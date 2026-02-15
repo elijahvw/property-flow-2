@@ -148,7 +148,7 @@ function App() {
           <div className="welcome-hero">
             <h1>Manage your properties with ease.</h1>
             <p>The all-in-one platform for multi-tenant property management.</p>
-            <button className="btn-primary">Get Started</button>
+            <button className="btn-primary" onClick={handleLogin}>Get Started</button>
           </div>
         )}
 

@@ -48,8 +48,9 @@ module "cognito" {
 }
 
 module "s3_frontend" {
-  source      = "../../modules/s3_frontend"
-  environment = var.environment
+  source       = "../../modules/s3_frontend"
+  environment  = var.environment
+  alb_dns_name = module.ecr.alb_dns_name
 }
 
 module "rds" {
