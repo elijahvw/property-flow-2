@@ -194,3 +194,8 @@ jobs:
       - name: Deploy to S3
         run: |
           aws s3 sync client/dist/ s3://propertyflow-dev-frontend --delete
+
+      - name: Invalidate CloudFront
+        run: |
+          DIST_ID=$(cd $TF_DIR && terraform output -raw cloudfront_distribution_id)
+          aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*"

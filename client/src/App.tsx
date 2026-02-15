@@ -68,6 +68,18 @@ function App() {
   };
 
   useEffect(() => {
+    // Check for missing environment variables
+    const missing = [];
+    if (!import.meta.env.VITE_COGNITO_USER_POOL_ID) missing.push('USER_POOL_ID');
+    if (!import.meta.env.VITE_COGNITO_CLIENT_ID) missing.push('CLIENT_ID');
+    if (!import.meta.env.VITE_COGNITO_DOMAIN) missing.push('COGNITO_DOMAIN');
+    
+    if (missing.length > 0) {
+      setError(`Missing environment variables: ${missing.join(', ')}`);
+      setLoading(false);
+      return;
+    }
+
     fetch('/api/health')
       .then((res) => res.json())
       .then(setHealth)
