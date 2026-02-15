@@ -173,7 +173,7 @@ jobs:
   infra-outputs:
     name: Capture Infra Outputs
     needs: [terraform-plan, terraform-apply]
-    if: always() && (needs.terraform-plan.result == 'success') && (needs.terraform-apply.result == 'success' || needs.terraform-apply.result == 'skipped')
+    if: always() && !cancelled() && needs.terraform-plan.result == 'success'
     runs-on: ubuntu-latest
     outputs:
       cloudfront_distribution_id: ${{ steps.out.outputs.cloudfront_distribution_id }}
@@ -209,23 +209,26 @@ jobs:
         id: out
         run: |
           cd $TF_DIR
-          JSON_OUTPUTS=$(terraform output -json)
-          
-          DB_END=$(echo $JSON_OUTPUTS | jq -r '.db_endpoint.value')
-          CF_URL=$(echo $JSON_OUTPUTS | jq -r '.cloudfront_url.value')
-          POOL_ID=$(echo $JSON_OUTPUTS | jq -r '.cognito_user_pool_id.value')
-          CLIENT_ID=$(echo $JSON_OUTPUTS | jq -r '.cognito_client_id.value')
-          COG_DOMAIN=$(echo $JSON_OUTPUTS | jq -r '.cognito_domain.value')
-          DIST_ID=$(echo $JSON_OUTPUTS | jq -r '.cloudfront_distribution_id.value')
+          # Get outputs directly using -raw for better reliability
+          DB_END=$(terraform output -raw db_endpoint || echo "")
+          CF_URL=$(terraform output -raw cloudfront_url || echo "")
+          POOL_ID=$(terraform output -raw cognito_user_pool_id || echo "")
+          CLIENT_ID=$(terraform output -raw cognito_client_id || echo "")
+          COG_DOMAIN=$(terraform output -raw cognito_domain || echo "")
+          DIST_ID=$(terraform output -raw cloudfront_distribution_id || echo "")
           
           echo "database_url=postgresql://postgres:password123@$DB_END/propertyflow?schema=public" >> $GITHUB_OUTPUT
           echo "cloudfront_distribution_id=$DIST_ID" >> $GITHUB_OUTPUT
           echo "cognito_user_pool_id=$POOL_ID" >> $GITHUB_OUTPUT
           echo "cognito_client_id=$CLIENT_ID" >> $GITHUB_OUTPUT
           echo "cognito_domain=$COG_DOMAIN" >> $GITHUB_OUTPUT
+          
+          # Debugging (masked)
+          echo "Fetched DB Endpoint: ${DB_END:0:5}..."
+          echo "Fetched Pool ID: ${POOL_ID:0:5}..."
 
   build-and-deploy-api:
-    needs: [terraform-apply, infra-outputs]
+    needs: [infra-outputs]
     if: always() && needs.infra-outputs.result == 'success'
     runs-on: ubuntu-latest
     permissions:
