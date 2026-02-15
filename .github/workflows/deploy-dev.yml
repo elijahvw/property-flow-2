@@ -28,9 +28,21 @@ jobs:
         with:
           terraform_version: "1.7.0"
 
-      # TODO: add AWS auth here (OIDC) before init if backend needs AWS
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
       - name: Terraform Init
-        run: cd $TF_DIR && terraform init
+        run: |
+          cd $TF_DIR
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET || 'propertyflow-tfstate' }}" \
+            -backend-config="key=dev/terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE || 'propertyflow-tflock' }}" \
+            -input=false
 
       - name: Terraform Validate
         run: cd $TF_DIR && terraform validate
@@ -61,9 +73,21 @@ jobs:
         with:
           terraform_version: "1.7.0"
 
-      # TODO: add AWS auth here (OIDC)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
       - name: Terraform Init
-        run: cd $TF_DIR && terraform init
+        run: |
+          cd $TF_DIR
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET || 'propertyflow-tfstate' }}" \
+            -backend-config="key=dev/terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE || 'propertyflow-tflock' }}" \
+            -input=false
 
       - name: Download plan artifact
         uses: actions/download-artifact@v4

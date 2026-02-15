@@ -31,4 +31,17 @@ module "network" {
   vpc_cidr    = var.vpc_cidr
 }
 
-# Other modules would be added here as they are developed
+module "ecr" {
+  source      = "../../modules/ecs_api"
+  environment = var.environment
+}
+
+module "cognito" {
+  source      = "../../modules/cognito"
+  environment = var.environment
+}
+
+module "s3_frontend" {
+  source      = "../../modules/s3_frontend"
+  environment = var.environment
+}
