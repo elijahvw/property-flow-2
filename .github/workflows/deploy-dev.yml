@@ -157,6 +157,11 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Install and Build SPA
+        env:
+          VITE_API_URL: http://${{ secrets.ALB_DNS_NAME }} # Or fetch from terraform output
+          VITE_COGNITO_USER_POOL_ID: ${{ secrets.COGNITO_USER_POOL_ID }}
+          VITE_COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID }}
+          VITE_COGNITO_DOMAIN: ${{ secrets.COGNITO_DOMAIN }}
         run: |
           npm install
           cd shared && npm run build

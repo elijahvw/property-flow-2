@@ -25,6 +25,8 @@ provider "aws" {
   }
 }
 
+data "aws_caller_identity" "current" {}
+
 module "network" {
   source      = "../../modules/network"
   environment = var.environment
@@ -39,8 +41,10 @@ module "ecr" {
 }
 
 module "cognito" {
-  source      = "../../modules/cognito"
-  environment = var.environment
+  source            = "../../modules/cognito"
+  environment       = var.environment
+  account_id        = data.aws_caller_identity.current.account_id
+  cloudfront_domain = module.s3_frontend.cloudfront_domain_name
 }
 
 module "s3_frontend" {

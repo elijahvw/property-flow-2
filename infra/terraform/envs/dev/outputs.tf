@@ -9,3 +9,7 @@ output "api_url" {
 output "db_endpoint" {
   value = module.rds.db_endpoint
 }
+
+output "cognito_domain" {
+  value = "https://${module.cognito.domain}.auth.${var.aws_region}.amazoncognito.com"
+}
