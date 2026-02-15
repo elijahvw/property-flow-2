@@ -5,6 +5,7 @@ Multi-tenant property management platform built with a monorepo architecture. De
 
 ## Project Architecture
 
+
 ### Monorepo Structure
 ```
 client/          - React + Vite frontend (port 5000)
