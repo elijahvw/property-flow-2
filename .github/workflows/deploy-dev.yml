@@ -48,7 +48,19 @@ jobs:
         run: cd $TF_DIR && terraform validate
 
       - name: Terraform Plan
-        run: cd $TF_DIR && terraform plan -out=tfplan
+        id: plan
+        run: |
+          cd $TF_DIR
+          terraform plan -out=tfplan -no-color
+          terraform show -no-color tfplan > plan_clean.txt
+          
+          echo "### 📝 Terraform Plan Summary (Dev)" >> $GITHUB_STEP_SUMMARY
+          echo "<details><summary>Click to expand full plan</summary>" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```terraform' >> $GITHUB_STEP_SUMMARY
+          cat plan_clean.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "</details>" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload plan artifact
         uses: actions/upload-artifact@v4
