@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       plan_artifact: tfplan-dev
+      has_changes: ${{ steps.plan.outputs.has_changes }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,7 +53,23 @@ jobs:
         id: plan
         run: |
           cd $TF_DIR
-          terraform plan -out=tfplan -no-color
+          # -detailed-exitcode returns 2 if there are changes, 0 if no changes, 1 if error
+          set +e
+          terraform plan -out=tfplan -detailed-exitcode -no-color
+          PLAN_EXIT_CODE=$?
+          set -e
+          
+          if [ $PLAN_EXIT_CODE -eq 2 ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Infrastructure changes detected."
+          elif [ $PLAN_EXIT_CODE -eq 0 ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No infrastructure changes detected."
+          else
+            echo "Terraform plan failed with exit code $PLAN_EXIT_CODE"
+            exit $PLAN_EXIT_CODE
+          fi
+
           terraform show -no-color tfplan > plan_clean.txt
           
           echo "### 📝 Terraform Plan Summary (Dev)" >> $GITHUB_STEP_SUMMARY
@@ -74,6 +91,7 @@ jobs:
   terraform-apply:
     name: Terraform Apply (dev - requires approval)
     needs: terraform-plan
+    if: needs.terraform-plan.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
     outputs:
       cloudfront_distribution_id: ${{ steps.apply.outputs.cloudfront_distribution_id }}
@@ -151,8 +169,64 @@ jobs:
           echo "---" >> $GITHUB_STEP_SUMMARY
           echo "💡 *Use these values to update your GitHub Secrets if needed.*" >> $GITHUB_STEP_SUMMARY
 
+  # New job to ensure we always have the latest outputs even if apply is skipped
+  infra-outputs:
+    name: Capture Infra Outputs
+    needs: [terraform-plan, terraform-apply]
+    if: always() && (needs.terraform-plan.result == 'success') && (needs.terraform-apply.result == 'success' || needs.terraform-apply.result == 'skipped')
+    runs-on: ubuntu-latest
+    outputs:
+      cloudfront_distribution_id: ${{ steps.out.outputs.cloudfront_distribution_id }}
+      cognito_user_pool_id: ${{ steps.out.outputs.cognito_user_pool_id }}
+      cognito_client_id: ${{ steps.out.outputs.cognito_client_id }}
+      cognito_domain: ${{ steps.out.outputs.cognito_domain }}
+      database_url: ${{ steps.out.outputs.database_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Terraform Init
+        run: |
+          cd $TF_DIR
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET || 'propertyflow-tfstate' }}" \
+            -backend-config="key=dev/terraform.tfstate" \
+            -backend-config="region=${{ vars.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE || 'propertyflow-tflock' }}" \
+            -input=false
+
+      - name: Extract Outputs
+        id: out
+        run: |
+          cd $TF_DIR
+          JSON_OUTPUTS=$(terraform output -json)
+          
+          DB_END=$(echo $JSON_OUTPUTS | jq -r '.db_endpoint.value')
+          CF_URL=$(echo $JSON_OUTPUTS | jq -r '.cloudfront_url.value')
+          POOL_ID=$(echo $JSON_OUTPUTS | jq -r '.cognito_user_pool_id.value')
+          CLIENT_ID=$(echo $JSON_OUTPUTS | jq -r '.cognito_client_id.value')
+          COG_DOMAIN=$(echo $JSON_OUTPUTS | jq -r '.cognito_domain.value')
+          DIST_ID=$(echo $JSON_OUTPUTS | jq -r '.cloudfront_distribution_id.value')
+          
+          echo "database_url=postgresql://postgres:password123@$DB_END/propertyflow?schema=public" >> $GITHUB_OUTPUT
+          echo "cloudfront_distribution_id=$DIST_ID" >> $GITHUB_OUTPUT
+          echo "cognito_user_pool_id=$POOL_ID" >> $GITHUB_OUTPUT
+          echo "cognito_client_id=$CLIENT_ID" >> $GITHUB_OUTPUT
+          echo "cognito_domain=$COG_DOMAIN" >> $GITHUB_OUTPUT
+
   build-and-deploy-api:
-    needs: terraform-apply
+    needs: [terraform-apply, infra-outputs]
+    if: always() && needs.infra-outputs.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -162,7 +236,7 @@ jobs:
 
       - name: Debug Job Outputs
         run: |
-          URL_VAL="${{ needs.terraform-apply.outputs.database_url }}"
+          URL_VAL="${{ needs.infra-outputs.outputs.database_url }}"
           echo "DATABASE_URL length is ${#URL_VAL}"
           if [ -z "$URL_VAL" ]; then
             echo "Error: database_url output is empty!"
@@ -192,7 +266,7 @@ jobs:
 
       - name: Run Database Migrations
         env:
-          DATABASE_URL: ${{ needs.terraform-apply.outputs.database_url }}
+          DATABASE_URL: ${{ needs.infra-outputs.outputs.database_url }}
         run: |
           npm install
           cd server && npx prisma migrate deploy
@@ -202,7 +276,8 @@ jobs:
           aws ecs update-service --cluster propertyflow-dev-cluster --service propertyflow-api --force-new-deployment
 
   build-and-deploy-spa:
-    needs: terraform-apply
+    needs: [terraform-apply, infra-outputs]
+    if: always() && needs.infra-outputs.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -219,9 +294,9 @@ jobs:
       - name: Install and Build SPA
         env:
           VITE_API_URL: "" # Use relative paths since we proxy /api via CloudFront
-          VITE_COGNITO_USER_POOL_ID: ${{ needs.terraform-apply.outputs.cognito_user_pool_id }}
-          VITE_COGNITO_CLIENT_ID: ${{ needs.terraform-apply.outputs.cognito_client_id }}
-          VITE_COGNITO_DOMAIN: ${{ needs.terraform-apply.outputs.cognito_domain }}
+          VITE_COGNITO_USER_POOL_ID: ${{ needs.infra-outputs.outputs.cognito_user_pool_id }}
+          VITE_COGNITO_CLIENT_ID: ${{ needs.infra-outputs.outputs.cognito_client_id }}
+          VITE_COGNITO_DOMAIN: ${{ needs.infra-outputs.outputs.cognito_domain }}
         run: |
           npm install
           npm run build --workspace=@property-flow/shared
@@ -233,5 +308,5 @@ jobs:
 
       - name: Invalidate CloudFront
         run: |
-          DIST_ID=${{ needs.terraform-apply.outputs.cloudfront_distribution_id }}
+          DIST_ID=${{ needs.infra-outputs.outputs.cloudfront_distribution_id }}
           aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*"
