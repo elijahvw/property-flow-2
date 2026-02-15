@@ -104,7 +104,10 @@ resource "aws_security_group" "ecs" {
   }
 }
 
-variable "database_url" { type = string default = "" }
+variable "database_url" {
+  type    = string
+  default = ""
+}
 
 resource "aws_ecs_task_definition" "api" {
   family                   = "propertyflow-api"
