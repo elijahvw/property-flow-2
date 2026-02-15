@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm install
+        
+      - name: Lint and Test (Shared)
+        run: cd shared && npm install && npm run build
+        
+      - name: Lint and Test (Server)
+        run: cd server && npm install && npm run build
+        
+      - name: Lint and Test (Client)
+        run: cd client && npm install && npm run build
+
+  terraform-plan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+      
+      - name: Terraform Format
+        run: terraform fmt -check -recursive infra/terraform
+        
+      - name: Terraform Init
+        run: cd infra/terraform/envs/dev && terraform init -backend=false
+        
+      - name: Terraform Validate
+        run: cd infra/terraform/envs/dev && terraform validate

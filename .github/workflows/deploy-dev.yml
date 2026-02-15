@@ -1,0 +1,35 @@
+name: Deploy Dev
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  terraform-apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+      
+      - name: Terraform Init
+        run: cd infra/terraform/envs/dev && terraform init
+        
+      - name: Terraform Apply
+        run: cd infra/terraform/envs/dev && terraform apply -auto-approve
+
+  build-and-deploy-api:
+    needs: terraform-apply
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # AWS Auth using OIDC would go here
+      # Build, Push to ECR, Update ECS Service
+
+  build-and-deploy-spa:
+    needs: terraform-apply
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Build Vite app, Upload to S3, Invalidate CloudFront
