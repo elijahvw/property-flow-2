@@ -19,6 +19,9 @@ jobs:
   terraform-plan:
     name: Terraform Plan (dev)
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     outputs:
       plan_artifact: tfplan-dev
       has_changes: ${{ steps.plan.outputs.has_changes }}
@@ -93,6 +96,9 @@ jobs:
     needs: terraform-plan
     if: needs.terraform-plan.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     environment: dev
     steps:
       - uses: actions/checkout@v4
