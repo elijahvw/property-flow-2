@@ -54,6 +54,8 @@ jobs:
 
       - name: Terraform Plan
         id: plan
+        env:
+          TF_VAR_database_url: ${{ vars.DATABASE_URL }}
         run: |
           cd $TF_DIR
           # -detailed-exitcode returns 2 if there are changes, 0 if no changes, 1 if error
@@ -126,6 +128,8 @@ jobs:
           name: tfplan-dev
           path: ${{ env.TF_DIR }}
       - name: Terraform Apply (saved plan)
+        env:
+          TF_VAR_database_url: ${{ vars.DATABASE_URL }}
         run: |
           cd $TF_DIR
           terraform apply -auto-approve tfplan
@@ -190,9 +194,9 @@ jobs:
       - name: Install and Build SPA
         env:
           VITE_API_URL: ""
-          VITE_COGNITO_USER_POOL_ID: ${{ vars.COGNITO_USER_POOL_ID }}
-          VITE_COGNITO_CLIENT_ID: ${{ vars.COGNITO_CLIENT_ID }}
-          VITE_COGNITO_DOMAIN: ${{ vars.COGNITO_DOMAIN }}
+          VITE_COGNITO_USER_POOL_ID: ${{ secrets.COGNITO_USER_POOL_ID || vars.COGNITO_USER_POOL_ID }}
+          VITE_COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID || vars.COGNITO_CLIENT_ID }}
+          VITE_COGNITO_DOMAIN: ${{ secrets.COGNITO_DOMAIN || vars.COGNITO_DOMAIN }}
         run: |
           npm install
           npm run build --workspace=@property-flow/shared

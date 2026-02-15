@@ -54,6 +54,7 @@ module "ecr" {
   db_endpoint          = module.rds.db_endpoint
   cognito_user_pool_id = module.cognito.user_pool_id
   aws_region           = var.aws_region
+  database_url         = var.database_url
 }
 
 module "s3_frontend" {
