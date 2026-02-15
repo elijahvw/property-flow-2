@@ -7,7 +7,7 @@ import { registerRoutes } from './routes';
 
 const prisma = new PrismaClient();
 
-const buildApp = async () => {
+export const buildApp = async () => {
   const app = Fastify({ logger: true });
 
   await app.register(cors, {
