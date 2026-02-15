@@ -120,33 +120,34 @@ jobs:
           cd $TF_DIR
           terraform apply -auto-approve tfplan
           
-          # Extract outputs and format them for the summary
-          echo "### 🚀 Deployment Successful (Dev)" >> $GITHUB_STEP_SUMMARY
-          echo "| Resource | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
-          
+          # Extract outputs
           CF_URL=$(terraform output -raw cloudfront_url)
           API_URL=$(terraform output -raw api_url)
           POOL_ID=$(terraform output -raw cognito_user_pool_id)
           CLIENT_ID=$(terraform output -raw cognito_client_id)
           COG_DOMAIN=$(terraform output -raw cognito_domain)
+          DB_END=$(terraform output -raw db_endpoint)
+          DIST_ID=$(terraform output -raw cloudfront_distribution_id)
           
+          # Set output for other jobs
+          echo "cloudfront_distribution_id=$DIST_ID" >> $GITHUB_OUTPUT
+          echo "cognito_user_pool_id=$POOL_ID" >> $GITHUB_OUTPUT
+          echo "cognito_client_id=$CLIENT_ID" >> $GITHUB_OUTPUT
+          echo "cognito_domain=$COG_DOMAIN" >> $GITHUB_OUTPUT
+          echo "database_url=postgresql://postgres:password123@$DB_END/propertyflow?schema=public" >> $GITHUB_OUTPUT
+
+          # Format for the summary
+          echo "### 🚀 Deployment Successful (Dev)" >> $GITHUB_STEP_SUMMARY
+          echo "| Resource | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
           echo "| **CloudFront (App)** | https://$CF_URL |" >> $GITHUB_STEP_SUMMARY
           echo "| **API (Internal)** | $API_URL |" >> $GITHUB_STEP_SUMMARY
           echo "| **Cognito Domain** | $COG_DOMAIN |" >> $GITHUB_STEP_SUMMARY
           echo "| **Cognito Client ID** | \`$CLIENT_ID\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Cognito Pool ID** | \`$POOL_ID\` |" >> $GITHUB_STEP_SUMMARY
-          
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
           echo "💡 *Use these values to update your GitHub Secrets if needed.*" >> $GITHUB_STEP_SUMMARY
-          
-          # Set output for other jobs
-          echo "cloudfront_distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
-          echo "cognito_user_pool_id=$(terraform output -raw cognito_user_pool_id)" >> $GITHUB_OUTPUT
-          echo "cognito_client_id=$(terraform output -raw cognito_client_id)" >> $GITHUB_OUTPUT
-          echo "cognito_domain=$(terraform output -raw cognito_domain)" >> $GITHUB_OUTPUT
-          echo "database_url=postgresql://postgres:password123@$(terraform output -raw db_endpoint)/propertyflow?schema=public" >> $GITHUB_OUTPUT
 
   build-and-deploy-api:
     needs: terraform-apply
@@ -156,6 +157,13 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+
+      - name: Debug Job Outputs
+        run: |
+          echo "DATABASE_URL: ${{ needs.terraform-apply.outputs.database_url }}"
+          if [ -z "${{ needs.terraform-apply.outputs.database_url }}" ]; then
+            echo "Error: database_url output is empty!"
+          fi
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
