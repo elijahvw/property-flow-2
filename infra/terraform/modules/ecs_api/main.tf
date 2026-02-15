@@ -1,6 +1,9 @@
 variable "environment" { type = string }
 variable "vpc_id" { type = string }
 variable "public_subnets" { type = list(string) }
+variable "db_endpoint" { type = string }
+variable "cognito_user_pool_id" { type = string }
+variable "aws_region" { type = string default = "us-east-1" }
 
 resource "aws_ecr_repository" "api" {
   name                 = "propertyflow-${var.environment}-api"
@@ -113,6 +116,13 @@ resource "aws_ecs_task_definition" "api" {
       containerPort = 3001
       hostPort      = 3001
     }]
+    environment = [
+      { name = "DATABASE_URL", value = "postgresql://postgres:password123@${var.db_endpoint}/propertyflow?schema=public" },
+      { name = "COGNITO_USER_POOL_ID", value = var.cognito_user_pool_id },
+      { name = "AWS_REGION", value = var.aws_region },
+      { name = "NODE_ENV", value = "production" },
+      { name = "API_PORT", value = "3001" }
+    ]
     logConfiguration = {
       logDriver = "awslogs"
       options = {

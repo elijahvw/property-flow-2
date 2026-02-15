@@ -74,6 +74,12 @@ jobs:
     name: Terraform Apply (dev - requires approval)
     needs: terraform-plan
     runs-on: ubuntu-latest
+    outputs:
+      cloudfront_distribution_id: ${{ steps.apply.outputs.cloudfront_distribution_id }}
+      cognito_user_pool_id: ${{ steps.apply.outputs.cognito_user_pool_id }}
+      cognito_client_id: ${{ steps.apply.outputs.cognito_client_id }}
+      cognito_domain: ${{ steps.apply.outputs.cognito_domain }}
+      database_url: ${{ steps.apply.outputs.database_url }}
 
     # THIS triggers the approval gate via Settings → Environments → dev
     environment: dev
@@ -134,6 +140,13 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
           echo "💡 *Use these values to update your GitHub Secrets if needed.*" >> $GITHUB_STEP_SUMMARY
+          
+          # Set output for other jobs
+          echo "cloudfront_distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
+          echo "cognito_user_pool_id=$(terraform output -raw cognito_user_pool_id)" >> $GITHUB_OUTPUT
+          echo "cognito_client_id=$(terraform output -raw cognito_client_id)" >> $GITHUB_OUTPUT
+          echo "cognito_domain=$(terraform output -raw cognito_domain)" >> $GITHUB_OUTPUT
+          echo "database_url=postgresql://postgres:password123@$(terraform output -raw db_endpoint)/propertyflow?schema=public" >> $GITHUB_OUTPUT
 
   build-and-deploy-api:
     needs: terraform-apply
@@ -165,6 +178,17 @@ jobs:
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
+      - name: Run Database Migrations
+        env:
+          DATABASE_URL: ${{ needs.terraform-apply.outputs.database_url }}
+        run: |
+          npm install
+          cd server && npx prisma migrate deploy
+
+      - name: Update ECS Service
+        run: |
+          aws ecs update-service --cluster propertyflow-dev-cluster --service propertyflow-api --force-new-deployment
+
   build-and-deploy-spa:
     needs: terraform-apply
     runs-on: ubuntu-latest
@@ -183,9 +207,9 @@ jobs:
       - name: Install and Build SPA
         env:
           VITE_API_URL: "" # Use relative paths since we proxy /api via CloudFront
-          VITE_COGNITO_USER_POOL_ID: ${{ secrets.COGNITO_USER_POOL_ID }}
-          VITE_COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID }}
-          VITE_COGNITO_DOMAIN: ${{ secrets.COGNITO_DOMAIN }}
+          VITE_COGNITO_USER_POOL_ID: ${{ needs.terraform-apply.outputs.cognito_user_pool_id }}
+          VITE_COGNITO_CLIENT_ID: ${{ needs.terraform-apply.outputs.cognito_client_id }}
+          VITE_COGNITO_DOMAIN: ${{ needs.terraform-apply.outputs.cognito_domain }}
         run: |
           npm install
           npm run build --workspace=@property-flow/shared
@@ -197,5 +221,5 @@ jobs:
 
       - name: Invalidate CloudFront
         run: |
-          DIST_ID=$(cd $TF_DIR && terraform output -raw cloudfront_distribution_id)
+          DIST_ID=${{ needs.terraform-apply.outputs.cloudfront_distribution_id }}
           aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*"
