@@ -11,10 +11,9 @@ COPY server/ ./server/
 
 # Install and build
 RUN npm install
+RUN cd server && npx prisma generate
 RUN cd shared && npm run build
 RUN cd server && npm run build
-# Ensure Prisma client is generated in the builder
-RUN cd server && npx prisma generate
 
 FROM node:20-slim
 
