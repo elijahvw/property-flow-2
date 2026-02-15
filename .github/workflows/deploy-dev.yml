@@ -4,32 +4,87 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  id-token: write   # for AWS OIDC later
+  contents: read
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+env:
+  TF_DIR: infra/terraform/envs/dev
+
 jobs:
-  terraform-apply:
+  terraform-plan:
+    name: Terraform Plan (dev)
     runs-on: ubuntu-latest
+    outputs:
+      plan_artifact: tfplan-dev
     steps:
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.7.0"
-      
+
+      # TODO: add AWS auth here (OIDC) before init if backend needs AWS
       - name: Terraform Init
-        run: cd infra/terraform/envs/dev && terraform init
-        
-      - name: Terraform Apply
-        run: cd infra/terraform/envs/dev && terraform apply -auto-approve
+        run: cd $TF_DIR && terraform init
+
+      - name: Terraform Validate
+        run: cd $TF_DIR && terraform validate
+
+      - name: Terraform Plan
+        run: cd $TF_DIR && terraform plan -out=tfplan
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-dev
+          path: ${{ env.TF_DIR }}/tfplan
+          if-no-files-found: error
+          retention-days: 7
+
+  terraform-apply:
+    name: Terraform Apply (dev - requires approval)
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+
+    # THIS triggers the approval gate via Settings → Environments → dev
+    environment: dev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+
+      # TODO: add AWS auth here (OIDC)
+      - name: Terraform Init
+        run: cd $TF_DIR && terraform init
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-dev
+          path: ${{ env.TF_DIR }}
+
+      # Apply the exact plan we generated (no re-planning)
+      - name: Terraform Apply (saved plan)
+        run: cd $TF_DIR && terraform apply -auto-approve tfplan
 
   build-and-deploy-api:
     needs: terraform-apply
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # AWS Auth using OIDC would go here
-      # Build, Push to ECR, Update ECS Service
+      # Add AWS OIDC auth + ECR build/push + ECS update here
 
   build-and-deploy-spa:
     needs: terraform-apply
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Build Vite app, Upload to S3, Invalidate CloudFront
+      # Add build + S3 upload + CloudFront invalidation here
