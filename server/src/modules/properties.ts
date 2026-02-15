@@ -1,16 +1,22 @@
 import { FastifyInstance } from 'fastify';
 import { authenticate } from '../auth/middleware';
 import { resolveUser } from '../auth/user-resolver';
+import { resolveTenant } from '../tenant/middleware';
+import { checkRole } from '../rbac/middleware';
 
 export async function propertyRoutes(app: FastifyInstance) {
   // Apply auth and user resolution to all routes in this module
   app.addHook('preHandler', authenticate);
   app.addHook('preHandler', resolveUser.bind(app));
+  app.addHook('preHandler', resolveTenant);
 
   app.get('/', async (request) => {
     const user = (request as any).dbUser;
-    // Multi-tenant: Filter by companyIds user belongs to
-    const companyIds = user.companies.map((c: any) => c.companyId);
+    const activeCompanyId = (request as any).companyId;
+
+    // Multi-tenant: If active company is set, filter by it. 
+    // Otherwise return everything user has access to.
+    const companyIds = activeCompanyId ? [activeCompanyId] : user.companies.map((c: any) => c.companyId);
     
     const properties = await app.prisma.property.findMany({
       where: {
@@ -22,10 +28,15 @@ export async function propertyRoutes(app: FastifyInstance) {
     return properties;
   });
 
-  app.post('/', async (request, reply) => {
-    const user = (request as any).dbUser;
+  app.post('/', {
+    preHandler: [checkRole(['COMPANY_OWNER', 'PROPERTY_MANAGER'])]
+  }, async (request, reply) => {
+    const activeCompanyId = (request as any).companyId;
+    if (!activeCompanyId) {
+      return reply.status(400).send({ error: 'Active company context required' });
+    }
+
     const body = request.body as {
-      companyId: string;
       name: string;
       address: string;
       city: string;
@@ -33,12 +44,12 @@ export async function propertyRoutes(app: FastifyInstance) {
       zip: string;
     };
 
-    // Ensure user belongs to the company they are trying to create for
-    if (!user.companies.some((c: any) => c.companyId === body.companyId)) {
-      return reply.status(403).send({ error: 'Access denied to this company' });
-    }
-
-    const property = await app.prisma.property.create({ data: body });
+    const property = await app.prisma.property.create({ 
+      data: {
+        ...body,
+        companyId: activeCompanyId
+      }
+    });
     return reply.status(201).send(property);
   });
 
@@ -58,15 +69,22 @@ export async function propertyRoutes(app: FastifyInstance) {
     return property;
   });
 
-  app.post('/:id/units', async (request, reply) => {
+  app.post('/:id/units', {
+    preHandler: [
+      async (request, reply) => {
+        const { id } = request.params as { id: string };
+        const property = await app.prisma.property.findUnique({ where: { id } });
+        if (!property) return reply.status(404).send({ error: 'Property not found' });
+        (request as any).inferredCompanyId = property.companyId;
+      },
+      checkRole(['COMPANY_OWNER', 'PROPERTY_MANAGER'])
+    ]
+  }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const user = (request as any).dbUser;
-    const companyIds = user.companies.map((c: any) => c.companyId);
-
     const property = await app.prisma.property.findUnique({ where: { id } });
-    if (!property || !companyIds.includes(property.companyId)) {
-      return reply.status(404).send({ error: 'Property not found' });
-    }
+    
+    // Safety check (already done in preHandler but for TS safety)
+    if (!property) return reply.status(404).send({ error: 'Property not found' });
 
     const body = request.body as {
       number: string;
@@ -90,16 +108,18 @@ export async function propertyRoutes(app: FastifyInstance) {
     return reply.status(201).send(unit);
   });
 
-  app.delete('/:id', async (request, reply) => {
+  app.delete('/:id', {
+    preHandler: [
+      async (request, reply) => {
+        const { id } = request.params as { id: string };
+        const property = await app.prisma.property.findUnique({ where: { id } });
+        if (!property) return reply.status(404).send({ error: 'Property not found' });
+        (request as any).inferredCompanyId = property.companyId;
+      },
+      checkRole(['COMPANY_OWNER'])
+    ]
+  }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const user = (request as any).dbUser;
-    const companyIds = user.companies.map((c: any) => c.companyId);
-
-    const property = await app.prisma.property.findUnique({ where: { id } });
-    if (!property || !companyIds.includes(property.companyId)) {
-      return reply.status(404).send({ error: 'Property not found' });
-    }
-
     await app.prisma.property.delete({ where: { id } });
     return reply.status(204).send();
   });

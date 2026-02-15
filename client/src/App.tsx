@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { PropertyService, fetchWithAuth } from './services/api';
+import { PropertyService, CompanyService, fetchWithAuth } from './services/api';
 import { AuthService } from './services/auth';
 import './App.css';
 
@@ -12,37 +12,41 @@ interface Property {
   units?: any[];
 }
 
-interface HealthStatus {
-  status: string;
-  timestamp: string;
-}
-
-interface VersionInfo {
-  version: string;
-  buildId: string;
-}
-
 interface UserInfo {
   id: string;
   email: string;
   name: string;
   companies: Array<{
     id: string;
-    name: string;
+    companyId: string;
     role: string;
+    company: {
+      id: string;
+      name: string;
+    };
   }>;
 }
 
 function App() {
-  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [health, setHealth] = useState<any>(null);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState<'property' | 'unit' | 'company' | null>(null);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
+
+  const [formData, setFormData] = useState({
+    propertyName: '',
+    address: '',
+    city: '',
+    state: '',
+    unitNumber: '',
+    companyName: ''
+  });
 
   const checkAuth = async () => {
     try {
-      // Check for token in URL hash (from Cognito redirect)
       const hash = window.location.hash;
       if (hash.includes('access_token=')) {
         const params = new URLSearchParams(hash.substring(1));
@@ -57,8 +61,14 @@ function App() {
       if (res.ok) {
         const userData = await res.json();
         setUser(userData);
-        const props = await PropertyService.list();
-        setProperties(props);
+        if (userData.companies.length > 0) {
+          const currentActive = localStorage.getItem('active_company_id');
+          if (!currentActive || !userData.companies.find((c: any) => c.companyId === currentActive)) {
+            localStorage.setItem('active_company_id', userData.companies[0].companyId);
+          }
+          const props = await PropertyService.list();
+          setProperties(props);
+        }
       }
     } catch (err) {
       setUser(null);
@@ -68,7 +78,6 @@ function App() {
   };
 
   useEffect(() => {
-    // Check for missing environment variables
     const missing = [];
     if (!import.meta.env.VITE_COGNITO_USER_POOL_ID) missing.push('USER_POOL_ID');
     if (!import.meta.env.VITE_COGNITO_CLIENT_ID) missing.push('CLIENT_ID');
@@ -80,13 +89,40 @@ function App() {
       return;
     }
 
-    fetch('/api/health')
-      .then((res) => res.json())
-      .then(setHealth)
-      .catch((err) => setError(err.message));
-
+    fetch('/api/health').then(res => res.json()).then(setHealth).catch(err => setError(err.message));
     checkAuth();
   }, []);
+
+  const handleCreateCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await CompanyService.create(formData.companyName);
+    setShowForm(null);
+    checkAuth();
+  };
+
+  const handleCreateProperty = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await PropertyService.create({
+      name: formData.propertyName,
+      address: formData.address,
+      city: formData.city,
+      state: formData.state
+    });
+    setShowForm(null);
+    const props = await PropertyService.list();
+    setProperties(props);
+  };
+
+  const handleCreateUnit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPropertyId) return;
+    await PropertyService.createUnit(selectedPropertyId, {
+      number: formData.unitNumber
+    });
+    setShowForm(null);
+    const props = await PropertyService.list();
+    setProperties(props);
+  };
 
   const handleLogin = () => {
     const domain = import.meta.env.VITE_COGNITO_DOMAIN;
@@ -95,6 +131,8 @@ function App() {
     window.location.href = `${domain}/login?client_id=${clientId}&response_type=token&scope=email+openid+profile&redirect_uri=${redirectUri}`;
   };
 
+  const activeCompany = user?.companies[0];
+
   return (
     <div className="app">
       <nav className="navbar">
@@ -102,7 +140,7 @@ function App() {
         <div className="nav-user">
           {user ? (
             <div className="user-profile">
-              <span>{user.name} ({user.companies[0]?.role || 'No Role'})</span>
+              <span>{user.name} ({activeCompany?.role || 'No Role'})</span>
               <button className="btn-logout" onClick={() => AuthService.logout()}>Logout</button>
             </div>
           ) : (
@@ -113,73 +151,79 @@ function App() {
 
       <main className="main">
         {loading ? (
-          <div className="loading-container">
-            <p>Loading PropertyFlow...</p>
-          </div>
+          <div className="loading-container"><p>Loading...</p></div>
         ) : error && !health ? (
           <div className="error-container">
-            <h1>Configuration Error</h1>
-            <p>Could not connect to the API. Please ensure your environment variables are set correctly.</p>
+            <h1>Config Error</h1>
             <pre>{error}</pre>
           </div>
         ) : user ? (
           <div className="dashboard">
-            <header className="dashboard-header">
-              <h1>Dashboard: {user.companies[0]?.name || 'No Company'}</h1>
-            </header>
-            
-            <section className="dashboard-grid">
+            {!activeCompany ? (
               <div className="card">
-                <div className="card-header">
-                  <h3>Properties</h3>
-                  <button className="btn-small">+ New</button>
-                </div>
-                <div className="property-list">
-                  {properties.length === 0 ? (
-                    <p className="muted">No properties found. Create your first one!</p>
-                  ) : (
-                    properties.map(p => (
-                      <div key={p.id} className="property-item">
-                        <div className="p-info">
-                          <strong>{p.name}</strong>
-                          <span>{p.address}, {p.city}</span>
+                <h2>Welcome! Create a company to get started.</h2>
+                <form onSubmit={handleCreateCompany}>
+                  <input placeholder="Company Name" onChange={e => setFormData({...formData, companyName: e.target.value})} required />
+                  <button type="submit" className="btn-primary">Create Company</button>
+                </form>
+              </div>
+            ) : (
+              <div className="dashboard-content">
+                <header className="dashboard-header">
+                  <h1>{activeCompany.company.name} Dashboard</h1>
+                </header>
+
+                <div className="dashboard-grid">
+                  <div className="card">
+                    <div className="card-header">
+                      <h3>Properties</h3>
+                      <button className="btn-small" onClick={() => setShowForm('property')}>+ New</button>
+                    </div>
+                    
+                    {showForm === 'property' && (
+                      <form onSubmit={handleCreateProperty} className="inline-form">
+                        <input placeholder="Name" onChange={e => setFormData({...formData, propertyName: e.target.value})} required />
+                        <input placeholder="Address" onChange={e => setFormData({...formData, address: e.target.value})} required />
+                        <button type="submit">Create</button>
+                        <button type="button" onClick={() => setShowForm(null)}>Cancel</button>
+                      </form>
+                    )}
+
+                    <div className="property-list">
+                      {properties.map(p => (
+                        <div key={p.id} className="property-item">
+                          <div className="p-info">
+                            <strong>{p.name}</strong>
+                            <span>{p.address}</span>
+                          </div>
+                          <div className="p-actions">
+                            <button className="btn-small" onClick={() => { setShowForm('unit'); setSelectedPropertyId(p.id); }}>+ Unit</button>
+                          </div>
                         </div>
-                        <div className="p-meta">
-                          {p.units?.length || 0} units
-                        </div>
-                      </div>
-                    ))
+                      ))}
+                    </div>
+                  </div>
+
+                  {showForm === 'unit' && (
+                    <div className="card modal">
+                      <h3>Add Unit to {properties.find(p => p.id === selectedPropertyId)?.name}</h3>
+                      <form onSubmit={handleCreateUnit}>
+                        <input placeholder="Unit Number (e.g. 101)" onChange={e => setFormData({...formData, unitNumber: e.target.value})} required />
+                        <button type="submit">Add Unit</button>
+                        <button type="button" onClick={() => setShowForm(null)}>Cancel</button>
+                      </form>
+                    </div>
                   )}
                 </div>
               </div>
-              
-              <div className="card">
-                <h3>System Status</h3>
-                <div className="status-row">
-                  <span>API:</span>
-                  <span className={health?.status === 'ok' ? 'ok' : ''}>{health?.status || 'Offline'}</span>
-                </div>
-                <div className="status-row">
-                  <span>Database:</span>
-                  <span>Connected</span>
-                </div>
-              </div>
-            </section>
+            )}
           </div>
         ) : (
           <div className="welcome-hero">
-            <h1>Manage your properties with ease.</h1>
-            <p>The all-in-one platform for multi-tenant property management.</p>
+            <h1>Property Management Simplified.</h1>
             <button className="btn-primary" onClick={handleLogin}>Get Started</button>
           </div>
         )}
-
-        <footer className="footer-status">
-          <div className="status-indicator">
-            <span className={`dot ${health?.status === 'ok' ? 'online' : 'offline'}`}></span>
-            API Status: {health?.status || 'Connecting...'}
-          </div>
-        </footer>
       </main>
     </div>
   );
