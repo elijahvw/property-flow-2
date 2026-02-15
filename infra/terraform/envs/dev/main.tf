@@ -32,8 +32,10 @@ module "network" {
 }
 
 module "ecr" {
-  source      = "../../modules/ecs_api"
-  environment = var.environment
+  source         = "../../modules/ecs_api"
+  environment    = var.environment
+  vpc_id         = module.network.vpc_id
+  public_subnets = module.network.public_subnets
 }
 
 module "cognito" {
@@ -44,4 +46,11 @@ module "cognito" {
 module "s3_frontend" {
   source      = "../../modules/s3_frontend"
   environment = var.environment
+}
+
+module "rds" {
+  source         = "../../modules/rds_postgres"
+  environment    = var.environment
+  vpc_id         = module.network.vpc_id
+  public_subnets = module.network.public_subnets
 }
