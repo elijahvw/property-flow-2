@@ -11,9 +11,20 @@ interface VersionInfo {
   buildId: string;
 }
 
+interface UserInfo {
+  id: string;
+  email: string;
+  name: string;
+  companies: Array<{
+    id: string;
+    name: string;
+    role: string;
+  }>;
+}
+
 function App() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
-  const [version, setVersion] = useState<VersionInfo | null>(null);
+  const [user, setUser] = useState<UserInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -22,73 +33,68 @@ function App() {
       .then(setHealth)
       .catch((err) => setError(err.message));
 
-    fetch('/api/version')
-      .then((res) => res.json())
-      .then(setVersion)
-      .catch(() => {});
+    // Attempt to fetch current user (will 401 if not logged in)
+    fetch('/api/me')
+      .then((res) => {
+        if (res.ok) return res.json();
+        throw new Error('Unauthenticated');
+      })
+      .then(setUser)
+      .catch(() => setUser(null));
   }, []);
 
   return (
     <div className="app">
-      <header className="header">
-        <h1>PropertyFlow</h1>
-        <p className="subtitle">Property Management Platform</p>
-      </header>
-
-      <main className="main">
-        <section className="status-card">
-          <h2>System Status</h2>
-          {error ? (
-            <p className="error">API Error: {error}</p>
-          ) : health ? (
-            <div className="status-details">
-              <div className="status-row">
-                <span className="label">API Status:</span>
-                <span className="value ok">{health.status}</span>
-              </div>
-              <div className="status-row">
-                <span className="label">Timestamp:</span>
-                <span className="value">{new Date(health.timestamp).toLocaleString()}</span>
-              </div>
-              {version && (
-                <>
-                  <div className="status-row">
-                    <span className="label">Version:</span>
-                    <span className="value">{version.version}</span>
-                  </div>
-                  <div className="status-row">
-                    <span className="label">Build:</span>
-                    <span className="value">{version.buildId}</span>
-                  </div>
-                </>
-              )}
+      <nav className="navbar">
+        <div className="nav-brand">PropertyFlow</div>
+        <div className="nav-user">
+          {user ? (
+            <div className="user-profile">
+              <span>{user.name} ({user.companies[0]?.role || 'No Role'})</span>
+              <button className="btn-logout">Logout</button>
             </div>
           ) : (
-            <p>Loading...</p>
+            <button className="btn-login">Login with Cognito</button>
           )}
-        </section>
+        </div>
+      </nav>
 
-        <section className="features">
-          <h2>Platform Features</h2>
-          <div className="feature-grid">
-            <div className="feature-card">
-              <h3>Properties & Units</h3>
-              <p>Manage your real estate portfolio with full CRUD operations.</p>
-            </div>
-            <div className="feature-card">
-              <h3>Tenant Management</h3>
-              <p>Track tenants, leases, and occupancy status.</p>
-            </div>
-            <div className="feature-card">
-              <h3>Rent & Billing</h3>
-              <p>Automated charge generation and ledger tracking.</p>
-            </div>
-            <div className="feature-card">
-              <h3>Maintenance</h3>
-              <p>Work order management from request to completion.</p>
-            </div>
+      <main className="main">
+        {user ? (
+          <div className="dashboard">
+            <header className="dashboard-header">
+              <h1>Dashboard: {user.companies[0]?.name || 'No Company'}</h1>
+            </header>
+            
+            <section className="dashboard-grid">
+              <div className="card">
+                <h3>Quick Actions</h3>
+                <div className="action-buttons">
+                  <button>+ Add Property</button>
+                  <button>+ Add Unit</button>
+                </div>
+              </div>
+              
+              <div className="card">
+                <h3>Recent Activity</h3>
+                <p>No recent activity found.</p>
+              </div>
+            </section>
           </div>
-        </section>
+        ) : (
+          <div className="welcome-hero">
+            <h1>Manage your properties with ease.</h1>
+            <p>The all-in-one platform for multi-tenant property management.</p>
+            <button className="btn-primary">Get Started</button>
+          </div>
+        )}
+
+        <footer className="footer-status">
+          <div className="status-indicator">
+            <span className={`dot ${health?.status === 'ok' ? 'online' : 'offline'}`}></span>
+            API Status: {health?.status || 'Connecting...'}
+          </div>
+        </footer>
       </main>
     </div>
   );
