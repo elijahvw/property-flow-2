@@ -27,6 +27,7 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.7.0"
+          terraform_wrapper: false
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -90,6 +91,7 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.7.0"
+          terraform_wrapper: false
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -120,28 +122,28 @@ jobs:
           cd $TF_DIR
           terraform apply -auto-approve tfplan
           
-          # Extract outputs
-          CF_URL=$(terraform output -raw cloudfront_url)
-          API_URL=$(terraform output -raw api_url)
-          POOL_ID=$(terraform output -raw cognito_user_pool_id)
-          CLIENT_ID=$(terraform output -raw cognito_client_id)
-          COG_DOMAIN=$(terraform output -raw cognito_domain)
-          DB_END=$(terraform output -raw db_endpoint)
-          DIST_ID=$(terraform output -raw cloudfront_distribution_id)
+          # Extract outputs and set them to GITHUB_OUTPUT
+          # Use -json to be more robust
+          JSON_OUTPUTS=$(terraform output -json)
           
-          # Set output for other jobs
+          DB_END=$(echo $JSON_OUTPUTS | jq -r '.db_endpoint.value')
+          CF_URL=$(echo $JSON_OUTPUTS | jq -r '.cloudfront_url.value')
+          POOL_ID=$(echo $JSON_OUTPUTS | jq -r '.cognito_user_pool_id.value')
+          CLIENT_ID=$(echo $JSON_OUTPUTS | jq -r '.cognito_client_id.value')
+          COG_DOMAIN=$(echo $JSON_OUTPUTS | jq -r '.cognito_domain.value')
+          DIST_ID=$(echo $JSON_OUTPUTS | jq -r '.cloudfront_distribution_id.value')
+          
+          echo "database_url=postgresql://postgres:password123@$DB_END/propertyflow?schema=public" >> $GITHUB_OUTPUT
           echo "cloudfront_distribution_id=$DIST_ID" >> $GITHUB_OUTPUT
           echo "cognito_user_pool_id=$POOL_ID" >> $GITHUB_OUTPUT
           echo "cognito_client_id=$CLIENT_ID" >> $GITHUB_OUTPUT
           echo "cognito_domain=$COG_DOMAIN" >> $GITHUB_OUTPUT
-          echo "database_url=postgresql://postgres:password123@$DB_END/propertyflow?schema=public" >> $GITHUB_OUTPUT
 
           # Format for the summary
           echo "### 🚀 Deployment Successful (Dev)" >> $GITHUB_STEP_SUMMARY
           echo "| Resource | Value |" >> $GITHUB_STEP_SUMMARY
           echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
           echo "| **CloudFront (App)** | https://$CF_URL |" >> $GITHUB_STEP_SUMMARY
-          echo "| **API (Internal)** | $API_URL |" >> $GITHUB_STEP_SUMMARY
           echo "| **Cognito Domain** | $COG_DOMAIN |" >> $GITHUB_STEP_SUMMARY
           echo "| **Cognito Client ID** | \`$CLIENT_ID\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Cognito Pool ID** | \`$POOL_ID\` |" >> $GITHUB_STEP_SUMMARY
@@ -160,9 +162,11 @@ jobs:
 
       - name: Debug Job Outputs
         run: |
-          echo "DATABASE_URL: ${{ needs.terraform-apply.outputs.database_url }}"
-          if [ -z "${{ needs.terraform-apply.outputs.database_url }}" ]; then
+          URL_VAL="${{ needs.terraform-apply.outputs.database_url }}"
+          echo "DATABASE_URL length is ${#URL_VAL}"
+          if [ -z "$URL_VAL" ]; then
             echo "Error: database_url output is empty!"
+            exit 1
           fi
 
       - name: Configure AWS credentials
