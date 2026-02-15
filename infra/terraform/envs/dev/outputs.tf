@@ -13,3 +13,11 @@ output "db_endpoint" {
 output "cognito_domain" {
   value = "https://${module.cognito.domain}.auth.${var.aws_region}.amazoncognito.com"
 }
+
+output "cognito_client_id" {
+  value = module.cognito.client_id
+}
+
+output "cognito_user_pool_id" {
+  value = module.cognito.user_pool_id
+}

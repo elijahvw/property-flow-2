@@ -100,7 +100,17 @@ function App() {
       </nav>
 
       <main className="main">
-        {user ? (
+        {loading ? (
+          <div className="loading-container">
+            <p>Loading PropertyFlow...</p>
+          </div>
+        ) : error && !health ? (
+          <div className="error-container">
+            <h1>Configuration Error</h1>
+            <p>Could not connect to the API. Please ensure your environment variables are set correctly.</p>
+            <pre>{error}</pre>
+          </div>
+        ) : user ? (
           <div className="dashboard">
             <header className="dashboard-header">
               <h1>Dashboard: {user.companies[0]?.name || 'No Company'}</h1>
