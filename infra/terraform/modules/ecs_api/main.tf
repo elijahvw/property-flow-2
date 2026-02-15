@@ -3,7 +3,10 @@ variable "vpc_id" { type = string }
 variable "public_subnets" { type = list(string) }
 variable "db_endpoint" { type = string }
 variable "cognito_user_pool_id" { type = string }
-variable "aws_region" { type = string default = "us-east-1" }
+variable "aws_region" {
+  type    = string
+  default = "us-east-1"
+}
 
 resource "aws_ecr_repository" "api" {
   name                 = "propertyflow-${var.environment}-api"

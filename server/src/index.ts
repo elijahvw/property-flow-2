@@ -26,14 +26,14 @@ const buildApp = async () => {
   });
 
   await app.register(jwt, {
-    secret: async (_request: any, token: any) => {
-      const header = token.header;
+    secret: async (_request, token) => {
+      const header = (token as any).header;
       const key = await client.getSigningKey(header.kid);
       return key.getPublicKey();
     },
     verify: {
       allowedIss: [cognitoDomain],
-    },
+    } as any,
   });
 
   app.decorate('prisma', prisma);
