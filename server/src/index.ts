@@ -26,7 +26,7 @@ const buildApp = async () => {
   });
 
   await app.register(jwt, {
-    secret: async (_request, token) => {
+    secret: async (_request: any, token: any) => {
       const header = (token as any).header;
       const key = await client.getSigningKey(header.kid);
       return key.getPublicKey();
