@@ -9,7 +9,7 @@ COPY server/package*.json ./server/
 COPY client/package*.json ./client/
 
 # Install all dependencies (including dev)
-RUN npm ci
+RUN npm install
 
 # Stage 2: Builder
 FROM node:20-slim AS builder
