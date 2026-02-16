@@ -89,7 +89,21 @@ function App() {
       return;
     }
 
-    fetch('/api/health').then(res => res.json()).then(setHealth).catch(err => setError(err.message));
+    fetchWithAuth('/api/health')
+      .then(async res => {
+        if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+        const contentType = res.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await res.text();
+          throw new Error(`Expected JSON but got ${contentType || 'nothing'} (first 50 chars: ${text.substring(0, 50)})`);
+        }
+        return res.json();
+      })
+      .then(setHealth)
+      .catch(err => {
+        console.error('Health check failed:', err);
+        setError(err.message);
+      });
     checkAuth();
   }, []);
 
