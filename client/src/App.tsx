@@ -77,6 +77,8 @@ function App() {
         }
       } else {
         setUser(null);
+      } else {
+        setUser(null);
       }
     } catch (err) {
       setUser(null);
