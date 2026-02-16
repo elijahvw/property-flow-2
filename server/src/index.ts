@@ -4,6 +4,9 @@ import jwt from '@fastify/jwt';
 import jwksClient from 'jwks-rsa';
 import { PrismaClient } from '@prisma/client';
 import { registerRoutes } from './routes';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const prisma = new PrismaClient();
 
@@ -19,22 +22,24 @@ export const buildApp = async () => {
   const cognitoUserPoolId = process.env.COGNITO_USER_POOL_ID;
   const cognitoDomain = `https://cognito-idp.${cognitoRegion}.amazonaws.com/${cognitoUserPoolId}`;
 
-  const client = jwksClient({
-    jwksUri: `${cognitoDomain}/.well-known/jwks.json`,
-    cache: true,
-    rateLimit: true,
-  });
+  if (cognitoUserPoolId) {
+    const client = jwksClient({
+      jwksUri: `${cognitoDomain}/.well-known/jwks.json`,
+      cache: true,
+      rateLimit: true,
+    });
 
-  await app.register(jwt, {
-    secret: async (_request: any, token: any) => {
-      const header = (token as any).header;
-      const key = await client.getSigningKey(header.kid);
-      return key.getPublicKey();
-    },
-    verify: {
-      allowedIss: [cognitoDomain],
-    } as any,
-  });
+    await app.register(jwt, {
+      secret: async (_request: any, token: any) => {
+        const header = (token as any).header;
+        const key = await client.getSigningKey(header.kid);
+        return key.getPublicKey();
+      },
+      verify: {
+        allowedIss: [cognitoDomain],
+      } as any,
+    });
+  }
 
   app.decorate('prisma', prisma);
 

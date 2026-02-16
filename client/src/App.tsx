@@ -75,6 +75,8 @@ function App() {
           const text = await res.text();
           console.error('Expected JSON for /api/me but got:', contentType, text.substring(0, 100));
         }
+      } else {
+        setUser(null);
       }
     } catch (err) {
       setUser(null);
