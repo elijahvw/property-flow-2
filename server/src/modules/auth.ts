@@ -12,9 +12,13 @@ export async function authRoutes(app: FastifyInstance) {
       email: user.email,
       name: user.name,
       companies: user.companies.map((cu: any) => ({
-        id: cu.company.id,
-        name: cu.company.name,
-        role: cu.role
+        id: cu.id,
+        companyId: cu.companyId,
+        role: cu.role,
+        company: {
+          id: cu.company.id,
+          name: cu.company.name
+        }
       }))
     };
   });

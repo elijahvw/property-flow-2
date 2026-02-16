@@ -77,8 +77,6 @@ function App() {
         }
       } else {
         setUser(null);
-      } else {
-        setUser(null);
       }
     } catch (err) {
       setUser(null);
@@ -164,6 +162,117 @@ function App() {
 
   const activeCompany = user?.companies[0];
 
+  const RoleDashboard = () => {
+    const role = activeCompany?.role;
+
+    if (role === 'COMPANY_OWNER' || role === 'PROPERTY_MANAGER') {
+      return (
+        <div className="dashboard-content">
+          <header className="dashboard-header">
+            <h1>Landlord Portal</h1>
+            <p className="text-muted">{activeCompany.company.name} — Welcome, {user?.name}</p>
+          </header>
+          
+          <div className="dashboard-grid">
+            <div className="card">
+              <div className="card-header">
+                <h3>Properties</h3>
+                <button className="btn-small" onClick={() => setShowForm('property')}>+ New Property</button>
+              </div>
+              
+              {showForm === 'property' && (
+                <form onSubmit={handleCreateProperty} className="inline-form">
+                  <div className="form-group">
+                    <input placeholder="Property Name" onChange={e => setFormData({...formData, propertyName: e.target.value})} required />
+                    <input placeholder="Address" onChange={e => setFormData({...formData, address: e.target.value})} required />
+                  </div>
+                  <div className="form-actions">
+                    <button type="submit" className="btn-primary">Create</button>
+                    <button type="button" className="btn-secondary" onClick={() => setShowForm(null)}>Cancel</button>
+                  </div>
+                </form>
+              )}
+
+              <div className="property-list">
+                {properties.length === 0 ? (
+                  <p className="muted">No properties found. Add one to get started.</p>
+                ) : (
+                  properties.map(p => (
+                    <div key={p.id} className="property-item">
+                      <div className="p-info">
+                        <strong>{p.name}</strong>
+                        <span>{p.address}</span>
+                      </div>
+                      <div className="p-actions">
+                        <button className="btn-small secondary" onClick={() => { setShowForm('unit'); setSelectedPropertyId(p.id); }}>+ Unit</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="card">
+              <h3>Overview</h3>
+              <div className="stats-list">
+                <div className="stat-item">
+                  <span className="stat-label">Total Properties</span>
+                  <span className="stat-value">{properties.length}</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Active Leases</span>
+                  <span className="stat-value">0</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Pending Maintenance</span>
+                  <span className="stat-value">0</span>
+                </div>
+              </div>
+              <div className="quick-links">
+                <button className="btn-link">Manage Tenants</button>
+                <button className="btn-link">Financial Reports</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (role === 'TENANT') {
+      return (
+        <div className="dashboard-content">
+          <header className="dashboard-header">
+            <h1>Tenant Portal</h1>
+            <p className="text-muted">Welcome home, {user?.name}</p>
+          </header>
+          <div className="dashboard-grid">
+            <div className="card">
+              <h3>My Residence</h3>
+              <p className="muted">Details for your unit at {activeCompany.company.name} will appear here.</p>
+            </div>
+            <div className="card">
+              <h3>Actions</h3>
+              <button className="btn-primary full-width mb-1">Pay Rent</button>
+              <button className="btn-secondary full-width">Request Maintenance</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="dashboard-content">
+        <header className="dashboard-header">
+          <h1>Dashboard</h1>
+          <p className="text-muted">Role: {role} — {activeCompany?.company.name}</p>
+        </header>
+        <div className="card">
+          <p>Welcome to PropertyFlow. Your specific dashboard features are being prepared.</p>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="app">
       <nav className="navbar">
@@ -171,7 +280,7 @@ function App() {
         <div className="nav-user">
           {user ? (
             <div className="user-profile">
-              <span>{user.name} ({activeCompany?.role || 'No Role'})</span>
+              <span>{user.name} ({activeCompany?.role?.replace('_', ' ') || 'No Role'})</span>
               <button className="btn-logout" onClick={() => AuthService.logout()}>Logout</button>
             </div>
           ) : (
@@ -194,65 +303,35 @@ function App() {
               <div className="card">
                 <h2>Welcome! Create a company to get started.</h2>
                 <form onSubmit={handleCreateCompany}>
-                  <input placeholder="Company Name" onChange={e => setFormData({...formData, companyName: e.target.value})} required />
+                  <input placeholder="Company Name" className="full-width mb-1" onChange={e => setFormData({...formData, companyName: e.target.value})} required />
                   <button type="submit" className="btn-primary">Create Company</button>
                 </form>
               </div>
             ) : (
-              <div className="dashboard-content">
-                <header className="dashboard-header">
-                  <h1>{activeCompany.company.name} Dashboard</h1>
-                </header>
-
-                <div className="dashboard-grid">
-                  <div className="card">
-                    <div className="card-header">
-                      <h3>Properties</h3>
-                      <button className="btn-small" onClick={() => setShowForm('property')}>+ New</button>
-                    </div>
-                    
-                    {showForm === 'property' && (
-                      <form onSubmit={handleCreateProperty} className="inline-form">
-                        <input placeholder="Name" onChange={e => setFormData({...formData, propertyName: e.target.value})} required />
-                        <input placeholder="Address" onChange={e => setFormData({...formData, address: e.target.value})} required />
-                        <button type="submit">Create</button>
-                        <button type="button" onClick={() => setShowForm(null)}>Cancel</button>
-                      </form>
-                    )}
-
-                    <div className="property-list">
-                      {properties.map(p => (
-                        <div key={p.id} className="property-item">
-                          <div className="p-info">
-                            <strong>{p.name}</strong>
-                            <span>{p.address}</span>
-                          </div>
-                          <div className="p-actions">
-                            <button className="btn-small" onClick={() => { setShowForm('unit'); setSelectedPropertyId(p.id); }}>+ Unit</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {showForm === 'unit' && (
+              <>
+                <RoleDashboard />
+                {showForm === 'unit' && (
+                  <div className="modal-overlay">
                     <div className="card modal">
                       <h3>Add Unit to {properties.find(p => p.id === selectedPropertyId)?.name}</h3>
                       <form onSubmit={handleCreateUnit}>
-                        <input placeholder="Unit Number (e.g. 101)" onChange={e => setFormData({...formData, unitNumber: e.target.value})} required />
-                        <button type="submit">Add Unit</button>
-                        <button type="button" onClick={() => setShowForm(null)}>Cancel</button>
+                        <input placeholder="Unit Number (e.g. 101)" className="full-width mb-1" onChange={e => setFormData({...formData, unitNumber: e.target.value})} required />
+                        <div className="form-actions">
+                          <button type="submit" className="btn-primary">Add Unit</button>
+                          <button type="button" className="btn-secondary" onClick={() => setShowForm(null)}>Cancel</button>
+                        </div>
                       </form>
                     </div>
-                  )}
-                </div>
-              </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         ) : (
           <div className="welcome-hero">
             <h1>Property Management Simplified.</h1>
-            <button className="btn-primary" onClick={handleLogin}>Get Started</button>
+            <p className="text-muted mb-2">The all-in-one platform for landlords and tenants.</p>
+            <button className="btn-primary lg" onClick={handleLogin}>Get Started</button>
           </div>
         )}
       </main>
