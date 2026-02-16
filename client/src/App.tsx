@@ -59,15 +59,21 @@ function App() {
 
       const res = await fetchWithAuth('/api/me');
       if (res.ok) {
-        const userData = await res.json();
-        setUser(userData);
-        if (userData.companies.length > 0) {
-          const currentActive = localStorage.getItem('active_company_id');
-          if (!currentActive || !userData.companies.find((c: any) => c.companyId === currentActive)) {
-            localStorage.setItem('active_company_id', userData.companies[0].companyId);
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const userData = await res.json();
+          setUser(userData);
+          if (userData.companies.length > 0) {
+            const currentActive = localStorage.getItem('active_company_id');
+            if (!currentActive || !userData.companies.find((c: any) => c.companyId === currentActive)) {
+              localStorage.setItem('active_company_id', userData.companies[0].companyId);
+            }
+            const props = await PropertyService.list();
+            setProperties(props);
           }
-          const props = await PropertyService.list();
-          setProperties(props);
+        } else {
+          const text = await res.text();
+          console.error('Expected JSON for /api/me but got:', contentType, text.substring(0, 100));
         }
       }
     } catch (err) {
@@ -89,17 +95,24 @@ function App() {
       return;
     }
 
-    fetchWithAuth('/api/health')
+    console.log('Fetching health check...');
+    fetch('/api/health')
       .then(async res => {
-        if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+        console.log('Health check response status:', res.status);
         const contentType = res.headers.get('content-type');
+        console.log('Health check content-type:', contentType);
+        if (!res.ok) throw new Error(`Server responded with ${res.status}`);
         if (!contentType || !contentType.includes('application/json')) {
           const text = await res.text();
+          console.error('Health check returned non-JSON:', text.substring(0, 200));
           throw new Error(`Expected JSON but got ${contentType || 'nothing'} (first 50 chars: ${text.substring(0, 50)})`);
         }
         return res.json();
       })
-      .then(setHealth)
+      .then(data => {
+        console.log('Health check success:', data);
+        setHealth(data);
+      })
       .catch(err => {
         console.error('Health check failed:', err);
         setError(err.message);
