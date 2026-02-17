@@ -53,7 +53,7 @@ export const AuthService = {
 
   getToken: async () => {
     const session = await AuthService.getSession();
-    if (session) return session.getAccessToken().getJwtToken();
+    if (session) return session.getIdToken().getJwtToken();
     return localStorage.getItem('access_token');
   }
 };

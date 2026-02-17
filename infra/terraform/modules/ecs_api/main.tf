@@ -3,6 +3,7 @@ variable "vpc_id" { type = string }
 variable "public_subnets" { type = list(string) }
 variable "db_endpoint" { type = string }
 variable "cognito_user_pool_id" { type = string }
+variable "cognito_client_id" { type = string }
 variable "aws_region" {
   type    = string
   default = "us-east-1"
@@ -127,6 +128,7 @@ resource "aws_ecs_task_definition" "api" {
     environment = [
       { name = "DATABASE_URL", value = var.database_url != "" ? var.database_url : "postgresql://postgres:password123@${var.db_endpoint}/propertyflow?schema=public" },
       { name = "COGNITO_USER_POOL_ID", value = var.cognito_user_pool_id },
+      { name = "COGNITO_CLIENT_ID", value = var.cognito_client_id },
       { name = "AWS_REGION", value = var.aws_region },
       { name = "NODE_ENV", value = "production" },
       { name = "API_PORT", value = "3001" }

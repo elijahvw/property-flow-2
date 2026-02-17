@@ -53,6 +53,7 @@ module "ecr" {
   public_subnets       = module.network.public_subnets
   db_endpoint          = module.rds.db_endpoint
   cognito_user_pool_id = module.cognito.user_pool_id
+  cognito_client_id    = aws_cognito_user_pool_client.client.id
   aws_region           = var.aws_region
   database_url         = var.database_url
 }

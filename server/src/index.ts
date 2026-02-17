@@ -13,6 +13,7 @@ console.log('Starting server with environment:', {
   PORT: process.env.API_PORT || '3001',
   AWS_REGION: process.env.AWS_REGION || 'us-east-1',
   HAS_COGNITO_POOL: !!process.env.COGNITO_USER_POOL_ID,
+  HAS_COGNITO_CLIENT: !!process.env.COGNITO_CLIENT_ID,
   HAS_DATABASE_URL: !!process.env.DATABASE_URL
 });
 
@@ -31,6 +32,7 @@ export const buildApp = async () => {
 
   const cognitoRegion = process.env.AWS_REGION || 'us-east-1';
   const cognitoUserPoolId = process.env.COGNITO_USER_POOL_ID;
+  const cognitoClientId = process.env.COGNITO_CLIENT_ID;
 
   if (!cognitoUserPoolId) {
     app.log.warn('COGNITO_USER_POOL_ID is not set. Auth might fail.');
@@ -47,11 +49,15 @@ export const buildApp = async () => {
   await app.register(jwt, {
     secret: async (_request: any, token: any) => {
       const header = (token as any).header;
+      if (!header || !header.kid) {
+        throw new Error('No kid found in JWT header');
+      }
       const key = await client.getSigningKey(header.kid);
       return key.getPublicKey();
     },
     verify: {
       allowedIss: [cognitoDomain],
+      allowedAud: cognitoClientId ? [cognitoClientId] : undefined,
     } as any,
   });
 
