@@ -28,10 +28,25 @@ export async function companyRoutes(app: FastifyInstance) {
             role: 'COMPANY_OWNER'
           }
         }
+      },
+      include: {
+        users: {
+          where: { userId: user.id },
+          include: { company: true }
+        }
       }
     });
 
-    return reply.status(201).send(company);
+    const companyUser = company.users[0];
+    return reply.status(201).send({
+      id: companyUser.id,
+      companyId: companyUser.companyId,
+      role: companyUser.role,
+      company: {
+        id: companyUser.company.id,
+        name: companyUser.company.name
+      }
+    });
   });
 
   app.get('/:id', async (request, reply) => {

@@ -48,7 +48,14 @@ function App() {
   const checkAuth = async () => {
     try {
       const hash = window.location.hash;
-      if (hash.includes('access_token=')) {
+      if (hash.includes('id_token=')) {
+        const params = new URLSearchParams(hash.substring(1));
+        const idToken = params.get('id_token');
+        if (idToken) {
+          localStorage.setItem('access_token', idToken);
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      } else if (hash.includes('access_token=')) {
         const params = new URLSearchParams(hash.substring(1));
         const token = params.get('access_token');
         if (token) {
@@ -170,7 +177,7 @@ function App() {
         <div className="dashboard-content">
           <header className="dashboard-header">
             <h1>Landlord Portal</h1>
-            <p className="text-muted">{activeCompany.company.name} — Welcome, {user?.name}</p>
+            <p className="text-muted">{activeCompany?.company.name} — Welcome, {user?.name}</p>
           </header>
           
           <div className="dashboard-grid">
@@ -248,7 +255,7 @@ function App() {
           <div className="dashboard-grid">
             <div className="card">
               <h3>My Residence</h3>
-              <p className="muted">Details for your unit at {activeCompany.company.name} will appear here.</p>
+              <p className="muted">Details for your unit at {activeCompany?.company.name} will appear here.</p>
             </div>
             <div className="card">
               <h3>Actions</h3>
