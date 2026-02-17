@@ -56,8 +56,9 @@ export const buildApp = async () => {
       return key.getPublicKey();
     },
     verify: {
-      allowedIss: [cognitoDomain],
-      allowedAud: cognitoClientId ? [cognitoClientId] : undefined,
+      issuer: cognitoDomain,
+      audience: cognitoClientId,
+      algorithms: ['RS256']
     } as any,
   });
 

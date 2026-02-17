@@ -48,10 +48,13 @@ function App() {
   const checkAuth = async () => {
     try {
       const hash = window.location.hash;
+      console.log('Checking auth, hash present:', !!hash);
+      
       if (hash.includes('id_token=')) {
         const params = new URLSearchParams(hash.substring(1));
         const idToken = params.get('id_token');
         if (idToken) {
+          console.log('ID Token found in hash, saving...');
           localStorage.setItem('access_token', idToken);
           window.history.replaceState({}, document.title, window.location.pathname);
         }
@@ -59,16 +62,20 @@ function App() {
         const params = new URLSearchParams(hash.substring(1));
         const token = params.get('access_token');
         if (token) {
+          console.log('Access Token found in hash (no ID token), saving...');
           localStorage.setItem('access_token', token);
           window.history.replaceState({}, document.title, window.location.pathname);
         }
       }
 
       const res = await fetchWithAuth('/api/me');
+      console.log('/api/me response status:', res.status);
+      
       if (res.ok) {
         const contentType = res.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
           const userData = await res.json();
+          console.log('User data loaded:', userData.email);
           setUser(userData);
           if (userData.companies.length > 0) {
             const currentActive = localStorage.getItem('active_company_id');
@@ -83,9 +90,12 @@ function App() {
           console.error('Expected JSON for /api/me but got:', contentType, text.substring(0, 100));
         }
       } else {
+        const errorText = await res.text();
+        console.error('Auth failed with status:', res.status, errorText);
         setUser(null);
       }
     } catch (err) {
+      console.error('Auth check error:', err);
       setUser(null);
     } finally {
       setLoading(false);
