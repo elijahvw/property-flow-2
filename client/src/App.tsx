@@ -260,14 +260,29 @@ function App() {
       );
     }
 
+    if (role === 'MAINTENANCE') {
+      return (
+        <div className="dashboard-content">
+          <header className="dashboard-header">
+            <h1>Maintenance Portal</h1>
+            <p className="text-muted">Welcome, {user?.name}</p>
+          </header>
+          <div className="card">
+            <h3>Assigned Work Orders</h3>
+            <p className="muted">You have no active work orders assigned.</p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="dashboard-content">
         <header className="dashboard-header">
-          <h1>Dashboard</h1>
-          <p className="text-muted">Role: {role} — {activeCompany?.company.name}</p>
+          <h1>{role?.replace('_', ' ')} Dashboard</h1>
+          <p className="text-muted">Welcome to PropertyFlow, {user?.name}</p>
         </header>
         <div className="card">
-          <p>Welcome to PropertyFlow. Your specific dashboard features are being prepared.</p>
+          <p>Your workspace for {activeCompany?.company.name} is being set up. Please check back soon for updates.</p>
         </div>
       </div>
     );

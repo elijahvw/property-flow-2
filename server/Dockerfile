@@ -1,5 +1,6 @@
 # Stage 1: Base & Dependencies
 FROM node:20-slim AS deps
+RUN apt-get update -y && apt-get install -y openssl
 WORKDIR /app
 
 # Copy workspace configuration
@@ -13,6 +14,7 @@ RUN npm install
 
 # Stage 2: Builder
 FROM node:20-slim AS builder
+RUN apt-get update -y && apt-get install -y openssl
 WORKDIR /app
 
 # Copy node_modules and all source
@@ -26,6 +28,7 @@ RUN npm run build --workspace=@property-flow/server
 
 # Stage 3: Production
 FROM node:20-slim
+RUN apt-get update -y && apt-get install -y openssl
 WORKDIR /app
 
 # Copy built assets and node_modules
