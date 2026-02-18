@@ -9,6 +9,7 @@ interface AuthContextType {
   loading: boolean;
   signOut: () => void;
   signIn: () => void;
+  isConfigured: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,22 +18,24 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const ROLES_CLAIM = 'https://propertyflow.com/roles';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { 
-    user, 
-    isAuthenticated, 
-    isLoading: auth0Loading, 
-    logout, 
-    loginWithRedirect 
-  } = useAuth0();
+  const auth0 = (() => {
+    try {
+      return useAuth0();
+    } catch (e) {
+      return null;
+    }
+  })();
   
   const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const isConfigured = !!auth0;
+
   useEffect(() => {
-    if (!auth0Loading) {
-      if (isAuthenticated && user) {
+    if (auth0 && !auth0.isLoading) {
+      if (auth0.isAuthenticated && auth0.user) {
         // Extract role from custom claim
-        const userRoles = user[ROLES_CLAIM] || [];
+        const userRoles = auth0.user[ROLES_CLAIM] || [];
         if (userRoles.includes('admin')) setRole('admin');
         else if (userRoles.includes('landlord')) setRole('landlord');
         else if (userRoles.includes('tenant')) setRole('tenant');
@@ -41,24 +44,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setRole(null);
       }
       setLoading(false);
+    } else if (!auth0) {
+      setRole(null);
+      setLoading(false);
     }
-  }, [auth0Loading, isAuthenticated, user]);
+  }, [auth0?.isLoading, auth0?.isAuthenticated, auth0?.user]);
 
   const signOut = () => {
-    logout({ logoutParams: { returnTo: window.location.origin } });
+    if (auth0) {
+      auth0.logout({ logoutParams: { returnTo: window.location.origin } });
+    }
   };
 
   const signIn = () => {
-    loginWithRedirect();
+    if (auth0) {
+      auth0.loginWithRedirect();
+    } else {
+      alert('Auth0 is not configured. Please check your .env file.');
+    }
   };
 
   return (
     <AuthContext.Provider value={{ 
-      user, 
+      user: auth0?.user, 
       role, 
-      loading: auth0Loading || loading, 
+      loading: (auth0?.isLoading || false) || loading, 
       signOut, 
-      signIn 
+      signIn,
+      isConfigured
     }}>
       {children}
     </AuthContext.Provider>

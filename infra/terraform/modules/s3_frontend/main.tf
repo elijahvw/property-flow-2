@@ -1,5 +1,6 @@
 resource "aws_s3_bucket" "frontend" {
   bucket = "propertyflow-${var.environment}-frontend"
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_public_access_block" "frontend" {
@@ -25,6 +26,18 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     origin_id                = "S3-${aws_s3_bucket.frontend.id}"
   }
 
+  origin {
+    domain_name = var.alb_dns_name
+    origin_id   = "ALB"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
@@ -43,6 +56,24 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     min_ttl                = 0
     default_ttl            = 3600
     max_ttl                = 86400
+  }
+
+  ordered_cache_behavior {
+    path_pattern     = "/api/*"
+    allowed_methods  = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "ALB"
+
+    forwarded_values {
+      query_string = true
+      headers      = ["*"]
+      cookies { forward = "all" }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 0
+    max_ttl                = 0
   }
 
   restrictions {
@@ -89,6 +120,7 @@ resource "aws_s3_bucket_policy" "frontend" {
 }
 
 variable "environment" { type = string }
+variable "alb_dns_name" { type = string }
 
 output "bucket_name" { value = aws_s3_bucket.frontend.id }
 output "cloudfront_domain_name" { value = aws_cloudfront_distribution.s3_distribution.domain_name }

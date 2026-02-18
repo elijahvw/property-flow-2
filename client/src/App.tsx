@@ -29,7 +29,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
       return (
         <div className="error-container">
           <h1>Something went wrong.</h1>
-          <p>{this.state.error?.message}</p>
+          <pre>{this.state.error?.message}</pre>
           <button className="btn-primary" onClick={() => window.location.reload()}>Reload Page</button>
         </div>
       );
@@ -152,37 +152,38 @@ const auth0Domain = import.meta.env.VITE_AUTH0_DOMAIN;
 const auth0ClientId = import.meta.env.VITE_AUTH0_CLIENT_ID;
 const auth0Audience = import.meta.env.VITE_AUTH0_AUDIENCE;
 
-function App() {
+const OptionalAuth0Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   if (!auth0Domain || !auth0ClientId) {
-    return (
-      <div className="error-container">
-        <h1>Configuration Missing</h1>
-        <p>Please provide VITE_AUTH0_DOMAIN and VITE_AUTH0_CLIENT_ID in your .env file.</p>
-      </div>
-    );
+    return <AuthProvider>{children}</AuthProvider>;
   }
 
   return (
+    <Auth0Provider
+      domain={auth0Domain}
+      clientId={auth0ClientId}
+      authorizationParams={{
+        redirect_uri: window.location.origin,
+        audience: auth0Audience,
+      }}
+    >
+      <AuthProvider>{children}</AuthProvider>
+    </Auth0Provider>
+  );
+};
+
+function App() {
+  return (
     <ErrorBoundary>
-      <Auth0Provider
-        domain={auth0Domain}
-        clientId={auth0ClientId}
-        authorizationParams={{
-          redirect_uri: window.location.origin,
-          audience: auth0Audience,
-        }}
-      >
-        <AuthProvider>
-          <Router>
-            <div className="app">
-              <Navbar />
-              <main className="main">
-                <AppRoutes />
-              </main>
-            </div>
-          </Router>
-        </AuthProvider>
-      </Auth0Provider>
+      <OptionalAuth0Provider>
+        <Router>
+          <div className="app">
+            <Navbar />
+            <main className="main">
+              <AppRoutes />
+            </main>
+          </div>
+        </Router>
+      </OptionalAuth0Provider>
     </ErrorBoundary>
   );
 }

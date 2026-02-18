@@ -14,6 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       cloudfront_distribution_id: ${{ steps.outputs.outputs.cloudfront_distribution_id }}
+      repository_url: ${{ steps.outputs.outputs.repository_url }}
+      ecs_cluster_name: ${{ steps.outputs.outputs.ecs_cluster_name }}
+      ecs_service_name: ${{ steps.outputs.outputs.ecs_service_name }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
@@ -29,14 +32,45 @@ jobs:
       - name: Apply
         run: |
           cd infra/terraform/envs/dev
-          terraform apply -auto-approve
+          terraform apply -auto-approve \
+            -var="auth0_domain=${{ vars.AUTH0_DOMAIN }}" \
+            -var="auth0_m2m_client_id=${{ vars.AUTH0_MANAGEMENT_CLIENT_ID }}" \
+            -var="auth0_m2m_client_secret=${{ secrets.AUTH0_MANAGEMENT_CLIENT_SECRET }}"
       - name: Get Outputs
         id: outputs
         run: |
           cd infra/terraform/envs/dev
           echo "cloudfront_distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
+          echo "repository_url=$(terraform output -raw repository_url)" >> $GITHUB_OUTPUT
+          echo "ecs_cluster_name=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_OUTPUT
+          echo "ecs_service_name=$(terraform output -raw ecs_service_name)" >> $GITHUB_OUTPUT
 
-  deploy:
+  deploy-backend:
+    needs: terraform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build, tag, and push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY_URL: ${{ needs.terraform.outputs.repository_url }}
+          IMAGE_TAG: latest
+        run: |
+          docker build -t $REPOSITORY_URL:$IMAGE_TAG ./server
+          docker push $REPOSITORY_URL:$IMAGE_TAG
+      - name: Update ECS service
+        run: |
+          aws ecs update-service --cluster ${{ needs.terraform.outputs.ecs_cluster_name }} --service ${{ needs.terraform.outputs.ecs_service_name }} --force-new-deployment
+
+  deploy-frontend:
     needs: terraform
     runs-on: ubuntu-latest
     steps:
