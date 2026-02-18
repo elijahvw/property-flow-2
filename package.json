@@ -2,21 +2,13 @@
   "name": "property-flow",
   "private": true,
   "workspaces": [
-    "server",
-    "client",
-    "shared"
+    "client"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:server": "cd server && npm run dev",
-    "dev:client": "cd client && npm run dev",
-    "build": "npm run build:server && npm run build:client",
-    "build:server": "cd server && npm run build",
-    "build:client": "cd client && npm run build",
-    "test": "cd server && npm test"
+    "dev": "npm run dev --workspace=@property-flow/client",
+    "build": "npm run build --workspace=@property-flow/client"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
     "concurrently": "^8.2.2"
   }
 }
