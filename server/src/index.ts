@@ -12,12 +12,16 @@ server.register(cors, {
   origin: '*', // In production, restrict this
 });
 
-const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
-const AUTH0_CLIENT_ID = process.env.AUTH0_MANAGEMENT_CLIENT_ID;
-const AUTH0_CLIENT_SECRET = process.env.AUTH0_MANAGEMENT_CLIENT_SECRET;
-const AUTH0_AUDIENCE = process.env.AUTH0_AUDIENCE;
+const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN || '';
+const AUTH0_CLIENT_ID = process.env.AUTH0_MANAGEMENT_CLIENT_ID || '';
+const AUTH0_CLIENT_SECRET = process.env.AUTH0_MANAGEMENT_CLIENT_SECRET || '';
+const AUTH0_AUDIENCE = process.env.AUTH0_AUDIENCE || '';
 
-server.register(auth0, {
+if (!AUTH0_DOMAIN || !AUTH0_AUDIENCE) {
+  server.log.warn('Missing AUTH0_DOMAIN or AUTH0_AUDIENCE in environment variables');
+}
+
+server.register(auth0 as any, {
   domain: AUTH0_DOMAIN,
   audience: AUTH0_AUDIENCE,
 });
