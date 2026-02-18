@@ -32,6 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshUser = async () => {
     try {
       const token = localStorage.getItem('access_token');
+      console.log('AuthContext: refreshing user, token exists:', !!token);
       if (!token) {
         setUser(null);
         setLoading(false);
@@ -43,11 +44,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           'Authorization': `Bearer ${token}`
         }
       });
+      console.log('AuthContext: /api/me response status:', res.status);
 
       if (res.ok) {
         const userData = await res.json();
+        console.log('AuthContext: user loaded successfully:', userData.email);
         setUser(userData);
       } else {
+        console.warn('AuthContext: /api/me failed');
         setUser(null);
         if (res.status === 401) {
           localStorage.removeItem('access_token');
@@ -62,16 +66,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash.includes('id_token=') || hash.includes('access_token=')) {
-      const params = new URLSearchParams(hash.substring(1));
-      const token = params.get('id_token') || params.get('access_token');
-      if (token) {
-        localStorage.setItem('access_token', token);
-        window.history.replaceState({}, document.title, window.location.pathname);
+    const initAuth = async () => {
+      const hash = window.location.hash;
+      console.log('AuthContext: initAuth, hash:', hash);
+      if (hash.includes('id_token=') || hash.includes('access_token=')) {
+        const params = new URLSearchParams(hash.substring(1));
+        const token = params.get('id_token') || params.get('access_token');
+        if (token) {
+          console.log('AuthContext: found token in hash, saving...');
+          localStorage.setItem('access_token', token);
+          // Wait a tick for localStorage to settle
+          await new Promise(resolve => setTimeout(resolve, 0));
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
       }
-    }
-    refreshUser();
+      await refreshUser();
+    };
+    
+    initAuth();
   }, []);
 
   const login = () => {

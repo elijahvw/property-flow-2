@@ -39,7 +39,7 @@ test.describe('Authentication and Dashboard', () => {
     });
 
     // Navigate to the app with a simulated ID token in the fragment
-    await page.goto('/#id_token=mock-valid-id-token');
+    await page.goto('./#id_token=mock-valid-id-token');
 
     // Verify Landlord Portal is displayed
     await expect(page.locator('h1')).toContainText('Landlord Portal');
@@ -62,7 +62,7 @@ test.describe('Authentication and Dashboard', () => {
       });
     });
 
-    await page.goto('/#id_token=mock-new-id-token');
+    await page.goto('./#id_token=mock-new-id-token');
 
     // Verify onboarding form is displayed
     await expect(page.locator('h2')).toContainText('Welcome! Create a company to get started.');
@@ -94,7 +94,7 @@ test.describe('Authentication and Dashboard', () => {
       });
     });
 
-    await page.goto('/#id_token=mock-tenant-id-token');
+    await page.goto('./#id_token=mock-tenant-id-token');
 
     // Verify Tenant Portal is displayed
     await expect(page.locator('h1')).toContainText('Tenant Portal');
