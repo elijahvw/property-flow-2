@@ -28,14 +28,14 @@ async function getManagementToken() {
     grant_type: 'client_credentials',
   });
 
-  managementToken = response.data.access_token;
+  managementToken = (response.data as any).access_token;
   // Reset token after 1 hour (tokens usually last 24h)
   setTimeout(() => { managementToken = null; }, 3600000);
   return managementToken;
 }
 
 // GET all users
-server.get('/users', async (request, reply) => {
+server.get('/api/users', async (request, reply) => {
   try {
     const token = await getManagementToken();
     const response = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/users`, {
@@ -43,7 +43,7 @@ server.get('/users', async (request, reply) => {
     });
     
     // For each user, we also need their roles
-    const usersWithRoles = await Promise.all(response.data.map(async (user: any) => {
+    const usersWithRoles = await Promise.all((response.data as any[]).map(async (user: any) => {
       const rolesResponse = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/users/${user.user_id}/roles`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -51,7 +51,7 @@ server.get('/users', async (request, reply) => {
         id: user.user_id,
         email: user.email,
         name: user.name,
-        role: rolesResponse.data[0]?.name || 'tenant'
+        role: (rolesResponse.data as any[])[0]?.name || 'tenant'
       };
     }));
 
@@ -63,7 +63,7 @@ server.get('/users', async (request, reply) => {
 });
 
 // UPDATE user role
-server.post('/users/:id/role', async (request: any, reply) => {
+server.post('/api/users/:id/role', async (request: any, reply) => {
   const { id } = request.params;
   const { role } = request.body;
   
@@ -75,7 +75,7 @@ server.post('/users/:id/role', async (request: any, reply) => {
       headers: { Authorization: `Bearer ${token}` }
     });
     
-    const newRole = allRolesResponse.data.find((r: any) => r.name === role);
+    const newRole = (allRolesResponse.data as any[]).find((r: any) => r.name === role);
     if (!newRole) return reply.status(400).send({ error: 'Role not found' });
 
     // 2. Get current roles for the user and remove them
@@ -83,11 +83,12 @@ server.post('/users/:id/role', async (request: any, reply) => {
       headers: { Authorization: `Bearer ${token}` }
     });
     
-    if (currentRolesResponse.data.length > 0) {
+    const currentRoles = currentRolesResponse.data as any[];
+    if (currentRoles.length > 0) {
       await axios.delete(`https://${AUTH0_DOMAIN}/api/v2/users/${id}/roles`, {
         headers: { Authorization: `Bearer ${token}` },
-        data: { roles: currentRolesResponse.data.map((r: any) => r.id) }
-      });
+        data: { roles: currentRoles.map((r: any) => r.id) }
+      } as any);
     }
 
     // 3. Assign new role

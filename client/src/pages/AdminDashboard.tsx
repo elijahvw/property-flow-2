@@ -21,8 +21,8 @@ const AdminDashboard: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      // Backend is expected to be running on 5011
-      const response = await axios.get('http://localhost:5011/users');
+      // Using relative path, CloudFront will route /api/ to the ALB
+      const response = await axios.get('/api/users');
       setUsers(response.data);
     } catch (err: any) {
       console.error('Error fetching users:', err);
@@ -35,7 +35,7 @@ const AdminDashboard: React.FC = () => {
   const updateRole = async (userId: string, newRole: string) => {
     try {
       setError(null);
-      await axios.post(`http://localhost:5011/users/${userId}/role`, {
+      await axios.post(`/api/users/${userId}/role`, {
         role: newRole
       });
       // Refresh user list to see updated role

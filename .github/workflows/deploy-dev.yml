@@ -86,9 +86,14 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ vars.AWS_REGION }}
       - name: Build & Deploy
+        env:
+          VITE_AUTH0_DOMAIN: ${{ vars.VITE_AUTH0_DOMAIN }}
+          VITE_AUTH0_CLIENT_ID: ${{ vars.VITE_AUTH0_CLIENT_ID }}
+          VITE_AUTH0_AUDIENCE: ${{ vars.VITE_AUTH0_AUDIENCE }}
         run: |
           npm install
-          npm run build --workspace=@property-flow/client
+          cd client && npm run build
+          cd ..
           aws s3 sync client/dist/ s3://propertyflow-dev-frontend --delete
       - name: Invalidate CloudFront
         run: |
