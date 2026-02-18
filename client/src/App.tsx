@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { Auth0Provider } from '@auth0/auth0-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Home from './pages/Home';
@@ -7,7 +8,6 @@ import About from './pages/About';
 import LandlordDashboard from './pages/LandlordDashboard';
 import TenantPortal from './pages/TenantPortal';
 import AdminDashboard from './pages/AdminDashboard';
-import Auth from './pages/Auth';
 import './App.css';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -41,7 +41,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, role, signOut, loading } = useAuth();
+  const { user, role, signOut, signIn, loading } = useAuth();
 
   if (loading) return (
     <nav className="navbar">
@@ -94,15 +94,16 @@ const Navbar = () => {
         )}
 
         {!user ? (
-          location.pathname !== '/auth' && (
-            <button className="nav-btn active" onClick={() => navigate('/auth')}>
-              Sign In
-            </button>
-          )
-        ) : (
-          <button className="nav-btn" onClick={signOut}>
-            Sign Out
+          <button className="nav-btn active" onClick={signIn}>
+            Sign In
           </button>
+        ) : (
+          <div className="user-profile">
+            <span className="user-name">{user.name}</span>
+            <button className="nav-btn" onClick={signOut}>
+              Sign Out
+            </button>
+          </div>
         )}
       </div>
     </nav>
@@ -114,7 +115,6 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/about" element={<About />} />
-      <Route path="/auth" element={<Auth />} />
       
       <Route 
         path="/landlord" 
@@ -148,19 +148,41 @@ function AppRoutes() {
   );
 }
 
+const auth0Domain = import.meta.env.VITE_AUTH0_DOMAIN;
+const auth0ClientId = import.meta.env.VITE_AUTH0_CLIENT_ID;
+const auth0Audience = import.meta.env.VITE_AUTH0_AUDIENCE;
+
 function App() {
+  if (!auth0Domain || !auth0ClientId) {
+    return (
+      <div className="error-container">
+        <h1>Configuration Missing</h1>
+        <p>Please provide VITE_AUTH0_DOMAIN and VITE_AUTH0_CLIENT_ID in your .env file.</p>
+      </div>
+    );
+  }
+
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <Router>
-          <div className="app">
-            <Navbar />
-            <main className="main">
-              <AppRoutes />
-            </main>
-          </div>
-        </Router>
-      </AuthProvider>
+      <Auth0Provider
+        domain={auth0Domain}
+        clientId={auth0ClientId}
+        authorizationParams={{
+          redirect_uri: window.location.origin,
+          audience: auth0Audience,
+        }}
+      >
+        <AuthProvider>
+          <Router>
+            <div className="app">
+              <Navbar />
+              <main className="main">
+                <AppRoutes />
+              </main>
+            </div>
+          </Router>
+        </AuthProvider>
+      </Auth0Provider>
     </ErrorBoundary>
   );
 }

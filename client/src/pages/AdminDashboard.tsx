@@ -1,32 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import axios from 'axios';
 
-interface Profile {
+interface User {
   id: string;
   email: string;
+  name: string;
   role: string;
-  full_name: string | null;
 }
 
 const AdminDashboard: React.FC = () => {
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchProfiles();
+    fetchUsers();
   }, []);
 
-  const fetchProfiles = async () => {
+  const fetchUsers = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*');
-
-      if (error) throw error;
-      setProfiles(data || []);
-    } catch (error) {
-      console.error('Error fetching profiles:', error);
+      setError(null);
+      // Backend is expected to be running on 5011
+      const response = await axios.get('http://localhost:5011/users');
+      setUsers(response.data);
+    } catch (err: any) {
+      console.error('Error fetching users:', err);
+      setError('Failed to fetch users. Make sure the backend server is running.');
     } finally {
       setLoading(false);
     }
@@ -34,15 +34,15 @@ const AdminDashboard: React.FC = () => {
 
   const updateRole = async (userId: string, newRole: string) => {
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', userId);
-
-      if (error) throw error;
-      await fetchProfiles();
-    } catch (error) {
-      console.error('Error updating role:', error);
+      setError(null);
+      await axios.post(`http://localhost:5011/users/${userId}/role`, {
+        role: newRole
+      });
+      // Refresh user list to see updated role
+      await fetchUsers();
+    } catch (err: any) {
+      console.error('Error updating role:', err);
+      setError('Failed to update role. Please try again.');
     }
   };
 
@@ -73,47 +73,56 @@ const AdminDashboard: React.FC = () => {
           <div className="content-card">
             <div className="card-header">
               <h2>User Management</h2>
-              <button className="btn-secondary" onClick={fetchProfiles}>Refresh</button>
+              <button className="btn-secondary" onClick={fetchUsers} disabled={loading}>
+                {loading ? 'Refreshing...' : 'Refresh'}
+              </button>
             </div>
             
-            {loading ? (
-              <p>Loading users...</p>
-            ) : (
-              <div className="user-table-container">
-                <table className="user-table">
-                  <thead>
+            {error && <div className="error-message">{error}</div>}
+            
+            <div className="user-table-container">
+              <table className="user-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.length === 0 && !loading && (
                     <tr>
-                      <th>Email</th>
-                      <th>Role</th>
-                      <th>Actions</th>
+                      <td colSpan={4} className="text-muted" style={{ textAlign: 'center' }}>
+                        No users found.
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {profiles.map((profile) => (
-                      <tr key={profile.id}>
-                        <td>{profile.email || 'No Email'}</td>
-                        <td>
-                          <span className={`role-badge ${profile.role}`}>
-                            {profile.role}
-                          </span>
-                        </td>
-                        <td>
-                          <select 
-                            value={profile.role} 
-                            onChange={(e) => updateRole(profile.id, e.target.value)}
-                            className="role-select"
-                          >
-                            <option value="tenant">Tenant</option>
-                            <option value="landlord">Landlord</option>
-                            <option value="admin">Admin</option>
-                          </select>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                  )}
+                  {users.map((user) => (
+                    <tr key={user.id}>
+                      <td>{user.name}</td>
+                      <td>{user.email}</td>
+                      <td>
+                        <span className={`role-badge ${user.role}`}>
+                          {user.role}
+                        </span>
+                      </td>
+                      <td>
+                        <select 
+                          value={user.role} 
+                          className="role-select"
+                          onChange={(e) => updateRole(user.id, e.target.value)}
+                        >
+                          <option value="tenant">Tenant</option>
+                          <option value="landlord">Landlord</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>

@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
-  const { user, role, loading } = useAuth();
+  const { user, role, loading, signIn } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -20,8 +20,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
   }
 
   if (!user) {
-    // Redirect to login but save the current location they were trying to access
-    return <Navigate to="/auth" state={{ from: location }} replace />;
+    // Auth0 handles redirecting back to the current page after login
+    signIn();
+    return null;
   }
 
   if (allowedRoles && role && !allowedRoles.includes(role)) {

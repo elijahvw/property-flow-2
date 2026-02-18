@@ -1,68 +1,65 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabaseClient';
+import { useAuth0, User } from '@auth0/auth0-react';
 
 export type UserRole = 'tenant' | 'landlord' | 'admin';
 
 interface AuthContextType {
-  user: User | null;
+  user: User | undefined;
   role: UserRole | null;
   loading: boolean;
-  signOut: () => Promise<void>;
+  signOut: () => void;
+  signIn: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Key for custom roles claim in Auth0 token
+const ROLES_CLAIM = 'https://propertyflow.com/roles';
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const { 
+    user, 
+    isAuthenticated, 
+    isLoading: auth0Loading, 
+    logout, 
+    loginWithRedirect 
+  } = useAuth0();
+  
   const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check active sessions and sets the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
-      else setLoading(false);
-    });
-
-    // Listen for changes on auth state (sign in, sign out, etc.)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) await fetchProfile(session.user.id);
-      else {
+    if (!auth0Loading) {
+      if (isAuthenticated && user) {
+        // Extract role from custom claim
+        const userRoles = user[ROLES_CLAIM] || [];
+        if (userRoles.includes('admin')) setRole('admin');
+        else if (userRoles.includes('landlord')) setRole('landlord');
+        else if (userRoles.includes('tenant')) setRole('tenant');
+        else setRole(null);
+      } else {
         setRole(null);
-        setLoading(false);
       }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .single();
-
-      if (error) throw error;
-      setRole(data?.role as UserRole);
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-      setRole(null);
-    } finally {
       setLoading(false);
     }
+  }, [auth0Loading, isAuthenticated, user]);
+
+  const signOut = () => {
+    logout({ logoutParams: { returnTo: window.location.origin } });
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
+  const signIn = () => {
+    loginWithRedirect();
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, loading, signOut }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      role, 
+      loading: auth0Loading || loading, 
+      signOut, 
+      signIn 
+    }}>
       {children}
     </AuthContext.Provider>
   );
