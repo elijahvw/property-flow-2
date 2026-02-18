@@ -1,20 +1,38 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import Home from './pages/Home';
 import About from './pages/About';
 import './App.css';
+
+const Navbar = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  return (
+    <nav className="navbar">
+      <div className="nav-brand">PropertyFlow</div>
+      <div className="nav-actions">
+        <button 
+          className={`nav-btn ${location.pathname === '/' ? 'active' : ''}`}
+          onClick={() => navigate('/')}
+        >
+          Home
+        </button>
+        <button 
+          className={`nav-btn ${location.pathname === '/about' ? 'active' : ''}`}
+          onClick={() => navigate('/about')}
+        >
+          About
+        </button>
+      </div>
+    </nav>
+  );
+};
 
 function App() {
   return (
     <Router>
       <div className="app">
-        <nav className="navbar">
-          <div className="nav-brand">My Website</div>
-          <div className="nav-links">
-            <Link to="/">Home</Link>
-            <Link to="/about">About</Link>
-          </div>
-        </nav>
-
+        <Navbar />
         <main className="main">
           <Routes>
             <Route path="/" element={<Home />} />
