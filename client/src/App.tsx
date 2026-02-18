@@ -1,6 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import Home from './pages/Home';
 import About from './pages/About';
+import LandlordDashboard from './pages/LandlordDashboard';
+import TenantPortal from './pages/TenantPortal';
+import AdminDashboard from './pages/AdminDashboard';
 import './App.css';
 
 const Navbar = () => {
@@ -18,10 +21,22 @@ const Navbar = () => {
           Home
         </button>
         <button 
-          className={`nav-btn ${location.pathname === '/about' ? 'active' : ''}`}
-          onClick={() => navigate('/about')}
+          className={`nav-btn ${location.pathname === '/landlord' ? 'active' : ''}`}
+          onClick={() => navigate('/landlord')}
         >
-          About
+          Landlord
+        </button>
+        <button 
+          className={`nav-btn ${location.pathname === '/tenant' ? 'active' : ''}`}
+          onClick={() => navigate('/tenant')}
+        >
+          Tenant
+        </button>
+        <button 
+          className={`nav-btn ${location.pathname === '/admin' ? 'active' : ''}`}
+          onClick={() => navigate('/admin')}
+        >
+          Admin
         </button>
       </div>
     </nav>
@@ -37,6 +52,9 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/about" element={<About />} />
+            <Route path="/landlord" element={<LandlordDashboard />} />
+            <Route path="/tenant" element={<TenantPortal />} />
+            <Route path="/admin" element={<AdminDashboard />} />
           </Routes>
         </main>
       </div>
