@@ -53,6 +53,7 @@ model Company {
   tenants    TenantProfile[]
   leases     Lease[]
   charges    Charge[]
+  leaseTenants LeaseTenant[]
   maintenanceRequests MaintenanceRequest[]
   workOrders WorkOrder[]
   ledgerEntries LedgerEntry[]
@@ -157,12 +158,14 @@ model Lease {
 }
 
 model LeaseTenant {
-  id       String @id @default(uuid())
-  leaseId  String @map("lease_id")
-  tenantId String @map("tenant_id")
+  id        String @id @default(uuid())
+  companyId String @map("company_id")
+  leaseId   String @map("lease_id")
+  tenantId  String @map("tenant_id")
 
-  lease  Lease         @relation(fields: [leaseId], references: [id])
-  tenant TenantProfile @relation(fields: [tenantId], references: [id])
+  company Company       @relation(fields: [companyId], references: [id])
+  lease   Lease         @relation(fields: [leaseId], references: [id])
+  tenant  TenantProfile @relation(fields: [tenantId], references: [id])
 
   @@unique([leaseId, tenantId])
   @@map("lease_tenants")

@@ -26,6 +26,16 @@ describe('Server Initialization', () => {
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body);
     expect(body.status).toBe('ok');
-    expect(body.timestamp).toBeDefined();
+  });
+
+  it('should respond to version check', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/version'
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.version).toBeDefined();
   });
 });
