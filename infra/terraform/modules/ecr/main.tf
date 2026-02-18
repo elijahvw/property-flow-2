@@ -2,6 +2,7 @@ variable "environment" { type = string }
 variable "vpc_id" { type = string }
 variable "public_subnets" { type = list(string) }
 variable "auth0_domain" { type = string }
+variable "auth0_audience" { type = string }
 variable "auth0_m2m_client_id" { type = string }
 variable "auth0_m2m_client_secret" { type = string }
 
@@ -111,6 +112,7 @@ resource "aws_ecs_task_definition" "app" {
     }]
     environment = [
       { name = "AUTH0_DOMAIN", value = var.auth0_domain },
+      { name = "AUTH0_AUDIENCE", value = var.auth0_audience },
       { name = "AUTH0_MANAGEMENT_CLIENT_ID", value = var.auth0_m2m_client_id },
       { name = "AUTH0_MANAGEMENT_CLIENT_SECRET", value = var.auth0_m2m_client_secret }
     ]

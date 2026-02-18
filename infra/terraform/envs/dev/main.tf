@@ -28,6 +28,7 @@ module "ecr" {
   vpc_id                  = module.network.vpc_id
   public_subnets          = module.network.public_subnets
   auth0_domain            = var.auth0_domain
+  auth0_audience          = var.auth0_audience
   auth0_m2m_client_id     = var.auth0_m2m_client_id
   auth0_m2m_client_secret = var.auth0_m2m_client_secret
 }

@@ -12,6 +12,11 @@ server.register(cors, {
   origin: '*', // In production, restrict this
 });
 
+// Health check endpoint for ALB
+server.get('/', async () => {
+  return { status: 'ok', version: '1.0.0' };
+});
+
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN || '';
 const AUTH0_CLIENT_ID = process.env.AUTH0_MANAGEMENT_CLIENT_ID || '';
 const AUTH0_CLIENT_SECRET = process.env.AUTH0_MANAGEMENT_CLIENT_SECRET || '';
