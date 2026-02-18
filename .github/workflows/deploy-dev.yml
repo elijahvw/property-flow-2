@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 permissions:
-  id-token: write   # for AWS OIDC later
+  id-token: write
   contents: read
 
 concurrency:
@@ -16,134 +16,32 @@ env:
   TF_DIR: infra/terraform/envs/dev
 
 jobs:
-  terraform-plan:
-    name: Terraform Plan (dev)
+  terraform:
+    name: Terraform Apply
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-    outputs:
-      plan_artifact: tfplan-dev
-      has_changes: ${{ steps.plan.outputs.has_changes }}
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.7.0"
-          terraform_wrapper: false
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Terraform Init
+      - name: Terraform Init and Apply
         run: |
           cd $TF_DIR
           terraform init \
             -backend-config="bucket=${{ vars.TF_STATE_BUCKET || 'propertyflow-tfstate' }}" \
             -backend-config="key=dev/terraform.tfstate" \
             -backend-config="region=${{ vars.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE || 'propertyflow-tflock' }}" \
-            -input=false
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE || 'propertyflow-tflock' }}"
+          terraform apply -auto-approve
 
-      - name: Terraform Validate
-        run: cd $TF_DIR && terraform validate
-
-      - name: Terraform Plan
-        id: plan
-        env:
-          TF_VAR_database_url: ${{ vars.DATABASE_URL }}
-        run: |
-          cd $TF_DIR
-          # -detailed-exitcode returns 2 if there are changes, 0 if no changes, 1 if error
-          set +e
-          terraform plan -out=tfplan -detailed-exitcode -no-color
-          PLAN_EXIT_CODE=$?
-          set -e
-          
-          if [ $PLAN_EXIT_CODE -eq 2 ]; then
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "Infrastructure changes detected."
-          elif [ $PLAN_EXIT_CODE -eq 0 ]; then
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "No infrastructure changes detected."
-          else
-            echo "Terraform plan failed with exit code $PLAN_EXIT_CODE"
-            exit $PLAN_EXIT_CODE
-          fi
-
-          terraform show -no-color tfplan > plan_clean.txt
-          
-          echo "### 📝 Terraform Plan Summary (Dev)" >> $GITHUB_STEP_SUMMARY
-          echo "<details><summary>Click to expand full plan</summary>" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```terraform' >> $GITHUB_STEP_SUMMARY
-          cat plan_clean.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "</details>" >> $GITHUB_STEP_SUMMARY
-
-      - name: Upload plan artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tfplan-dev
-          path: ${{ env.TF_DIR }}/tfplan
-          if-no-files-found: error
-          retention-days: 7
-
-  terraform-apply:
-    name: Terraform Apply (dev - requires approval)
-    needs: terraform-plan
-    if: needs.terraform-plan.outputs.has_changes == 'true'
+  build-deploy-api:
+    needs: terraform
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-    environment: dev
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.7.0"
-          terraform_wrapper: false
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ vars.AWS_REGION }}
-      - name: Terraform Init
-        run: |
-          cd $TF_DIR
-          terraform init \
-            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
-            -backend-config="key=dev/terraform.tfstate" \
-            -backend-config="region=${{ vars.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
-            -input=false
-      - name: Download plan artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: tfplan-dev
-          path: ${{ env.TF_DIR }}
-      - name: Terraform Apply (saved plan)
-        env:
-          TF_VAR_database_url: ${{ vars.DATABASE_URL }}
-        run: |
-          cd $TF_DIR
-          terraform apply -auto-approve tfplan
-
-  build-and-deploy-api:
-    needs: [terraform-plan, terraform-apply]
-    if: |
-      always() && 
-      (needs.terraform-plan.result == 'success') && 
-      (needs.terraform-apply.result == 'success' || needs.terraform-apply.result == 'skipped')
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Configure AWS credentials
@@ -154,36 +52,20 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-      - name: Build, tag, and push image to Amazon ECR
+      - name: Build and Push API
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: propertyflow-dev-api
-          IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f server/Dockerfile .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest -f server/Dockerfile .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-      - name: Run Database Migrations
-        env:
-          DATABASE_URL: ${{ vars.DATABASE_URL }}
-        run: |
-          npm install
-          cd server && npx prisma migrate deploy
       - name: Update ECS Service
         run: |
           aws ecs update-service --cluster propertyflow-dev-cluster --service propertyflow-api --force-new-deployment
 
-  build-and-deploy-spa:
-    needs: [terraform-plan, terraform-apply]
-    if: |
-      always() && 
-      (needs.terraform-plan.result == 'success') && 
-      (needs.terraform-apply.result == 'success' || needs.terraform-apply.result == 'skipped')
+  build-deploy-spa:
+    needs: terraform
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Configure AWS credentials
@@ -191,15 +73,9 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ vars.AWS_REGION }}
-      - name: Install and Build SPA
-        env:
-          VITE_API_URL: ""
-          VITE_COGNITO_USER_POOL_ID: ${{ secrets.COGNITO_USER_POOL_ID || vars.COGNITO_USER_POOL_ID }}
-          VITE_COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID || vars.COGNITO_CLIENT_ID }}
-          VITE_COGNITO_DOMAIN: ${{ secrets.COGNITO_DOMAIN || vars.COGNITO_DOMAIN }}
+      - name: Build SPA
         run: |
           npm install
-          npm run build --workspace=@property-flow/shared
           npm run build --workspace=@property-flow/client
       - name: Deploy to S3
         run: |

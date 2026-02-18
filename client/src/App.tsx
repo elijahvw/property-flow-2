@@ -1,36 +1,27 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { TenantProvider } from './contexts/TenantContext';
-import { BaseLayout } from './layouts/BaseLayout';
-import HomePage from './pages/HomePage';
-import DashboardPage from './pages/DashboardPage';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import Home from './pages/Home';
+import About from './pages/About';
 import './App.css';
-
-const AppRoutes = () => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return <div className="loading-container"><p>Loading...</p></div>;
-  }
-
-  return (
-    <BaseLayout>
-      <Routes>
-        <Route path="/" element={user ? <Navigate to="/dashboard" /> : <HomePage />} />
-        <Route path="/dashboard" element={user ? <DashboardPage /> : <Navigate to="/" />} />
-      </Routes>
-    </BaseLayout>
-  );
-};
 
 function App() {
   return (
     <Router>
-      <AuthProvider>
-        <TenantProvider>
-          <AppRoutes />
-        </TenantProvider>
-      </AuthProvider>
+      <div className="app">
+        <nav className="navbar">
+          <div className="nav-brand">My Website</div>
+          <div className="nav-links">
+            <Link to="/">Home</Link>
+            <Link to="/about">About</Link>
+          </div>
+        </nav>
+
+        <main className="main">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/about" element={<About />} />
+          </Routes>
+        </main>
+      </div>
     </Router>
   );
 }
