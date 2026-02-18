@@ -249,7 +249,101 @@ body {
   margin-top: 1rem;
 }
 
+.auth-card {
+  max-width: 450px;
+  margin: 0 auto;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  text-align: left;
+}
+
+.input-group label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.input-group input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  color: white;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.input-group input:focus {
+  border-color: var(--primary);
+}
+
+.error-message {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  padding: 0.75rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 2rem;
+}
+
+.user-table-container {
+  overflow-x: auto;
+  margin-top: 1rem;
+}
+
+.user-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.user-table th, .user-table td {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.user-table th {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.role-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.role-badge.admin { background: rgba(99, 102, 241, 0.2); color: #818cf8; }
+.role-badge.landlord { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+.role-badge.tenant { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+
+.role-select {
+  background: var(--bg);
+  color: white;
+  border: 1px solid var(--border);
+  padding: 0.4rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+
 @media (max-width: 768px) {
+  .admin-grid {
+    grid-template-columns: 1fr;
+  }
   .hero-content h1 {
     font-size: 2.5rem;
   }
