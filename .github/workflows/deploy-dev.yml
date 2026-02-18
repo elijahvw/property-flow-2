@@ -12,6 +12,8 @@ jobs:
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
+    outputs:
+      cloudfront_distribution_id: ${{ steps.outputs.outputs.cloudfront_distribution_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
@@ -20,17 +22,30 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ vars.AWS_REGION }}
-      - name: Apply
+      - name: Init
         run: |
           cd infra/terraform/envs/dev
           terraform init -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" -backend-config="key=dev/terraform.tfstate" -backend-config="region=${{ vars.AWS_REGION }}" -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}"
+      - name: Apply
+        run: |
+          cd infra/terraform/envs/dev
           terraform apply -auto-approve
+      - name: Get Outputs
+        id: outputs
+        run: |
+          cd infra/terraform/envs/dev
+          echo "cloudfront_distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
 
   deploy:
     needs: terraform
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -41,3 +56,6 @@ jobs:
           npm install
           npm run build --workspace=@property-flow/client
           aws s3 sync client/dist/ s3://propertyflow-dev-frontend --delete
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ needs.terraform.outputs.cloudfront_distribution_id }} --paths "/*"
