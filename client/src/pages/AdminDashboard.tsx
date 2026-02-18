@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useAuth0 } from '@auth0/auth0-react';
 
 interface User {
   id: string;
@@ -12,6 +13,7 @@ const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { getAccessTokenSilently } = useAuth0();
 
   useEffect(() => {
     fetchUsers();
@@ -21,12 +23,17 @@ const AdminDashboard: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
+      const token = await getAccessTokenSilently();
       // Using relative path, CloudFront will route /api/ to the ALB
-      const response = await axios.get('/api/users');
+      const response = await axios.get('/api/users', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
       setUsers(response.data);
     } catch (err: any) {
       console.error('Error fetching users:', err);
-      setError('Failed to fetch users. Make sure the backend server is running.');
+      setError('Failed to fetch users. Make sure the backend server is running and your token is valid.');
     } finally {
       setLoading(false);
     }
@@ -35,8 +42,13 @@ const AdminDashboard: React.FC = () => {
   const updateRole = async (userId: string, newRole: string) => {
     try {
       setError(null);
+      const token = await getAccessTokenSilently();
       await axios.post(`/api/users/${userId}/role`, {
         role: newRole
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
       });
       // Refresh user list to see updated role
       await fetchUsers();

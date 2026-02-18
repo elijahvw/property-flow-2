@@ -1,5 +1,6 @@
 import fastify from 'fastify';
 import cors from '@fastify/cors';
+import auth0 from 'fastify-auth0-verify';
 import axios from 'axios';
 import dotenv from 'dotenv';
 
@@ -14,6 +15,12 @@ server.register(cors, {
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
 const AUTH0_CLIENT_ID = process.env.AUTH0_MANAGEMENT_CLIENT_ID;
 const AUTH0_CLIENT_SECRET = process.env.AUTH0_MANAGEMENT_CLIENT_SECRET;
+const AUTH0_AUDIENCE = process.env.AUTH0_AUDIENCE;
+
+server.register(auth0, {
+  domain: AUTH0_DOMAIN,
+  audience: AUTH0_AUDIENCE,
+});
 
 let managementToken: string | null = null;
 
@@ -35,7 +42,13 @@ async function getManagementToken() {
 }
 
 // GET all users
-server.get('/api/users', async (request, reply) => {
+server.get('/api/users', { preValidation: [server.authenticate] }, async (request: any, reply) => {
+  // Only allow admins
+  const roles = request.user['https://propertyflow.com/roles'] || [];
+  if (!roles.includes('admin')) {
+    return reply.status(403).send({ error: 'Forbidden' });
+  }
+
   try {
     const token = await getManagementToken();
     const response = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/users`, {
@@ -50,7 +63,7 @@ server.get('/api/users', async (request, reply) => {
       return {
         id: user.user_id,
         email: user.email,
-        name: user.name,
+        name: user.name || user.email,
         role: (rolesResponse.data as any[])[0]?.name || 'tenant'
       };
     }));
@@ -63,9 +76,15 @@ server.get('/api/users', async (request, reply) => {
 });
 
 // UPDATE user role
-server.post('/api/users/:id/role', async (request: any, reply) => {
+server.post('/api/users/:id/role', { preValidation: [server.authenticate] }, async (request: any, reply) => {
+  // Only allow admins
+  const adminRoles = request.user['https://propertyflow.com/roles'] || [];
+  if (!adminRoles.includes('admin')) {
+    return reply.status(403).send({ error: 'Forbidden' });
+  }
+
   const { id } = request.params;
-  const { role } = request.body;
+  const { role } = request.body as any;
   
   try {
     const token = await getManagementToken();
