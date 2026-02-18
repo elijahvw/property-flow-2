@@ -1,3 +1,4 @@
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -9,14 +10,48 @@ import AdminDashboard from './pages/AdminDashboard';
 import Auth from './pages/Auth';
 import './App.css';
 
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="error-container">
+          <h1>Something went wrong.</h1>
+          <p>{this.state.error?.message}</p>
+          <button className="btn-primary" onClick={() => window.location.reload()}>Reload Page</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, role, signOut } = useAuth();
+  const { user, role, signOut, loading } = useAuth();
+
+  if (loading) return (
+    <nav className="navbar">
+      <div className="nav-brand">PropertyFlow</div>
+    </nav>
+  );
 
   return (
     <nav className="navbar">
-      <div className="nav-brand">PropertyFlow</div>
+      <div className="nav-brand" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>PropertyFlow</div>
       <div className="nav-actions">
         <button 
           className={`nav-btn ${location.pathname === '/' ? 'active' : ''}`}
@@ -59,9 +94,11 @@ const Navbar = () => {
         )}
 
         {!user ? (
-          <button className="nav-btn active" onClick={() => navigate('/auth')}>
-            Sign In
-          </button>
+          location.pathname !== '/auth' && (
+            <button className="nav-btn active" onClick={() => navigate('/auth')}>
+              Sign In
+            </button>
+          )
         ) : (
           <button className="nav-btn" onClick={signOut}>
             Sign Out
@@ -113,16 +150,18 @@ function AppRoutes() {
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="app">
-          <Navbar />
-          <main className="main">
-            <AppRoutes />
-          </main>
-        </div>
-      </Router>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Router>
+          <div className="app">
+            <Navbar />
+            <main className="main">
+              <AppRoutes />
+            </main>
+          </div>
+        </Router>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
