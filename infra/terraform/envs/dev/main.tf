@@ -25,6 +25,7 @@ module "network" {
 module "ecr" {
   source                  = "../../modules/ecr"
   environment             = var.environment
+  aws_region              = var.aws_region
   vpc_id                  = module.network.vpc_id
   public_subnets          = module.network.public_subnets
   auth0_domain            = var.auth0_domain

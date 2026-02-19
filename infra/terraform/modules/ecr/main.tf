@@ -87,6 +87,11 @@ resource "aws_lb_listener" "http" {
   }
 }
 
+resource "aws_cloudwatch_log_group" "ecs" {
+  name              = "/ecs/propertyflow-${var.environment}"
+  retention_in_days = 7
+}
+
 resource "aws_ecs_task_definition" "app" {
   family                   = "propertyflow-${var.environment}"
   network_mode             = "awsvpc"
@@ -108,6 +113,14 @@ resource "aws_ecs_task_definition" "app" {
       { name = "AUTH0_MANAGEMENT_CLIENT_ID", value = var.auth0_m2m_client_id },
       { name = "AUTH0_MANAGEMENT_CLIENT_SECRET", value = var.auth0_m2m_client_secret }
     ]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
+        "awslogs-region"        = var.aws_region
+        "awslogs-stream-prefix" = "ecs"
+      }
+    }
   }])
 }
 
