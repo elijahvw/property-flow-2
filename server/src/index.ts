@@ -102,7 +102,8 @@ server.register(async (instance) => {
           id: user.user_id,
           email: user.email,
           name: user.name || user.email,
-          role: (rolesResponse.data as any[])[0]?.name || 'tenant'
+          role: (rolesResponse.data as any[])[0]?.name || 'tenant',
+          blocked: user.blocked || false
         };
       }));
 
@@ -114,6 +115,76 @@ server.register(async (instance) => {
         error: 'Failed to fetch users',
         details: errorMessage
       });
+    }
+  });
+
+  // CREATE user
+  instance.post('/api/users', { preValidation: [authenticate] }, async (request: any, reply) => {
+    const adminRoles = request.user['https://propertyflow.com/roles'] || [];
+    if (!adminRoles.includes('admin')) {
+      return reply.status(403).send({ error: 'Forbidden' });
+    }
+
+    const { email, password, name, role } = request.body as any;
+
+    try {
+      const token = await getManagementToken();
+      
+      // 1. Create the user
+      const createResponse = await axios.post(`https://${AUTH0_DOMAIN}/api/v2/users`, {
+        email,
+        password,
+        name,
+        connection: 'Username-Password-Authentication', // Default Auth0 connection
+        email_verified: true
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const userId = createResponse.data.user_id;
+
+      // 2. Assign role
+      const allRolesResponse = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/roles`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const newRole = (allRolesResponse.data as any[]).find((r: any) => r.name === (role || 'tenant'));
+      if (newRole) {
+        await axios.post(`https://${AUTH0_DOMAIN}/api/v2/users/${userId}/roles`, {
+          roles: [newRole.id]
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+
+      return createResponse.data;
+    } catch (error: any) {
+      instance.log.error(error);
+      const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+      return reply.status(500).send({ error: 'Failed to create user', details: errorMessage });
+    }
+  });
+
+  // UPDATE user (name, email, blocked)
+  instance.patch('/api/users/:id', { preValidation: [authenticate] }, async (request: any, reply) => {
+    const adminRoles = request.user['https://propertyflow.com/roles'] || [];
+    if (!adminRoles.includes('admin')) {
+      return reply.status(403).send({ error: 'Forbidden' });
+    }
+
+    const { id } = request.params;
+    const updateData = request.body as any;
+
+    try {
+      const token = await getManagementToken();
+      const response = await axios.patch(`https://${AUTH0_DOMAIN}/api/v2/users/${id}`, updateData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return response.data;
+    } catch (error: any) {
+      instance.log.error(error);
+      const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+      return reply.status(500).send({ error: 'Failed to update user', details: errorMessage });
     }
   });
 

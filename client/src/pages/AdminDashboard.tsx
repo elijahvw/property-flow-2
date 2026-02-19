@@ -7,12 +7,16 @@ interface User {
   email: string;
   name: string;
   role: string;
+  blocked: boolean;
 }
 
 const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [formData, setFormData] = useState({ email: '', password: '', name: '', role: 'tenant' });
   const { getAccessTokenSilently } = useAuth0();
 
   useEffect(() => {
@@ -24,18 +28,66 @@ const AdminDashboard: React.FC = () => {
       setLoading(true);
       setError(null);
       const token = await getAccessTokenSilently();
-      // Using relative path, CloudFront will route /api/ to the ALB
       const response = await axios.get('/api/users', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
       setUsers(response.data);
     } catch (err: any) {
       console.error('Error fetching users:', err);
-      setError('Failed to fetch users. Make sure the backend server is running and your token is valid.');
+      setError('Failed to fetch users. Make sure the backend server is running.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setError(null);
+      const token = await getAccessTokenSilently();
+      await axios.post('/api/users', formData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setShowCreateModal(false);
+      setFormData({ email: '', password: '', name: '', role: 'tenant' });
+      await fetchUsers();
+    } catch (err: any) {
+      setError(err.response?.data?.details || 'Failed to create user');
+    }
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    try {
+      setError(null);
+      const token = await getAccessTokenSilently();
+      await axios.patch(`/api/users/${editingUser.id}`, {
+        email: formData.email,
+        name: formData.name
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setEditingUser(null);
+      setFormData({ email: '', password: '', name: '', role: 'tenant' });
+      await fetchUsers();
+    } catch (err: any) {
+      setError(err.response?.data?.details || 'Failed to update user');
+    }
+  };
+
+  const toggleUserStatus = async (user: User) => {
+    try {
+      setError(null);
+      const token = await getAccessTokenSilently();
+      await axios.patch(`/api/users/${user.id}`, {
+        blocked: !user.blocked
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      await fetchUsers();
+    } catch (err: any) {
+      setError('Failed to change user status');
     }
   };
 
@@ -46,16 +98,17 @@ const AdminDashboard: React.FC = () => {
       await axios.post(`/api/users/${userId}/role`, {
         role: newRole
       }, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
-      // Refresh user list to see updated role
       await fetchUsers();
     } catch (err: any) {
-      console.error('Error updating role:', err);
-      setError('Failed to update role. Please try again.');
+      setError('Failed to update role');
     }
+  };
+
+  const openEditModal = (user: User) => {
+    setEditingUser(user);
+    setFormData({ email: user.email, password: '', name: user.name, role: user.role });
   };
 
   return (
@@ -67,17 +120,13 @@ const AdminDashboard: React.FC = () => {
       
       <div className="admin-grid">
         <div className="admin-sidebar">
-          <div className="feature-card">
+          <button className="btn-primary full-width lg" onClick={() => setShowCreateModal(true)}>
+            + Create New User
+          </button>
+          <div className="feature-card mt-1">
             <div className="feature-icon">⚙️</div>
             <h3>System Config</h3>
             <p>All services operational</p>
-            <button className="btn-secondary lg mt-1 full-width">Settings</button>
-          </div>
-          <div className="feature-card mt-1">
-            <div className="feature-icon">🛡️</div>
-            <h3>Security</h3>
-            <p>No active threats</p>
-            <button className="btn-secondary lg mt-1 full-width">Audit Logs</button>
           </div>
         </div>
 
@@ -90,7 +139,7 @@ const AdminDashboard: React.FC = () => {
               </button>
             </div>
             
-            {error && <div className="error-message">{error}</div>}
+            {error && <div className="error-message mb-1">{error}</div>}
             
             <div className="user-table-container">
               <table className="user-table">
@@ -99,26 +148,15 @@ const AdminDashboard: React.FC = () => {
                     <th>Name</th>
                     <th>Email</th>
                     <th>Role</th>
+                    <th>Status</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {users.length === 0 && !loading && (
-                    <tr>
-                      <td colSpan={4} className="text-muted" style={{ textAlign: 'center' }}>
-                        No users found.
-                      </td>
-                    </tr>
-                  )}
                   {users.map((user) => (
                     <tr key={user.id}>
                       <td>{user.name}</td>
                       <td>{user.email}</td>
-                      <td>
-                        <span className={`role-badge ${user.role}`}>
-                          {user.role}
-                        </span>
-                      </td>
                       <td>
                         <select 
                           value={user.role} 
@@ -130,6 +168,22 @@ const AdminDashboard: React.FC = () => {
                           <option value="admin">Admin</option>
                         </select>
                       </td>
+                      <td>
+                        <span className={`status-badge ${user.blocked ? 'inactive' : 'active'}`}>
+                          {user.blocked ? 'Disabled' : 'Enabled'}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="action-buttons">
+                          <button className="btn-small" onClick={() => openEditModal(user)}>Edit</button>
+                          <button 
+                            className={`btn-small ${user.blocked ? 'btn-success' : 'btn-danger'}`}
+                            onClick={() => toggleUserStatus(user)}
+                          >
+                            {user.blocked ? 'Enable' : 'Disable'}
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -138,6 +192,68 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {(showCreateModal || editingUser) && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h2>{editingUser ? 'Edit User' : 'Create New User'}</h2>
+            <form onSubmit={editingUser ? handleUpdateUser : handleCreateUser}>
+              <div className="form-group">
+                <label>Name</label>
+                <input 
+                  type="text" 
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  required 
+                />
+              </div>
+              <div className="form-group">
+                <label>Email</label>
+                <input 
+                  type="email" 
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  required 
+                />
+              </div>
+              {!editingUser && (
+                <div className="form-group">
+                  <label>Password</label>
+                  <input 
+                    type="password" 
+                    value={formData.password}
+                    onChange={(e) => setFormData({...formData, password: e.target.value})}
+                    required 
+                  />
+                </div>
+              )}
+              {!editingUser && (
+                <div className="form-group">
+                  <label>Initial Role</label>
+                  <select 
+                    value={formData.role}
+                    onChange={(e) => setFormData({...formData, role: e.target.value})}
+                  >
+                    <option value="tenant">Tenant</option>
+                    <option value="landlord">Landlord</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+              )}
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => {
+                  setShowCreateModal(false);
+                  setEditingUser(null);
+                  setFormData({ email: '', password: '', name: '', role: 'tenant' });
+                }}>Cancel</button>
+                <button type="submit" className="btn-primary">
+                  {editingUser ? 'Update User' : 'Create User'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
