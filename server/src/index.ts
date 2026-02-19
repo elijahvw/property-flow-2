@@ -165,14 +165,14 @@ server.register(async (instance) => {
     }
   });
 
-  // UPDATE user (name, email, blocked)
+  // UPDATE user (name, email)
   instance.patch('/api/users/:id', { preValidation: [authenticate] }, async (request: any, reply) => {
     const adminRoles = request.user['https://propertyflow.com/roles'] || [];
     if (!adminRoles.includes('admin')) {
       return reply.status(403).send({ error: 'Forbidden' });
     }
 
-    const { id } = request.params;
+    const { id } = request.params as any;
     const updateData = request.body as any;
 
     try {
@@ -188,6 +188,28 @@ server.register(async (instance) => {
     }
   });
 
+  // BLOCK/UNBLOCK user
+  instance.patch('/api/users/:id/status', { preValidation: [authenticate] }, async (request: any, reply) => {
+    const adminRoles = request.user['https://propertyflow.com/roles'] || [];
+    if (!adminRoles.includes('admin')) {
+      return reply.status(403).send({ error: 'Forbidden' });
+    }
+
+    const { id } = request.params as any;
+    const { blocked } = request.body as any;
+
+    try {
+      const token = await getManagementToken();
+      const response = await axios.patch(`https://${AUTH0_DOMAIN}/api/v2/users/${id}`, { blocked }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return response.data;
+    } catch (error: any) {
+      instance.log.error(error);
+      return reply.status(500).send({ error: 'Failed to update status' });
+    }
+  });
+
   // UPDATE user role
   instance.post('/api/users/:id/role', { preValidation: [authenticate] }, async (request: any, reply) => {
     // Only allow admins
@@ -196,7 +218,7 @@ server.register(async (instance) => {
       return reply.status(403).send({ error: 'Forbidden' });
     }
 
-    const { id } = request.params;
+    const { id } = request.params as any;
     const { role } = request.body as any;
     
     try {

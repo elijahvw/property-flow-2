@@ -62,7 +62,8 @@ const AdminDashboard: React.FC = () => {
     try {
       setError(null);
       const token = await getAccessTokenSilently();
-      await axios.patch(`/api/users/${editingUser.id}`, {
+      // Properly encode user ID which may contain pipe characters
+      await axios.patch(`/api/users/${encodeURIComponent(editingUser.id)}`, {
         email: formData.email,
         name: formData.name
       }, {
@@ -80,7 +81,8 @@ const AdminDashboard: React.FC = () => {
     try {
       setError(null);
       const token = await getAccessTokenSilently();
-      await axios.patch(`/api/users/${user.id}`, {
+      // Properly encode user ID which may contain pipe characters
+      await axios.patch(`/api/users/${encodeURIComponent(user.id)}/status`, {
         blocked: !user.blocked
       }, {
         headers: { Authorization: `Bearer ${token}` }
@@ -95,7 +97,8 @@ const AdminDashboard: React.FC = () => {
     try {
       setError(null);
       const token = await getAccessTokenSilently();
-      await axios.post(`/api/users/${userId}/role`, {
+      // Properly encode user ID which may contain pipe characters
+      await axios.post(`/api/users/${encodeURIComponent(userId)}/role`, {
         role: newRole
       }, {
         headers: { Authorization: `Bearer ${token}` }
