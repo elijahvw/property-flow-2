@@ -109,7 +109,11 @@ server.register(async (instance) => {
       return usersWithRoles;
     } catch (error: any) {
       instance.log.error(error);
-      return reply.status(500).send({ error: 'Failed to fetch users' });
+      const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+      return reply.status(500).send({ 
+        error: 'Failed to fetch users',
+        details: errorMessage
+      });
     }
   });
 
