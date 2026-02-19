@@ -12,9 +12,9 @@ server.register(cors, {
   origin: '*', // In production, restrict this
 });
 
-// Health check endpoint for ALB
+// Health check endpoint for ALB (registered BEFORE auth)
 server.get('/', async () => {
-  return { status: 'ok', version: '1.0.0' };
+  return { status: 'ok', timestamp: new Date().toISOString() };
 });
 
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN || '';
@@ -22,14 +22,18 @@ const AUTH0_CLIENT_ID = process.env.AUTH0_MANAGEMENT_CLIENT_ID || '';
 const AUTH0_CLIENT_SECRET = process.env.AUTH0_MANAGEMENT_CLIENT_SECRET || '';
 const AUTH0_AUDIENCE = process.env.AUTH0_AUDIENCE || '';
 
-if (!AUTH0_DOMAIN || !AUTH0_AUDIENCE) {
-  server.log.warn('Missing AUTH0_DOMAIN or AUTH0_AUDIENCE in environment variables');
-}
+console.log('--- Starting Server Configuration ---');
+console.log('AUTH0_DOMAIN:', AUTH0_DOMAIN ? 'SET' : 'MISSING');
+console.log('AUTH0_AUDIENCE:', AUTH0_AUDIENCE ? 'SET' : 'MISSING');
 
-server.register(auth0 as any, {
-  domain: AUTH0_DOMAIN,
-  audience: AUTH0_AUDIENCE,
-});
+if (AUTH0_DOMAIN && AUTH0_AUDIENCE) {
+  server.register(auth0 as any, {
+    domain: AUTH0_DOMAIN,
+    audience: AUTH0_AUDIENCE,
+  });
+} else {
+  server.log.error('CRITICAL: AUTH0_DOMAIN or AUTH0_AUDIENCE not set. Auth routes will fail.');
+}
 
 let managementToken: string | null = null;
 
