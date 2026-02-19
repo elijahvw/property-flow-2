@@ -43,16 +43,22 @@ const AdminDashboard: React.FC = () => {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      setLoading(true);
       setError(null);
       const token = await getAccessTokenSilently();
       await axios.post('/api/users', formData, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      
       setShowCreateModal(false);
       setFormData({ email: '', password: '', name: '', role: 'tenant' });
+      
+      // Fetch fresh data from Auth0
       await fetchUsers();
     } catch (err: any) {
       setError(err.response?.data?.details || 'Failed to create user');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -60,52 +66,67 @@ const AdminDashboard: React.FC = () => {
     e.preventDefault();
     if (!editingUser) return;
     try {
+      setLoading(true);
       setError(null);
       const token = await getAccessTokenSilently();
-      // Properly encode user ID which may contain pipe characters
       await axios.patch(`/api/users/${encodeURIComponent(editingUser.id)}`, {
         email: formData.email,
         name: formData.name
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      
       setEditingUser(null);
       setFormData({ email: '', password: '', name: '', role: 'tenant' });
+      
+      // Fetch fresh data from Auth0
       await fetchUsers();
     } catch (err: any) {
       setError(err.response?.data?.details || 'Failed to update user');
+    } finally {
+      setLoading(false);
     }
   };
 
   const toggleUserStatus = async (user: User) => {
     try {
+      setLoading(true);
       setError(null);
       const token = await getAccessTokenSilently();
-      // Properly encode user ID which may contain pipe characters
+      
       await axios.post(`/api/users/${encodeURIComponent(user.id)}/status`, {
         blocked: !user.blocked
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      
+      // Fetch fresh data from Auth0
       await fetchUsers();
     } catch (err: any) {
       setError('Failed to change user status');
+    } finally {
+      setLoading(false);
     }
   };
 
   const updateRole = async (userId: string, newRole: string) => {
     try {
+      setLoading(true);
       setError(null);
       const token = await getAccessTokenSilently();
-      // Properly encode user ID which may contain pipe characters
+      
       await axios.post(`/api/users/${encodeURIComponent(userId)}/role`, {
         role: newRole
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      
+      // Fetch fresh data from Auth0
       await fetchUsers();
     } catch (err: any) {
       setError('Failed to update role');
+    } finally {
+      setLoading(false);
     }
   };
 
