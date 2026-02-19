@@ -17,9 +17,11 @@ provider "aws" {
 }
 
 module "network" {
-  source      = "../../modules/network"
-  environment = var.environment
-  vpc_cidr    = var.vpc_cidr
+  source = "../../modules/network"
+  vars = {
+    environment = var.environment
+    vpc_cidr    = var.vpc_cidr
+  }
 }
 
 module "ecr" {
@@ -35,7 +37,9 @@ module "ecr" {
 }
 
 module "s3_frontend" {
-  source       = "../../modules/s3_frontend"
-  environment  = var.environment
-  alb_dns_name = module.ecr.alb_dns_name
+  source = "../../modules/s3_frontend"
+  vars = {
+    environment  = var.environment
+    alb_dns_name = module.ecr.alb_dns_name
+  }
 }

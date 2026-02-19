@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "frontend" {
-  bucket = "propertyflow-${var.environment}-frontend"
+  bucket = "propertyflow-${var.vars.environment}-frontend"
   force_destroy = true
 }
 
@@ -13,7 +13,7 @@ resource "aws_s3_bucket_public_access_block" "frontend" {
 }
 
 resource "aws_cloudfront_origin_access_control" "default" {
-  name                              = "propertyflow-${var.environment}-oac"
+  name                              = "propertyflow-${var.vars.environment}-oac"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
@@ -27,7 +27,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   }
 
   origin {
-    domain_name = var.alb_dns_name
+    domain_name = var.vars.alb_dns_name
     origin_id   = "ALB"
 
     custom_origin_config {
@@ -93,7 +93,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   }
 
   tags = {
-    Name = "propertyflow-${var.environment}-cf"
+    Name = "propertyflow-${var.vars.environment}-cf"
   }
 }
 

@@ -1,14 +1,14 @@
 resource "aws_ecr_repository" "app" {
-  name = "propertyflow-${var.environment}-app"
+  name = "propertyflow-${var.vars.environment}-app"
   force_delete = true
 }
 
 resource "aws_ecs_cluster" "main" {
-  name = "propertyflow-${var.environment}-cluster"
+  name = "propertyflow-${var.vars.environment}-cluster"
 }
 
 resource "aws_iam_role" "ecs_task_execution" {
-  name = "propertyflow-${var.environment}-ecs-task-execution"
+  name = "propertyflow-${var.vars.environment}-ecs-task-execution"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -25,8 +25,8 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
 }
 
 resource "aws_security_group" "alb" {
-  name   = "propertyflow-${var.environment}-alb-sg"
-  vpc_id = var.vpc_id
+  name   = "propertyflow-${var.vars.environment}-alb-sg"
+  vpc_id = var.vars.vpc_id
   ingress {
     from_port   = 80
     to_port     = 80
@@ -42,8 +42,8 @@ resource "aws_security_group" "alb" {
 }
 
 resource "aws_security_group" "ecs" {
-  name   = "propertyflow-${var.environment}-ecs-sg"
-  vpc_id = var.vpc_id
+  name   = "propertyflow-${var.vars.environment}-ecs-sg"
+  vpc_id = var.vars.vpc_id
   ingress {
     from_port       = 5011
     to_port         = 5011
@@ -59,7 +59,7 @@ resource "aws_security_group" "ecs" {
 }
 
 resource "aws_lb" "main" {
-  name               = "propertyflow-${var.environment}-alb"
+  name               = "propertyflow-${var.vars.environment}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -67,10 +67,10 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "app" {
-  name        = "propertyflow-${var.environment}-tg"
+  name        = "propertyflow-${var.vars.environment}-tg"
   port        = 5011
   protocol    = "HTTP"
-  vpc_id      = var.vpc_id
+  vpc_id      = var.vars.vpc_id
   target_type = "ip"
   health_check {
     path = "/" # Fastify logs root request
@@ -88,12 +88,12 @@ resource "aws_lb_listener" "http" {
 }
 
 resource "aws_cloudwatch_log_group" "ecs" {
-  name              = "/ecs/propertyflow-${var.environment}"
+  name              = "/ecs/propertyflow-${var.vars.environment}"
   retention_in_days = 7
 }
 
 resource "aws_ecs_task_definition" "app" {
-  family                   = "propertyflow-${var.environment}"
+  family                   = "propertyflow-${var.vars.environment}"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
@@ -125,7 +125,7 @@ resource "aws_ecs_task_definition" "app" {
 }
 
 resource "aws_ecs_service" "app" {
-  name            = "propertyflow-${var.environment}"
+  name            = "propertyflow-${var.vars.environment}"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.app.arn
   desired_count   = 1

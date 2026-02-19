@@ -1,22 +1,22 @@
 resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr
+  cidr_block           = var.vars.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-  tags = { Name = "propertyflow-${var.environment}-vpc" }
+  tags = { Name = "propertyflow-${var.vars.environment}-vpc" }
 }
 
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-  tags   = { Name = "propertyflow-${var.environment}-igw" }
+  tags   = { Name = "propertyflow-${var.vars.environment}-igw" }
 }
 
 resource "aws_subnet" "public" {
   count                   = 2
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
+  cidr_block              = cidrsubnet(var.vars.vpc_cidr, 8, count.index)
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
-  tags                    = { Name = "propertyflow-${var.environment}-public-${count.index}" }
+  tags                    = { Name = "propertyflow-${var.vars.environment}-public-${count.index}" }
 }
 
 data "aws_availability_zones" "available" {}

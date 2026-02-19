@@ -1,2 +1,6 @@
-variable "environment" { type = string }
-variable "alb_dns_name" { type = string }
+variable "vars" {
+  type = object({
+    environment  = string
+    alb_dns_name = string
+  })
+}

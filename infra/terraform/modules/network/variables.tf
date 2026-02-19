@@ -1,2 +1,6 @@
-variable "environment" { type = string }
-variable "vpc_cidr" { type = string }
+variable "vars" {
+  type = object({
+    environment = string
+    vpc_cidr    = string
+  })
+}
