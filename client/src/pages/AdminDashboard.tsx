@@ -13,6 +13,7 @@ interface User {
 const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rowLoading, setRowLoading] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -40,6 +41,8 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -53,7 +56,8 @@ const AdminDashboard: React.FC = () => {
       setShowCreateModal(false);
       setFormData({ email: '', password: '', name: '', role: 'tenant' });
       
-      // Fetch fresh data from Auth0
+      // Wait for Auth0 propagation
+      await delay(1500);
       await fetchUsers();
     } catch (err: any) {
       setError(err.response?.data?.details || 'Failed to create user');
@@ -79,7 +83,8 @@ const AdminDashboard: React.FC = () => {
       setEditingUser(null);
       setFormData({ email: '', password: '', name: '', role: 'tenant' });
       
-      // Fetch fresh data from Auth0
+      // Wait for Auth0 propagation
+      await delay(1000);
       await fetchUsers();
     } catch (err: any) {
       setError(err.response?.data?.details || 'Failed to update user');
@@ -90,7 +95,7 @@ const AdminDashboard: React.FC = () => {
 
   const toggleUserStatus = async (user: User) => {
     try {
-      setLoading(true);
+      setRowLoading(prev => ({ ...prev, [user.id]: true }));
       setError(null);
       const token = await getAccessTokenSilently();
       
@@ -100,18 +105,19 @@ const AdminDashboard: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // Fetch fresh data from Auth0
+      // Wait for Auth0 eventual consistency
+      await delay(1500);
       await fetchUsers();
     } catch (err: any) {
       setError('Failed to change user status');
     } finally {
-      setLoading(false);
+      setRowLoading(prev => ({ ...prev, [user.id]: false }));
     }
   };
 
   const updateRole = async (userId: string, newRole: string) => {
     try {
-      setLoading(true);
+      setRowLoading(prev => ({ ...prev, [userId]: true }));
       setError(null);
       const token = await getAccessTokenSilently();
       
@@ -121,12 +127,13 @@ const AdminDashboard: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // Fetch fresh data from Auth0
+      // Wait for Auth0 eventual consistency
+      await delay(1500);
       await fetchUsers();
     } catch (err: any) {
       setError('Failed to update role');
     } finally {
-      setLoading(false);
+      setRowLoading(prev => ({ ...prev, [userId]: false }));
     }
   };
 
@@ -178,7 +185,7 @@ const AdminDashboard: React.FC = () => {
                 </thead>
                 <tbody>
                   {users.map((user) => (
-                    <tr key={user.id}>
+                    <tr key={user.id} className={rowLoading[user.id] ? 'row-loading' : ''}>
                       <td>{user.name}</td>
                       <td>{user.email}</td>
                       <td>
@@ -186,6 +193,7 @@ const AdminDashboard: React.FC = () => {
                           value={user.role} 
                           className="role-select"
                           onChange={(e) => updateRole(user.id, e.target.value)}
+                          disabled={rowLoading[user.id]}
                         >
                           <option value="tenant">Tenant</option>
                           <option value="landlord">Landlord</option>
@@ -194,17 +202,24 @@ const AdminDashboard: React.FC = () => {
                       </td>
                       <td>
                         <span className={`status-badge ${user.blocked ? 'inactive' : 'active'}`}>
-                          {user.blocked ? 'Disabled' : 'Enabled'}
+                          {rowLoading[user.id] ? 'Updating...' : (user.blocked ? 'Disabled' : 'Enabled')}
                         </span>
                       </td>
                       <td>
                         <div className="action-buttons">
-                          <button className="btn-small" onClick={() => openEditModal(user)}>Edit</button>
+                          <button 
+                            className="btn-small" 
+                            onClick={() => openEditModal(user)}
+                            disabled={rowLoading[user.id]}
+                          >
+                            Edit
+                          </button>
                           <button 
                             className={`btn-small ${user.blocked ? 'btn-success' : 'btn-danger'}`}
                             onClick={() => toggleUserStatus(user)}
+                            disabled={rowLoading[user.id]}
                           >
-                            {user.blocked ? 'Enable' : 'Disable'}
+                            {rowLoading[user.id] ? '...' : (user.blocked ? 'Enable' : 'Disable')}
                           </button>
                         </div>
                       </td>
