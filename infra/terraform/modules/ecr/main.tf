@@ -63,7 +63,7 @@ resource "aws_lb" "main" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets            = var.public_subnets
+  subnets            = var.vars.public_subnets
 }
 
 resource "aws_lb_target_group" "app" {
@@ -108,16 +108,16 @@ resource "aws_ecs_task_definition" "app" {
       hostPort      = 5011
     }]
     environment = [
-      { name = "AUTH0_DOMAIN", value = var.auth0_domain },
-      { name = "AUTH0_AUDIENCE", value = var.auth0_audience },
-      { name = "AUTH0_MANAGEMENT_CLIENT_ID", value = var.auth0_m2m_client_id },
-      { name = "AUTH0_MANAGEMENT_CLIENT_SECRET", value = var.auth0_m2m_client_secret }
+      { name = "AUTH0_DOMAIN", value = var.vars.auth0_domain },
+      { name = "AUTH0_AUDIENCE", value = var.vars.auth0_audience },
+      { name = "AUTH0_MANAGEMENT_CLIENT_ID", value = var.vars.auth0_m2m_client_id },
+      { name = "AUTH0_MANAGEMENT_CLIENT_SECRET", value = var.vars.auth0_m2m_client_secret }
     ]
     logConfiguration = {
       logDriver = "awslogs"
       options = {
         "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
-        "awslogs-region"        = var.aws_region
+        "awslogs-region"        = var.vars.aws_region
         "awslogs-stream-prefix" = "ecs"
       }
     }
@@ -132,7 +132,7 @@ resource "aws_ecs_service" "app" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = var.public_subnets
+    subnets          = var.vars.public_subnets
     security_groups  = [aws_security_group.ecs.id]
     assign_public_ip = true
   }
