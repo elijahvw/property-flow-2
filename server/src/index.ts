@@ -20,11 +20,12 @@ server.get('/', async () => {
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN || '';
 const AUTH0_CLIENT_ID = process.env.AUTH0_MANAGEMENT_CLIENT_ID || '';
 const AUTH0_CLIENT_SECRET = process.env.AUTH0_MANAGEMENT_CLIENT_SECRET || '';
-const AUTH0_AUDIENCE = process.env.AUTH0_AUDIENCE || '';
+const AUTH0_AUDIENCE = process.env.AUTH0_AUDIENCE || process.env.VITE_AUTH0_AUDIENCE || '';
 
 console.log('--- Starting Server Configuration ---');
 console.log('AUTH0_DOMAIN:', AUTH0_DOMAIN ? 'SET' : 'MISSING');
 console.log('AUTH0_AUDIENCE:', AUTH0_AUDIENCE ? 'SET' : 'MISSING');
+console.log('AUTH0_MANAGEMENT_CLIENT_ID:', AUTH0_CLIENT_ID ? 'SET' : 'MISSING');
 
 if (AUTH0_DOMAIN && AUTH0_AUDIENCE) {
   server.register(auth0 as any, {
@@ -41,17 +42,31 @@ let managementToken: string | null = null;
 async function getManagementToken() {
   if (managementToken) return managementToken;
 
-  const response = await axios.post(`https://${AUTH0_DOMAIN}/oauth/token`, {
-    client_id: AUTH0_CLIENT_ID,
-    client_secret: AUTH0_CLIENT_SECRET,
-    audience: `https://${AUTH0_DOMAIN}/api/v2/`,
-    grant_type: 'client_credentials',
-  });
+  const params = new URLSearchParams();
+  params.append('client_id', AUTH0_CLIENT_ID);
+  params.append('client_secret', AUTH0_CLIENT_SECRET);
+  params.append('audience', `https://${AUTH0_DOMAIN}/api/v2/`);
+  params.append('grant_type', 'client_credentials');
 
-  managementToken = (response.data as any).access_token;
-  // Reset token after 1 hour (tokens usually last 24h)
-  setTimeout(() => { managementToken = null; }, 3600000);
-  return managementToken;
+  try {
+    const response = await axios.post(`https://${AUTH0_DOMAIN}/oauth/token`, params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    managementToken = (response.data as any).access_token;
+    // Reset token after 1 hour (tokens usually last 24h)
+    setTimeout(() => { managementToken = null; }, 3600000);
+    return managementToken;
+  } catch (error: any) {
+    console.error('ERROR: Failed to get Auth0 Management token');
+    if (error.response) {
+      console.error('Status:', error.response.status);
+      console.error('Data:', JSON.stringify(error.response.data));
+    } else {
+      console.error('Message:', error.message);
+    }
+    throw error;
+  }
 }
 
 // Authenticated routes
