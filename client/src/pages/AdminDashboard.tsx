@@ -82,7 +82,7 @@ const AdminDashboard: React.FC = () => {
       setError(null);
       const token = await getAccessTokenSilently();
       // Properly encode user ID which may contain pipe characters
-      await axios.patch(`/api/users/${encodeURIComponent(user.id)}/status`, {
+      await axios.post(`/api/users/${encodeURIComponent(user.id)}/status`, {
         blocked: !user.blocked
       }, {
         headers: { Authorization: `Bearer ${token}` }

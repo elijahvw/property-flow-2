@@ -95,7 +95,7 @@ server.register(async (instance) => {
       
       // For each user, we also need their roles
       const usersWithRoles = await Promise.all((response.data as any[]).map(async (user: any) => {
-        const rolesResponse = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/users/${user.user_id}/roles`, {
+        const rolesResponse = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(user.user_id)}/roles`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         return {
@@ -126,70 +126,73 @@ server.register(async (instance) => {
     }
 
     const { email, password, name, role } = request.body as any;
+    instance.log.info(`Creating user: ${email}, role: ${role}`);
 
     try {
       const token = await getManagementToken();
       
       // 1. Create the user
-      const createResponse = await axios.post(`https://${AUTH0_DOMAIN}/api/v2/users`, {
-        email,
-        password,
-        name,
-        connection: 'Username-Password-Authentication', // Default Auth0 connection
-        email_verified: true
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      const userId = createResponse.data.user_id;
-
-      // 2. Assign role
-      const allRolesResponse = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/roles`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      const newRole = (allRolesResponse.data as any[]).find((r: any) => r.name === (role || 'tenant'));
-      if (newRole) {
-        await axios.post(`https://${AUTH0_DOMAIN}/api/v2/users/${userId}/roles`, {
-          roles: [newRole.id]
+      instance.log.info('Step 1: Creating user in Auth0...');
+      let createResponse;
+      try {
+        createResponse = await axios.post(`https://${AUTH0_DOMAIN}/api/v2/users`, {
+          email,
+          password,
+          name,
+          connection: 'Username-Password-Authentication', // Default Auth0 connection
+          email_verified: true
         }, {
           headers: { Authorization: `Bearer ${token}` }
         });
+      } catch (createError: any) {
+        instance.log.error('Auth0 User Creation Error:', createError.response?.data || createError.message);
+        throw createError;
+      }
+
+      const userId = createResponse.data.user_id;
+      instance.log.info(`User created successfully: ${userId}`);
+
+      // 2. Assign role
+      instance.log.info(`Step 2: Assigning role '${role}' to user ${userId}...`);
+      try {
+        const allRolesResponse = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/roles`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const newRole = (allRolesResponse.data as any[]).find((r: any) => r.name === (role || 'tenant'));
+        if (newRole) {
+          await axios.post(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(userId)}/roles`, {
+            roles: [newRole.id]
+          }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          instance.log.info('Role assigned successfully');
+        } else {
+          instance.log.warn(`Role '${role}' not found in Auth0, skipping assignment`);
+        }
+      } catch (roleError: any) {
+        instance.log.error('Auth0 Role Assignment Error:', roleError.response?.data || roleError.message);
+        // We don't necessarily want to fail the whole request if role assignment fails, 
+        // but for now let's keep it strict or at least return a partial success.
+        throw roleError;
       }
 
       return createResponse.data;
     } catch (error: any) {
-      instance.log.error(error);
+      instance.log.error('Detailed Create User Error:', error.response?.data || error.message);
       const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
-      return reply.status(500).send({ error: 'Failed to create user', details: errorMessage });
-    }
-  });
-
-  // UPDATE user (name, email)
-  instance.patch('/api/users/:id', { preValidation: [authenticate] }, async (request: any, reply) => {
-    const adminRoles = request.user['https://propertyflow.com/roles'] || [];
-    if (!adminRoles.includes('admin')) {
-      return reply.status(403).send({ error: 'Forbidden' });
-    }
-
-    const { id } = request.params as any;
-    const updateData = request.body as any;
-
-    try {
-      const token = await getManagementToken();
-      const response = await axios.patch(`https://${AUTH0_DOMAIN}/api/v2/users/${id}`, updateData, {
-        headers: { Authorization: `Bearer ${token}` }
+      const errorCode = error.response?.data?.errorCode || 'internal_error';
+      return reply.status(error.response?.status || 500).send({ 
+        error: 'Failed to create user', 
+        details: errorMessage,
+        errorCode: errorCode,
+        auth0Details: error.response?.data
       });
-      return response.data;
-    } catch (error: any) {
-      instance.log.error(error);
-      const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
-      return reply.status(500).send({ error: 'Failed to update user', details: errorMessage });
     }
   });
 
   // BLOCK/UNBLOCK user
-  instance.patch('/api/users/:id/status', { preValidation: [authenticate] }, async (request: any, reply) => {
+  instance.post('/api/users/:id/status', { preValidation: [authenticate] }, async (request: any, reply) => {
     const adminRoles = request.user['https://propertyflow.com/roles'] || [];
     if (!adminRoles.includes('admin')) {
       return reply.status(403).send({ error: 'Forbidden' });
@@ -197,10 +200,11 @@ server.register(async (instance) => {
 
     const { id } = request.params as any;
     const { blocked } = request.body as any;
+    instance.log.info(`Toggling status for user ${id} to blocked=${blocked}`);
 
     try {
       const token = await getManagementToken();
-      const response = await axios.patch(`https://${AUTH0_DOMAIN}/api/v2/users/${id}`, { blocked }, {
+      const response = await axios.patch(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(id)}`, { blocked }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       return response.data;
@@ -220,6 +224,7 @@ server.register(async (instance) => {
 
     const { id } = request.params as any;
     const { role } = request.body as any;
+    instance.log.info(`Updating role for user ${id} to ${role}`);
     
     try {
       const token = await getManagementToken();
@@ -233,20 +238,20 @@ server.register(async (instance) => {
       if (!newRole) return reply.status(400).send({ error: 'Role not found' });
 
       // 2. Get current roles for the user and remove them
-      const currentRolesResponse = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/users/${id}/roles`, {
+      const currentRolesResponse = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(id)}/roles`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
       const currentRoles = currentRolesResponse.data as any[];
       if (currentRoles.length > 0) {
-        await axios.delete(`https://${AUTH0_DOMAIN}/api/v2/users/${id}/roles`, {
+        await axios.delete(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(id)}/roles`, {
           headers: { Authorization: `Bearer ${token}` },
           data: { roles: currentRoles.map((r: any) => r.id) }
         } as any);
       }
 
       // 3. Assign new role
-      await axios.post(`https://${AUTH0_DOMAIN}/api/v2/users/${id}/roles`, {
+      await axios.post(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(id)}/roles`, {
         roles: [newRole.id]
       }, {
         headers: { Authorization: `Bearer ${token}` }
@@ -257,6 +262,40 @@ server.register(async (instance) => {
       instance.log.error(error);
       return reply.status(500).send({ error: 'Failed to update role' });
     }
+  });
+
+  // UPDATE user (name, email)
+  instance.patch('/api/users/:id', { preValidation: [authenticate] }, async (request: any, reply) => {
+    const adminRoles = request.user['https://propertyflow.com/roles'] || [];
+    if (!adminRoles.includes('admin')) {
+      return reply.status(403).send({ error: 'Forbidden' });
+    }
+
+    const { id } = request.params as any;
+    const updateData = request.body as any;
+    instance.log.info(`Updating user ${id} with ${JSON.stringify(updateData)}`);
+
+    try {
+      const token = await getManagementToken();
+      const response = await axios.patch(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(id)}`, updateData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return response.data;
+    } catch (error: any) {
+      instance.log.error(error);
+      const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+      return reply.status(500).send({ error: 'Failed to update user', details: errorMessage });
+    }
+  });
+
+  // Catch-all for /api/users/* to debug 404s
+  instance.all('/api/users/*', async (request, reply) => {
+    instance.log.warn(`Unmatched request: ${request.method} ${request.url}`);
+    return reply.status(404).send({ 
+      error: 'Not Found', 
+      message: `Route ${request.method}:${request.url} not found`,
+      suggestion: 'Check if the ID is correctly encoded'
+    });
   });
 });
 
