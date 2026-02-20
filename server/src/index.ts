@@ -66,7 +66,8 @@ async function getManagementToken() {
     setTimeout(() => { managementToken = null; }, 3600000);
     return managementToken;
   } catch (error: any) {
-    console.error('ERROR: Failed to get Auth0 Management token');
+    console.error('ERROR: Failed to get Auth0 Management token for domain:', AUTH0_DOMAIN);
+    console.error('Client ID used:', AUTH0_CLIENT_ID);
     if (error.response) {
       console.error('Status:', error.response.status);
       console.error('Data:', JSON.stringify(error.response.data));
@@ -81,7 +82,8 @@ async function getManagementToken() {
 const authenticate = (instance: any) => (request: any, reply: any, done: any) => {
   const authPlugin = (instance.authenticate || server.authenticate);
   if (typeof authPlugin === 'function') {
-    return authPlugin(request, reply, done);
+    authPlugin(request, reply, done);
+    return;
   }
   instance.log.error('Authentication plugin not found on instance or server');
   reply.status(500).send({ error: 'Authentication service unavailable' });
@@ -117,8 +119,8 @@ const withUserSync = async (request: any, reply: any) => {
 
     // Multi-tenant check: if X-Company-ID is provided, verify access
     const companyId = request.headers['x-company-id'] as string;
-    if (companyId) {
-      if (user.role !== 'admin' && user.companyId !== companyId) {
+    if (companyId && user.role !== 'admin') {
+      if (user.companyId !== companyId) {
         return reply.status(403).send({ error: 'Forbidden: You do not belong to this company' });
       }
     }
@@ -133,6 +135,11 @@ const withUserSync = async (request: any, reply: any) => {
 // GET current user profile
 server.get('/api/me', { preValidation: [authenticate(server), withUserSync] }, async (request: any, reply) => {
   return request.dbUser;
+});
+
+// Unauthenticated health check
+server.get('/api/health', async () => {
+  return { status: 'ok', timestamp: new Date().toISOString(), db: 'connected' };
 });
 
 // GET all companies (Admin only)
@@ -157,6 +164,22 @@ server.post('/api/companies', { preValidation: [authenticate(server), withUserSy
     });
   } catch (error: any) {
     return reply.status(400).send({ error: 'Failed to create company', details: error.message });
+  }
+});
+
+// ASSIGN user to company (Admin only)
+server.post('/api/companies/:companyId/users/:userId', { preValidation: [authenticate(server), withUserSync] }, async (request: any, reply) => {
+  if (request.dbUser.role !== 'admin') {
+    return reply.status(403).send({ error: 'Forbidden' });
+  }
+  const { companyId, userId } = request.params as any;
+  try {
+    return await prisma.user.update({
+      where: { id: decodeURIComponent(userId) },
+      data: { companyId: companyId === 'none' ? null : companyId }
+    });
+  } catch (error: any) {
+    return reply.status(400).send({ error: 'Failed to assign user', details: error.message });
   }
 });
 

@@ -19,6 +19,14 @@ resource "aws_subnet" "public" {
   tags                    = { Name = "propertyflow-${var.vars.environment}-public-${count.index}" }
 }
 
+resource "aws_subnet" "private" {
+  count             = 2
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(var.vars.vpc_cidr, 8, count.index + 2)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+  tags              = { Name = "propertyflow-${var.vars.environment}-private-${count.index}" }
+}
+
 data "aws_availability_zones" "available" {}
 
 resource "aws_route_table" "public" {
@@ -35,5 +43,42 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
+resource "aws_security_group" "alb" {
+  name   = "propertyflow-${var.vars.environment}-alb-sg"
+  vpc_id = aws_vpc.main.id
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group" "ecs" {
+  name   = "propertyflow-${var.vars.environment}-ecs-sg"
+  vpc_id = aws_vpc.main.id
+  ingress {
+    from_port       = 5011
+    to_port         = 5011
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
 output "vpc_id" { value = aws_vpc.main.id }
 output "public_subnets" { value = aws_subnet.public[*].id }
+output "private_subnets" { value = aws_subnet.private[*].id }
+output "alb_security_group_id" { value = aws_security_group.alb.id }
+output "ecs_security_group_id" { value = aws_security_group.ecs.id }

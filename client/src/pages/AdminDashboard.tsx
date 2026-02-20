@@ -57,7 +57,7 @@ const AdminDashboard: React.FC = () => {
       setUsers(response.data);
     } catch (err: any) {
       console.error('Error fetching users:', err);
-      setError('Failed to fetch users.');
+      setError(`Failed to fetch users: ${err.response?.data?.message || err.response?.data?.error || err.message}`);
     }
   };
 

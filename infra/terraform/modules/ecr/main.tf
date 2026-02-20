@@ -24,45 +24,11 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-resource "aws_security_group" "alb" {
-  name   = "propertyflow-${var.vars.environment}-alb-sg"
-  vpc_id = var.vars.vpc_id
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-resource "aws_security_group" "ecs" {
-  name   = "propertyflow-${var.vars.environment}-ecs-sg"
-  vpc_id = var.vars.vpc_id
-  ingress {
-    from_port       = 5011
-    to_port         = 5011
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
 resource "aws_lb" "main" {
   name               = "propertyflow-${var.vars.environment}-alb"
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
+  security_groups    = [var.vars.alb_security_group_id]
   subnets            = var.vars.public_subnets
 }
 
@@ -73,7 +39,7 @@ resource "aws_lb_target_group" "app" {
   vpc_id      = var.vars.vpc_id
   target_type = "ip"
   health_check {
-    path = "/" # Fastify logs root request
+    path = "/api/health"
   }
 }
 
@@ -110,8 +76,10 @@ resource "aws_ecs_task_definition" "app" {
     environment = [
       { name = "AUTH0_DOMAIN", value = var.vars.auth0_domain },
       { name = "AUTH0_AUDIENCE", value = var.vars.auth0_audience },
+      { name = "VITE_AUTH0_AUDIENCE", value = var.vars.auth0_audience },
       { name = "AUTH0_MANAGEMENT_CLIENT_ID", value = var.vars.auth0_m2m_client_id },
-      { name = "AUTH0_MANAGEMENT_CLIENT_SECRET", value = var.vars.auth0_m2m_client_secret }
+      { name = "AUTH0_MANAGEMENT_CLIENT_SECRET", value = var.vars.auth0_m2m_client_secret },
+      { name = "DATABASE_URL", value = var.vars.database_url }
     ]
     logConfiguration = {
       logDriver = "awslogs"
@@ -133,7 +101,7 @@ resource "aws_ecs_service" "app" {
 
   network_configuration {
     subnets          = var.vars.public_subnets
-    security_groups  = [aws_security_group.ecs.id]
+    security_groups  = [var.vars.ecs_security_group_id]
     assign_public_ip = true
   }
 

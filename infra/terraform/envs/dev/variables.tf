@@ -28,3 +28,18 @@ variable "auth0_m2m_client_id" {
 variable "auth0_m2m_client_secret" {
   type = string
 }
+
+variable "db_name" {
+  type    = string
+  default = "propertyflow"
+}
+
+variable "db_user" {
+  type    = string
+  default = "dbadmin"
+}
+
+variable "db_password" {
+  type      = string
+  sensitive = true
+}
