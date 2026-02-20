@@ -8,25 +8,47 @@ interface User {
   name: string;
   role: string;
   blocked: boolean;
+  company?: { id: string, name: string } | null;
+}
+
+interface Company {
+  id: string;
+  name: string;
+  domain: string | null;
+  _count?: {
+    users: number;
+    properties: number;
+  };
 }
 
 const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [rowLoading, setRowLoading] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [activeTab, setActiveTab] = useState<'users' | 'companies'>('users');
+  
   const [formData, setFormData] = useState({ email: '', password: '', name: '', role: 'tenant' });
+  const [companyFormData, setCompanyFormData] = useState({ name: '', domain: '' });
+  
   const { getAccessTokenSilently } = useAuth0();
 
   useEffect(() => {
-    fetchUsers();
+    fetchInitialData();
   }, []);
+
+  const fetchInitialData = async () => {
+    setLoading(true);
+    await Promise.all([fetchUsers(), fetchCompanies()]);
+    setLoading(false);
+  };
 
   const fetchUsers = async () => {
     try {
-      setLoading(true);
       setError(null);
       const token = await getAccessTokenSilently();
       const response = await axios.get('/api/users', {
@@ -35,9 +57,52 @@ const AdminDashboard: React.FC = () => {
       setUsers(response.data);
     } catch (err: any) {
       console.error('Error fetching users:', err);
-      setError('Failed to fetch users. Make sure the backend server is running.');
+      setError('Failed to fetch users.');
+    }
+  };
+
+  const fetchCompanies = async () => {
+    try {
+      const token = await getAccessTokenSilently();
+      const response = await axios.get('/api/companies', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCompanies(response.data);
+    } catch (err: any) {
+      console.error('Error fetching companies:', err);
+    }
+  };
+
+  const handleCreateCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      const token = await getAccessTokenSilently();
+      await axios.post('/api/companies', companyFormData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setShowCompanyModal(false);
+      setCompanyFormData({ name: '', domain: '' });
+      await fetchCompanies();
+    } catch (err: any) {
+      setError('Failed to create company');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const assignCompany = async (userId: string, companyId: string) => {
+    try {
+      setRowLoading(prev => ({ ...prev, [userId]: true }));
+      const token = await getAccessTokenSilently();
+      await axios.post(`/api/companies/${companyId}/users/${encodeURIComponent(userId)}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      await fetchUsers();
+    } catch (err: any) {
+      setError('Failed to assign company');
+    } finally {
+      setRowLoading(prev => ({ ...prev, [userId]: false }));
     }
   };
 
@@ -146,88 +211,201 @@ const AdminDashboard: React.FC = () => {
     <div className="admin-grid">
       <header className="admin-sidebar-actions">
         <div>
-          <h1>User Management</h1>
-          <p className="text-muted">Manage platform users, roles, and access status.</p>
+          <h1>System Administration</h1>
+          <p className="text-muted">Manage companies, users, and platform-wide settings.</p>
         </div>
-        <button className="btn-primary lg" onClick={() => setShowCreateModal(true)}>
-          + Create New User
-        </button>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          {activeTab === 'users' ? (
+            <button className="btn-primary lg" onClick={() => setShowCreateModal(true)}>
+              + Create New User
+            </button>
+          ) : (
+            <button className="btn-primary lg" onClick={() => setShowCompanyModal(true)}>
+              + Create New Company
+            </button>
+          )}
+        </div>
       </header>
+
+      <div className="tab-container mb-1" style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}>
+        <button 
+          className={`nav-btn ${activeTab === 'users' ? 'active' : ''}`}
+          onClick={() => setActiveTab('users')}
+        >
+          Users
+        </button>
+        <button 
+          className={`nav-btn ${activeTab === 'companies' ? 'active' : ''}`}
+          onClick={() => setActiveTab('companies')}
+        >
+          Companies
+        </button>
+      </div>
       
       <div className="admin-main-content">
-        <div className="content-card no-padding">
-          <div className="card-header" style={{ padding: '1.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Total Users: {users.length}</span>
-              <button className="btn-secondary" onClick={fetchUsers} disabled={loading} style={{ padding: '0.4rem 1rem', borderRadius: '8px' }}>
-                {loading ? 'Refreshing...' : 'Refresh List'}
-              </button>
+        {activeTab === 'users' ? (
+          <div className="content-card no-padding">
+            <div className="card-header" style={{ padding: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Total Users: {users.length}</span>
+                <button className="btn-secondary" onClick={fetchUsers} disabled={loading} style={{ padding: '0.4rem 1rem', borderRadius: '8px' }}>
+                  {loading ? 'Refreshing...' : 'Refresh List'}
+                </button>
+              </div>
+            </div>
+            
+            {error && <div className="error-message mx-1 mt-1">{error}</div>}
+            
+            <div className="user-table-container">
+              <table className="user-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Company</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((user) => (
+                    <tr key={user.id} className={rowLoading[user.id] ? 'row-loading' : ''}>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{user.name}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: {user.id}</div>
+                      </td>
+                      <td>{user.email}</td>
+                      <td>
+                        <select 
+                          value={user.role} 
+                          className="role-select"
+                          onChange={(e) => updateRole(user.id, e.target.value)}
+                          disabled={rowLoading[user.id]}
+                        >
+                          <option value="tenant">Tenant</option>
+                          <option value="landlord">Landlord</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          className="role-select"
+                          value={user.company?.id || ''}
+                          onChange={(e) => assignCompany(user.id, e.target.value)}
+                          disabled={rowLoading[user.id]}
+                        >
+                          <option value="">No Company</option>
+                          {companies.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <span className={`status-badge ${user.blocked ? 'inactive' : 'active'}`}>
+                          {rowLoading[user.id] ? 'Updating...' : (user.blocked ? 'Disabled' : 'Enabled')}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="action-buttons">
+                          <button 
+                            className="btn-small" 
+                            onClick={() => openEditModal(user)}
+                            disabled={rowLoading[user.id]}
+                          >
+                            Edit
+                          </button>
+                          <button 
+                            className={`btn-small ${user.blocked ? 'btn-success' : 'btn-danger'}`}
+                            onClick={() => toggleUserStatus(user)}
+                            disabled={rowLoading[user.id]}
+                          >
+                            {rowLoading[user.id] ? '...' : (user.blocked ? 'Enable' : 'Disable')}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
-          
-          {error && <div className="error-message mx-1 mt-1">{error}</div>}
-          
-          <div className="user-table-container">
-            <table className="user-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((user) => (
-                  <tr key={user.id} className={rowLoading[user.id] ? 'row-loading' : ''}>
-                    <td>
-                      <div style={{ fontWeight: 600 }}>{user.name}</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: {user.id}</div>
-                    </td>
-                    <td>{user.email}</td>
-                    <td>
-                      <select 
-                        value={user.role} 
-                        className="role-select"
-                        onChange={(e) => updateRole(user.id, e.target.value)}
-                        disabled={rowLoading[user.id]}
-                      >
-                        <option value="tenant">Tenant</option>
-                        <option value="landlord">Landlord</option>
-                        <option value="admin">Admin</option>
-                      </select>
-                    </td>
-                    <td>
-                      <span className={`status-badge ${user.blocked ? 'inactive' : 'active'}`}>
-                        {rowLoading[user.id] ? 'Updating...' : (user.blocked ? 'Disabled' : 'Enabled')}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="action-buttons">
-                        <button 
-                          className="btn-small" 
-                          onClick={() => openEditModal(user)}
-                          disabled={rowLoading[user.id]}
-                        >
-                          Edit
-                        </button>
-                        <button 
-                          className={`btn-small ${user.blocked ? 'btn-success' : 'btn-danger'}`}
-                          onClick={() => toggleUserStatus(user)}
-                          disabled={rowLoading[user.id]}
-                        >
-                          {rowLoading[user.id] ? '...' : (user.blocked ? 'Enable' : 'Disable')}
-                        </button>
-                      </div>
-                    </td>
+        ) : (
+          <div className="content-card no-padding">
+            <div className="card-header" style={{ padding: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Total Companies: {companies.length}</span>
+                <button className="btn-secondary" onClick={fetchCompanies} disabled={loading} style={{ padding: '0.4rem 1rem', borderRadius: '8px' }}>
+                  {loading ? 'Refreshing...' : 'Refresh Companies'}
+                </button>
+              </div>
+            </div>
+            
+            <div className="user-table-container">
+              <table className="user-table">
+                <thead>
+                  <tr>
+                    <th>Company Name</th>
+                    <th>Domain</th>
+                    <th>Users</th>
+                    <th>Properties</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {companies.map((company) => (
+                    <tr key={company.id}>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{company.name}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: {company.id}</div>
+                      </td>
+                      <td>{company.domain || 'N/A'}</td>
+                      <td>{company._count?.users || 0}</td>
+                      <td>{company._count?.properties || 0}</td>
+                      <td>
+                        <button className="btn-small">Manage</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {showCompanyModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h2>Create New Company</h2>
+            <form onSubmit={handleCreateCompany}>
+              <div className="form-group">
+                <label>Company Name</label>
+                <input 
+                  type="text" 
+                  value={companyFormData.name}
+                  onChange={(e) => setCompanyFormData({...companyFormData, name: e.target.value})}
+                  required 
+                />
+              </div>
+              <div className="form-group">
+                <label>Custom Domain (Optional)</label>
+                <input 
+                  type="text" 
+                  value={companyFormData.domain}
+                  onChange={(e) => setCompanyFormData({...companyFormData, domain: e.target.value})}
+                  placeholder="e.g. acme-rentals.com"
+                />
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setShowCompanyModal(false)}>Cancel</button>
+                <button type="submit" className="btn-primary">Create Company</button>
+              </div>
+            </form>
           </div>
         </div>
-      </div>
+      )}
+
 
       {(showCreateModal || editingUser) && (
         <div className="modal-overlay">

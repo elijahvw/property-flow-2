@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import auth0 from 'fastify-auth0-verify';
 import axios from 'axios';
 import dotenv from 'dotenv';
+import { prisma } from './lib/prisma';
 
 dotenv.config();
 
@@ -79,42 +80,155 @@ server.register(async (instance) => {
     reply.status(500).send({ error: 'Authentication service unavailable' });
   };
 
-  // GET all users
-  instance.get('/api/users', { preValidation: [authenticate] }, async (request: any, reply) => {
-    // Only allow admins
-    const roles = request.user['https://propertyflow.com/roles'] || [];
-    if (!roles.includes('admin')) {
+  // Middleware to ensure user is synced with DB and check company access
+  const withUserSync = async (request: any, reply: any) => {
+    const auth0User = request.user;
+    const roles = auth0User['https://propertyflow.com/roles'] || [];
+    
+    // Sync user with Prisma
+    let user = await prisma.user.upsert({
+      where: { id: auth0User.sub },
+      update: {
+        email: auth0User.email,
+        name: auth0User.name,
+        role: roles.includes('admin') ? 'admin' : (roles.includes('landlord') ? 'landlord' : 'tenant'),
+      },
+      create: {
+        id: auth0User.sub,
+        email: auth0User.email,
+        name: auth0User.name,
+        role: roles.includes('admin') ? 'admin' : (roles.includes('landlord') ? 'landlord' : 'tenant'),
+      },
+    });
+
+    request.dbUser = user;
+
+    // Multi-tenant check: if X-Company-ID is provided, verify access
+    const companyId = request.headers['x-company-id'] as string;
+    if (companyId) {
+      if (user.role !== 'admin' && user.companyId !== companyId) {
+        return reply.status(403).send({ error: 'Forbidden: You do not belong to this company' });
+      }
+    }
+  };
+
+  // --- COMPANY ROUTES ---
+
+  // GET all companies (Admin only)
+  instance.get('/api/companies', { preValidation: [authenticate, withUserSync] }, async (request: any, reply) => {
+    if (request.dbUser.role !== 'admin') {
       return reply.status(403).send({ error: 'Forbidden' });
     }
+    return prisma.company.findMany({
+      include: { _count: { select: { users: true, properties: true } } }
+    });
+  });
 
+  // CREATE company (Admin only)
+  instance.post('/api/companies', { preValidation: [authenticate, withUserSync] }, async (request: any, reply) => {
+    if (request.dbUser.role !== 'admin') {
+      return reply.status(403).send({ error: 'Forbidden' });
+    }
+    const { name, domain } = request.body as any;
+    try {
+      return await prisma.company.create({
+        data: { name, domain }
+      });
+    } catch (error: any) {
+      return reply.status(400).send({ error: 'Failed to create company', details: error.message });
+    }
+  });
+
+  // ASSIGN user to company (Admin only)
+  instance.post('/api/companies/:companyId/users/:userId', { preValidation: [authenticate, withUserSync] }, async (request: any, reply) => {
+    if (request.dbUser.role !== 'admin') {
+      return reply.status(403).send({ error: 'Forbidden' });
+    }
+    const { companyId, userId } = request.params as any;
+    try {
+      return await prisma.user.update({
+        where: { id: decodeURIComponent(userId) },
+        data: { companyId }
+      });
+    } catch (error: any) {
+      return reply.status(400).send({ error: 'Failed to assign user', details: error.message });
+    }
+  });
+
+  // GET all users
+  instance.get('/api/users', { preValidation: [authenticate, withUserSync] }, async (request: any, reply) => {
+    // Only allow admins
+    if (request.dbUser.role !== 'admin') {
+      return reply.status(403).send({ error: 'Forbidden' });
+    }
+    
+    // If we have a company filter, only show users for that company
+    const companyId = request.headers['x-company-id'] as string;
+    
     try {
       const token = await getManagementToken();
       const response = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // For each user, we also need their roles
-      const usersWithRoles = await Promise.all((response.data as any[]).map(async (user: any) => {
+      const allUsers = response.data as any[];
+      
+      // Get all local users with their company associations
+      const localUsers = await prisma.user.findMany({
+        include: { company: true }
+      });
+
+      const usersWithRoles = await Promise.all(allUsers.map(async (user: any) => {
+        const localUser = localUsers.find(u => u.id === user.user_id);
+        
+        // Filter by company if requested
+        if (companyId && localUser?.companyId !== companyId) return null;
+
         const rolesResponse = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(user.user_id)}/roles`, {
           headers: { Authorization: `Bearer ${token}` }
         });
+
         return {
           id: user.user_id,
           email: user.email,
           name: user.name || user.email,
           role: (rolesResponse.data as any[])[0]?.name || 'tenant',
-          blocked: user.blocked || false
+          blocked: user.blocked || false,
+          company: localUser?.company || null
         };
       }));
 
-      return usersWithRoles;
+      return usersWithRoles.filter(u => u !== null);
     } catch (error: any) {
       instance.log.error(error);
-      const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
-      return reply.status(500).send({ 
-        error: 'Failed to fetch users',
-        details: errorMessage
+      return reply.status(500).send({ error: 'Failed to fetch users' });
+    }
+  });
+
+  // --- PROPERTY ROUTES ---
+
+  // GET all properties (scoped by company)
+  instance.get('/api/properties', { preValidation: [authenticate, withUserSync] }, async (request: any, reply) => {
+    const companyId = request.headers['x-company-id'] as string;
+    if (!companyId) return reply.status(400).send({ error: 'X-Company-ID header is required' });
+
+    return prisma.property.findMany({
+      where: { companyId }
+    });
+  });
+
+  // CREATE property
+  instance.post('/api/properties', { preValidation: [authenticate, withUserSync] }, async (request: any, reply) => {
+    const companyId = request.headers['x-company-id'] as string;
+    if (!companyId) return reply.status(400).send({ error: 'X-Company-ID header is required' });
+
+    const { name, address, city, state, zip } = request.body as any;
+    try {
+      return await prisma.property.create({
+        data: { name, address, city, state, zip, companyId }
       });
+    } catch (error: any) {
+      return reply.status(400).send({ error: 'Failed to create property', details: error.message });
     }
   });
 
