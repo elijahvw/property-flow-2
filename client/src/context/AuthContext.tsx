@@ -86,7 +86,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = () => {
     if (auth0) {
-      auth0.loginWithRedirect();
+      auth0.loginWithRedirect({
+        appState: { returnTo: '/dashboard' }
+      });
     } else {
       alert('Auth0 is not configured. Please check your .env file.');
     }

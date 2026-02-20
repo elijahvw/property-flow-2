@@ -232,18 +232,25 @@ const auth0ClientId = import.meta.env.VITE_AUTH0_CLIENT_ID;
 const auth0Audience = import.meta.env.VITE_AUTH0_AUDIENCE;
 
 const OptionalAuth0Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const navigate = useNavigate();
+
   if (!auth0Domain || !auth0ClientId) {
     return <AuthProvider>{children}</AuthProvider>;
   }
+
+  const onRedirectCallback = (appState: any) => {
+    navigate(appState?.returnTo || '/dashboard');
+  };
 
   return (
     <Auth0Provider
       domain={auth0Domain}
       clientId={auth0ClientId}
       authorizationParams={{
-        redirect_uri: window.location.origin + '/dashboard',
+        redirect_uri: window.location.origin,
         audience: auth0Audience,
       }}
+      onRedirectCallback={onRedirectCallback}
     >
       <AuthProvider>{children}</AuthProvider>
     </Auth0Provider>
@@ -253,13 +260,13 @@ const OptionalAuth0Provider: React.FC<{ children: React.ReactNode }> = ({ childr
 function App() {
   return (
     <ErrorBoundary>
-      <OptionalAuth0Provider>
-        <Router>
+      <Router>
+        <OptionalAuth0Provider>
           <div className="app">
             <AppRoutes />
           </div>
-        </Router>
-      </OptionalAuth0Provider>
+        </OptionalAuth0Provider>
+      </Router>
     </ErrorBoundary>
   );
 }
