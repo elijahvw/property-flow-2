@@ -1,14 +1,29 @@
 import React from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const Home: React.FC = () => {
+  const { user, signIn, loading } = useAuth();
+  const navigate = useNavigate();
+
+  if (loading) return null;
+
   return (
     <div className="page hero-section">
       <div className="hero-content">
         <h1>Simplify Your Property Management</h1>
         <p className="hero-subtitle">The modern way to track, manage, and flow your properties with ease.</p>
         <div className="hero-actions">
-          <button className="btn-primary lg">Get Started</button>
-          <button className="btn-secondary lg">Learn More</button>
+          {!user ? (
+            <>
+              <button className="btn-primary lg" onClick={signIn}>Get Started</button>
+              <button className="btn-secondary lg">Learn More</button>
+            </>
+          ) : (
+            <button className="btn-primary lg" onClick={() => navigate('/dashboard')}>
+              Go to Your Portal
+            </button>
+          )}
         </div>
       </div>
       

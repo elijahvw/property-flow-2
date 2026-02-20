@@ -143,91 +143,88 @@ const AdminDashboard: React.FC = () => {
   };
 
   return (
-    <div className="page dashboard">
-      <header className="dashboard-header">
-        <h1>System Admin</h1>
-        <p className="text-muted">Configure platform settings and monitor system health.</p>
+    <div className="admin-grid">
+      <header className="admin-sidebar-actions">
+        <div>
+          <h1>User Management</h1>
+          <p className="text-muted">Manage platform users, roles, and access status.</p>
+        </div>
+        <button className="btn-primary lg" onClick={() => setShowCreateModal(true)}>
+          + Create New User
+        </button>
       </header>
       
-      <div className="admin-grid">
-        <div className="admin-sidebar">
-          <button className="btn-primary full-width lg" onClick={() => setShowCreateModal(true)}>
-            + Create New User
-          </button>
-          <div className="feature-card mt-1">
-            <div className="feature-icon">⚙️</div>
-            <h3>System Config</h3>
-            <p>All services operational</p>
-          </div>
-        </div>
-
-        <div className="admin-main">
-          <div className="content-card">
-            <div className="card-header">
-              <h2>User Management</h2>
-              <button className="btn-secondary" onClick={fetchUsers} disabled={loading}>
-                {loading ? 'Refreshing...' : 'Refresh'}
+      <div className="admin-main-content">
+        <div className="content-card no-padding">
+          <div className="card-header" style={{ padding: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Total Users: {users.length}</span>
+              <button className="btn-secondary" onClick={fetchUsers} disabled={loading} style={{ padding: '0.4rem 1rem', borderRadius: '8px' }}>
+                {loading ? 'Refreshing...' : 'Refresh List'}
               </button>
             </div>
-            
-            {error && <div className="error-message mb-1">{error}</div>}
-            
-            <div className="user-table-container">
-              <table className="user-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user) => (
-                    <tr key={user.id} className={rowLoading[user.id] ? 'row-loading' : ''}>
-                      <td>{user.name}</td>
-                      <td>{user.email}</td>
-                      <td>
-                        <select 
-                          value={user.role} 
-                          className="role-select"
-                          onChange={(e) => updateRole(user.id, e.target.value)}
+          </div>
+          
+          {error && <div className="error-message mx-1 mt-1">{error}</div>}
+          
+          <div className="user-table-container">
+            <table className="user-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((user) => (
+                  <tr key={user.id} className={rowLoading[user.id] ? 'row-loading' : ''}>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{user.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: {user.id}</div>
+                    </td>
+                    <td>{user.email}</td>
+                    <td>
+                      <select 
+                        value={user.role} 
+                        className="role-select"
+                        onChange={(e) => updateRole(user.id, e.target.value)}
+                        disabled={rowLoading[user.id]}
+                      >
+                        <option value="tenant">Tenant</option>
+                        <option value="landlord">Landlord</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </td>
+                    <td>
+                      <span className={`status-badge ${user.blocked ? 'inactive' : 'active'}`}>
+                        {rowLoading[user.id] ? 'Updating...' : (user.blocked ? 'Disabled' : 'Enabled')}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="action-buttons">
+                        <button 
+                          className="btn-small" 
+                          onClick={() => openEditModal(user)}
                           disabled={rowLoading[user.id]}
                         >
-                          <option value="tenant">Tenant</option>
-                          <option value="landlord">Landlord</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                      </td>
-                      <td>
-                        <span className={`status-badge ${user.blocked ? 'inactive' : 'active'}`}>
-                          {rowLoading[user.id] ? 'Updating...' : (user.blocked ? 'Disabled' : 'Enabled')}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="action-buttons">
-                          <button 
-                            className="btn-small" 
-                            onClick={() => openEditModal(user)}
-                            disabled={rowLoading[user.id]}
-                          >
-                            Edit
-                          </button>
-                          <button 
-                            className={`btn-small ${user.blocked ? 'btn-success' : 'btn-danger'}`}
-                            onClick={() => toggleUserStatus(user)}
-                            disabled={rowLoading[user.id]}
-                          >
-                            {rowLoading[user.id] ? '...' : (user.blocked ? 'Enable' : 'Disable')}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                          Edit
+                        </button>
+                        <button 
+                          className={`btn-small ${user.blocked ? 'btn-success' : 'btn-danger'}`}
+                          onClick={() => toggleUserStatus(user)}
+                          disabled={rowLoading[user.id]}
+                        >
+                          {rowLoading[user.id] ? '...' : (user.blocked ? 'Enable' : 'Disable')}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
