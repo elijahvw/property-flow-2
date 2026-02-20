@@ -504,15 +504,20 @@ body {
 .role-badge.tenant { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
 
 .role-select {
-  background: var(--bg);
+  background: #334155; /* Solid background */
   color: #fff;
-  border: 1px solid var(--border);
+  border: 1px solid #64748b; /* Lighter border */
   padding: 0.5rem 0.75rem;
   border-radius: 8px;
   font-size: 0.875rem;
   width: 140px;
   cursor: pointer;
   outline: none;
+}
+
+.role-select:hover {
+  background: #475569;
+  border-color: #94a3b8;
 }
 
 .role-select:focus {
@@ -533,13 +538,13 @@ body {
 .status-badge.active { 
   background: rgba(16, 185, 129, 0.15); 
   color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.4);
 }
 
 .status-badge.inactive { 
   background: rgba(239, 68, 68, 0.15); 
   color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
 }
 
 .action-buttons {
@@ -553,15 +558,15 @@ body {
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid #64748b; /* Lighter border */
+  background: #334155; /* Solid background */
   color: white;
   transition: all 0.2s;
 }
 
 .btn-small:hover:not(:disabled) { 
-  background: rgba(255, 255, 255, 0.1);
-  border-color: var(--text-muted);
+  background: #475569;
+  border-color: #94a3b8;
 }
 
 .btn-danger { 
