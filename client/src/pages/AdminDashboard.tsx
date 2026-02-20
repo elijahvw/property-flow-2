@@ -114,15 +114,25 @@ const AdminDashboard: React.FC = () => {
       setLoading(true);
       setError(null);
       const token = await getAccessTokenSilently();
-      await axios.post('/api/users', formData, {
+      const response = await axios.post('/api/users', formData, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
+      // Transform Auth0 response to our User interface for optimistic update
+      const newUser: User = {
+        id: response.data.user_id,
+        email: response.data.email,
+        name: response.data.name || response.data.email,
+        role: formData.role,
+        blocked: false
+      };
+      
+      setUsers(prev => [newUser, ...prev]);
       setShowCreateModal(false);
       setFormData({ email: '', password: '', name: '', role: 'tenant' });
       
-      // Wait for Auth0 propagation
-      await delay(1500);
+      // Still fetch to sync everything properly with roles from Auth0
+      await delay(2000);
       await fetchUsers();
     } catch (err: any) {
       setError(err.response?.data?.details || 'Failed to create user');
@@ -162,19 +172,24 @@ const AdminDashboard: React.FC = () => {
     try {
       setRowLoading(prev => ({ ...prev, [user.id]: true }));
       setError(null);
-      const token = await getAccessTokenSilently();
       
+      // Optimistic update
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, blocked: !user.blocked } : u));
+      
+      const token = await getAccessTokenSilently();
       await axios.post(`/api/users/${encodeURIComponent(user.id)}/status`, {
         blocked: !user.blocked
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // Wait for Auth0 eventual consistency
-      await delay(1500);
+      // Wait for Auth0 eventual consistency (shorter since we updated optimistically)
+      await delay(1000);
       await fetchUsers();
     } catch (err: any) {
       setError('Failed to change user status');
+      // Revert on error
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, blocked: user.blocked } : u));
     } finally {
       setRowLoading(prev => ({ ...prev, [user.id]: false }));
     }
@@ -385,6 +400,7 @@ const AdminDashboard: React.FC = () => {
                   type="text" 
                   value={companyFormData.name}
                   onChange={(e) => setCompanyFormData({...companyFormData, name: e.target.value})}
+                  placeholder="Enter company name..."
                   required 
                 />
               </div>

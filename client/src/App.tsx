@@ -152,8 +152,28 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/about" element={<About />} />
+      <Route 
+        path="/" 
+        element={
+          <>
+            <Navbar />
+            <main className="main">
+              <Home />
+            </main>
+          </>
+        } 
+      />
+      <Route 
+        path="/about" 
+        element={
+          <>
+            <Navbar />
+            <main className="main">
+              <About />
+            </main>
+          </>
+        } 
+      />
       
       <Route 
         path="/dashboard" 
@@ -221,7 +241,7 @@ const OptionalAuth0Provider: React.FC<{ children: React.ReactNode }> = ({ childr
       domain={auth0Domain}
       clientId={auth0ClientId}
       authorizationParams={{
-        redirect_uri: window.location.origin,
+        redirect_uri: window.location.origin + '/dashboard',
         audience: auth0Audience,
       }}
     >
@@ -236,10 +256,7 @@ function App() {
       <OptionalAuth0Provider>
         <Router>
           <div className="app">
-            <Navbar />
-            <main className="main">
-              <AppRoutes />
-            </main>
+            <AppRoutes />
           </div>
         </Router>
       </OptionalAuth0Provider>

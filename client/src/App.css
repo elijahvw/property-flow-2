@@ -306,10 +306,11 @@ body {
 
 .user-table-container {
   overflow-x: auto;
-  margin-top: 1rem;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 12px;
+  border-radius: 16px;
+  background: var(--card-bg);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
   border: 1px solid var(--border);
+  margin-top: 1rem;
 }
 
 .user-table {
@@ -323,7 +324,13 @@ body {
 .portal-container {
   display: flex;
   height: 100vh;
+  width: 100vw;
+  background: var(--bg);
+  position: fixed;
+  top: 0;
+  left: 0;
   overflow: hidden;
+  z-index: 1000;
 }
 
 .portal-sidebar {
@@ -463,31 +470,28 @@ body {
 
 .user-table {
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  text-align: left;
-  min-width: 800px;
+  border-collapse: collapse;
+  min-width: 700px;
 }
 
 .user-table th {
-  background: rgba(255, 255, 255, 0.03);
-  padding: 1.25rem 1rem;
-  font-size: 0.75rem;
+  background: rgba(15, 23, 42, 0.4);
+  padding: 1rem 1.5rem;
+  font-size: 0.8rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  border-bottom: 2px solid var(--border);
+  color: #94a3b8;
+  border-bottom: 1px solid var(--border);
 }
 
 .user-table td {
-  padding: 1.25rem 1rem;
+  padding: 1rem 1.5rem;
   border-bottom: 1px solid var(--border);
+  background: transparent;
   vertical-align: middle;
-  background: var(--card-bg);
-  color: var(--text);
 }
 
-.user-table tr:hover td {
+.user-table tr:hover {
   background: rgba(255, 255, 255, 0.02);
 }
 
@@ -504,20 +508,20 @@ body {
 .role-badge.tenant { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
 
 .role-select {
-  background: #334155; /* Solid background */
+  background: #0f172a;
   color: #fff;
-  border: 1px solid #64748b; /* Lighter border */
+  border: 1px solid #475569;
   padding: 0.5rem 0.75rem;
   border-radius: 8px;
   font-size: 0.875rem;
   width: 140px;
   cursor: pointer;
   outline: none;
+  font-weight: 600;
 }
 
 .role-select:hover {
-  background: #475569;
-  border-color: #94a3b8;
+  border-color: #6366f1;
 }
 
 .role-select:focus {
@@ -556,17 +560,17 @@ body {
   padding: 0.5rem 1rem;
   border-radius: 8px;
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  border: 1px solid #64748b; /* Lighter border */
-  background: #334155; /* Solid background */
-  color: white;
+  border: 1px solid #6366f1;
+  background: rgba(99, 102, 241, 0.1);
+  color: #818cf8;
   transition: all 0.2s;
 }
 
 .btn-small:hover:not(:disabled) { 
-  background: #475569;
-  border-color: #94a3b8;
+  background: var(--primary);
+  color: #fff;
 }
 
 .btn-danger { 
@@ -629,21 +633,27 @@ body {
 .form-group label {
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--text-muted);
+  color: #e2e8f0;
 }
 
 .form-group input, .form-group select {
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: #0f172a !important;
+  border: 1px solid #475569 !important;
   border-radius: 12px;
-  padding: 0.875rem 1rem;
-  color: white;
+  padding: 1rem;
+  color: #ffffff !important;
+  caret-color: #6366f1;
   font-size: 1rem;
   transition: all 0.2s;
+  width: 100%;
+}
+
+.form-group input::placeholder {
+  color: #94a3b8;
 }
 
 .form-group input:focus, .form-group select:focus {
-  border-color: var(--primary);
+  border-color: #6366f1 !important;
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
   outline: none;
 }
