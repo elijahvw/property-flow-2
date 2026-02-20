@@ -8,6 +8,7 @@ import About from './pages/About';
 import LandlordDashboard from './pages/LandlordDashboard';
 import TenantPortal from './pages/TenantPortal';
 import AdminDashboard from './pages/AdminDashboard';
+import Properties from './pages/Properties';
 import './App.css';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -170,10 +171,7 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={['tenant', 'landlord', 'admin']}>
             <PortalLayout>
-              <div className="page dashboard">
-                <h1>Properties</h1>
-                <p>Property management coming soon.</p>
-              </div>
+              <Properties />
             </PortalLayout>
           </ProtectedRoute>
         } 

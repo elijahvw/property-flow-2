@@ -3,7 +3,14 @@ import cors from '@fastify/cors';
 import auth0 from 'fastify-auth0-verify';
 import axios from 'axios';
 import dotenv from 'dotenv';
-import { prisma } from './lib/prisma';
+import { prisma } from './lib/prisma.js';
+
+// Extend Fastify types
+declare module 'fastify' {
+  interface FastifyRequest {
+    dbUser?: any;
+  }
+}
 
 dotenv.config();
 
@@ -155,6 +162,11 @@ server.register(async (instance) => {
     }
   });
 
+  // GET current user profile
+  instance.get('/api/me', { preValidation: [authenticate, withUserSync] }, async (request: any, reply) => {
+    return request.dbUser;
+  });
+
   // GET all users
   instance.get('/api/users', { preValidation: [authenticate, withUserSync] }, async (request: any, reply) => {
     // Only allow admins
@@ -198,7 +210,7 @@ server.register(async (instance) => {
         };
       }));
 
-      return usersWithRoles.filter(u => u !== null);
+      return (usersWithRoles as any[]).filter((u: any) => u !== null);
     } catch (error: any) {
       instance.log.error(error);
       return reply.status(500).send({ error: 'Failed to fetch users' });
