@@ -25,17 +25,15 @@ module "network" {
 }
 
 module "rds" {
-  source = "../../modules/rds"
-  vars = {
-    environment           = var.environment
-    vpc_id                = module.network.vpc_id
-    private_subnets       = module.network.private_subnets
-    public_subnets        = module.network.public_subnets
-    db_name               = var.db_name
-    db_user               = var.db_user
-    db_password           = var.db_password
-    ecs_security_group_id = module.network.ecs_security_group_id
-  }
+  source                = "../../modules/rds"
+  environment           = var.environment
+  vpc_id                = module.network.vpc_id
+  private_subnets       = module.network.private_subnets
+  public_subnets        = module.network.public_subnets
+  db_name               = var.db_name
+  db_user               = var.db_user
+  db_password           = var.db_password
+  ecs_security_group_id = module.network.ecs_security_group_id
 }
 
 module "ecr" {

@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "frontend" {
-  bucket = "propertyflow-${var.vars.environment}-frontend"
+  bucket        = "propertyflow-${var.vars.environment}-frontend"
   force_destroy = true
 }
 
@@ -87,9 +87,9 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   }
 
   custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
+    error_code         = 403
+    response_code      = 200
+    response_page_path = "/index.html"
   }
 
   tags = {
