@@ -26,7 +26,7 @@ resource "aws_security_group" "rds" {
 resource "aws_db_instance" "postgresql" {
   identifier           = "propertyflow-${var.environment}-db"
   engine               = "postgres"
-  engine_version       = "15.4"
+  engine_version       = "16.3"
   instance_class       = "db.t3.micro" # Free Tier eligible
   allocated_storage    = 20            # Minimum required for Standard RDS
   storage_type         = "gp2"
