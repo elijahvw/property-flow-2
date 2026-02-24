@@ -23,33 +23,24 @@ resource "aws_security_group" "rds" {
   }
 }
 
-resource "aws_rds_cluster" "postgresql" {
-  cluster_identifier     = "propertyflow-${var.environment}-db"
-  engine                 = "aurora-postgresql"
-  engine_mode            = "provisioned"
-  engine_version         = "15.4"
-  database_name          = var.db_name
-  master_username        = var.db_user
-  master_password        = var.db_password
-  db_subnet_group_name   = aws_db_subnet_group.main.name
+resource "aws_db_instance" "postgresql" {
+  identifier           = "propertyflow-${var.environment}-db"
+  engine               = "postgres"
+  engine_version       = "15.4"
+  instance_class       = "db.t3.micro" # Free Tier eligible
+  allocated_storage    = 20            # Minimum required for Standard RDS
+  storage_type         = "gp2"
+  db_name              = var.db_name
+  username             = var.db_user
+  password             = var.db_password
+  db_subnet_group_name = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
-  skip_final_snapshot    = true
-  apply_immediately      = true
-
-  serverlessv2_scaling_configuration {
-    max_capacity = 1.0
-    min_capacity = 0.5
-  }
-}
-
-resource "aws_rds_cluster_instance" "postgresql" {
-  cluster_identifier  = aws_rds_cluster.postgresql.id
-  instance_class      = "db.serverless"
-  engine              = aws_rds_cluster.postgresql.engine
-  engine_version      = aws_rds_cluster.postgresql.engine_version
-  publicly_accessible = false
+  skip_final_snapshot  = true
+  publicly_accessible  = false
+  multi_az             = false
+  storage_encrypted    = true
 }
 
 output "db_endpoint" {
-  value = aws_rds_cluster.postgresql.endpoint
+  value = aws_db_instance.postgresql.address
 }
