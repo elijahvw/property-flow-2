@@ -74,7 +74,7 @@ module "ecs_fargate_task" {
 
   # Configure Task Definition
   family                   = "propertyflow-${var.vars.environment}"
-  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task_execution.arn
   cpu                      = 256
   memory                   = 512
   network_mode             = "awsvpc"
