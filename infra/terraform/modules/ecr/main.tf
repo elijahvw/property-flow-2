@@ -58,13 +58,27 @@ resource "aws_cloudwatch_log_group" "ecs" {
   retention_in_days = 7
 }
 
-resource "aws_ecs_task_definition" "app" {
+module "ecs_fargate_task" {
+  source  = "DataDog/ecs-datadog/aws//modules/ecs_fargate"
+  version = "1.1.0"
+
+  # Configure Datadog
+  dd_api_key = var.vars.datadog_api_key
+  dd_site    = var.vars.datadog_site
+  dd_dogstatsd = {
+    enabled = true
+  }
+  dd_apm = {
+    enabled = true
+  }
+
+  # Configure Task Definition
   family                   = "propertyflow-${var.vars.environment}"
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  cpu                      = 256
+  memory                   = 512
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "256"
-  memory                   = "512"
-  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
 
   container_definitions = jsonencode([
     {
@@ -91,14 +105,6 @@ resource "aws_ecs_task_definition" "app" {
           "awslogs-stream-prefix" = "ecs"
         }
       }
-    },
-    {
-      name  = "datadog-agent"
-      image = "public.ecr.aws/datadog/agent:latest"
-      environment = [
-        { name = "DD_API_KEY", value = var.vars.datadog_api_key },
-        { name = "ECS_FARGATE", value = "true" }
-      ]
     }
   ])
 }
@@ -106,7 +112,7 @@ resource "aws_ecs_task_definition" "app" {
 resource "aws_ecs_service" "app" {
   name            = "propertyflow-${var.vars.environment}"
   cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.app.arn
+  task_definition = module.ecs_fargate_task.arn
   desired_count   = 1
   launch_type     = "FARGATE"
 

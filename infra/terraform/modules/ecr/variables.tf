@@ -12,5 +12,6 @@ variable "vars" {
     auth0_m2m_client_secret = string
     database_url            = string
     datadog_api_key         = string
+    datadog_site            = string
   })
 }
