@@ -12,8 +12,15 @@ interface Property {
   zip: string;
 }
 
+interface Company {
+  id: string;
+  name: string;
+}
+
 const Properties: React.FC = () => {
   const [properties, setProperties] = useState<Property[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -26,15 +33,44 @@ const Properties: React.FC = () => {
   });
 
   const { getAccessTokenSilently } = useAuth0();
-  const { companyId, role } = useAuth();
+  const { companyId: contextCompanyId, role } = useAuth();
+
+  // effectiveCompanyId is either the one from context (landlord/tenant) or the selected one (admin)
+  const effectiveCompanyId = role === 'admin' ? selectedCompanyId : contextCompanyId;
 
   useEffect(() => {
-    if (companyId) {
+    if (role === 'admin') {
+      fetchCompanies();
+    }
+  }, [role]);
+
+  useEffect(() => {
+    if (effectiveCompanyId) {
       fetchProperties();
-    } else if (role !== 'admin') {
+    } else {
+      setProperties([]);
+      if (role !== 'admin') {
+        setLoading(false);
+      }
+    }
+  }, [effectiveCompanyId]);
+
+  const fetchCompanies = async () => {
+    try {
+      const token = await getAccessTokenSilently();
+      const response = await axios.get('/api/companies', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCompanies(response.data);
+      if (response.data.length > 0 && !selectedCompanyId) {
+        setSelectedCompanyId(response.data[0].id);
+      }
+    } catch (err: any) {
+      console.error('Error fetching companies:', err);
+    } finally {
       setLoading(false);
     }
-  }, [companyId]);
+  };
 
   const fetchProperties = async () => {
     try {
@@ -44,7 +80,7 @@ const Properties: React.FC = () => {
       const response = await axios.get('/api/properties', {
         headers: { 
           Authorization: `Bearer ${token}`,
-          'X-Company-ID': companyId
+          'X-Company-ID': effectiveCompanyId
         }
       });
       setProperties(response.data);
@@ -58,8 +94,8 @@ const Properties: React.FC = () => {
 
   const handleCreateProperty = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!companyId) {
-      setError('You must be assigned to a company to create properties.');
+    if (!effectiveCompanyId) {
+      setError('You must select a company to create properties.');
       return;
     }
 
@@ -69,7 +105,7 @@ const Properties: React.FC = () => {
       await axios.post('/api/properties', formData, {
         headers: { 
           Authorization: `Bearer ${token}`,
-          'X-Company-ID': companyId
+          'X-Company-ID': effectiveCompanyId
         }
       });
       setShowCreateModal(false);
@@ -82,7 +118,7 @@ const Properties: React.FC = () => {
     }
   };
 
-  if (!companyId && role !== 'admin') {
+  if (!effectiveCompanyId && role !== 'admin') {
     return (
       <div className="page dashboard">
         <div className="content-card">
@@ -100,7 +136,11 @@ const Properties: React.FC = () => {
           <h1>Properties</h1>
           <p className="text-muted">Manage your real estate assets and units.</p>
         </div>
-        <button className="btn-primary lg" onClick={() => setShowCreateModal(true)}>
+        <button 
+          className="btn-primary lg" 
+          onClick={() => setShowCreateModal(true)}
+          disabled={!effectiveCompanyId}
+        >
           + Add Property
         </button>
       </header>
@@ -108,11 +148,30 @@ const Properties: React.FC = () => {
       <div className="admin-main-content">
         <div className="content-card no-padding">
           <div className="card-header" style={{ padding: '1.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Total Properties: {properties.length}</span>
-              <button className="btn-secondary" onClick={fetchProperties} disabled={loading} style={{ padding: '0.4rem 1rem', borderRadius: '8px' }}>
-                {loading ? 'Refreshing...' : 'Refresh List'}
-              </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Total Properties: {properties.length}</span>
+                <button className="btn-secondary" onClick={fetchProperties} disabled={loading || !effectiveCompanyId} style={{ padding: '0.4rem 1rem', borderRadius: '8px' }}>
+                  {loading ? 'Refreshing...' : 'Refresh List'}
+                </button>
+              </div>
+
+              {role === 'admin' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.875rem', fontWeight: 500 }}>Switch Company:</label>
+                  <select 
+                    value={selectedCompanyId} 
+                    onChange={(e) => setSelectedCompanyId(e.target.value)}
+                    className="role-select"
+                    style={{ minWidth: '200px' }}
+                  >
+                    <option value="">Select a company...</option>
+                    {companies.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
 
@@ -145,7 +204,9 @@ const Properties: React.FC = () => {
                 {properties.length === 0 && !loading && (
                   <tr>
                     <td colSpan={4} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-                      No properties found. Click "Add Property" to get started.
+                      {effectiveCompanyId 
+                        ? 'No properties found. Click "Add Property" to get started.' 
+                        : 'Please select a company to view properties.'}
                     </td>
                   </tr>
                 )}

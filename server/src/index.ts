@@ -176,7 +176,7 @@ server.post('/api/companies/:companyId/users/:userId', { preValidation: [authent
   try {
     return await prisma.user.update({
       where: { id: decodeURIComponent(userId) },
-      data: { companyId: companyId === 'none' ? null : companyId }
+      data: { companyId: (companyId === 'none' || companyId === '') ? null : companyId }
     });
   } catch (error: any) {
     return reply.status(400).send({ error: 'Failed to assign user', details: error.message });
