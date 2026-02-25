@@ -58,27 +58,14 @@ resource "aws_cloudwatch_log_group" "ecs" {
   retention_in_days = 7
 }
 
-module "ecs_fargate_task" {
-  source  = "DataDog/ecs-datadog/aws//modules/ecs_fargate"
-  version = "1.0.7"
-
-  # Configure Datadog
-  dd_api_key = var.vars.datadog_api_key
-  dd_site    = var.vars.datadog_site
-  dd_dogstatsd = {
-    enabled = true
-  }
-  dd_apm = {
-    enabled = true
-  }
-
-  # Configure Task Definition
+resource "aws_ecs_task_definition" "app" {
   family                   = "propertyflow-${var.vars.environment}"
-  task_role_arn            = aws_iam_role.ecs_task_execution.arn
-  cpu                      = 256
-  memory                   = 512
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task_execution.arn
 
   container_definitions = jsonencode([
     {
@@ -105,6 +92,25 @@ module "ecs_fargate_task" {
           "awslogs-stream-prefix" = "ecs"
         }
       }
+    },
+    {
+      name  = "datadog-agent"
+      image = "public.ecr.aws/datadog/agent:latest"
+      environment = [
+        { name = "DD_API_KEY", value = var.vars.datadog_api_key },
+        { name = "DD_SITE", value = var.vars.datadog_site },
+        { name = "ECS_FARGATE", value = "true" },
+        { name = "DD_APM_ENABLED", value = "true" },
+        { name = "DD_DOGSTATSD_NON_LOCAL_TRAFFIC", value = "true" }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
+          "awslogs-region"        = var.vars.aws_region
+          "awslogs-stream-prefix" = "datadog"
+        }
+      }
     }
   ])
 }
@@ -112,7 +118,7 @@ module "ecs_fargate_task" {
 resource "aws_ecs_service" "app" {
   name            = "propertyflow-${var.vars.environment}"
   cluster         = aws_ecs_cluster.main.id
-  task_definition = module.ecs_fargate_task.arn
+  task_definition = aws_ecs_task_definition.app.arn
   desired_count   = 1
   launch_type     = "FARGATE"
 
