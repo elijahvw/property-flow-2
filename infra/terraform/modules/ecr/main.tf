@@ -66,30 +66,41 @@ resource "aws_ecs_task_definition" "app" {
   memory                   = "512"
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
 
-  container_definitions = jsonencode([{
-    name  = "app"
-    image = "${aws_ecr_repository.app.repository_url}:latest"
-    portMappings = [{
-      containerPort = 5011
-      hostPort      = 5011
-    }]
-    environment = [
-      { name = "AUTH0_DOMAIN", value = var.vars.auth0_domain },
-      { name = "AUTH0_AUDIENCE", value = var.vars.auth0_audience },
-      { name = "VITE_AUTH0_AUDIENCE", value = var.vars.auth0_audience },
-      { name = "AUTH0_MANAGEMENT_CLIENT_ID", value = var.vars.auth0_m2m_client_id },
-      { name = "AUTH0_MANAGEMENT_CLIENT_SECRET", value = var.vars.auth0_m2m_client_secret },
-      { name = "DATABASE_URL", value = var.vars.database_url }
-    ]
-    logConfiguration = {
-      logDriver = "awslogs"
-      options = {
-        "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
-        "awslogs-region"        = var.vars.aws_region
-        "awslogs-stream-prefix" = "ecs"
+  container_definitions = jsonencode([
+    {
+      name  = "app"
+      image = "${aws_ecr_repository.app.repository_url}:latest"
+      portMappings = [{
+        containerPort = 5011
+        hostPort      = 5011
+      }]
+      environment = [
+        { name = "AUTH0_DOMAIN", value = var.vars.auth0_domain },
+        { name = "AUTH0_AUDIENCE", value = var.vars.auth0_audience },
+        { name = "VITE_AUTH0_AUDIENCE", value = var.vars.auth0_audience },
+        { name = "AUTH0_MANAGEMENT_CLIENT_ID", value = var.vars.auth0_m2m_client_id },
+        { name = "AUTH0_MANAGEMENT_CLIENT_SECRET", value = var.vars.auth0_m2m_client_secret },
+        { name = "DATABASE_URL", value = var.vars.database_url },
+        { name = "DD_TRACE_AGENT_HOSTNAME", value = "localhost" }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
+          "awslogs-region"        = var.vars.aws_region
+          "awslogs-stream-prefix" = "ecs"
+        }
       }
+    },
+    {
+      name  = "datadog-agent"
+      image = "public.ecr.aws/datadog/agent:latest"
+      environment = [
+        { name = "DD_API_KEY", value = var.vars.datadog_api_key },
+        { name = "ECS_FARGATE", value = "true" }
+      ]
     }
-  }])
+  ])
 }
 
 resource "aws_ecs_service" "app" {

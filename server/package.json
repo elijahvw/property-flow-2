@@ -19,6 +19,7 @@
     "@fastify/jwt": "^8.0.1",
     "@prisma/client": "^7.4.1",
     "axios": "^1.7.5",
+    "dd-trace": "^5.87.0",
     "dotenv": "^16.4.5",
     "fastify": "^4.28.1",
     "fastify-auth0-verify": "^1.2.0"
