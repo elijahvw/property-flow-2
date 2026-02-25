@@ -60,7 +60,7 @@ resource "aws_cloudwatch_log_group" "ecs" {
 
 module "ecs_fargate_task" {
   source  = "DataDog/ecs-datadog/aws//modules/ecs_fargate"
-  version = "1.1.0"
+  version = "1.0.7"
 
   # Configure Datadog
   dd_api_key = var.vars.datadog_api_key
