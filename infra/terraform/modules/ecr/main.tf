@@ -82,7 +82,10 @@ resource "aws_ecs_task_definition" "app" {
         { name = "AUTH0_MANAGEMENT_CLIENT_ID", value = var.vars.auth0_m2m_client_id },
         { name = "AUTH0_MANAGEMENT_CLIENT_SECRET", value = var.vars.auth0_m2m_client_secret },
         { name = "DATABASE_URL", value = var.vars.database_url },
-        { name = "DD_TRACE_AGENT_HOSTNAME", value = "localhost" }
+        { name = "DD_TRACE_AGENT_HOSTNAME", value = "localhost" },
+        { name = "DD_ENV", value = var.vars.environment },
+        { name = "DD_SERVICE", value = "propertyflow-server" },
+        { name = "DD_VERSION", value = "1.0.0" }
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -101,7 +104,10 @@ resource "aws_ecs_task_definition" "app" {
         { name = "DD_SITE", value = var.vars.datadog_site },
         { name = "ECS_FARGATE", value = "true" },
         { name = "DD_APM_ENABLED", value = "true" },
-        { name = "DD_DOGSTATSD_NON_LOCAL_TRAFFIC", value = "true" }
+        { name = "DD_DOGSTATSD_NON_LOCAL_TRAFFIC", value = "true" },
+        { name = "DD_ENV", value = var.vars.environment },
+        { name = "DD_SERVICE", value = "propertyflow-server" },
+        { name = "DD_VERSION", value = "1.0.0" }
       ]
       logConfiguration = {
         logDriver = "awslogs"
