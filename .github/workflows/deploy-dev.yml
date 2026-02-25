@@ -37,7 +37,8 @@ jobs:
             -var="auth0_audience=${{ vars.VITE_AUTH0_AUDIENCE }}" \
             -var="auth0_m2m_client_id=${{ vars.AUTH0_MANAGEMENT_CLIENT_ID }}" \
             -var="auth0_m2m_client_secret=${{ secrets.AUTH0_MANAGEMENT_CLIENT_SECRET }}" \
-            -var="db_password=${{ secrets.DATABASE_PASSWORD }}"
+            -var="db_password=${{ secrets.DATABASE_PASSWORD }}" \
+            -var="datadog_api_key=${{ secrets.DATADOG_API_KEY }}"
       - name: Get Outputs
         id: outputs
         run: |
