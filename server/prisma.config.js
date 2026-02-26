@@ -11,9 +11,11 @@ if (fs.existsSync(envPath)) {
   dotenv.config({ path: envPath });
 }
 
-// Debug log to verify environment variable presence in ECS logs
+// Use a dummy URL during build to satisfy Prisma 7 validation if environment variable is missing
+const dbUrl = process.env.DATABASE_URL || "postgresql://dummy:dummy@localhost:5432/dummy";
+
 if (!process.env.DATABASE_URL) {
-  console.error("PRISMA_CONFIG_LOG: DATABASE_URL is NOT set in environment");
+  console.log("PRISMA_CONFIG_LOG: DATABASE_URL is NOT set in environment (using build-time dummy)");
 } else {
   console.log("PRISMA_CONFIG_LOG: DATABASE_URL is detected");
 }
@@ -21,6 +23,6 @@ if (!process.env.DATABASE_URL) {
 export default defineConfig({
   schema: "prisma/schema.prisma",
   datasource: {
-    url: process.env.DATABASE_URL || "",
+    url: dbUrl,
   },
 });
