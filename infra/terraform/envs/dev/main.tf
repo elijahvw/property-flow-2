@@ -49,7 +49,7 @@ module "ecr" {
     auth0_audience          = var.auth0_audience
     auth0_m2m_client_id     = var.auth0_m2m_client_id
     auth0_m2m_client_secret = var.auth0_m2m_client_secret
-    database_url            = "postgresql://${var.db_user}:${var.db_password}@${module.rds.db_endpoint}:5432/${var.db_name}?sslmode=require"
+    database_url            = var.database_url
     datadog_api_key         = var.datadog_api_key
     datadog_site            = var.datadog_site
   }

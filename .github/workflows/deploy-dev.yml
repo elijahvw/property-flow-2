@@ -38,7 +38,8 @@ jobs:
             -var="auth0_m2m_client_id=${{ vars.AUTH0_MANAGEMENT_CLIENT_ID }}" \
             -var="auth0_m2m_client_secret=${{ secrets.AUTH0_MANAGEMENT_CLIENT_SECRET }}" \
             -var="db_password=${{ secrets.DATABASE_PASSWORD }}" \
-            -var="datadog_api_key=${{ secrets.DATADOG_API_KEY }}"
+            -var="datadog_api_key=${{ secrets.DATADOG_API_KEY }}" \
+            -var="database_url=${{ vars.DATABASE_URL }}"
       - name: Get Outputs
         id: outputs
         run: |

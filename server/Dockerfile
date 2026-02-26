@@ -13,6 +13,7 @@ RUN apt-get update -y && apt-get install -y openssl
 WORKDIR /app
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/prisma ./prisma/
+COPY --from=builder /app/prisma.config.js ./
 RUN npm install --omit=dev
 # Generate prisma client for the runtime OS
 RUN npx prisma generate
