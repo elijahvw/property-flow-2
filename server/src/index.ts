@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import auth0 from 'fastify-auth0-verify';
 import axios from 'axios';
 import dotenv from 'dotenv';
+import { Prisma } from '@prisma/client';
 import { prisma } from './lib/prisma.js';
 
 // Extend Fastify types
@@ -45,6 +46,59 @@ if (AUTH0_DOMAIN && AUTH0_AUDIENCE) {
 }
 
 let managementToken: string | null = null;
+
+const isDatabaseUnavailableError = (error: unknown) => {
+  if (error instanceof Prisma.PrismaClientInitializationError) {
+    return true;
+  }
+
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return ['P1001', 'P1002', 'P1008', 'P1017', 'P2021', 'P2022'].includes(error.code);
+  }
+
+  return false;
+};
+
+const getDatabaseErrorResponse = (error: unknown) => {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (['P2021', 'P2022'].includes(error.code)) {
+      return {
+        status: 503,
+        payload: {
+          error: 'Database schema is not ready',
+          code: error.code,
+        },
+      };
+    }
+
+    if (['P1001', 'P1002', 'P1008', 'P1017'].includes(error.code)) {
+      return {
+        status: 503,
+        payload: {
+          error: 'Database is unavailable',
+          code: error.code,
+        },
+      };
+    }
+  }
+
+  if (error instanceof Prisma.PrismaClientInitializationError) {
+    return {
+      status: 503,
+      payload: {
+        error: 'Database is unavailable',
+        code: 'PRISMA_INIT',
+      },
+    };
+  }
+
+  return {
+    status: 500,
+    payload: {
+      error: 'Failed to sync user data',
+    },
+  };
+};
 
 // Helper to get Auth0 Management API Token
 async function getManagementToken() {
@@ -125,8 +179,9 @@ const withUserSync = async (request: any, reply: any) => {
       }
     }
   } catch (error: any) {
-    server.log.error('User Sync Error:', error.message);
-    return reply.status(500).send({ error: 'Failed to sync user data' });
+    server.log.error({ err: error }, 'User sync failed');
+    const dbError = getDatabaseErrorResponse(error);
+    return reply.status(dbError.status).send(dbError.payload);
   }
 };
 
@@ -138,8 +193,30 @@ server.get('/api/me', { preValidation: [authenticate(server), withUserSync] }, a
 });
 
 // Unauthenticated health check
-server.get('/api/health', async () => {
-  return { status: 'ok', timestamp: new Date().toISOString(), db: 'connected' };
+server.get('/api/health', async (_request, reply) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+
+    return { status: 'ok', timestamp: new Date().toISOString(), db: 'connected' };
+  } catch (error) {
+    server.log.error({ err: error }, 'Health check failed');
+
+    if (isDatabaseUnavailableError(error)) {
+      return reply.status(503).send({
+        statusCode: 503,
+        status: 'error',
+        timestamp: new Date().toISOString(),
+        db: 'unavailable',
+      });
+    }
+
+    return reply.status(500).send({
+      statusCode: 500,
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      db: 'unknown',
+    });
+  }
 });
 
 // GET all companies (Admin only)
