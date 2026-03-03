@@ -3,6 +3,16 @@ resource "aws_ecr_repository" "app" {
   force_delete = true
 }
 
+locals {
+  database_url = format(
+    "postgresql://%s:%s@%s:5432/%s?schema=public",
+    urlencode(var.vars.db_user),
+    urlencode(var.vars.db_password),
+    var.vars.db_endpoint,
+    urlencode(var.vars.db_name)
+  )
+}
+
 resource "aws_ecs_cluster" "main" {
   name = "propertyflow-${var.vars.environment}-cluster"
 }
@@ -81,7 +91,7 @@ resource "aws_ecs_task_definition" "app" {
         { name = "VITE_AUTH0_AUDIENCE", value = var.vars.auth0_audience },
         { name = "AUTH0_MANAGEMENT_CLIENT_ID", value = var.vars.auth0_m2m_client_id },
         { name = "AUTH0_MANAGEMENT_CLIENT_SECRET", value = var.vars.auth0_m2m_client_secret },
-        { name = "DATABASE_URL", value = var.vars.database_url },
+        { name = "DATABASE_URL", value = local.database_url },
         { name = "DD_TRACE_AGENT_HOSTNAME", value = "localhost" },
         { name = "DD_ENV", value = var.vars.environment },
         { name = "DD_SERVICE", value = "propertyflow-server" },

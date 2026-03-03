@@ -24,21 +24,21 @@ resource "aws_security_group" "rds" {
 }
 
 resource "aws_db_instance" "postgresql" {
-  identifier           = "propertyflow-${var.environment}-db"
-  engine               = "postgres"
-  engine_version       = "16.3"
-  instance_class       = "db.t3.micro" # Free Tier eligible
-  allocated_storage    = 20            # Minimum required for Standard RDS
-  storage_type         = "gp2"
-  db_name              = var.db_name
-  username             = var.db_user
-  password             = var.db_password
-  db_subnet_group_name = aws_db_subnet_group.main.name
+  identifier             = "propertyflow-${var.environment}-db"
+  engine                 = "postgres"
+  engine_version         = "16.3"
+  instance_class         = "db.t3.micro" # Free Tier eligible
+  allocated_storage      = 20            # Minimum required for Standard RDS
+  storage_type           = "gp2"
+  db_name                = var.db_name
+  username               = var.db_user
+  password               = var.db_password
+  db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
-  skip_final_snapshot  = true
-  publicly_accessible  = false
-  multi_az             = false
-  storage_encrypted    = true
+  skip_final_snapshot    = true
+  publicly_accessible    = false
+  multi_az               = false
+  storage_encrypted      = true
 }
 
 output "db_endpoint" {

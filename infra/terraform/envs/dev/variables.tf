@@ -53,9 +53,3 @@ variable "datadog_site" {
   type    = string
   default = "us5.datadoghq.com"
 }
-
-variable "database_url" {
-  type      = string
-  sensitive = true
-}
-
