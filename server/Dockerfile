@@ -4,7 +4,7 @@ WORKDIR /app
 COPY package*.json ./
 # Need prisma schema for build
 COPY prisma ./prisma/
-RUN npm install
+RUN npm install --include=dev
 COPY . .
 RUN DATABASE_URL="postgresql://dummy@localhost:5432/dummy" npm run build
 
