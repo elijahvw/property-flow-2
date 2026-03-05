@@ -77,6 +77,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       cloudfront_distribution_id: ${{ steps.outputs.outputs.cloudfront_distribution_id }}
+      cloudfront_url: ${{ steps.outputs.outputs.cloudfront_url }}
       repository_url: ${{ steps.outputs.outputs.repository_url }}
       ecs_cluster_name: ${{ steps.outputs.outputs.ecs_cluster_name }}
       ecs_service_name: ${{ steps.outputs.outputs.ecs_service_name }}
@@ -112,6 +113,7 @@ jobs:
         run: |
           cd infra/terraform/envs/dev
           echo "cloudfront_distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
+          echo "cloudfront_url=$(terraform output -raw cloudfront_url)" >> $GITHUB_OUTPUT
           echo "repository_url=$(terraform output -raw repository_url)" >> $GITHUB_OUTPUT
           echo "ecs_cluster_name=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_OUTPUT
           echo "ecs_service_name=$(terraform output -raw ecs_service_name)" >> $GITHUB_OUTPUT
@@ -272,10 +274,20 @@ jobs:
           VITE_AUTH0_DOMAIN: ${{ vars.VITE_AUTH0_DOMAIN }}
           VITE_AUTH0_CLIENT_ID: ${{ vars.VITE_AUTH0_CLIENT_ID }}
           VITE_AUTH0_AUDIENCE: ${{ vars.VITE_AUTH0_AUDIENCE }}
+          VITE_DATADOG_SERVICE: property-flow-client
+          VITE_DATADOG_ENV: dev
+          VITE_APP_VERSION: ${{ github.sha }}
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DATADOG_SITE: us5.datadoghq.com
+          DATADOG_API_HOST: api.us5.datadoghq.com
         run: |
           npm install
           cd client && npm run build
           cd ..
+          npx @datadog/datadog-ci@latest sourcemaps upload ./client/dist/assets \
+            --service "$VITE_DATADOG_SERVICE" \
+            --release-version "$VITE_APP_VERSION" \
+            --minified-path-prefix "https://${{ needs.terraform.outputs.cloudfront_url }}/assets"
           aws s3 sync client/dist/ s3://propertyflow-dev-frontend --delete
       - name: Invalidate CloudFront
         run: |
