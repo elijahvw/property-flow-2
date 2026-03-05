@@ -243,21 +243,17 @@ server.get('/api/ready', async (_request, reply) => {
     return { status: 'ok', timestamp: new Date().toISOString(), db: 'connected' };
   } catch (error) {
     server.log.error({ err: error }, 'Readiness check failed');
+    const dbError = getDatabaseErrorResponse(error);
+    const payload = dbError.payload as { code?: string; reason?: string; error?: string };
 
-    if (isDatabaseUnavailableError(error)) {
-      return reply.status(503).send({
-        statusCode: 503,
-        status: 'error',
-        timestamp: new Date().toISOString(),
-        db: 'unavailable',
-      });
-    }
-
-    return reply.status(500).send({
-      statusCode: 500,
+    // Any DB read failure means the service is not ready.
+    return reply.status(503).send({
+      statusCode: 503,
       status: 'error',
       timestamp: new Date().toISOString(),
-      db: 'unknown',
+      db: 'unavailable',
+      code: payload.code ?? 'DB_READY_CHECK_FAILED',
+      reason: payload.reason ?? payload.error ?? (error instanceof Error ? error.message : 'Unknown DB readiness failure'),
     });
   }
 });
