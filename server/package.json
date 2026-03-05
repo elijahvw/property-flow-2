@@ -5,10 +5,10 @@
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon --exec ts-node src/index.ts",
+    "dev": "nodemon --exec ts-node src/bootstrap.ts",
     "build": "npx prisma generate && tsc -p tsconfig.json",
     "db:migrate": "npx prisma migrate deploy",
-    "start": "npm run db:migrate && node dist/index.js"
+    "start": "npm run db:migrate && node dist/bootstrap.js"
   },
   "keywords": [],
   "author": "",

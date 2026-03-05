@@ -1,4 +1,3 @@
-import tracer from 'dd-trace';
 import fastify from 'fastify';
 import cors from '@fastify/cors';
 import auth0 from 'fastify-auth0-verify';
@@ -6,10 +5,6 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import { Prisma } from '@prisma/client';
 import { prisma } from './lib/prisma.js';
-
-tracer.init({
-  logInjection: true,
-});
 
 // Extend Fastify types
 declare module 'fastify' {
