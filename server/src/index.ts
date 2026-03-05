@@ -120,14 +120,23 @@ const getDatabaseErrorResponse = (error: unknown) => {
       payload: {
         error: 'Database is unavailable',
         code: 'PRISMA_INIT',
+        reason: error.message,
       },
     };
   }
 
+  const fallbackCode =
+    typeof error === 'object' && error !== null && 'code' in error && typeof (error as { code?: unknown }).code === 'string'
+      ? (error as { code: string }).code
+      : 'DB_UNKNOWN';
+  const fallbackReason = error instanceof Error ? error.message : 'Unknown database operation failure';
+
   return {
-    status: 500,
+    status: 503,
     payload: {
-      error: 'Failed to sync user data',
+      error: 'Database operation failed',
+      code: fallbackCode,
+      reason: fallbackReason,
     },
   };
 };

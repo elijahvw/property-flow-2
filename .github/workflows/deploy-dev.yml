@@ -259,6 +259,12 @@ jobs:
                 --query 'TargetHealthDescriptions[*].[Target.Id,TargetHealth.State,TargetHealth.Reason,TargetHealth.Description]' \
                 --output table || true
             fi
+
+            LOG_GROUP="/ecs/${SERVICE}"
+            if aws logs describe-log-groups --log-group-name-prefix "$LOG_GROUP" --query 'length(logGroups)' --output text | grep -qv '^0$'; then
+              echo "Recent application logs from $LOG_GROUP"
+              aws logs tail "$LOG_GROUP" --since 10m --format short | tail -n 200 || true
+            fi
           }
 
           unknown_500_count=0
