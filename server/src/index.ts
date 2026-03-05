@@ -36,10 +36,11 @@ const AUTH0_CLIENT_ID = process.env.AUTH0_MANAGEMENT_CLIENT_ID || '';
 const AUTH0_CLIENT_SECRET = process.env.AUTH0_MANAGEMENT_CLIENT_SECRET || '';
 const AUTH0_AUDIENCE = process.env.AUTH0_AUDIENCE || process.env.VITE_AUTH0_AUDIENCE || '';
 
-console.log('--- Starting Server Configuration ---');
-console.log('AUTH0_DOMAIN:', AUTH0_DOMAIN ? 'SET' : 'MISSING');
-console.log('AUTH0_AUDIENCE:', AUTH0_AUDIENCE ? 'SET' : 'MISSING');
-console.log('AUTH0_MANAGEMENT_CLIENT_ID:', AUTH0_CLIENT_ID ? 'SET' : 'MISSING');
+server.log.info({
+  auth0Domain: AUTH0_DOMAIN ? 'SET' : 'MISSING',
+  auth0Audience: AUTH0_AUDIENCE ? 'SET' : 'MISSING',
+  auth0ManagementClientId: AUTH0_CLIENT_ID ? 'SET' : 'MISSING',
+}, 'Starting server configuration');
 
 if (AUTH0_DOMAIN && AUTH0_AUDIENCE) {
   server.register(auth0 as any, {
@@ -151,13 +152,19 @@ async function getManagementToken() {
     setTimeout(() => { managementToken = null; }, 3600000);
     return managementToken;
   } catch (error: any) {
-    console.error('ERROR: Failed to get Auth0 Management token for domain:', AUTH0_DOMAIN);
-    console.error('Client ID used:', AUTH0_CLIENT_ID);
     if (error.response) {
-      console.error('Status:', error.response.status);
-      console.error('Data:', JSON.stringify(error.response.data));
+      server.log.error({
+        auth0Domain: AUTH0_DOMAIN,
+        auth0ManagementClientId: AUTH0_CLIENT_ID,
+        statusCode: error.response.status,
+        responseData: error.response.data,
+      }, 'Failed to get Auth0 Management token');
     } else {
-      console.error('Message:', error.message);
+      server.log.error({
+        auth0Domain: AUTH0_DOMAIN,
+        auth0ManagementClientId: AUTH0_CLIENT_ID,
+        message: error.message,
+      }, 'Failed to get Auth0 Management token');
     }
     throw error;
   }
@@ -496,7 +503,7 @@ server.all('/api/users/*', async (request, reply) => {
 const start = async () => {
   try {
     await server.listen({ port: 5011, host: '0.0.0.0' });
-    console.log('Server listening on port 5011');
+    server.log.info('Server listening on port 5011');
   } catch (err) {
     server.log.error(err);
     process.exit(1);

@@ -232,13 +232,39 @@ jobs:
       - name: Verify backend readiness
         env:
           ALB_DNS_NAME: ${{ needs.terraform.outputs.alb_dns_name }}
+          CLUSTER: ${{ needs.terraform.outputs.ecs_cluster_name }}
+          SERVICE: ${{ needs.terraform.outputs.ecs_service_name }}
         run: |
           set -euo pipefail
 
           READY_URL="http://${ALB_DNS_NAME}/api/ready"
           echo "Probing readiness endpoint: $READY_URL"
 
-          for attempt in $(seq 1 18); do
+          print_diagnostics() {
+            aws ecs describe-services \
+              --cluster "$CLUSTER" \
+              --services "$SERVICE" \
+              --query 'services[0].events[0:20].[createdAt,message]' \
+              --output table || true
+
+            TARGET_GROUP_ARN=$(aws ecs describe-services \
+              --cluster "$CLUSTER" \
+              --services "$SERVICE" \
+              --query 'services[0].loadBalancers[0].targetGroupArn' \
+              --output text)
+
+            if [ "$TARGET_GROUP_ARN" != "None" ]; then
+              aws elbv2 describe-target-health \
+                --target-group-arn "$TARGET_GROUP_ARN" \
+                --query 'TargetHealthDescriptions[*].[Target.Id,TargetHealth.State,TargetHealth.Reason,TargetHealth.Description]' \
+                --output table || true
+            fi
+          }
+
+          unknown_500_count=0
+          max_attempts=8
+
+          for attempt in $(seq 1 "$max_attempts"); do
             status_code=$(curl -sS -o /tmp/backend-ready.json -w "%{http_code}" "$READY_URL" || true)
             if [ "$status_code" = "200" ]; then
               echo "Backend readiness check passed."
@@ -246,12 +272,26 @@ jobs:
               exit 0
             fi
 
-            echo "Readiness probe attempt $attempt/18 returned HTTP $status_code"
+            echo "Readiness probe attempt $attempt/$max_attempts returned HTTP $status_code"
             cat /tmp/backend-ready.json || true
+
+            if [ "$status_code" = "500" ] && grep -q '"db":"unknown"' /tmp/backend-ready.json; then
+              unknown_500_count=$((unknown_500_count + 1))
+            else
+              unknown_500_count=0
+            fi
+
+            if [ "$unknown_500_count" -ge 3 ]; then
+              echo "Backend readiness returned 500 with db=unknown 3 times in a row. Failing fast."
+              print_diagnostics
+              exit 1
+            fi
+
             sleep 10
           done
 
           echo "Backend readiness check failed after retries."
+          print_diagnostics
           exit 1
 
   deploy-frontend:
