@@ -255,7 +255,9 @@ jobs:
           exit 1
 
   deploy-frontend:
-    needs: terraform
+    needs:
+      - terraform
+      - deploy-backend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
