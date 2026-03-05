@@ -19,6 +19,10 @@ permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: true
+
 jobs:
   terraform-changes:
     name: Terraform Changes
@@ -134,15 +138,93 @@ jobs:
           docker push $REPOSITORY_URL:$IMAGE_TAG
       - name: Update ECS service
         run: |
-          aws ecs update-service --cluster ${{ needs.terraform.outputs.ecs_cluster_name }} --service ${{ needs.terraform.outputs.ecs_service_name }} --force-new-deployment
-          aws ecs wait services-stable --cluster ${{ needs.terraform.outputs.ecs_cluster_name }} --services ${{ needs.terraform.outputs.ecs_service_name }} || {
+          set -euo pipefail
+
+          CLUSTER="${{ needs.terraform.outputs.ecs_cluster_name }}"
+          SERVICE="${{ needs.terraform.outputs.ecs_service_name }}"
+
+          print_diagnostics() {
+            echo "Collecting ECS diagnostics for $SERVICE"
             aws ecs describe-services \
-              --cluster ${{ needs.terraform.outputs.ecs_cluster_name }} \
-              --services ${{ needs.terraform.outputs.ecs_service_name }} \
-              --query 'services[0].events[0:10].[createdAt,message]' \
-              --output table
-            exit 1
+              --cluster "$CLUSTER" \
+              --services "$SERVICE" \
+              --query 'services[0].deployments[*].[id,status,rolloutState,desiredCount,pendingCount,runningCount,failedTasks,taskDefinition]' \
+              --output table || true
+
+            aws ecs describe-services \
+              --cluster "$CLUSTER" \
+              --services "$SERVICE" \
+              --query 'services[0].events[0:20].[createdAt,message]' \
+              --output table || true
+
+            TARGET_GROUP_ARN=$(aws ecs describe-services \
+              --cluster "$CLUSTER" \
+              --services "$SERVICE" \
+              --query 'services[0].loadBalancers[0].targetGroupArn' \
+              --output text)
+
+            if [ "$TARGET_GROUP_ARN" != "None" ]; then
+              aws elbv2 describe-target-health \
+                --target-group-arn "$TARGET_GROUP_ARN" \
+                --query 'TargetHealthDescriptions[*].[Target.Id,TargetHealth.State,TargetHealth.Reason,TargetHealth.Description]' \
+                --output table || true
+            fi
+
+            STOPPED_TASKS=$(aws ecs list-tasks \
+              --cluster "$CLUSTER" \
+              --service-name "$SERVICE" \
+              --desired-status STOPPED \
+              --max-items 5 \
+              --query 'taskArns' \
+              --output text)
+
+            if [ "$STOPPED_TASKS" != "None" ] && [ -n "$STOPPED_TASKS" ]; then
+              aws ecs describe-tasks \
+                --cluster "$CLUSTER" \
+                --tasks $STOPPED_TASKS \
+                --query 'tasks[*].[taskArn,lastStatus,stoppedReason,containers[0].reason]' \
+                --output table || true
+            fi
           }
+
+          DESIRED_COUNT=$(aws ecs describe-services \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --query 'services[0].desiredCount' \
+            --output text)
+
+          if [ "$DESIRED_COUNT" = "None" ] || [ -z "$DESIRED_COUNT" ] || [ "$DESIRED_COUNT" -lt 1 ]; then
+            DESIRED_COUNT=1
+          fi
+
+          echo "Deploying service $SERVICE in cluster $CLUSTER"
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --force-new-deployment > /dev/null
+
+          if aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"; then
+            echo "ECS service stabilized on first attempt."
+            exit 0
+          fi
+
+          echo "Initial ECS stabilization failed. Attempting automated recovery."
+          print_diagnostics
+
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --desired-count 0 > /dev/null
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
+
+          aws ecs update-service \
+            --cluster "$CLUSTER" \
+            --service "$SERVICE" \
+            --desired-count "$DESIRED_COUNT" \
+            --force-new-deployment > /dev/null
+
+          if aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"; then
+            echo "ECS service stabilized after automated recovery."
+            exit 0
+          fi
+
+          echo "ECS service failed to stabilize after recovery."
+          print_diagnostics
+          exit 1
 
   deploy-frontend:
     needs: terraform

@@ -49,7 +49,7 @@ resource "aws_lb_target_group" "app" {
   vpc_id      = var.vars.vpc_id
   target_type = "ip"
   health_check {
-    path = "/api/health"
+    path = "/"
   }
 }
 
