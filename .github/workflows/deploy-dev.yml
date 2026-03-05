@@ -80,6 +80,7 @@ jobs:
       repository_url: ${{ steps.outputs.outputs.repository_url }}
       ecs_cluster_name: ${{ steps.outputs.outputs.ecs_cluster_name }}
       ecs_service_name: ${{ steps.outputs.outputs.ecs_service_name }}
+      alb_dns_name: ${{ steps.outputs.outputs.alb_dns_name }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
@@ -114,6 +115,7 @@ jobs:
           echo "repository_url=$(terraform output -raw repository_url)" >> $GITHUB_OUTPUT
           echo "ecs_cluster_name=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_OUTPUT
           echo "ecs_service_name=$(terraform output -raw ecs_service_name)" >> $GITHUB_OUTPUT
+          echo "alb_dns_name=$(terraform output -raw alb_dns_name)" >> $GITHUB_OUTPUT
 
   deploy-backend:
     needs: terraform
@@ -224,6 +226,30 @@ jobs:
 
           echo "ECS service failed to stabilize after recovery."
           print_diagnostics
+          exit 1
+      - name: Verify backend readiness
+        env:
+          ALB_DNS_NAME: ${{ needs.terraform.outputs.alb_dns_name }}
+        run: |
+          set -euo pipefail
+
+          READY_URL="http://${ALB_DNS_NAME}/api/ready"
+          echo "Probing readiness endpoint: $READY_URL"
+
+          for attempt in $(seq 1 18); do
+            status_code=$(curl -sS -o /tmp/backend-ready.json -w "%{http_code}" "$READY_URL" || true)
+            if [ "$status_code" = "200" ]; then
+              echo "Backend readiness check passed."
+              cat /tmp/backend-ready.json
+              exit 0
+            fi
+
+            echo "Readiness probe attempt $attempt/18 returned HTTP $status_code"
+            cat /tmp/backend-ready.json || true
+            sleep 10
+          done
+
+          echo "Backend readiness check failed after retries."
           exit 1
 
   deploy-frontend:

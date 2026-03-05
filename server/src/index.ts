@@ -192,14 +192,19 @@ server.get('/api/me', { preValidation: [authenticate(server), withUserSync] }, a
   return request.dbUser;
 });
 
-// Unauthenticated health check
-server.get('/api/health', async (_request, reply) => {
+// Unauthenticated liveness check: never block on dependencies.
+server.get('/api/health', async () => {
+  return { status: 'ok', timestamp: new Date().toISOString() };
+});
+
+// Unauthenticated readiness check: verifies database connectivity.
+server.get('/api/ready', async (_request, reply) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
 
     return { status: 'ok', timestamp: new Date().toISOString(), db: 'connected' };
   } catch (error) {
-    server.log.error({ err: error }, 'Health check failed');
+    server.log.error({ err: error }, 'Readiness check failed');
 
     if (isDatabaseUnavailableError(error)) {
       return reply.status(503).send({
