@@ -35,11 +35,9 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           RUN_TERRAFORM: ${{ inputs.run_terraform || 'auto' }}
-          BEFORE_SHA: ${{ github.event.before }}
-          CURRENT_SHA: ${{ github.sha }}
         run: |
-          should_apply=false
-          reason="no infra/terraform changes detected"
+          should_apply=true
+          reason="dev deploy reapplies terraform by default"
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             case "$RUN_TERRAFORM" in
@@ -60,14 +58,9 @@ jobs:
                 exit 1
                 ;;
             esac
-          elif [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
-            if git diff --name-only "$BEFORE_SHA" "$CURRENT_SHA" -- infra/terraform | grep -q .; then
-              should_apply=true
-              reason="push to main includes infra/terraform changes"
-            fi
           else
             should_apply=true
-            reason="push event has no comparable previous SHA"
+            reason="push to main deploy reapplies terraform"
           fi
 
           echo "should_apply=$should_apply" >> "$GITHUB_OUTPUT"
@@ -142,6 +135,14 @@ jobs:
       - name: Update ECS service
         run: |
           aws ecs update-service --cluster ${{ needs.terraform.outputs.ecs_cluster_name }} --service ${{ needs.terraform.outputs.ecs_service_name }} --force-new-deployment
+          aws ecs wait services-stable --cluster ${{ needs.terraform.outputs.ecs_cluster_name }} --services ${{ needs.terraform.outputs.ecs_service_name }} || {
+            aws ecs describe-services \
+              --cluster ${{ needs.terraform.outputs.ecs_cluster_name }} \
+              --services ${{ needs.terraform.outputs.ecs_service_name }} \
+              --query 'services[0].events[0:10].[createdAt,message]' \
+              --output table
+            exit 1
+          }
 
   deploy-frontend:
     needs: terraform

@@ -21,6 +21,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Key for custom roles claim in Auth0 token
 const ROLES_CLAIM = 'https://propertyflow.com/roles';
+const API_ME_TIMEOUT_MS = 15000;
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const auth0 = (() => {
@@ -42,11 +43,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const token = await auth0.getAccessTokenSilently();
         const response = await axios.get('/api/me', {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
+          timeout: API_ME_TIMEOUT_MS,
         });
         setDbUser(response.data);
       } catch (err) {
         console.error('Error fetching db user:', err);
+        setDbUser(null);
       }
     }
   };

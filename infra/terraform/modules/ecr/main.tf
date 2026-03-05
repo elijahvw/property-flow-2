@@ -5,7 +5,7 @@ resource "aws_ecr_repository" "app" {
 
 locals {
   database_url = format(
-    "postgresql://%s:%s@%s:5432/%s?schema=public",
+    "postgresql://%s:%s@%s:5432/%s?schema=public&sslmode=require",
     urlencode(var.vars.db_user),
     urlencode(var.vars.db_password),
     var.vars.db_endpoint,
@@ -86,6 +86,7 @@ resource "aws_ecs_task_definition" "app" {
         hostPort      = 5011
       }]
       environment = [
+        { name = "NODE_ENV", value = "production" },
         { name = "AUTH0_DOMAIN", value = var.vars.auth0_domain },
         { name = "AUTH0_AUDIENCE", value = var.vars.auth0_audience },
         { name = "VITE_AUTH0_AUDIENCE", value = var.vars.auth0_audience },
