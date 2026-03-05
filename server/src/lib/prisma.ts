@@ -8,8 +8,8 @@ dotenv.config();
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 const isProduction = process.env.NODE_ENV === 'production';
 
-function withNoVerifySslMode(databaseUrl?: string): string | undefined {
-  if (!databaseUrl || !isProduction) {
+function withoutSslMode(databaseUrl?: string): string | undefined {
+  if (!databaseUrl) {
     return databaseUrl;
   }
 
@@ -19,19 +19,28 @@ function withNoVerifySslMode(databaseUrl?: string): string | undefined {
 
   try {
     const parsedUrl = new URL(databaseUrl);
-    parsedUrl.searchParams.set('sslmode', 'no-verify');
+    parsedUrl.searchParams.delete('sslmode');
     return parsedUrl.toString();
   } catch {
-    const separator = databaseUrl.includes('?') ? '&' : '?';
-    return databaseUrl.includes('sslmode=')
-      ? databaseUrl.replace(/sslmode=[^&]*/i, 'sslmode=no-verify')
-      : `${databaseUrl}${separator}sslmode=no-verify`;
+    const [base, query] = databaseUrl.split('?');
+    if (!query) {
+      return base;
+    }
+
+    const params = query.split('&').filter((item) => item && !/^sslmode=/i.test(item));
+    return params.length > 0 ? `${base}?${params.join('&')}` : base;
   }
 }
 
-const pool = new Pool({
-  connectionString: withNoVerifySslMode(process.env.DATABASE_URL),
-});
+const poolConfig: ConstructorParameters<typeof Pool>[0] = {
+  connectionString: withoutSslMode(process.env.DATABASE_URL),
+};
+
+if (isProduction) {
+  poolConfig.ssl = { rejectUnauthorized: false };
+}
+
+const pool = new Pool(poolConfig);
 const adapter = new PrismaPg(pool);
 
 export const prisma =

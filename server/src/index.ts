@@ -52,12 +52,24 @@ if (AUTH0_DOMAIN && AUTH0_AUDIENCE) {
 
 let managementToken: string | null = null;
 
+const getPrismaDriverCause = (error: Prisma.PrismaClientKnownRequestError) => {
+  const meta = error.meta as { driverAdapterError?: { cause?: { kind?: string; reason?: string } } } | undefined;
+  return meta?.driverAdapterError?.cause;
+};
+
 const isDatabaseUnavailableError = (error: unknown) => {
   if (error instanceof Prisma.PrismaClientInitializationError) {
     return true;
   }
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === 'P2010') {
+      const cause = getPrismaDriverCause(error);
+      if (cause?.kind === 'TlsConnectionError') {
+        return true;
+      }
+    }
+
     return ['P1001', 'P1002', 'P1008', 'P1017', 'P2021', 'P2022'].includes(error.code);
   }
 
@@ -84,6 +96,20 @@ const getDatabaseErrorResponse = (error: unknown) => {
           code: error.code,
         },
       };
+    }
+
+    if (error.code === 'P2010') {
+      const cause = getPrismaDriverCause(error);
+      if (cause?.kind === 'TlsConnectionError') {
+        return {
+          status: 503,
+          payload: {
+            error: 'Database TLS connection failed',
+            code: error.code,
+            reason: cause.reason || 'TLS connection error',
+          },
+        };
+      }
     }
   }
 
