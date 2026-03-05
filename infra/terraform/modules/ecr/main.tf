@@ -5,7 +5,7 @@ resource "aws_ecr_repository" "app" {
 
 locals {
   database_url = format(
-    "postgresql://%s:%s@%s:5432/%s?schema=public&sslmode=require",
+    "postgresql://%s:%s@%s:5432/%s?schema=public&sslmode=no-verify",
     urlencode(var.vars.db_user),
     urlencode(var.vars.db_password),
     var.vars.db_endpoint,
