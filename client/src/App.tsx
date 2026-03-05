@@ -1,5 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { addReactError } from '@datadog/browser-rum-react';
+import { Routes } from '@datadog/browser-rum-react/react-router-v6';
+import { BrowserRouter as Router, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { Auth0Provider } from '@auth0/auth0-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -22,6 +24,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    addReactError(error, errorInfo);
     console.error("Uncaught error:", error, errorInfo);
   }
 
