@@ -21,3 +21,7 @@ output "ecs_service_name" {
 output "alb_dns_name" {
   value = module.ecr.alb_dns_name
 }
+
+output "frontend_bucket_name" {
+  value = module.s3_frontend.bucket_name
+}
