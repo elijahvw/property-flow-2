@@ -14,8 +14,13 @@ jobs:
           node-version: '20'
           cache: 'npm'
       
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Test development power controls
-        run: python3 -m unittest discover -s tests/operations -p 'test_*.py'
+        run: |
+          python3 -m pip install unittest-xml-reporting==3.2.0
+          python3 -m xmlrunner discover -s tests/operations -p 'test_*.py' -o test-results/python
 
       - name: Install dependencies
         run: npm install
@@ -26,13 +31,49 @@ jobs:
         run: |
           npm ci --prefix server
           npm run build --prefix server
-          node --test server/tests/*.test.mjs
+          mkdir -p test-results
+          node --test --test-reporter=spec --test-reporter=junit --test-reporter-destination=stdout --test-reporter-destination=test-results/server.xml server/tests/*.test.mjs
 
-      - name: Test browser trace propagation boundaries
-        run: node --test client/tests/observability.test.cjs
+      - name: Test browser operations and authentication deadlines
+        run: |
+          mkdir -p test-results
+          node --test --test-reporter=spec --test-reporter=junit --test-reporter-destination=stdout --test-reporter-destination=test-results/browser.xml client/tests/*.test.cjs
 
       - name: Build (Client)
         run: npm run build --workspace=@property-flow/client
+
+      - name: Keep test reports in GitHub
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Send test results to Datadog US1
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        env:
+          DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DD_SITE: datadoghq.com
+          DD_ENV: ci
+          DD_GIT_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -z "$DD_API_KEY" ]; then
+            echo "Datadog upload skipped: API key is not configured."
+            exit 0
+          fi
+          if [ ! -d test-results ]; then
+            echo "Datadog upload skipped: no test reports were generated."
+            exit 0
+          fi
+          mapfile -d '' reports < <(find test-results -type f -name '*.xml' -print0)
+          if [ "${#reports[@]}" -eq 0 ]; then
+            echo "Datadog upload skipped: no XML reports found."
+            exit 0
+          fi
+          npx --yes @datadog/datadog-ci@latest junit upload --service propertyflow-tests --skip-git-metadata-upload "${reports[@]}"
 
   terraform-validate:
     runs-on: ubuntu-latest
