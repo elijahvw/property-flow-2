@@ -93,3 +93,15 @@ test('profile API errors propagate and the request scope is cleaned up', async (
   }, 30), value => value === error);
   assert.equal(signal.aborted, true);
 });
+
+test('database defaults and missing or malformed role claims do not grant portal access', () => {
+  const { roleFromClaims, matchingPortalRole } = load('auth-profile');
+  for (const claims of [undefined, null, 'admin', {}, [], ['unknown']]) {
+    assert.equal(roleFromClaims(claims), null);
+    assert.equal(matchingPortalRole(roleFromClaims(claims), 'tenant'), null);
+    assert.equal(matchingPortalRole(roleFromClaims(claims), 'admin'), null);
+  }
+  assert.equal(matchingPortalRole(roleFromClaims(['admin']), 'admin'), 'admin');
+  assert.equal(matchingPortalRole(roleFromClaims(['tenant']), 'admin'), null);
+  assert.equal(matchingPortalRole(roleFromClaims(['tenant']), 'tenant'), 'tenant');
+});
