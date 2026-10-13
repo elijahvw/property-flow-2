@@ -6,15 +6,13 @@ const Home: React.FC = () => {
   const { user, signIn, loading } = useAuth();
   const navigate = useNavigate();
 
-  if (loading) return null;
-
   return (
     <div className="page hero-section">
       <div className="hero-content">
         <h1>Simplify Your Property Management</h1>
         <p className="hero-subtitle">The modern way to track, manage, and flow your properties with ease.</p>
         <div className="hero-actions">
-          {!user ? (
+          {loading ? <p role="status">Restoring your sign-in…</p> : !user ? (
             <>
               <button className="btn-primary lg" onClick={signIn}>Get Started</button>
               <button className="btn-secondary lg">Learn More</button>
