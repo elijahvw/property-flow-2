@@ -1,4 +1,5 @@
 import fastify from 'fastify';
+import { authenticate } from './authenticate.js';
 import cors from '@fastify/cors';
 import auth0 from 'fastify-auth0-verify';
 import axios from 'axios';
@@ -175,16 +176,6 @@ async function getManagementToken() {
 }
 
 // Authenticated routes - move definitions out for better scope visibility
-const authenticate = (instance: any) => (request: any, reply: any, done: any) => {
-  const authPlugin = (instance.authenticate || server.authenticate);
-  if (typeof authPlugin === 'function') {
-    authPlugin(request, reply, done);
-    return;
-  }
-  instance.log.error('Authentication plugin not found on instance or server');
-  reply.status(500).send({ error: 'Authentication service unavailable' });
-};
-
 // Middleware to ensure user is synced with DB and check company access
 const withUserSync = async (request: any, reply: any) => {
   if (!request.user) {
