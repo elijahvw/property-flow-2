@@ -9,6 +9,8 @@ COPY . .
 RUN DATABASE_URL="postgresql://dummy@localhost:5432/dummy" npm run build
 
 FROM node:20-slim
+ARG APP_VERSION=unknown
+ENV DD_VERSION=$APP_VERSION
 RUN apt-get update -y && apt-get install -y openssl
 WORKDIR /app
 COPY --from=builder /app/package*.json ./
