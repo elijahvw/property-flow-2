@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import { startOperation } from '../operations';
 import { useAuth0 } from '@auth0/auth0-react';
 
 interface CompanyDetails {
@@ -27,42 +28,48 @@ export default function CompanyManager({ companyId, onClose, onSaved, onManageUs
 
   useEffect(() => {
     let active = true;
+    const operation = startOperation('company.details.load');
     setLoading(true);
     setError(null);
     setCompany(null);
     (async () => {
       try {
-        const token = await getAccessTokenSilently();
+        const token = await getAccessTokenSilently({ timeoutInSeconds: 8 });
         const response = await axios.get<CompanyDetails>(`/api/companies/${encodeURIComponent(companyId)}`, {
           headers: { Authorization: `Bearer ${token}` }, timeout: 15000,
         });
         if (!active) return;
+        operation.succeed();
         setCompany(response.data);
         setForm({ name: response.data.name, domain: response.data.domain || '' });
       } catch (err: any) {
+        operation.fail(err);
         if (active) setError(err.response?.data?.error || 'Unable to load company details. Please try again.');
       } finally {
         if (active) setLoading(false);
       }
     })();
-    return () => { active = false; };
+    return () => { active = false; operation.abandon(); };
   }, [companyId, getAccessTokenSilently, reload]);
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving || !company) return;
+    const operation = startOperation('company.update');
     setSaving(true);
     setError(null);
     setNotice(null);
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({ timeoutInSeconds: 8 });
       const response = await axios.patch(`/api/companies/${encodeURIComponent(companyId)}`, {
         name: form.name.trim(), domain: form.domain.trim() || null,
       }, { headers: { Authorization: `Bearer ${token}` }, timeout: 15000 });
       setCompany(previous => previous ? { ...previous, name: response.data.name, domain: response.data.domain } : previous);
+      operation.succeed();
       setNotice('Company saved.');
       await onSaved();
     } catch (err: any) {
+      operation.fail(err);
       setError(err.response?.data?.error || 'Unable to save company. Please try again.');
     } finally {
       setSaving(false);
