@@ -48,8 +48,14 @@ resource "aws_lb_target_group" "app" {
   protocol    = "HTTP"
   vpc_id      = var.vars.vpc_id
   target_type = "ip"
+  # Dev HTTP requests are bounded; retain one minute for in-flight requests.
+  deregistration_delay = 60
   health_check {
-    path = "/"
+    path                = "/api/ready"
+    interval            = 10
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
   }
 }
 
@@ -164,3 +170,4 @@ output "alb_dns_name" { value = aws_lb.main.dns_name }
 output "repository_url" { value = aws_ecr_repository.app.repository_url }
 output "ecs_cluster_name" { value = aws_ecs_cluster.main.name }
 output "ecs_service_name" { value = aws_ecs_service.app.name }
+
