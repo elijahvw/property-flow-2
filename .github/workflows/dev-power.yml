@@ -1,0 +1,49 @@
+name: Dev Start or Stop
+run-name: Dev ${{ inputs.action }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Start or stop the development backend and database
+        required: true
+        type: choice
+        default: stop
+        options:
+          - start
+          - stop
+
+permissions:
+  contents: read
+  id-token: write
+
+# Serialize power controls with deployments; never interrupt a running change.
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+jobs:
+  power:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: us-east-1
+      - name: Change development power state
+        env:
+          DEV_POWER_ACTION: ${{ inputs.action }}
+        run: bash scripts/dev-power.sh "$DEV_POWER_ACTION"
+      - name: Explain stopped-state costs
+        if: success() && inputs.action == 'stop'
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          Development backend and database are stopped. Data is retained.
+          Storage, load balancer and some networking charges continue.
+          AWS automatically restarts a stopped RDS database after seven days.
+          Run **Dev Start or Stop** with **start** to bring the environment back up.
+          EOF
