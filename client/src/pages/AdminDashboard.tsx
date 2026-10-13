@@ -318,6 +318,7 @@ const AdminDashboard: React.FC = () => {
                           onChange={(e) => updateRole(user.id, e.target.value)}
                           disabled={rowLoading[user.id]}
                         >
+                          <option value="unassigned" disabled>No Role Assigned</option>
                           <option value="tenant">Tenant</option>
                           <option value="landlord">Landlord</option>
                           <option value="admin">Admin</option>
