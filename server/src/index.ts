@@ -1,4 +1,5 @@
 import fastify from 'fastify';
+import { registerCompanyManagement } from './company-management.js';
 import { authenticate } from './authenticate.js';
 import { synchronizeUser, UserProfileError } from './user-sync.js';
 import cors from '@fastify/cors';
@@ -215,6 +216,7 @@ const withUserSync = async (request: any, reply: any) => {
 };
 
 // --- ROUTES ---
+registerCompanyManagement(server, prisma, [authenticate(server), withUserSync]);
 
 // GET current user profile
 server.get('/api/me', { preValidation: [authenticate(server), withUserSync] }, async (request: any, reply) => {
