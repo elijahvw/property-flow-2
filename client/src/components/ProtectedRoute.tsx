@@ -8,13 +8,13 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
-  const { user, role, loading, signIn, isConfigured } = useAuth();
+  const { user, role, loading, error, signIn, isConfigured } = useAuth();
   const location = useLocation();
 
   if (loading) {
     return (
       <div className="loading-container">
-        <div className="loader">Loading...</div>
+        <div className="loader" role="status">Restoring your sign-in…</div>
       </div>
     );
   }
@@ -29,9 +29,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     );
   }
 
-  if (!user) {
-    signIn();
-    return null;
+  if (error || !user) {
+    return (
+      <div className="error-container">
+        <h1>{error ? 'Unable to load your account' : 'Sign in to continue'}</h1>
+        {error && <p role="alert">{error}</p>}
+        <button className="btn-primary" onClick={signIn}>Sign In</button>
+        <button className="btn-secondary" onClick={() => window.location.reload()}>Reload</button>
+        <button className="btn-secondary" onClick={() => window.location.href = '/'}>Go Home</button>
+      </div>
+    );
   }
 
   if (allowedRoles && !role) {
