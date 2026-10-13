@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import CompanyManager from '../components/CompanyManager';
 import { useAuth0 } from '@auth0/auth0-react';
 
 interface User {
@@ -28,6 +29,7 @@ const AdminDashboard: React.FC = () => {
   const [rowLoading, setRowLoading] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [managedCompanyId, setManagedCompanyId] = useState<string | null>(null);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [savingCompany, setSavingCompany] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -383,7 +385,7 @@ const AdminDashboard: React.FC = () => {
                       <td>{company._count?.users || 0}</td>
                       <td>{company._count?.properties || 0}</td>
                       <td>
-                        <button className="btn-small">Manage</button>
+                        <button className="btn-small" onClick={() => setManagedCompanyId(company.id)}>Manage</button>
                       </td>
                     </tr>
                   ))}
@@ -393,6 +395,16 @@ const AdminDashboard: React.FC = () => {
           </div>
         )}
       </div>
+
+      {managedCompanyId && (
+        <CompanyManager companyId={managedCompanyId}
+          onClose={() => setManagedCompanyId(null)}
+          onSaved={fetchCompanies}
+          onManageUsers={() => {
+            setManagedCompanyId(null);
+            setActiveTab('users');
+          }} />
+      )}
 
       {showCompanyModal && (
         <div className="modal-overlay">
