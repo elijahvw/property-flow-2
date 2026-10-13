@@ -11,3 +11,5 @@ Stopping retains database data and avoids backend/container and database compute
 AWS automatically starts RDS after seven consecutive stopped days. With manual-only controls, run stop again if you leave development off for longer; do not assume it remains off indefinitely. See [AWS RDS stopping documentation](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_StopInstance.html).
 
 The static website remains served while the backend is stopped, but sign-in-dependent API operations will be unavailable. A manual Deploy Dev run can also start infrastructure; use the power workflow for ordinary on/off control, without rebuilding the application.
+
+Actual Deploy Dev runs start an existing database and wait for availability before Terraform can restore ECS tasks. After uploading the backend image, deployment checks database availability again and restores at least one ECS task, including when Terraform is skipped. Infrastructure previews do not start either resource. A first deployment may create a missing database; permission errors still fail the run.
