@@ -156,7 +156,7 @@ async function getManagementToken() {
 
     managementToken = (response.data as any).access_token;
     // Reset token after 1 hour (tokens usually last 24h)
-    setTimeout(() => { managementToken = null; }, 3600000);
+    setTimeout(() => { managementToken = null; }, 3600000).unref();
     return managementToken;
   } catch (error: any) {
     if (error.response) {
@@ -498,5 +498,25 @@ const start = async () => {
     process.exit(1);
   }
 };
+
+// Finish in-flight HTTP requests when ECS replaces a task.
+let shuttingDown = false;
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  const deadline = setTimeout(() => process.exit(1), 25000);
+  deadline.unref();
+  try {
+    await server.close();
+    await prisma.$disconnect();
+    clearTimeout(deadline);
+    process.exit(0);
+  } catch (error) {
+    server.log.error({ err: error }, 'Graceful shutdown failed');
+    process.exit(1);
+  }
+}
+process.once('SIGTERM', shutdown);
+process.once('SIGINT', shutdown);
 
 start();
