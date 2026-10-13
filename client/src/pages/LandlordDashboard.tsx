@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 const LandlordDashboard: React.FC = () => {
   return (
@@ -12,20 +13,20 @@ const LandlordDashboard: React.FC = () => {
         <div className="feature-card">
           <div className="feature-icon">🏠</div>
           <h3>Properties</h3>
-          <p>4 Active listings</p>
-          <button className="btn-secondary lg mt-1 full-width">View All</button>
+          <p>View and manage your company’s properties.</p>
+          <Link className="btn-secondary lg mt-1 full-width" to="/properties">View Properties</Link>
         </div>
         <div className="feature-card">
           <div className="feature-icon">💰</div>
           <h3>Revenue</h3>
-          <p>$12,450 this month</p>
-          <button className="btn-secondary lg mt-1 full-width">Reports</button>
+          <p>Revenue reporting is coming soon.</p>
+          <button className="btn-secondary lg mt-1 full-width" disabled>Coming Soon</button>
         </div>
         <div className="feature-card">
           <div className="feature-icon">🔧</div>
           <h3>Maintenance</h3>
-          <p>2 Pending requests</p>
-          <button className="btn-secondary lg mt-1 full-width">Manage</button>
+          <p>Maintenance tracking is coming soon.</p>
+          <button className="btn-secondary lg mt-1 full-width" disabled>Coming Soon</button>
         </div>
       </div>
     </div>
