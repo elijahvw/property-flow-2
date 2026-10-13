@@ -1,10 +1,12 @@
 import fastify from 'fastify';
+import { Auth0ReadError, readError, listAdminUsers, createManagementTokenCache, createManagementReader } from './admin-users.js';
 import { registerCompanyManagement } from './company-management.js';
 import { authenticate } from './authenticate.js';
 import { synchronizeUser, UserProfileError } from './user-sync.js';
 import cors from '@fastify/cors';
 import auth0 from 'fastify-auth0-verify';
 import axios from 'axios';
+import tracer from 'dd-trace';
 import dotenv from 'dotenv';
 import { Prisma } from '@prisma/client';
 import { prisma } from './lib/prisma.js';
@@ -49,7 +51,7 @@ if (AUTH0_DOMAIN && AUTH0_AUDIENCE) {
   server.log.error('CRITICAL: AUTH0_DOMAIN or AUTH0_AUDIENCE not set. Auth routes will fail.');
 }
 
-let managementToken: string | null = null;
+
 
 const getPrismaDriverCause = (error: Prisma.PrismaClientKnownRequestError) => {
   const meta = error.meta as { driverAdapterError?: { cause?: { kind?: string; reason?: string } } } | undefined;
@@ -139,43 +141,30 @@ const getDatabaseErrorResponse = (error: unknown) => {
   };
 };
 
-// Helper to get Auth0 Management API Token
-async function getManagementToken() {
-  if (managementToken) return managementToken;
-
-  const params = new URLSearchParams();
-  params.append('client_id', AUTH0_CLIENT_ID);
-  params.append('client_secret', AUTH0_CLIENT_SECRET);
-  params.append('audience', `https://${AUTH0_DOMAIN}/api/v2/`);
-  params.append('grant_type', 'client_credentials');
-
+// Coalesce token requests and honor the real token expiry.
+const managementTokens = createManagementTokenCache(async () => {
+  const params = new URLSearchParams({
+    client_id: AUTH0_CLIENT_ID, client_secret: AUTH0_CLIENT_SECRET,
+    audience: `https://${AUTH0_DOMAIN}/api/v2/`, grant_type: 'client_credentials',
+  });
   try {
     const response = await axios.post(`https://${AUTH0_DOMAIN}/oauth/token`, params, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 5000,
     });
-
-    managementToken = (response.data as any).access_token;
-    // Reset token after 1 hour (tokens usually last 24h)
-    setTimeout(() => { managementToken = null; }, 3600000).unref();
-    return managementToken;
-  } catch (error: any) {
-    if (error.response) {
-      server.log.error({
-        auth0Domain: AUTH0_DOMAIN,
-        auth0ManagementClientId: AUTH0_CLIENT_ID,
-        statusCode: error.response.status,
-        responseData: error.response.data,
-      }, 'Failed to get Auth0 Management token');
-    } else {
-      server.log.error({
-        auth0Domain: AUTH0_DOMAIN,
-        auth0ManagementClientId: AUTH0_CLIENT_ID,
-        message: error.message,
-      }, 'Failed to get Auth0 Management token');
-    }
-    throw error;
+    return response.data;
+  } catch (error) {
+    // Axios errors include credentials and headers; expose only safe metadata.
+    throw readError('token', error);
   }
-}
+});
+const getManagementToken = () => managementTokens.get();
+
+const managementRead = createManagementReader(managementTokens, async (path, token) => {
+  const response = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/${path}`, {
+    headers: { Authorization: `Bearer ${token}` }, timeout: 5000,
+  });
+  return response.data;
+});
 
 // Authenticated routes - move definitions out for better scope visibility
 // Middleware to ensure user is synced with DB and check company access
@@ -302,38 +291,28 @@ server.get('/api/users', { preValidation: [authenticate(server), withUserSync] }
   const companyId = request.headers['x-company-id'] as string;
   
   try {
-    const token = await getManagementToken();
-    const response = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/users`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    
-    const allUsers = response.data as any[];
-    const localUsers = await prisma.user.findMany({
-      include: { company: true }
-    });
-
-    const usersWithRoles = await Promise.all(allUsers.map(async (user: any) => {
-      const localUser = localUsers.find((u: any) => u.id === user.user_id);
-      if (companyId && localUser?.companyId !== companyId) return null;
-
-      const rolesResponse = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(user.user_id)}/roles`, {
-        headers: { Authorization: `Bearer ${token}` }
+    const allUsers = await managementRead<any[]>('users', 'users');
+    const localUsers = await prisma.user.findMany({ include: { company: true } });
+    return await listAdminUsers(allUsers, localUsers, async id =>
+      managementRead<{ name: string }[]>(`users/${encodeURIComponent(id)}/roles`, 'roles'), companyId);
+  } catch (error) {
+    if (error instanceof Auth0ReadError) {
+      const span = tracer.scope().active();
+      span?.setTag('error', new Error(error.message));
+      span?.setTag('auth0.stage', error.stage);
+      span?.setTag('auth0.error_code', error.code);
+      if (error.upstreamStatus) span?.setTag('auth0.upstream_status', error.upstreamStatus);
+      server.log.warn({
+        code: error.code, auth0Stage: error.stage, upstreamStatus: error.upstreamStatus,
+      }, 'Admin user lookup failed');
+      if (error.retryAfter) reply.header('Retry-After', String(error.retryAfter));
+      return reply.status(error.code === 'AUTH0_RATE_LIMITED' ? 503 : 502).send({
+        error: error.message, code: error.code,
       });
-
-      return {
-        id: user.user_id,
-        email: user.email,
-        name: user.name || user.email,
-        role: (rolesResponse.data as any[])[0]?.name || 'tenant',
-        blocked: user.blocked || false,
-        company: localUser?.company || null
-      };
-    }));
-
-    return (usersWithRoles as any[]).filter((u: any) => u !== null);
-  } catch (error: any) {
-    server.log.error(error);
-    return reply.status(500).send({ error: 'Failed to fetch users' });
+    }
+    tracer.scope().active()?.setTag('error', new Error('Unable to load platform users'));
+    server.log.error({ errorType: error instanceof Error ? error.name : 'Unknown' }, 'Admin user lookup failed');
+    return reply.status(500).send({ error: 'Unable to load platform users', code: 'USERS_LOOKUP_FAILED' });
   }
 });
 

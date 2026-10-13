@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { useAuth0, User } from '@auth0/auth0-react';
 import axios from 'axios';
-import { loadProfile } from '../auth-profile';
+import { loadProfile, roleFromClaims, matchingPortalRole } from '../auth-profile';
 import { startOperation, monitorOperation } from '../operations';
 
 export type UserRole = 'tenant' | 'landlord' | 'admin';
@@ -20,6 +20,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const auth0 = useAuth0();
+  const claimRole = roleFromClaims(auth0.user?.['https://propertyflow.com/roles']);
   const isConfigured = !!import.meta.env.VITE_AUTH0_DOMAIN && !!import.meta.env.VITE_AUTH0_CLIENT_ID;
   const [role, setRole] = useState<UserRole | null>(null);
   const [dbUser, setDbUser] = useState<any | null>(null);
@@ -57,7 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ));
       if (version !== requestVersion.current) return;
       setDbUser(profile);
-      setRole(['admin', 'landlord', 'tenant'].includes(profile.role) ? profile.role : null);
+      setRole(matchingPortalRole(claimRole, profile.role));
     } catch {
       if (version !== requestVersion.current) return;
       setDbUser(null);
@@ -66,7 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       if (version === requestVersion.current) setLoading(false);
     }
-  }, [isConfigured, auth0.isAuthenticated, auth0.getAccessTokenSilently]);
+  }, [isConfigured, auth0.isAuthenticated, auth0.getAccessTokenSilently, claimRole]);
 
   useEffect(() => {
     if (!isConfigured) {

@@ -23,3 +23,12 @@ export async function loadProfile<T>(
     controller.abort();
   }
 }
+
+export type PortalRole = 'admin' | 'landlord' | 'tenant';
+export function roleFromClaims(claims: unknown): PortalRole | null {
+  if (!Array.isArray(claims)) return null;
+  return (['admin', 'landlord', 'tenant'] as const).find(role => claims.includes(role)) || null;
+}
+export function matchingPortalRole(claimRole: PortalRole | null, profileRole: unknown): PortalRole | null {
+  return claimRole && claimRole === profileRole ? claimRole : null;
+}
