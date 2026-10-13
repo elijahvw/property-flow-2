@@ -1,5 +1,6 @@
 import fastify from 'fastify';
 import { authenticate } from './authenticate.js';
+import { synchronizeUser, UserProfileError } from './user-sync.js';
 import cors from '@fastify/cors';
 import auth0 from 'fastify-auth0-verify';
 import axios from 'axios';
@@ -183,23 +184,14 @@ const withUserSync = async (request: any, reply: any) => {
   }
   
   const auth0User = request.user;
-  const roles = auth0User['https://propertyflow.com/roles'] || [];
   
   try {
-    // Sync user with Prisma
-    let user = await prisma.user.upsert({
-      where: { id: auth0User.sub },
-      update: {
-        email: auth0User.email,
-        name: auth0User.name,
-        role: roles.includes('admin') ? 'admin' : (roles.includes('landlord') ? 'landlord' : 'tenant'),
-      },
-      create: {
-        id: auth0User.sub,
-        email: auth0User.email,
-        name: auth0User.name,
-        role: roles.includes('admin') ? 'admin' : (roles.includes('landlord') ? 'landlord' : 'tenant'),
-      },
+    const user = await synchronizeUser(prisma.user, auth0User, async () => {
+      const response = await axios.get(`https://${AUTH0_DOMAIN}/userinfo`, {
+        headers: { Authorization: request.headers.authorization },
+        timeout: 5000,
+      });
+      return response.data;
     });
 
     request.dbUser = user;
@@ -212,6 +204,10 @@ const withUserSync = async (request: any, reply: any) => {
       }
     }
   } catch (error: any) {
+    if (error instanceof UserProfileError) {
+      server.log.warn({ code: error.code, status: error.status }, 'User profile synchronization failed');
+      return reply.status(error.status).send({ error: error.message, code: error.code });
+    }
     server.log.error({ err: error }, 'User sync failed');
     const dbError = getDatabaseErrorResponse(error);
     return reply.status(dbError.status).send(dbError.payload);
