@@ -96,8 +96,7 @@ resource "aws_ecs_task_definition" "app" {
         { name = "DD_TRACE_AGENT_HOSTNAME", value = "localhost" },
         { name = "DD_LOGS_INJECTION", value = "true" },
         { name = "DD_ENV", value = var.vars.environment },
-        { name = "DD_SERVICE", value = "propertyflow-server" },
-        { name = "DD_VERSION", value = "1.0.0" }
+        { name = "DD_SERVICE", value = "propertyflow-server" }
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -118,8 +117,7 @@ resource "aws_ecs_task_definition" "app" {
         { name = "DD_APM_ENABLED", value = "true" },
         { name = "DD_DOGSTATSD_NON_LOCAL_TRAFFIC", value = "true" },
         { name = "DD_ENV", value = var.vars.environment },
-        { name = "DD_SERVICE", value = "propertyflow-server" },
-        { name = "DD_VERSION", value = "1.0.0" }
+        { name = "DD_SERVICE", value = "propertyflow-server" }
       ]
       logConfiguration = {
         logDriver = "awslogs"
