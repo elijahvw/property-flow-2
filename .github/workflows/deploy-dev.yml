@@ -130,7 +130,7 @@ jobs:
           echo "frontend_bucket_name=$(terraform output -raw frontend_bucket_name)" >> $GITHUB_OUTPUT
 
   deploy-backend:
-    if: github.event_name == 'workflow_dispatch' && !inputs.plan_only && inputs.deployment_target != 'frontend'
+    if: github.event_name == 'workflow_dispatch' && !inputs.plan_only && needs.terraform-changes.outputs.backend == 'true'
     needs: [terraform-changes, terraform]
     runs-on: ubuntu-latest
     steps:
