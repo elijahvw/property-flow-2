@@ -20,7 +20,7 @@ jobs:
       - name: Build (Client)
         run: npm run build --workspace=@property-flow/client
 
-  terraform-plan:
+  terraform-validate:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -35,12 +35,7 @@ jobs:
       - name: Terraform Init
         run: |
           cd infra/terraform/envs/dev
-          terraform init \
-            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
-            -backend-config="key=dev/terraform.tfstate" \
-            -backend-config="region=${{ vars.AWS_REGION }}" \
-            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
-            -input=false
+          terraform init -backend=false -input=false
         
       - name: Terraform Validate
         run: cd infra/terraform/envs/dev && terraform validate
