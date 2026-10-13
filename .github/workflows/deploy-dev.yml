@@ -10,6 +10,11 @@ on:
         required: true
         default: true
         type: boolean
+      force_all:
+        description: 'Deploy all components (also use after changing GitHub variables or secrets)'
+        required: true
+        default: false
+        type: boolean
       run_terraform:
         description: 'Control Terraform apply for this deploy'
         required: false
@@ -23,6 +28,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  actions: read
 
 concurrency:
   group: deploy-dev
@@ -33,48 +39,22 @@ jobs:
     name: Terraform Changes
     runs-on: ubuntu-latest
     outputs:
-      should_apply: ${{ steps.decision.outputs.should_apply }}
+      should_apply: ${{ steps.decision.outputs.infrastructure }}
+      backend: ${{ steps.decision.outputs.backend }}
+      frontend: ${{ steps.decision.outputs.frontend }}
+      previous_versions: ${{ steps.decision.outputs.previous_versions }}
       reason: ${{ steps.decision.outputs.reason }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Decide whether Terraform should apply
+      - name: Plan changed components
         id: decision
         env:
-          EVENT_NAME: ${{ github.event_name }}
+          GITHUB_TOKEN: ${{ github.token }}
           RUN_TERRAFORM: ${{ inputs.run_terraform || 'auto' }}
-        run: |
-          should_apply=true
-          reason="dev deploy reapplies terraform by default"
-
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            case "$RUN_TERRAFORM" in
-              always)
-                should_apply=true
-                reason="manual run with run_terraform=always"
-                ;;
-              never)
-                should_apply=false
-                reason="manual run with run_terraform=never"
-                ;;
-              auto)
-                should_apply=true
-                reason="manual run with run_terraform=auto"
-                ;;
-              *)
-                echo "Unsupported run_terraform value: $RUN_TERRAFORM"
-                exit 1
-                ;;
-            esac
-          else
-            should_apply=true
-            reason="push to main deploy reapplies terraform"
-          fi
-
-          echo "should_apply=$should_apply" >> "$GITHUB_OUTPUT"
-          echo "reason=$reason" >> "$GITHUB_OUTPUT"
-          echo "Terraform apply decision: $reason"
+          FORCE_ALL: ${{ inputs.force_all || false }}
+        run: python3 scripts/plan-dev-release.py
 
   terraform:
     name: Terraform
@@ -122,7 +102,7 @@ jobs:
           # The saved plan contains secrets; keep it on this ephemeral runner.
           terraform plan -input=false -out=dev.tfplan
       - name: Start existing database before deployment
-        if: github.event_name == 'workflow_dispatch' && !inputs.plan_only
+        if: github.event_name == 'workflow_dispatch' && !inputs.plan_only && needs.terraform-changes.outputs.backend == 'true'
         env:
           SHOULD_APPLY: ${{ needs.terraform-changes.outputs.should_apply }}
         run: |
@@ -150,8 +130,8 @@ jobs:
           echo "frontend_bucket_name=$(terraform output -raw frontend_bucket_name)" >> $GITHUB_OUTPUT
 
   deploy-backend:
-    if: github.event_name == 'workflow_dispatch' && !inputs.plan_only
-    needs: terraform
+    if: github.event_name == 'workflow_dispatch' && !inputs.plan_only && inputs.deployment_target != 'frontend'
+    needs: [terraform-changes, terraform]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -163,15 +143,19 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-      - name: Build, tag, and push image to Amazon ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REPOSITORY_URL: ${{ needs.terraform.outputs.repository_url }}
-          IMAGE_TAG: latest
-          APP_VERSION: ${{ github.sha }}
-        run: |
-          docker build --build-arg APP_VERSION="$APP_VERSION" -t "$REPOSITORY_URL:$IMAGE_TAG" ./server
-          docker push $REPOSITORY_URL:$IMAGE_TAG
+      - name: Set up cached Docker builder
+        uses: docker/setup-buildx-action@v3
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./server
+          push: true
+          tags: |
+            ${{ needs.terraform.outputs.repository_url }}:latest
+            ${{ needs.terraform.outputs.repository_url }}:${{ github.sha }}
+          build-args: APP_VERSION=${{ github.sha }}
+          cache-from: type=gha,scope=propertyflow-server
+          cache-to: type=gha,mode=max,scope=propertyflow-server
       - name: Ensure database is available before starting backend
         run: bash scripts/dev-power.sh start-database
       - name: Update ECS service
@@ -243,24 +227,7 @@ jobs:
             exit 0
           fi
 
-          echo "Initial ECS stabilization failed. Attempting automated recovery."
-          print_diagnostics
-
-          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --desired-count 0 > /dev/null
-          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
-
-          aws ecs update-service \
-            --cluster "$CLUSTER" \
-            --service "$SERVICE" \
-            --desired-count "$DESIRED_COUNT" \
-            --force-new-deployment > /dev/null
-
-          if aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"; then
-            echo "ECS service stabilized after automated recovery."
-            exit 0
-          fi
-
-          echo "ECS service failed to stabilize after recovery."
+          echo "ECS did not stabilize in time. Keeping the existing service running."
           print_diagnostics
           exit 1
       - name: Verify backend readiness
@@ -335,7 +302,9 @@ jobs:
           exit 1
 
   deploy-frontend:
+    if: always() && github.event_name == 'workflow_dispatch' && !inputs.plan_only && needs.terraform-changes.outputs.frontend == 'true' && needs.terraform.result == 'success' && (needs.deploy-backend.result == 'success' || needs.deploy-backend.result == 'skipped')
     needs:
+      - terraform-changes
       - terraform
       - deploy-backend
     runs-on: ubuntu-latest
@@ -388,3 +357,23 @@ jobs:
           bash scripts/verify-dev-public.sh "$PUBLIC_URL"
           echo "Deployed commit: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Application: $PUBLIC_URL" >> "$GITHUB_STEP_SUMMARY"
+
+  record-release-state:
+    name: Remember successful component releases
+    if: always() && github.event_name == 'workflow_dispatch' && !inputs.plan_only && needs.terraform-changes.result == 'success'
+    needs: [terraform-changes, terraform, deploy-backend, deploy-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record only successful releases
+        env:
+          RECORD_STATE: 'true'
+          PREVIOUS_VERSIONS: ${{ needs.terraform-changes.outputs.previous_versions }}
+          COMPONENT_RESULTS: '{"infrastructure":"${{ needs.terraform.result }}","backend":"${{ needs.deploy-backend.result }}","frontend":"${{ needs.deploy-frontend.result }}"}'
+          INFRASTRUCTURE_APPLIED: ${{ needs.terraform-changes.outputs.should_apply }}
+        run: python3 scripts/plan-dev-release.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dev-release-state
+          path: release-state.json
+          retention-days: 90
