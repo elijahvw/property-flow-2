@@ -26,7 +26,7 @@ permissions:
 
 concurrency:
   group: deploy-dev
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   terraform-changes:
@@ -121,6 +121,16 @@ jobs:
           cd infra/terraform/envs/dev
           # The saved plan contains secrets; keep it on this ephemeral runner.
           terraform plan -input=false -out=dev.tfplan
+      - name: Start existing database before deployment
+        if: github.event_name == 'workflow_dispatch' && !inputs.plan_only
+        env:
+          SHOULD_APPLY: ${{ needs.terraform-changes.outputs.should_apply }}
+        run: |
+          if [ "$SHOULD_APPLY" = "true" ]; then
+            bash scripts/dev-power.sh start-database --allow-missing
+          else
+            bash scripts/dev-power.sh start-database
+          fi
       - name: Apply reviewed configuration
         if: github.event_name == 'workflow_dispatch' && !inputs.plan_only && needs.terraform-changes.outputs.should_apply == 'true'
         run: |
@@ -161,6 +171,8 @@ jobs:
         run: |
           docker build -t $REPOSITORY_URL:$IMAGE_TAG ./server
           docker push $REPOSITORY_URL:$IMAGE_TAG
+      - name: Ensure database is available before starting backend
+        run: bash scripts/dev-power.sh start-database
       - name: Update ECS service
         run: |
           set -euo pipefail
@@ -223,7 +235,7 @@ jobs:
           fi
 
           echo "Deploying service $SERVICE in cluster $CLUSTER"
-          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --force-new-deployment > /dev/null
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --desired-count "$DESIRED_COUNT" --force-new-deployment > /dev/null
 
           if aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"; then
             echo "ECS service stabilized on first attempt."
