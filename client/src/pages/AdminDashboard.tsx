@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { startOperation } from '../operations';
 import CompanyManager from '../components/CompanyManager';
 import { useAuth0 } from '@auth0/auth0-react';
 
@@ -51,29 +52,35 @@ const AdminDashboard: React.FC = () => {
   };
 
   const fetchUsers = async () => {
+    const operation = startOperation('admin.users.load');
     try {
       setError(null);
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({ timeoutInSeconds: 8 });
       const response = await axios.get('/api/users', {
         headers: { Authorization: `Bearer ${token}` },
         timeout: 15000,
       });
       setUsers(response.data);
+      operation.succeed();
     } catch (err: any) {
-      console.error('Error fetching users:', err);
+      operation.fail(err);
+      console.error('Error fetching users');
       setError(`Failed to fetch users: ${err.response?.data?.message || err.response?.data?.error || err.message}`);
     }
   };
 
   const fetchCompanies = async () => {
+    const operation = startOperation('admin.companies.load');
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({ timeoutInSeconds: 8 });
       const response = await axios.get('/api/companies', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }, timeout: 15000,
       });
       setCompanies(response.data);
+      operation.succeed();
     } catch (err: any) {
-      console.error('Error fetching companies:', err);
+      operation.fail(err);
+      console.error('Error fetching companies');
       setError(`Failed to fetch companies: ${err.response?.data?.message || err.response?.data?.error || err.message}`);
     }
   };
@@ -81,17 +88,20 @@ const AdminDashboard: React.FC = () => {
   const handleCreateCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     if (savingCompany) return;
+    const operation = startOperation('company.create');
     try {
       setSavingCompany(true);
       setError(null);
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({ timeoutInSeconds: 8 });
       await axios.post('/api/companies', companyFormData, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }, timeout: 15000,
       });
+      operation.succeed();
       setShowCompanyModal(false);
       setCompanyFormData({ name: '', domain: '' });
       await fetchCompanies();
     } catch (err: any) {
+      operation.fail(err);
       setError(`Failed to create company: ${err.response?.data?.error || err.message}`);
     } finally {
       setSavingCompany(false);
@@ -99,14 +109,17 @@ const AdminDashboard: React.FC = () => {
   };
 
   const assignCompany = async (userId: string, companyId: string) => {
+    const operation = startOperation('company.user.assign');
     try {
       setRowLoading(prev => ({ ...prev, [userId]: true }));
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({ timeoutInSeconds: 8 });
       await axios.post(`/api/companies/${companyId}/users/${encodeURIComponent(userId)}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }, timeout: 15000,
       });
-      await fetchUsers();
+      operation.succeed();
+      await Promise.all([fetchUsers(), fetchCompanies()]);
     } catch (err: any) {
+      operation.fail(err);
       setError('Failed to assign company');
     } finally {
       setRowLoading(prev => ({ ...prev, [userId]: false }));
@@ -120,9 +133,9 @@ const AdminDashboard: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({ timeoutInSeconds: 8 });
       const response = await axios.post('/api/users', formData, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }, timeout: 15000,
       });
       
       // Transform Auth0 response to our User interface for optimistic update
@@ -154,12 +167,12 @@ const AdminDashboard: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({ timeoutInSeconds: 8 });
       await axios.patch(`/api/users/${encodeURIComponent(editingUser.id)}`, {
         email: formData.email,
         name: formData.name
       }, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }, timeout: 15000,
       });
       
       setEditingUser(null);
@@ -183,11 +196,11 @@ const AdminDashboard: React.FC = () => {
       // Optimistic update
       setUsers(prev => prev.map(u => u.id === user.id ? { ...u, blocked: !user.blocked } : u));
       
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({ timeoutInSeconds: 8 });
       await axios.post(`/api/users/${encodeURIComponent(user.id)}/status`, {
         blocked: !user.blocked
       }, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }, timeout: 15000,
       });
       
       // Wait for Auth0 eventual consistency (shorter since we updated optimistically)
@@ -206,12 +219,12 @@ const AdminDashboard: React.FC = () => {
     try {
       setRowLoading(prev => ({ ...prev, [userId]: true }));
       setError(null);
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({ timeoutInSeconds: 8 });
       
       await axios.post(`/api/users/${encodeURIComponent(userId)}/role`, {
         role: newRole
       }, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }, timeout: 15000,
       });
       
       // Wait for Auth0 eventual consistency

@@ -4,7 +4,7 @@ WORKDIR /app
 COPY package*.json ./
 # Need prisma schema for build
 COPY prisma ./prisma/
-RUN npm install --include=dev
+RUN npm ci --include=dev
 COPY . .
 RUN DATABASE_URL="postgresql://dummy@localhost:5432/dummy" npm run build
 
@@ -16,7 +16,7 @@ WORKDIR /app
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/prisma ./prisma/
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
-RUN npm install --omit=dev
+RUN npm ci --omit=dev
 # Generate prisma client for the runtime OS
 RUN DATABASE_URL="postgresql://dummy@localhost:5432/dummy" npx prisma generate
 COPY --from=builder /app/dist ./dist

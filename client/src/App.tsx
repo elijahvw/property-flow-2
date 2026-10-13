@@ -151,7 +151,7 @@ const PortalLayout = ({ children }: { children: React.ReactNode }) => {
 function AppRoutes() {
   const { user, role, loading } = useAuth();
 
-  if (loading) return <div>Loading...</div>;
+// Public pages render immediately; protected routes own sign-in recovery.
 
   return (
     <Routes>
@@ -249,6 +249,8 @@ const OptionalAuth0Provider: React.FC<{ children: React.ReactNode }> = ({ childr
     <Auth0Provider
       domain={auth0Domain}
       clientId={auth0ClientId}
+      authorizeTimeoutInSeconds={8}
+      httpTimeoutInSeconds={8}
       authorizationParams={{
         redirect_uri: window.location.origin,
         audience: auth0Audience,
