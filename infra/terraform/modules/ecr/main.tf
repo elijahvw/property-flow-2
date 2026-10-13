@@ -135,6 +135,9 @@ resource "aws_ecs_task_definition" "app" {
 }
 
 resource "aws_ecs_service" "app" {
+  # ECS requires the target group to be attached to a listener first.
+  depends_on = [aws_lb_listener.http]
+
   name                              = "propertyflow-${var.vars.environment}"
   cluster                           = aws_ecs_cluster.main.id
   task_definition                   = aws_ecs_task_definition.app.arn
