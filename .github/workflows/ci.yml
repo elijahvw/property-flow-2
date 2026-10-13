@@ -20,6 +20,14 @@ jobs:
       - name: Install dependencies
         run: npm install
         
+      - name: Build and test server tracing
+        env:
+          DATABASE_URL: postgresql://dummy@localhost:5432/dummy
+        run: |
+          npm ci --prefix server
+          npm run build --prefix server
+          node --test server/tests/tracing.test.mjs
+
       - name: Build (Client)
         run: npm run build --workspace=@property-flow/client
 

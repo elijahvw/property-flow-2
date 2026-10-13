@@ -95,7 +95,6 @@ resource "aws_ecs_task_definition" "app" {
         { name = "DATABASE_URL", value = local.database_url },
         { name = "DD_TRACE_AGENT_HOSTNAME", value = "localhost" },
         { name = "DD_LOGS_INJECTION", value = "true" },
-        { name = "DD_TRACE_DISABLED_PLUGINS", value = "prisma" },
         { name = "DD_ENV", value = var.vars.environment },
         { name = "DD_SERVICE", value = "propertyflow-server" },
         { name = "DD_VERSION", value = "1.0.0" }
