@@ -5,6 +5,11 @@ on:
     branches: [ main ]
   workflow_dispatch:
     inputs:
+      plan_only:
+        description: Preview infrastructure without deploying
+        required: true
+        default: true
+        type: boolean
       run_terraform:
         description: 'Control Terraform apply for this deploy'
         required: false
@@ -82,6 +87,7 @@ jobs:
       ecs_cluster_name: ${{ steps.outputs.outputs.ecs_cluster_name }}
       ecs_service_name: ${{ steps.outputs.outputs.ecs_service_name }}
       alb_dns_name: ${{ steps.outputs.outputs.alb_dns_name }}
+      frontend_bucket_name: ${{ steps.outputs.outputs.frontend_bucket_name }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
@@ -97,18 +103,31 @@ jobs:
       - name: Skip Apply
         if: needs.terraform-changes.outputs.should_apply != 'true'
         run: echo "Skipping terraform apply because ${{ needs.terraform-changes.outputs.reason }}."
-      - name: Apply
-        if: needs.terraform-changes.outputs.should_apply == 'true'
+      - name: Verify target account
+        run: |
+          account_id=$(aws sts get-caller-identity --query Account --output text)
+          test "$account_id" = "800754316001" || { echo "Unexpected AWS account: $account_id"; exit 1; }
+      - name: Plan
+        if: github.event_name != 'workflow_dispatch' || inputs.plan_only || needs.terraform-changes.outputs.should_apply == 'true'
+        env:
+          TF_VAR_auth0_domain: ${{ vars.VITE_AUTH0_DOMAIN }}
+          TF_VAR_auth0_audience: ${{ vars.VITE_AUTH0_AUDIENCE }}
+          TF_VAR_auth0_m2m_client_id: ${{ vars.AUTH0_MANAGEMENT_CLIENT_ID }}
+          TF_VAR_auth0_m2m_client_secret: ${{ secrets.AUTH0_MANAGEMENT_CLIENT_SECRET }}
+          TF_VAR_db_password: ${{ secrets.DATABASE_PASSWORD }}
+          TF_VAR_datadog_api_key: ${{ secrets.DATADOG_API_KEY }}
+          TF_VAR_datadog_site: datadoghq.com
         run: |
           cd infra/terraform/envs/dev
-          terraform apply -auto-approve \
-            -var="auth0_domain=${{ vars.VITE_AUTH0_DOMAIN }}" \
-            -var="auth0_audience=${{ vars.VITE_AUTH0_AUDIENCE }}" \
-            -var="auth0_m2m_client_id=${{ vars.AUTH0_MANAGEMENT_CLIENT_ID }}" \
-            -var="auth0_m2m_client_secret=${{ secrets.AUTH0_MANAGEMENT_CLIENT_SECRET }}" \
-            -var="db_password=${{ secrets.DATABASE_PASSWORD }}" \
-            -var="datadog_api_key=${{ secrets.DATADOG_API_KEY }}"
+          # The saved plan contains secrets; keep it on this ephemeral runner.
+          terraform plan -input=false -out=dev.tfplan
+      - name: Apply reviewed configuration
+        if: github.event_name == 'workflow_dispatch' && !inputs.plan_only && needs.terraform-changes.outputs.should_apply == 'true'
+        run: |
+          cd infra/terraform/envs/dev
+          terraform apply -input=false dev.tfplan
       - name: Get Outputs
+        if: github.event_name == 'workflow_dispatch' && !inputs.plan_only
         id: outputs
         run: |
           cd infra/terraform/envs/dev
@@ -118,8 +137,10 @@ jobs:
           echo "ecs_cluster_name=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_OUTPUT
           echo "ecs_service_name=$(terraform output -raw ecs_service_name)" >> $GITHUB_OUTPUT
           echo "alb_dns_name=$(terraform output -raw alb_dns_name)" >> $GITHUB_OUTPUT
+          echo "frontend_bucket_name=$(terraform output -raw frontend_bucket_name)" >> $GITHUB_OUTPUT
 
   deploy-backend:
+    if: github.event_name == 'workflow_dispatch' && !inputs.plan_only
     needs: terraform
     runs-on: ubuntu-latest
     steps:
@@ -322,12 +343,16 @@ jobs:
           VITE_AUTH0_DOMAIN: ${{ vars.VITE_AUTH0_DOMAIN }}
           VITE_AUTH0_CLIENT_ID: ${{ vars.VITE_AUTH0_CLIENT_ID }}
           VITE_AUTH0_AUDIENCE: ${{ vars.VITE_AUTH0_AUDIENCE }}
+          VITE_DATADOG_SITE: datadoghq.com
+          VITE_DATADOG_APPLICATION_ID: ${{ vars.VITE_DATADOG_APPLICATION_ID }}
+          VITE_DATADOG_CLIENT_TOKEN: ${{ vars.VITE_DATADOG_CLIENT_TOKEN }}
           VITE_DATADOG_SERVICE: property-flow-client
           VITE_DATADOG_ENV: dev
           VITE_APP_VERSION: ${{ github.sha }}
           DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
-          DATADOG_SITE: us5.datadoghq.com
-          DATADOG_API_HOST: api.us5.datadoghq.com
+          DATADOG_SITE: datadoghq.com
+          DATADOG_API_HOST: api.datadoghq.com
+          FRONTEND_BUCKET: ${{ needs.terraform.outputs.frontend_bucket_name }}
         run: |
           npm install
           cd client && npm run build
@@ -336,7 +361,7 @@ jobs:
             --service "$VITE_DATADOG_SERVICE" \
             --release-version "$VITE_APP_VERSION" \
             --minified-path-prefix "https://${{ needs.terraform.outputs.cloudfront_url }}/assets"
-          aws s3 sync client/dist/ s3://propertyflow-dev-frontend --delete
+          aws s3 sync client/dist/ "s3://$FRONTEND_BUCKET" --delete
       - name: Invalidate CloudFront
         run: |
           aws cloudfront create-invalidation --distribution-id ${{ needs.terraform.outputs.cloudfront_distribution_id }} --paths "/*"
