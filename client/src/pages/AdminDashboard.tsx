@@ -29,6 +29,7 @@ const AdminDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
+  const [savingCompany, setSavingCompany] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<'users' | 'companies'>('users');
   
@@ -52,7 +53,8 @@ const AdminDashboard: React.FC = () => {
       setError(null);
       const token = await getAccessTokenSilently();
       const response = await axios.get('/api/users', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 15000,
       });
       setUsers(response.data);
     } catch (err: any) {
@@ -70,13 +72,16 @@ const AdminDashboard: React.FC = () => {
       setCompanies(response.data);
     } catch (err: any) {
       console.error('Error fetching companies:', err);
+      setError(`Failed to fetch companies: ${err.response?.data?.message || err.response?.data?.error || err.message}`);
     }
   };
 
   const handleCreateCompany = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingCompany) return;
     try {
-      setLoading(true);
+      setSavingCompany(true);
+      setError(null);
       const token = await getAccessTokenSilently();
       await axios.post('/api/companies', companyFormData, {
         headers: { Authorization: `Bearer ${token}` }
@@ -85,9 +90,9 @@ const AdminDashboard: React.FC = () => {
       setCompanyFormData({ name: '', domain: '' });
       await fetchCompanies();
     } catch (err: any) {
-      setError('Failed to create company');
+      setError(`Failed to create company: ${err.response?.data?.error || err.message}`);
     } finally {
-      setLoading(false);
+      setSavingCompany(false);
     }
   };
 
@@ -393,6 +398,7 @@ const AdminDashboard: React.FC = () => {
         <div className="modal-overlay">
           <div className="modal-content">
             <h2>Create New Company</h2>
+            {error && <p role="alert">{error}</p>}
             <form onSubmit={handleCreateCompany}>
               <div className="form-group">
                 <label>Company Name</label>
@@ -415,7 +421,7 @@ const AdminDashboard: React.FC = () => {
               </div>
               <div className="modal-actions">
                 <button type="button" className="btn-secondary" onClick={() => setShowCompanyModal(false)}>Cancel</button>
-                <button type="submit" className="btn-primary">Create Company</button>
+                <button type="submit" className="btn-primary" disabled={savingCompany}>{savingCompany ? 'Saving…' : 'Create Company'}</button>
               </div>
             </form>
           </div>
