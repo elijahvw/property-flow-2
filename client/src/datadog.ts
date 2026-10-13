@@ -1,5 +1,6 @@
 import { datadogRum } from '@datadog/browser-rum';
 import { reactPlugin } from '@datadog/browser-rum-react';
+import { isFirstPartyApiUrl } from './observability';
 
 const DEFAULT_SITE = 'datadoghq.com';
 
@@ -50,6 +51,12 @@ export const initDatadogRum = () => {
     sessionSampleRate: parsePercentage(import.meta.env.VITE_DATADOG_SESSION_SAMPLE_RATE, 100),
     sessionReplaySampleRate: parsePercentage(import.meta.env.VITE_DATADOG_SESSION_REPLAY_SAMPLE_RATE, 20),
     defaultPrivacyLevel: 'mask-user-input',
+    trackResources: true,
+    trackLongTasks: true,
+    trackUserInteractions: true,
+    traceSampleRate: parsePercentage(import.meta.env.VITE_DATADOG_TRACE_SAMPLE_RATE, 100),
+    // Propagate tracing headers only to this application's API.
+    allowedTracingUrls: [(url: string) => isFirstPartyApiUrl(url, window.location.origin)],
     plugins: [reactPlugin({ router: true })],
   });
 
