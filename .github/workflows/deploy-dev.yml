@@ -168,8 +168,9 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           REPOSITORY_URL: ${{ needs.terraform.outputs.repository_url }}
           IMAGE_TAG: latest
+          APP_VERSION: ${{ github.sha }}
         run: |
-          docker build -t $REPOSITORY_URL:$IMAGE_TAG ./server
+          docker build --build-arg APP_VERSION="$APP_VERSION" -t "$REPOSITORY_URL:$IMAGE_TAG" ./server
           docker push $REPOSITORY_URL:$IMAGE_TAG
       - name: Ensure database is available before starting backend
         run: bash scripts/dev-power.sh start-database
@@ -360,6 +361,9 @@ jobs:
           VITE_DATADOG_CLIENT_TOKEN: ${{ vars.VITE_DATADOG_CLIENT_TOKEN }}
           VITE_DATADOG_SERVICE: property-flow-client
           VITE_DATADOG_ENV: dev
+          VITE_DATADOG_TRACE_SAMPLE_RATE: ${{ vars.VITE_DATADOG_TRACE_SAMPLE_RATE || '100' }}
+          VITE_DATADOG_SESSION_SAMPLE_RATE: ${{ vars.VITE_DATADOG_SESSION_SAMPLE_RATE || '100' }}
+          VITE_DATADOG_SESSION_REPLAY_SAMPLE_RATE: ${{ vars.VITE_DATADOG_SESSION_REPLAY_SAMPLE_RATE || '20' }}
           VITE_APP_VERSION: ${{ github.sha }}
           DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
           DATADOG_SITE: datadoghq.com
@@ -377,3 +381,10 @@ jobs:
       - name: Invalidate CloudFront
         run: |
           aws cloudfront create-invalidation --distribution-id ${{ needs.terraform.outputs.cloudfront_distribution_id }} --paths "/*"
+      - name: Verify public application and authentication
+        env:
+          PUBLIC_URL: https://${{ needs.terraform.outputs.cloudfront_url }}
+        run: |
+          bash scripts/verify-dev-public.sh "$PUBLIC_URL"
+          echo "Deployed commit: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Application: $PUBLIC_URL" >> "$GITHUB_STEP_SUMMARY"
