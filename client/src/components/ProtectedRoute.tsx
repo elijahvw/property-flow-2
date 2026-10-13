@@ -34,7 +34,17 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     return null;
   }
 
-  if (allowedRoles && role && !allowedRoles.includes(role)) {
+  if (allowedRoles && !role) {
+    return (
+      <div className="error-container">
+        <h1>Account access pending</h1>
+        <p>Your account needs a role before you can open this page. Contact your administrator, then sign out and sign in again after access is assigned.</p>
+        <button className="btn-secondary" onClick={() => window.location.href = '/'}>Go Home</button>
+      </div>
+    );
+  }
+
+  if (allowedRoles && !allowedRoles.includes(role!)) {
     return <Navigate to="/" replace />;
   }
 
