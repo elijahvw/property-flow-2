@@ -51,6 +51,7 @@ export const initDatadogRum = () => {
     sessionSampleRate: parsePercentage(import.meta.env.VITE_DATADOG_SESSION_SAMPLE_RATE, 100),
     sessionReplaySampleRate: parsePercentage(import.meta.env.VITE_DATADOG_SESSION_REPLAY_SAMPLE_RATE, 20),
     defaultPrivacyLevel: 'mask-user-input',
+    enableExperimentalFeatures: ['feature_operation_vital'],
     trackResources: true,
     trackLongTasks: true,
     trackUserInteractions: true,
