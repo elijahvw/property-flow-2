@@ -55,6 +55,13 @@ jobs:
       - name: Build (Client)
         run: npm run build --workspace=@property-flow/client
 
+      - name: Test owner onboarding with isolated browser fixtures
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: test-results/onboarding.xml
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test -c playwright.onboarding.config.ts --reporter=line,junit
+
       - name: Keep test reports in GitHub
         if: always()
         uses: actions/upload-artifact@v4

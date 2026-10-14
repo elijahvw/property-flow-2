@@ -394,3 +394,12 @@ tbody tr:last-child td {
 }
 /* Keep visually hidden table labels inside their scroll container. */
 .table-wrap { position: relative; }
+.onboarding-list {
+  padding-left: 1.5rem;
+}
+.onboarding-list li {
+  padding: 0.5rem 0 1rem 0.5rem;
+  border-bottom: 1px solid #e6edef;
+  margin-bottom: 1rem;
+}
+.onboarding-list h3 { margin: 0.5rem 0; }
