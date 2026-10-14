@@ -62,6 +62,9 @@ jobs:
           npx playwright install --with-deps chromium
           npx playwright test -c playwright.onboarding.config.ts --reporter=line,junit
 
+      - name: Test maintenance response loss and durable replay on disposable PostgreSQL
+        run: node scripts/test-maintenance.mjs
+
       - name: Keep test reports in GitHub
         if: always()
         uses: actions/upload-artifact@v4

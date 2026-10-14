@@ -1,4 +1,6 @@
 import test from 'node:test';
+import {randomUUID} from 'node:crypto';
+import {chromium, expect} from '@playwright/test';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
 import pg from 'pg';
@@ -30,10 +32,60 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  await admin.query('INSERT INTO "ResidentPropertyAssignment" ("companyId","propertyId","userId") VALUES (\'a\',\'home\',\'resident\'),(\'a\',\'home\',\'other\')');
  const app=Fastify();t.after(()=>app.close());const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(app,db,auth,'https://app.test');
  const call=(user,method,path,payload,extra={})=>app.inject({method,url:path,headers:{...(user?{cookie:`__Host-pf-session=token-${user}`} : {}),origin:'https://app.test','x-csrf-token':'csrf',...extra},...(payload?{payload}:{})});
- const valid={propertyId:'home',title:'Leaking tap',description:'Kitchen tap leaks.',priority:'normal'};
+ const valid={submissionKey:randomUUID(),propertyId:'home',title:'Leaking tap',description:'Kitchen tap leaks.',priority:'normal'};
+
+ await t.test('durable replay, concurrent attempts, mismatch, requester/company scopes and rollback',async()=>{
+ const key=randomUUID(),payload={...valid,submissionKey:key,title:'Idempotency regression'};
+ const results=await Promise.all(Array.from({length:3},()=>call('resident','POST','/api/resident/maintenance',payload)));
+ for(const result of results)assert.equal(result.statusCode,200,result.body);
+ assert.equal(new Set(results.map(r=>r.json().id)).size,1);
+ const first=results[0].json();
+ assert.equal((await call('resident','POST','/api/resident/maintenance',{...payload,submissionKey:key.toUpperCase()})).json().id,first.id);
+ assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='maintenance.created'`)).rows[0].n,1);
+ await assert.rejects(admin.query(`INSERT INTO "MaintenanceRequest" SELECT 'duplicate-id', "companyId", "propertyId", "requesterId", title, description, priority, status, "createdAt", "updatedAt", "submissionKey", "submissionHash" FROM "MaintenanceRequest" WHERE id=$1`,[first.id]),/unique constraint/);
+ await call('manager','PATCH',`/api/company/maintenance/${first.id}`,{status:'resolved'});
+ assert.equal((await call('resident','POST','/api/resident/maintenance',payload)).json().status,'resolved');
+ for(const patch of [{title:'Changed'},{description:'Changed'},{priority:'high'},{propertyId:'foreign-home'}])assert.equal((await call('resident','POST','/api/resident/maintenance',{...payload,...patch})).statusCode,409);
+ assert.notEqual((await call('other','POST','/api/resident/maintenance',payload)).json().id,first.id);
+ await admin.query(`DELETE FROM "ResidentPropertyAssignment" WHERE "userId"='resident'`);
+ assert.equal((await call('resident','POST','/api/resident/maintenance',payload)).statusCode,404);
+ await admin.query(`UPDATE "CompanyMembership" SET "companyId"='b' WHERE "userId"='resident'`);
+ await admin.query(`INSERT INTO "ResidentPropertyAssignment" ("companyId","propertyId","userId") VALUES ('b','foreign-home','resident')`);
+ const foreign=await call('resident','POST','/api/resident/maintenance',{...payload,propertyId:'foreign-home'});assert.equal(foreign.statusCode,200,foreign.body);assert.notEqual(foreign.json().id,first.id);
+ assert.equal((await admin.query(`SELECT count(*)::int n FROM "MaintenanceRequest" WHERE "submissionKey"=$1`,[key])).rows[0].n,3);
+ assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='maintenance.created'`)).rows[0].n,3);
+ await admin.query(`DELETE FROM "ResidentPropertyAssignment" WHERE "userId"='resident'`);
+ await admin.query(`UPDATE "CompanyMembership" SET "companyId"='a' WHERE "userId"='resident'`);
+ await admin.query(`INSERT INTO "ResidentPropertyAssignment" ("companyId","propertyId","userId") VALUES ('a','home','resident')`);
+ await admin.query(`DELETE FROM "AuditEvent"`);await admin.query(`DELETE FROM "MaintenanceRequest"`);
+ const failedKey=randomUUID();
+ await admin.query(`CREATE FUNCTION reject_maintenance_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='maintenance.created' THEN RAISE EXCEPTION 'audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_maintenance_audit BEFORE INSERT ON "AuditEvent" FOR EACH ROW EXECUTE FUNCTION reject_maintenance_audit()`);
+ assert.equal((await call('resident','POST','/api/resident/maintenance',{...valid,submissionKey:failedKey})).statusCode,500);
+ assert.equal((await admin.query(`SELECT count(*)::int n FROM "MaintenanceRequest"`)).rows[0].n,0);
+ await admin.query(`DROP TRIGGER reject_maintenance_audit ON "AuditEvent"; DROP FUNCTION reject_maintenance_audit()`);
+ assert.equal((await call('resident','POST','/api/resident/maintenance',{...valid,submissionKey:failedKey})).statusCode,200);
+ await admin.query(`DELETE FROM "AuditEvent"`);await admin.query(`DELETE FROM "MaintenanceRequest"`);
+ });
+ await t.test('real browser committed response loss replays one row and audit', {skip:!process.env.TEST_MAINTENANCE_BROWSER_URL},async()=>{
+ const browser=await chromium.launch({headless:true});try{
+ const page=await browser.newPage();let lose=true;const keys=[];
+ await page.route('**/api/**',async route=>{const req=route.request(),path=new URL(req.url());
+ const response=await app.inject({method:req.method(),url:path.pathname+path.search,headers:{...req.headers(),origin:'https://app.test',cookie:'__Host-pf-session=token-resident'},...(req.postData()?{payload:req.postData()}:{})});
+ if(req.method()==='POST'){keys.push(req.postDataJSON().submissionKey);assert.equal(response.statusCode,200,response.body);if(lose){lose=false;return route.abort('failed');}}
+ await route.fulfill({status:response.statusCode,contentType:'application/json',body:response.body});});
+ await page.goto(process.env.TEST_MAINTENANCE_BROWSER_URL+'/resident/maintenance');
+ await page.getByLabel('Title',{exact:true}).fill('Lost response regression');await page.getByLabel('Description',{exact:true}).fill('Committed before transport loss');
+ await page.getByRole('button',{name:'Submit request',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();
+ await page.getByRole('button',{name:'Submit request',exact:true}).click();await expect(page.getByText('Saved.',{exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Lost response regression'})).toHaveCount(1);
+ assert.equal(keys.length,2);assert.equal(keys[0],keys[1]);
+ assert.equal((await admin.query(`SELECT count(*)::int n FROM "MaintenanceRequest"`)).rows[0].n,1);assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='maintenance.created'`)).rows[0].n,1);
+ await page.getByRole('button',{name:'Start a new request'}).click();await page.getByLabel('Title',{exact:true}).fill('Deliberate second request');await page.getByLabel('Description',{exact:true}).fill('New submission');await page.getByRole('button',{name:'Submit request',exact:true}).click();await expect(page.getByText('Saved.',{exact:true})).toBeVisible();assert.notEqual(keys[2],keys[0]);
+ }finally{await browser.close();}
+ await admin.query(`DELETE FROM "AuditEvent"`);await admin.query(`DELETE FROM "MaintenanceRequest"`);
+ });
  let id;
  await t.test('creation validates identities, assigned property, bounded fields and CSRF',async()=>{
- for(const payload of [{...valid,companyId:'b'},{...valid,requesterId:'other'},{...valid,title:' '},{...valid,title:'x'.repeat(161)},{...valid,description:'x'.repeat(4001)},{...valid,priority:'urgent'}])assert.equal((await call('resident','POST','/api/resident/maintenance',payload)).statusCode,400);
+ for(const payload of [{...valid,companyId:'b'},{...valid,requesterId:'other'},{...valid,title:' '},{...valid,title:'x'.repeat(161)},{...valid,description:'x'.repeat(4001)},{...valid,priority:'urgent'}, {...valid,submissionKey:undefined}, {...valid,submissionKey:'invalid'}, {...valid,submissionKey:42}])assert.equal((await call('resident','POST','/api/resident/maintenance',payload)).statusCode,400);
  for(const propertyId of ['foreign-home','missing'])assert.equal((await call('resident','POST','/api/resident/maintenance',{...valid,propertyId})).statusCode,404);
  for(const extra of [{origin:'https://evil.test'},{'x-csrf-token':'bad'}])assert.equal((await call('resident','POST','/api/resident/maintenance',valid,extra)).statusCode,403);
  for(const role of ['owner','manager','staff','foreign'])assert.equal((await call(role,'POST','/api/resident/maintenance',valid)).statusCode,403);
@@ -63,8 +115,8 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  await t.test('forced RLS and composite property boundary',async()=>{
  assert.deepEqual((await admin.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE relname='MaintenanceRequest'")).rows[0],{relrowsecurity:true,relforcerowsecurity:true});
  assert.deepEqual(await db.maintenanceRequest.findMany(),[]);
- await assert.rejects(db.$transaction(async tx=>{await tx.$queryRaw`SELECT set_config('app.company_id', 'a', true)`;return tx.maintenanceRequest.create({data:{...valid,companyId:'b',requesterId:'resident'}});}),/row-level security|foreign key/i);
- await assert.rejects(db.$transaction(async tx=>{await tx.$queryRaw`SELECT set_config('app.company_id', 'a', true)`;return tx.maintenanceRequest.create({data:{...valid,propertyId:'foreign-home',companyId:'a',requesterId:'resident'}});}),/foreign key/i);
+ await assert.rejects(db.$transaction(async tx=>{await tx.$queryRaw`SELECT set_config('app.company_id', 'a', true)`;return tx.maintenanceRequest.create({data:{...valid,submissionKey:null,companyId:'b',requesterId:'resident'}});}),/row-level security|foreign key/i);
+ await assert.rejects(db.$transaction(async tx=>{await tx.$queryRaw`SELECT set_config('app.company_id', 'a', true)`;return tx.maintenanceRequest.create({data:{...valid,submissionKey:null,propertyId:'foreign-home',companyId:'a',requesterId:'resident'}});}),/foreign key/i);
  });
  await t.test('revocation locks block creation/read; manager history survives removal and transfer',async()=>{
  const leader=await admin.connect();try{

@@ -11,17 +11,20 @@ function Loading({ error, retry }: { error?: string; retry: () => void }) {
 export function Maintenance({ resident = false }: { resident?: boolean }) {
   const [status, setStatus] = useState(""), [propertyId, setPropertyId] = useState("");
   const [success, setSuccess] = useState("");
+  const [submissionKey, setSubmissionKey] = useState(() => crypto.randomUUID());
   const base = resident ? "/api/resident/maintenance" : "/api/company/maintenance";
   const properties = useResource<{ id: string; name: string }[]>(resident ? "/api/resident/properties" : "/api/company/properties");
   const r = useResource<Row[]>(`${base}?${new URLSearchParams({ ...(status ? { status } : {}), ...(propertyId ? { propertyId } : {}) })}`);
   return <>
     <header className="page-heading"><p className="eyebrow">{resident ? "Resident" : "Company"}</p><h1>{resident ? "My maintenance requests" : "Maintenance requests"}</h1><p>{resident ? "View your own requests for properties currently assigned to you. Access ends when an assignment is removed or transferred." : "Company request history remains available after resident assignments end."}</p></header>
     {resident && <section className="panel"><h2>Submit a request</h2><p className="help">For emergencies, contact local emergency services. High priority does not guarantee an immediate response.</p>
-      {!properties.data ? <Loading error={properties.error} retry={properties.reload} /> : !properties.data.length ? <p>No properties assigned. Ask your property manager for an assignment before submitting a request.</p> : <Form label="Submit request" operation="maintenance.create" submit={async data => { await api(base, { method: "POST", body: Object.fromEntries(data) }); r.reload(); }}>
+      {!properties.data ? <Loading error={properties.error} retry={properties.reload} /> : !properties.data.length ? <p>No properties assigned. Ask your property manager for an assignment before submitting a request.</p> : <Form key={submissionKey} label="Submit request" operation="maintenance.create" submit={async data => { await api(base, { method: "POST", body: { ...Object.fromEntries(data), submissionKey } }); r.reload(); }}>
         <label>Assigned property<select required name="propertyId">{properties.data.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
         <label>Title<input required name="title" maxLength={160} /></label>
         <label>Description<textarea required name="description" maxLength={4000} rows={4} /></label>
         <label>Priority<select name="priority" defaultValue="normal">{["low", "normal", "high"].map(v => <option key={v} value={v}>{v}</option>)}</select></label>
+        <p className="help">Retry keeps the same submission. Keep the original details when retrying; start a new request only for a separate issue.</p>
+        <button type="button" className="secondary" onClick={() => setSubmissionKey(crypto.randomUUID())}>Start a new request</button>
       </Form>}
     </section>}
     {success && <p role="status" className="notice">{success}</p>}

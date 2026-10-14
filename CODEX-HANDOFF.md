@@ -1,3 +1,5 @@
+> Continuation update — 2026-10-13 (America/New_York): the historical blocker below has now been fixed locally. Main 8098802 is integrated by merge 1999787; durable company/requester submission keys, authorization-safe replay and regression tests pass. Current evidence and limits are recorded at the top of docs/mvp-status.md. Run `node scripts/test-maintenance.mjs` after builds with cached postgres:17-alpine and installed Chromium for isolated real PostgreSQL/browser validation. Independent Bugbot found no actionable core implementation issues. All disposable resources were cleaned up. Branch remains maintenance-requests-mvp, local/unpublished; obtain user authorization before publication/merge, and do not deploy or modify live/shared databases. The original handoff below is retained as historical evidence.
+
 # PropertyFlow continuation handoff — 2026-10-14
 
 Stop point: **maintenance is implemented locally but blocked from publication by duplicate submissions after a lost committed response.** This handoff is documentation only; do not mistake passing checks for release readiness.

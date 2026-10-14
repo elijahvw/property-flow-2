@@ -150,6 +150,9 @@ model ResidentPropertyAssignment {
 }
 
 model MaintenanceRequest {
+  submissionKey String?
+  submissionHash String?
+  @@unique([companyId, requesterId, submissionKey])
   id String @id @default(cuid())
   companyId String
   propertyId String
