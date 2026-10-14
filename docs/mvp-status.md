@@ -1,5 +1,11 @@
 # PropertyFlow MVP status
 
+## Maintenance review stopping point — 2026-10-14
+
+Independent review reproduced a publication blocker: a committed creation response lost in transit followed by UI retry creates duplicate maintenance requests and creation audits. No implementation fix is being made at this stopping point. `CODEX-HANDOFF.md` records the exact branch/dependencies, real browser/API reproduction references in `/tmp/propertyflow-maintenance-review.AQgsal`, durable idempotency next task, current PR/main observations and approval boundaries. Prior test evidence does not establish release readiness. Maintenance remains local/unpublished.
+
+---
+
 ## Maintenance dependency integration stopping point — 2026-10-14
 
 Maintenance commit `c7aef20` retains validated harness `1cf022e` (source `496a663`). The assignment opaque-subject fix `d3f5c3081c086a7141e82c1a702302b9806dae92` is now integrated as `7764a31`. Only the docs insertion conflicted; both maintenance and upstream evidence sections were preserved. This supersedes the pending opaque-ID integration statements below. No feature expansion or source-worktree modification occurred. Server Prisma/TypeScript build passed; affected safe Node subset passed **28 tests, zero failures/skips** (`/tmp/propertyflow-maintenance-dependency-tests.txt`). Existing maintenance PostgreSQL/browser evidence remains as recorded below; no database rerun was needed for this dependency-only integration. Independent maintenance review is in progress; do not publish/merge/deploy without parent/user approval.
