@@ -1,4 +1,4 @@
-FROM node:20-slim AS builder
+FROM node:22-slim AS builder
 RUN apt-get update -y && apt-get install -y openssl
 WORKDIR /app
 COPY package*.json ./
@@ -8,7 +8,7 @@ RUN npm ci --include=dev
 COPY . .
 RUN DATABASE_URL="postgresql://dummy@localhost:5432/dummy" npm run build
 
-FROM node:20-slim
+FROM node:22-slim
 ARG APP_VERSION=unknown
 ENV DD_VERSION=$APP_VERSION
 RUN apt-get update -y && apt-get install -y openssl

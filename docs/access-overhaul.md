@@ -1,5 +1,7 @@
 # Access and navigation release
 
+The server and CI use Node.js 22, matching the supported cookie/OIDC runtime.
+
 This replaces browser bearer tokens and global Auth0 roles with a server session, a platform-owner role and one company membership per person. Auth0 remains the identity provider. The HTTP API independently authorizes every action; browser navigation uses capabilities returned by `/api/bootstrap`.
 
 ## Before release
