@@ -890,7 +890,7 @@ export function Resident() {
   return <>
     <header className="page-heading"><p className="eyebrow">Resident</p><h1>My properties</h1><p>These associations are not leases or proof of occupancy.</p></header>
     {!r.data ? <LoadState error={r.error} retry={r.reload} /> : r.data.length ? r.data.map(property => <section className="panel" key={property.id}><h2>{property.name}</h2><p>{property.address}</p></section>) : <section className="panel"><h2>No properties assigned</h2><p>Your company membership is active. Contact your property manager for a property assignment.</p></section>}
-    <p className="help">Lease, payment and maintenance features are not available yet.</p>
+    <p className="help">Use My requests for maintenance. Lease and financial records are managed by your property manager.</p>
   </>;
 }
 export function AcceptInvitation() {

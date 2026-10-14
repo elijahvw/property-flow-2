@@ -65,6 +65,9 @@ jobs:
       - name: Test maintenance response loss and durable replay on disposable PostgreSQL
         run: node scripts/test-maintenance.mjs
 
+      - name: Test units and leases with disposable PostgreSQL and real browser
+        run: node scripts/test-leasing.mjs
+
       - name: Keep test reports in GitHub
         if: always()
         uses: actions/upload-artifact@v4

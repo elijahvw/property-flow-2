@@ -45,6 +45,7 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
     </section> : <>
       <header className="page-heading"><p className="eyebrow">Company property</p><h1>{property.name}</h1>
         <p>{property.address}<br />{property.city}, {property.state} {property.zip}</p>
+        <Link className="button" to={`/company/properties/${encodeURIComponent(id)}/units`}>{editable ? "Manage units" : "View units"}</Link>
       </header>
       <section className="panel"><div className="section-heading"><h2>Property details</h2>
         {editable && !editing && <button onClick={() => { setEditing(true); setSaved(false); setSaveError(undefined); }}>Edit property</button>}

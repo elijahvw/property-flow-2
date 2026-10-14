@@ -26,6 +26,7 @@ import {
   Audit,
 } from "./pages/Workspace";
 import { Maintenance } from "./pages/Maintenance";
+import { Units, Leases } from "./pages/Leasing";
 import PropertyDetail from "./pages/PropertyDetail";
 import "./App.css";
 class ErrorBoundary extends Component<
@@ -173,6 +174,7 @@ function Pages() {
     "/resident": <Resident />,
     "/resident/maintenance": <Maintenance resident />,
     "/company/maintenance": <Maintenance />,
+    "/company/leases": <Leases />,
     "/account": <Account />,
   };
   return (
@@ -191,6 +193,7 @@ function Pages() {
           }
         />
       ))}
+      <Route path="/company/properties/:propertyId/units" element={<Shell><ProtectedRoute permission="property.read"><Units /></ProtectedRoute></Shell>} />
       <Route path="/company/properties/:propertyId" element={
         <Shell><ProtectedRoute permission="property.read"><PropertyDetail /></ProtectedRoute></Shell>
       } />
