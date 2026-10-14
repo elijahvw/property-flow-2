@@ -1,5 +1,9 @@
 # PropertyFlow MVP status
 
+## Maintenance PR publication and CI follow-up
+
+User authorized branch push and PR creation, with review of every comment/review and CI followed by explicit merge approval; deployment remains prohibited. PR #16: https://github.com/elijahvw/property-flow-2/pull/16, initially published at d9b0765. CI run 38508769666 passed operations, server/PostgreSQL checks, client tests/build and Terraform validation, then caught a maintenance loading fixture's ambiguous locator: property and request-list resources can simultaneously render identical loading statuses. The fixture now deliberately holds both resources and scopes assertions to their respective sections, preserving the assertion that submission controls remain absent until property loading completes. Integrated fixtures reran locally: 29 passed, zero failures (/tmp/pf-pr16-fixture-fix.log). This is a test-only correction; fresh remote CI/reviews remain required for the new head. CodeRabbit is rate-limited, not an approving review. No merge, deployment or existing database operation occurred.
+
 ## Trey guidance supplied by the user
 
 This is a development environment. PRs #13–15 were merged and checked; nothing was deployed during wrap-up. Maintenance idempotency is implemented locally in `3c5def0`, but publication, remote CI, review of every PR conversation comment/review body/inline thread, and explicit user merge approval remain required. Confirm durable committed-response-loss replay and regression coverage against the exact proposed head before merging; CI alone does not establish readiness. Deployment requires separate user authorization.

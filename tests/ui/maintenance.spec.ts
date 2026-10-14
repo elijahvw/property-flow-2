@@ -11,4 +11,21 @@ async function fixture(page:Page,resident=true){
 test('resident empty, create failure/retry, success and actual counts',async({page})=>{const state=await fixture(page);await page.goto('/resident/maintenance');await expect(page.getByText('No requests match these filters.')).toBeVisible();await page.getByLabel('Title',{exact:true}).fill('Tap leak');await page.getByLabel('Description',{exact:true}).fill('Kitchen tap leaks');state.fail=true;await page.getByRole('button',{name:'Submit request'}).click();await expect(page.getByRole('alert')).toContainText('Access changed');state.fail=false;await page.getByRole('button',{name:'Submit request'}).click();await expect(page.getByRole('heading',{name:'Tap leak'})).toBeVisible();await expect(page.getByText('Saved.',{exact:true})).toBeVisible();await expect(page.getByRole('status').filter({hasText:'1 matching requests'})).toBeVisible();await expect(page.getByRole('button',{name:'Update status'})).toHaveCount(0);});
 test('manager updates status, filters and retries load errors',async({page})=>{const state=await fixture(page,false);state.rows.push({id:'request',propertyId:'home',title:'Tap leak',description:'Leaks',priority:'normal',status:'open',property:{name:'Home'}});state.fail=true;await page.goto('/company/maintenance');await expect(page.getByRole('alert')).toContainText('Temporarily unavailable');state.fail=false;await page.getByRole('button',{name:'Try again'}).click();await page.getByLabel('Status for Tap leak').selectOption('resolved');await page.getByRole('button',{name:'Update status'}).click();await expect(page.getByText('Home · normal priority · resolved')).toBeVisible();await page.getByLabel('Filter status').selectOption('open');await expect(page.getByText('No requests match these filters.')).toBeVisible();});
 test('unassigned resident cannot submit',async({page})=>{const state=await fixture(page);state.assigned=false;await page.goto('/resident/maintenance');await expect(page.getByText(/No properties assigned/)).toBeVisible();await expect(page.getByRole('button',{name:'Submit request'})).toHaveCount(0);});
-test('loading state hides request controls until properties load',async({page})=>{await fixture(page);let release!:()=>void;const gate=new Promise<void>(r=>release=r);await page.route('**/api/resident/properties',async route=>{await gate;await route.fulfill({json:[{id:'home',name:'Home'}]});});await page.goto('/resident/maintenance');await expect(page.getByRole('status').filter({hasText:'Loading maintenance'})).toBeVisible();await expect(page.getByRole('button',{name:'Submit request'})).toHaveCount(0);release();await expect(page.getByRole('button',{name:'Submit request'})).toBeVisible();});
+test('loading state hides request controls until properties load',async({page})=>{
+ await fixture(page);
+ let release!:()=>void;
+ const gate=new Promise<void>(resolve=>release=resolve);
+ await page.route('**/api/resident/properties',async route=>{await gate;await route.fulfill({json:[{id:'home',name:'Home'}]});});
+ // Hold both independent resources so the two legitimate loaders are deterministic.
+ await page.route('**/api/resident/maintenance?*',async route=>{await gate;await route.fulfill({json:[]});});
+ try {
+  await page.goto('/resident/maintenance');
+  const submission=page.locator('section').filter({has:page.getByRole('heading',{name:'Submit a request',exact:true})});
+  const requests=page.locator('section').filter({has:page.getByRole('heading',{name:'Requests',exact:true})});
+  await expect(submission.getByRole('status')).toHaveText('Loading maintenance…');
+  await expect(requests.getByRole('status')).toHaveText('Loading maintenance…');
+  await expect(page.getByRole('button',{name:'Submit request'})).toHaveCount(0);
+  release();
+  await expect(page.getByRole('button',{name:'Submit request'})).toBeVisible();
+ } finally { release(); }
+});
