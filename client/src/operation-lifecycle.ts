@@ -1,4 +1,5 @@
 export type OperationName =
+  | 'finance.create' | 'finance.void'
   | 'unit.create' | 'unit.update' | 'lease.create' | 'lease.update'
   | 'maintenance.create' | 'maintenance.status'
   | 'page.data.load'

@@ -26,6 +26,7 @@ model Company {
   maintenanceRequests MaintenanceRequest[]
   units Unit[]
   leases Lease[]
+  ledgerEntries LedgerEntry[]
 }
 
 model User {
@@ -42,6 +43,7 @@ model User {
   leases Lease[] @relation("LeaseResident")
   createdLeases Lease[] @relation("LeaseCreator")
   createdUnits Unit[]
+  createdLedgerEntries LedgerEntry[]
   membership CompanyMembership?
   sessions Session[]
   companyId  String?
@@ -128,6 +130,7 @@ model AuditEvent {
 model Property {
   units Unit[]
   leases Lease[]
+  ledgerEntries LedgerEntry[]
   maintenanceRequests MaintenanceRequest[]
   assignments ResidentPropertyAssignment[]
   id          String   @id @default(cuid())
@@ -223,4 +226,28 @@ model Lease {
   @@unique([companyId, createdById, submissionKey])
   @@index([companyId, propertyId, id])
   @@index([companyId, unitId])
+}
+
+model LedgerEntry {
+ id String @id @default(cuid())
+ companyId String
+ propertyId String
+ createdById String
+ submissionKey String
+ submissionHash String
+ occurredOn DateTime @db.Date
+ amountCents Int
+ currency String @default("USD")
+ kind String
+ category String
+ memo String?
+ version Int @default(1)
+ voidedAt DateTime?
+ voidReason String?
+ createdAt DateTime @default(now())
+ company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+ property Property @relation(fields: [propertyId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Restrict)
+ creator User @relation(fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+ @@unique([companyId, createdById, submissionKey])
+ @@index([companyId, propertyId, occurredOn, id])
 }

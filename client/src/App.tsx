@@ -26,6 +26,7 @@ import {
   Audit,
 } from "./pages/Workspace";
 import { Maintenance } from "./pages/Maintenance";
+import { Finances } from "./pages/Finances";
 import { Units, Leases } from "./pages/Leasing";
 import PropertyDetail from "./pages/PropertyDetail";
 import "./App.css";
@@ -175,6 +176,7 @@ function Pages() {
     "/resident/maintenance": <Maintenance resident />,
     "/company/maintenance": <Maintenance />,
     "/company/leases": <Leases />,
+    "/company/finances": <Finances />,
     "/account": <Account />,
   };
   return (

@@ -1,3 +1,17 @@
+## Manual property finances — review checkpoint, 2026-10-14
+
+The second feature slice follows units/leases PR #17 and remains separate on `codex/manual-finances-mvp`. Owners and managers can record income received or expenses paid by property, date, USD amount, category and optional memo. Staff, residents and platform-only users have no financial access. No payment processing, bank connections, balances owed, deposits or transfers are included.
+
+Create requests use company/actor-scoped durable UUID keys and normalized fingerprints. Exact retries return the current record, including void status; changed details with the same key return conflict. Current account/company/membership authority is rechecked before replay. Creation and audit are atomic.
+
+Amounts are positive integer cents up to USD 1,000,000 per entry. Monetary details and retry identities cannot be edited by the runtime database role, and deletion is denied. Correct an entry by voiding it with a reason and creating a replacement. Void requests use versions, retain the original details and one reason, and replay safely after a lost response. Forced RLS and composite property/company foreign keys provide database boundaries.
+
+History supports property and inclusive date filters and 50-row keyset pages. Income, expenses and net summarize every matching nonvoided record, independently of the page, using bigint sums serialized as exact decimal cents. Voided history stays visible. History filtering/paging does not remount the transaction draft or rotate its submission key; the explicit new transaction action does. Drafts are cleared when the session/company changes and are not persisted across navigation/reload.
+
+Verification: 8 fresh tmpfs PostgreSQL/API/browser checks cover same-key concurrency, mismatch, roles/CSRF/tenant boundaries, validation, void concurrency/replay, exact totals across 53 matching rows, atomic audit rollback, forced RLS, immutable grants, current suspension/revocation, stale versions, and a real browser commit-response-loss retry producing one record/audit. Independent read-only Bugbot review found no actionable issue. All 41 browser fixtures pass serially and additionally cover filter/pagination draft preservation, corrections, role gates and company reset. Both builds pass; 40 safe Node checks pass with 4 DB suites skipped in that pass. Dedicated disposable runners separately pass finance 8, units/leases 12 and maintenance 9. CI now accepts PRs targeting codex/** branches so stacked feature PRs receive the same checks before retargeting to main. Finance PR #18 is https://github.com/elijahvw/property-flow-2/pull/18.
+
+Units/leases PR #17 CI initially exposed a stale-edit fixture race; its reload assertion now waits for the response and refreshed form. Exact-head CI at ad890cd is green. Automated review of the implementation at692720a completed with no findings; CodeRabbit skipped its review. Neither feature is merged or deployed. Dev remains main143432d; authenticated acceptance requires the manual test accounts described below. Documents still require separately designed private storage and are not implemented in this slice.
+
 # PropertyFlow MVP status
 
 ## Units and lease records checkpoint — 2026-10-14

@@ -7,7 +7,8 @@ export type Capability =
   | "resident.self"
   | "resident.assignment.manage"
   | "maintenance.manage"
-  | "lease.manage";
+  | "lease.manage"
+  | "finance.manage";
 export const routes: {
   path: string;
   title: string;
@@ -56,6 +57,7 @@ export const routes: {
     permission: "resident.self",
     section: "Resident",
   },
+  { path: "/company/finances", title: "Finances", permission: "finance.manage", section: "Company" },
   { path: "/company/leases", title: "Leases", permission: "lease.manage", section: "Company" },
   { path: "/company/maintenance", title: "Maintenance", permission: "maintenance.manage", section: "Company" },
   { path: "/resident/maintenance", title: "My requests", permission: "resident.self", section: "Resident" },
