@@ -4,7 +4,8 @@ export type Capability =
   | "property.write"
   | "company.manage"
   | "members.manage"
-  | "resident.self";
+  | "resident.self"
+  | "resident.assignment.manage";
 export const routes: {
   path: string;
   title: string;

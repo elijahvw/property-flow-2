@@ -64,6 +64,8 @@ model CompanyMembership {
   company Company @relation(fields: [companyId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  assignments ResidentPropertyAssignment[]
+  @@unique([userId, companyId])
   @@index([companyId])
 }
 
@@ -117,6 +119,7 @@ model AuditEvent {
 }
 
 model Property {
+  assignments ResidentPropertyAssignment[]
   id          String   @id @default(cuid())
   name        String
   address     String
@@ -129,4 +132,16 @@ model Property {
   updatedAt   DateTime @updatedAt
 
   @@index([companyId])
+  @@unique([id, companyId])
+}
+
+model ResidentPropertyAssignment {
+  companyId String
+  propertyId String
+  userId String
+  createdAt DateTime @default(now())
+  property Property @relation(fields: [propertyId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Restrict)
+  membership CompanyMembership @relation(fields: [userId, companyId], references: [userId, companyId], onDelete: Restrict, onUpdate: Restrict)
+  @@id([propertyId, userId])
+  @@index([companyId, userId])
 }

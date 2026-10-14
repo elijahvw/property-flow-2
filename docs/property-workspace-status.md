@@ -34,3 +34,13 @@ No dependency on PR14 or maintenance changes; no schema, delete/archive, unit, l
 Implemented and tested local checkpoint. No push, PR, merge, deployment, paid resources, or existing database operations. Independent review is pending and required before publishing. Continue in Codex: independently review the focused diff, resolve findings, then decide whether to publish or integrate with the latest main. PR14/maintenance integrations may conflict in App.tsx or the registration area of application.ts; retain both routes/modules rather than replacing either feature.
 
 Existing updates use last-write-wins semantics; no optimistic concurrency/version API was added in this slice. Address fields follow current schema and required-field conventions. Audit events record actor/company/target/action without copying address values. No authenticated production smoke test or visual screenshot review was performed.
+
+## PR14 integration checkpoint (2026-10-14)
+
+PR15: https://github.com/elijahvw/property-flow-2/pull/15. Original property head `d09987c` passed independent review, GitHub CI and completed automated Codex review with no findings. CodeRabbit skipped automatic review. Main then merged PR14 at `a6799968f9051de061ab456d7856a7d0015d98ae`, creating one conflict in the shared PostgreSQL fixture user list.
+
+Integrated main through an ordinary merge commit. The sole manual code resolution keeps both `staff-a` (property read/write tests) and `resident-a2` (resident assignment tests). Production modules auto-merged: property links and resident management controls coexist in the list; application registration retains property-detail routes alongside resident assignment routes and opaque user-ID handling. No feature expansion or edits to maintenance work.
+
+Combined verification passed: production build and client/server typechecks; 38 Node checks covering access, tracing, assignment retry/opaque-ID behavior and client contracts; 25 browser fixtures covering onboarding, property detail/edit and resident management; 40 isolated PostgreSQL checks including property audit/RLS and resident lifecycle concurrency. Disposable PostgreSQL container removed after verification. No existing database operations.
+
+The branch is published solely for CI and narrow independent review of this integration commit. PR15 remains unmerged until parent reviews the new head. Combined resident/property tests are now verified; integration with the separate maintenance branch remains unverified. No deployment or main push performed. The earlier local-only stopping-point paragraph records the original checkpoint and is superseded by this section.
