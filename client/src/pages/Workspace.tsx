@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
-import { monitorOperation, startOperation } from "../operations";
+import { monitorOperation } from "../operations";
+import { useResource } from "../useResource";
+import OwnerOnboarding from "../components/OwnerOnboarding";
 import type { OperationName } from "../operation-lifecycle";
 
 type Company = {
@@ -30,56 +32,6 @@ type Person = {
   membership: (Member & { company: Company }) | null;
 };
 const roles = ["owner", "manager", "staff", "resident"];
-export function useResource<T>(url: string) {
-  const { data: auth } = useAuth();
-  const scope = `${auth?.user.id}:${auth?.user.status}:${auth?.membership?.companyId}:${auth?.membership?.version}:${auth?.permissions.join(",")}`;
-  const key = `${scope}:${url}`;
-  const [result, setResult] = useState<{
-    key: string;
-    data?: T;
-    error?: string;
-  }>({ key });
-  const [revision, setRevision] = useState(0);
-  useEffect(() => {
-    const controller = new AbortController();
-    setResult({ key });
-    const operation = startOperation(
-      url === "/api/platform/users"
-        ? "admin.users.load"
-        : url === "/api/platform/companies"
-          ? "admin.companies.load"
-          : "page.data.load",
-    );
-    void api<T>(url, { signal: controller.signal })
-      .then((data) => {
-        if (!controller.signal.aborted) {
-          operation.succeed();
-          setResult({ key, data });
-        }
-      })
-      .catch((error) => {
-        if (!controller.signal.aborted) {
-          operation.fail(error);
-          setResult({
-            key,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Unable to load this page.",
-          });
-        }
-      });
-    return () => {
-      controller.abort();
-      operation.abandon();
-    };
-  }, [url, key, revision]);
-  return {
-    data: result.key === key ? result.data : undefined,
-    error: result.key === key ? result.error : undefined,
-    reload: () => setRevision((v) => v + 1),
-  };
-}
 function LoadState({ error, retry }: { error?: string; retry: () => void }) {
   return error ? (
     <div className="notice error" role="alert">
@@ -572,6 +524,7 @@ export function Properties() {
           </button>
         )}
       </header>
+      <OwnerOnboarding properties={r} onAddProperty={() => setAdding(true)} />
       {adding && can("property.write") && (
         <section className="panel">
           <h2>Add a property</h2>
@@ -636,6 +589,7 @@ export function Team() {
   const r = useResource<Member[]>("/api/company/members");
   const { user, refreshUser } = useAuth();
   const [selected, setSelected] = useState("");
+  const [invitationRevision, setInvitationRevision] = useState(0);
   const member = r.data?.find((m) => m.userId === selected);
   return (
     <>
@@ -698,7 +652,7 @@ export function Team() {
       <div className="split">
         <section className="panel">
           <h2>Invite a person</h2>
-          <InvitationForm reload={r.reload} />
+          <InvitationForm reload={() => setInvitationRevision((v) => v + 1)} />
         </section>
         <section className="panel">
           <h2>Transfer ownership</h2>
@@ -737,7 +691,7 @@ export function Team() {
           </Form>
         </section>
       </div>
-      <Invitations />
+      <Invitations key={invitationRevision} />
     </>
   );
 }
@@ -895,7 +849,7 @@ export function AccessStatus() {
       <p>
         {suspended
           ? "Contact your administrator to restore access."
-          : "Your account needs an active company assignment. Accept your invitation or contact your administrator."}
+          : "Your administrator will create your company and assign its initial owner. Your account is waiting for an active company assignment. If you received an invitation, open its link to accept it."}
       </p>
       <button onClick={() => void refreshUser()}>Check access again</button>
       <Link to="/account">View my profile</Link>

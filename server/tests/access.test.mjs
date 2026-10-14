@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import Fastify from 'fastify';
-import { permissions, companyScope, safeReturnTo } from '../dist/access.js';
+import { permissions, companyScope, safeReturnTo, defaultDestination } from '../dist/access.js';
 import { registerApplication } from '../dist/application.js';
 import { digest, sameSecret, validSession, readAuthConfig, registerSessions } from '../dist/sessions.js';
 const principal = (role, extra = {}) => ({ id: 'user-a', status: 'active', platformRole: null, membership: role ? { companyId: 'company-a', role, status: 'active', company: { status: 'active' } } : null, ...extra });
@@ -77,4 +77,26 @@ test('validated CloudFront viewers have independent login limits; spoofed/direct
   assert.equal((await app.inject({url:'/api/throttle-test',headers:headers('198.51.100.1:40002')})).statusCode,429);
   assert.equal((await app.inject({url:'/api/throttle-test',headers:headers('198.51.100.2:40000')})).statusCode,200);
   assert.equal((await app.inject({url:'/api/throttle-test',headers:{'cloudfront-viewer-address':'198.51.100.2:40000'}})).statusCode,403);
+});
+
+// Every server-selected landing is a terminal workspace, never /dashboard itself.
+test('role landings include unassigned and disabled states without redirect loops', () => {
+  for (const [user, expected] of [
+    [principal('owner'), '/company/properties'], [principal('manager'), '/company/properties'],
+    [principal('staff'), '/company/properties'], [principal('resident'), '/resident'],
+    [principal(null), '/access'], [principal('tenant'), '/access'],
+    [principal('owner', {status:'disabled'}), '/access'],
+    [principal(null, {platformRole:'owner'}), '/platform/companies'],
+  ]) assert.equal(defaultDestination(user), expected);
+});
+test('invalid callback binding expires locally without contacting the identity provider', async t => {
+  const app = Fastify(); t.after(() => app.close());
+  const db = { loginTransaction: { findUnique: async () => null } };
+  await registerSessions(app, db, {origin:'https://example.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});
+  for (const url of ['/api/auth/callback', '/api/auth/callback?state=unknown']) {
+    const response = await app.inject({url});
+    assert.equal(response.statusCode, 302);
+    assert.equal(response.headers.location, '/?authError=expired');
+    assert.match(response.headers['set-cookie'], /Expires=Thu, 01 Jan 1970/);
+  }
 });
