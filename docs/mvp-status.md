@@ -1,5 +1,26 @@
 # PropertyFlow MVP status
 
+## Independent PostgreSQL validation and PR handoff — 2026-10-14
+
+The independent reviewer validated a corrected temporary copy of `940c905e05094a454dbc359d5adfed79592f4464`. Applied the reviewed `harness-and-race.patch` locally: each controlled Fastify instance now registers its own session plugin (required for cookie/session authentication), and all five lifecycle changes run in both lock orderings with both absent and preexisting assignments. The final database test file matches the independently tested copy byte-for-byte; application and migration contents are unchanged from the tested correction.
+
+Independent evidence retained at `/tmp/propertyflow-db-review.l3vfgG`:
+
+- `freshcli-fresh-deploy.log`: real Prisma migrate deploy successfully applied all **four** migrations in correct order to an empty disposable PostgreSQL 17 cluster, with Property and ResidentPropertyAssignment forced RLS enabled.
+- `upgrade-database.log`: upgraded the populated `cb80ede` baseline using Prisma migrate deploy, preserving every existing table record; runtime assignment/API reads work and unscoped assignment reads are denied.
+- `fresh-database-access.test.log`: **38 tests passed**, zero failures/skips, including **20** deterministically coordinated assignment/lifecycle races (five changes, both orderings, absent/preexisting assignment), same-company resident isolation, real three-attempt exhaustion, company/role/account cleanup, composite keys, forced RLS, authorization and invitation/session behavior.
+- `fresh-deadlock.log`: actual PostgreSQL wait cycle produced nested P2010 / `40P01`; serializable retry recovered, with transaction attempts `[1,2]`.
+- `fresh-runtime-boundary.log`: real runtime SELECT/INSERT/UPDATE/DELETE respect assignment company RLS, rollback does not leak company scope, and the database-backed assignment endpoint denies anonymous requests, wrong/missing CSRF and wrong Origin while permitting valid mutation.
+- `fresh-isolation.json`, `freshcli-isolation.json`, `upgrade-isolation.json`: uniquely identified fresh containers using the cached postgres:17-alpine image `b0f9560a2de0`, loopback-only ports, no mounts, tmpfs database storage, and verified empty clusters before resets. Corresponding `*-cleanup.json` files confirm all three containers were removed. No existing/shared/development database was used.
+
+Safe handoff checks: **35 Node tests passed** again (`/tmp/propertyflow-resident-final-node-tests.txt`), and database test syntax / `git diff --check` passed. Prior server/client builds, 16 browser fixture tests and 24 operations tests remain verified. No additional local database run was needed after applying the exact independently tested harness patch. Live Auth0/browser acceptance remains outstanding; Node 22 CI validation is pending the PR.
+
+User authorization now permits the focused branch push and PR creation, with notification and approval before merge. No merge, auto-merge or deployment is authorized in this task. Reviewed workflow triggers: CI runs for PRs targeting main; Deploy Dev listens only to main push or explicit dispatch, and application deployment jobs additionally require explicit dispatch. No branch-push/PR deployment trigger or workflow_run deployment exists. PR13 onboarding has merged to main (`163df0bd0d85fb870092b1e96a21acd5e2c55fef`); the assignment PR must contain only the diff after `cb80ede`.
+
+Earlier statements below that PostgreSQL tests were unexecuted or publication was paused describe the historical stages and are superseded by this validation/authorization record.
+
+---
+
 ## Security review fixes — 2026-10-14
 
 The independent reviewer blocked release of `e06cccfe1db6b05319ae8e57e336a6def073c59c` on migration ordering and adapter error classification. Both were fixed locally for re-review, with no publication or database execution.
