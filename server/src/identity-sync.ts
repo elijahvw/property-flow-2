@@ -1,6 +1,16 @@
-import type {Prisma} from '@prisma/client';
+import type { Prisma } from "@prisma/client";
 // Shared by callback and regression tests: preconfigured grants belong to exact issuer/subject.
-export async function synchronizeIdentity(tx:Prisma.TransactionClient,issuer:string,claims:{sub:string;email:string;email_verified?:unknown;name?:unknown;[key:string]:unknown}) {
+export async function synchronizeIdentity(
+  tx: Prisma.TransactionClient,
+  issuer: string,
+  claims: {
+    sub: string;
+    email: string;
+    email_verified?: unknown;
+    name?: unknown;
+    [key: string]: unknown;
+  },
+) {
   const identity = await tx.identity.findUnique({
     where: { issuer_subject: { issuer, subject: claims.sub } },
   });
@@ -31,11 +41,7 @@ export async function synchronizeIdentity(tx:Prisma.TransactionClient,issuer:str
     user.role === "admin" &&
     Array.isArray(roles) &&
     roles.includes("admin");
-  if (
-    !user.accessInitializedAt &&
-    user.role === "admin" &&
-    !upgradeOwner
-  ) {
+  if (!user.accessInitializedAt && user.role === "admin" && !upgradeOwner) {
     throw new Error("OWNER_UPGRADE_CLAIM_REQUIRED");
   }
   user = await tx.user.update({
@@ -53,5 +59,5 @@ export async function synchronizeIdentity(tx:Prisma.TransactionClient,issuer:str
     update: {},
     create: { issuer, subject: claims.sub, userId: user.id },
   });
-  return {user,upgradeOwner};
+  return { user, upgradeOwner };
 }

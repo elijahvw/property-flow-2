@@ -38,7 +38,10 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
   const app = Fastify({routerOptions:{maxParamLength:MAX_USER_ID_BYTES}}); t.after(() => app.close());
   const auth = await registerSessions(app, db, { origin: 'https://app.test', domain: 'unused.auth0.com', clientId: 'test-web', clientSecret: 'test-only', secure: true });
   registerApplication(app, db, auth, 'https://app.test');
-  const call = (user, method, path, body, extra = {}) => app.inject({ method, url: path, headers: { ...(user ? { cookie: `__Host-pf-session=token-${user}` } : {}), origin: 'https://app.test', 'x-csrf-token': 'test-csrf', ...extra }, ...(body === undefined ? {} : { payload: body }) });
+  const call = async (user, method, path, body, extra = {}) => {
+    if (body && method==='PATCH' && path.startsWith('/api/platform/companies/') && !Object.hasOwn(body,'expectedVersion')) body={...body,expectedVersion:(await db.company.findUnique({where:{id:path.split('/').pop()}}))?.version};
+    if (body && method==='PUT' && path.endsWith('/membership') && !Object.hasOwn(body,'expectedVersion')) body={...body,expectedVersion:(await db.companyMembership.findUnique({where:{userId:decodeURIComponent(path.split('/').at(-2))}}))?.version??null};
+    return app.inject({ method, url: path, headers: { ...(user ? { cookie: `__Host-pf-session=token-${user}` } : {}), origin: 'https://app.test', 'x-csrf-token': 'test-csrf', ...extra }, ...(body === undefined ? {} : { payload: body }) }); };
   const property = { name:'Test property', address:'Test street',city:'Test city',state:'Test state',zip:'Test code' };
   await t.test('populated legacy records survive migrations without automatic privilege grants', async () => {
     const legacy = await db.user.findUnique({where:{id:'legacy-admin'}});
@@ -147,7 +150,9 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
     const instanceAuth=await registerSessions(instance,database,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test-web',clientSecret:'test-only',secure:true});
     registerApplication(instance,database,instanceAuth,'https://app.test');return instance;
   };
-  const controlledCall = (instance,user,method,path,body) => instance.inject({method,url:path,headers:{cookie:`__Host-pf-session=token-${user}`,origin:'https://app.test','x-csrf-token':'test-csrf'},...(body===undefined?{}:{payload:body})});
+  const controlledCall = async(instance,user,method,path,body) => {
+    if(body&&method==='PUT'&&path.endsWith('/membership')&&!Object.hasOwn(body,'expectedVersion'))body={...body,expectedVersion:(await db.companyMembership.findUnique({where:{userId:decodeURIComponent(path.split('/').at(-2))}}))?.version??null};
+    return instance.inject({method,url:path,headers:{cookie:`__Host-pf-session=token-${user}`,origin:'https://app.test','x-csrf-token':'test-csrf'},...(body===undefined?{}:{payload:body})});};
   const seedRaceUser = async (id,role) => {
     await admin.query('INSERT INTO "User" (id,email,"emailVerified","updatedAt") VALUES ($1,$2,true,NOW())',[id,`${id}@test.invalid`]);
     await admin.query('INSERT INTO "CompanyMembership" ("userId","companyId",role,"updatedAt") VALUES ($1,$2,$3,NOW())',[id,'a',role]);

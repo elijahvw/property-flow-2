@@ -16,6 +16,23 @@ model Company {
   id        String     @id @default(cuid())
   name      String
   domain    String?    @unique
+  legalName String?
+  contactName String?
+  contactEmail String?
+  contactPhone String?
+  website String?
+  addressLine1 String?
+  addressLine2 String?
+  city String?
+  region String?
+  postalCode String?
+  country String?
+  timezone String @default("America/New_York")
+  adminNotes String?
+  version Int @default(1)
+  createdById String?
+  submissionKey String?
+  submissionHash String?
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   users     User[]
@@ -27,6 +44,7 @@ model Company {
   units Unit[]
   leases Lease[]
   ledgerEntries LedgerEntry[]
+  @@unique([createdById, submissionKey])
 }
 
 model User {
