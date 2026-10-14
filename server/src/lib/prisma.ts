@@ -39,7 +39,7 @@ const poolConfig: ConstructorParameters<typeof Pool>[0] = {
 };
 
 if (isProduction) {
-  poolConfig.ssl = { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT || readFileSync(new URL('../../certs/rds-global-bundle.pem', import.meta.url), 'utf8') };
+  poolConfig.ssl = { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT || readFileSync(process.env.DATABASE_CA_FILE || new URL('../../certs/rds-global-bundle.pem', import.meta.url), 'utf8') };
 }
 
 if (isProduction && !process.env.RUNTIME_DATABASE_URL) throw new Error('Restricted runtime database credentials are required');

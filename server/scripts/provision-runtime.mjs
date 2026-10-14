@@ -10,7 +10,7 @@ const admin = new pg.Client({
   connectionString: process.env.DATABASE_URL,
   ssl:
     process.env.NODE_ENV === "production"
-      ? { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT || readFileSync(new URL('../certs/rds-global-bundle.pem', import.meta.url), 'utf8') }
+      ? { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT || readFileSync(process.env.DATABASE_CA_FILE || new URL('../certs/rds-global-bundle.pem', import.meta.url), 'utf8') }
       : undefined,
 });
 await admin.connect();
