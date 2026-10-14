@@ -33,7 +33,9 @@ Terraform generates a distinct password for `propertyflow_runtime`. Existing sta
 
 Property rows have forced row-level security. Each operation sets company context with transaction-local `set_config`; filters also include companyId. Context resets on commit and rollback, including pooled connections. Membership and invitation records are scoped by application authorization; they are not covered by property RLS. Session/identity lookup and platform administration require cross-company metadata access. This is defense against accidental unscoped property queries, not a claim that database credentials alone encode end-user authority.
 
-Runtime and migration database TLS verify the AWS RDS certificate using the bundled official AWS trust bundle. Update that bundle as AWS rotates authorities. The migration/provisioning process still has elevated credentials in its container environment; further deployment separation into a dedicated migration task is a production hardening item.
+Runtime and migration database TLS verify the AWS RDS certificate using the official AWS trust bundle. The container splits the RDS roots into individual OS trust-store certificates for the migration engine; the pg driver accepts the combined bundle. Update that bundle as AWS rotates authorities. CloudFront-to-ALB transport remains HTTP in this development infrastructure; a production release needs an HTTPS origin or an equivalent private encrypted origin connection.
+
+The migration/provisioning process still has elevated credentials in its container environment; further deployment separation into a dedicated migration task is a production hardening item.
 
 ## Monitoring
 

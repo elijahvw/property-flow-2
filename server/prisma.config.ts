@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import { defineConfig } from 'prisma/config';
-import { fileURLToPath } from 'node:url';
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('DATABASE_URL is required');
 const migrationUrl = new URL(databaseUrl);
@@ -9,7 +8,9 @@ if (process.env.NODE_ENV === 'production') {
   // The pg adapter's TLS configuration is handled separately.
   migrationUrl.searchParams.set('sslmode', 'require');
   migrationUrl.searchParams.set('sslaccept', 'strict');
-  migrationUrl.searchParams.set('sslcert', process.env.DATABASE_CA_FILE || fileURLToPath(new URL('./certs/rds-global-bundle.pem', import.meta.url)));
+  // The container installs every AWS RDS root in the OS trust store.
+  // A single explicit trust anchor may be supplied for isolated TLS tests.
+  if (process.env.DATABASE_CA_FILE) migrationUrl.searchParams.set('sslcert', process.env.DATABASE_CA_FILE);
 }
 export default defineConfig({
   schema: 'prisma/schema.prisma',
