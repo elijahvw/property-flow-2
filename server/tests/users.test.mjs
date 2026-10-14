@@ -1056,7 +1056,10 @@ test(
             remote.set(`auth0|limit-${i}`, {
               ...identity,
               user_id: `auth0|limit-${i}`,
-              email: `limit-${i}@test.invalid`,
+              email:
+                i === 1000
+                  ? "Jane.Doe@test.invalid"
+                  : `limit-${i}@test.invalid`,
             });
           r = await call("platform", "POST", path, { page: 19 });
           assert.equal(r.statusCode, 200, r.body);
@@ -1067,7 +1070,7 @@ test(
           );
           r = await call("platform", "POST", path, {
             page: 0,
-            email: "LIMIT-1000@test.invalid",
+            email: "Jane.Doe@test.invalid",
           });
           assert.equal(r.statusCode, 200, r.body);
           assert.equal(r.json().limited, false);

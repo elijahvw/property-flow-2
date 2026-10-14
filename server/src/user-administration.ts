@@ -223,9 +223,7 @@ export function registerUserAdministration(
         "Choose a valid directory page.",
       );
     const email =
-      b.email === undefined
-        ? undefined
-        : boundedText(b.email, 254, "Email").toLowerCase();
+      b.email === undefined ? undefined : boundedText(b.email, 254, "Email");
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       throw new AccessError(400, "INVALID_INPUT", "Enter a complete email.");
     const source = await configured().list(page, email);
