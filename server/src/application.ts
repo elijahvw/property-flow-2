@@ -13,6 +13,8 @@ import {
   permissions,
   requirePermission,
 } from "./access.js";
+import { registerUserAdministration } from "./user-administration.js";
+import type { IdentityProvider } from "./identity-provider.js";
 import { registerFinances } from "./finances.js";
 import { registerLeasing } from "./leasing.js";
 import { registerMaintenance } from "./maintenance.js";
@@ -187,10 +189,12 @@ export function registerApplication(
   db: PrismaClient,
   authenticate: preValidationHookHandler,
   origin: string,
+  identityProvider?: IdentityProvider,
 ) {
   registerMaintenance(server, db, authenticate, origin);
   registerLeasing(server, db, authenticate, origin);
   registerFinances(server, db, authenticate, origin);
+  registerUserAdministration(server, db, authenticate, origin, identityProvider);
   const auth = { preValidation: authenticate };
   registerPropertyDetail(server, db, authenticate);
   const serial = <T>(request: FastifyRequest, run: (tx: Tx) => Promise<T>) =>
@@ -343,6 +347,8 @@ export function registerApplication(
         email: true,
         status: true,
         platformRole: true,
+        emailVerified: true,
+        firstSignedInAt: true,
         membership: { include: { company: true } },
         companyId: true,
         role: true,

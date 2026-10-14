@@ -30,6 +30,7 @@ export default function ProtectedRoute({
         </div>
       </section>
     );
+  if (permission && user.emailVerified === false) return <section className="status-panel"><h1>Email verification required</h1><p>Your access is set up. Verify your email to open this workspace.</p><Link to="/account">View my profile</Link></section>;
   if (permission && !can(permission))
     return (
       <section className="status-panel">

@@ -14,6 +14,7 @@ export type Permission =
 export type Principal = {
   id: string;
   status: string;
+  emailVerified?: boolean;
   platformRole: string | null;
   membership: {
     companyId: string;
@@ -38,7 +39,7 @@ const grants: Record<CompanyRole, Permission[]> = {
   resident: ["resident.self"],
 };
 export function permissions(user: Principal): Permission[] {
-  if (user.status !== "active") return [];
+  if (user.status !== "active" || user.emailVerified === false) return [];
   const result: Permission[] =
     user.platformRole === "owner" ? ["platform.manage"] : [];
   const m = user.membership;

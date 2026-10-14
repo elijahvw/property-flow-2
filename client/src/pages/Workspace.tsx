@@ -1,3 +1,4 @@
+import {UserProvisioning, UserVerificationControls} from "../components/UserProvisioning";
 import React, { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
@@ -22,6 +23,8 @@ type Member = {
   user: { name: string | null; email: string; status: string };
 };
 type Person = {
+  emailVerified?: boolean;
+  firstSignedInAt?: string | null;
   id: string;
   name: string | null;
   email: string;
@@ -356,10 +359,10 @@ export function People() {
         <p className="eyebrow">Platform</p>
         <h1>People & access</h1>
         <p>
-          Each person has one company assignment. These are people who have
-          signed into Property Flow.
+          Set up identities, company assignments and roles before a person’s first sign-in. Email verification is tracked separately.
         </p>
       </header>
+      <UserProvisioning saved={r.reload} />
       <section className="panel">
         {!r.data ? (
           <LoadState error={r.error} retry={r.reload} />
@@ -369,6 +372,7 @@ export function People() {
               <thead>
                 <tr>
                   <th>Person</th>
+                  <th>Email verification</th>
                   <th>Company</th>
                   <th>Role</th>
                   <th>Access</th>
@@ -384,6 +388,7 @@ export function People() {
                       <strong>{p.name || p.email}</strong>
                       <span className="cell-detail">{p.email}</span>
                     </td>
+                    <td>{p.emailVerified ? "Verified" : "Not verified"}<span className="cell-detail">{p.firstSignedInAt ? "Has signed in" : "Awaiting first sign-in"}</span></td>
                     <td>
                       {p.membership?.company.name || "Unassigned"}
                       {!p.membership && p.companyId && (
@@ -475,6 +480,7 @@ export function People() {
               </p>
             </Form>
           )}
+          <UserVerificationControls key={person.id} id={person.id} verified={person.emailVerified} saved={r.reload} />
           {person.platformRole !== "owner" && (
             <div className="divider">
               <h3>Platform account</h3>

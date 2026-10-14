@@ -71,6 +71,9 @@ jobs:
       - name: Test manual finances on disposable PostgreSQL
         run: node scripts/test-finances.mjs
 
+      - name: Test pre-login user setup on disposable PostgreSQL
+        run: node scripts/test-users.mjs
+
       - name: Keep test reports in GitHub
         if: always()
         uses: actions/upload-artifact@v4
