@@ -44,6 +44,11 @@ test("configured management client caches tokens, encodes opaque subjects and st
   assert.ok(seen.some((x) => x.url.includes("auth0%7Cabc%2B1")));
   assert.equal(seen[0].options.redirect, "error");
   assert.ok(seen[0].options.signal);
+  assert.equal(
+    JSON.parse(seen[0].options.body).scope,
+    "read:users create:users update:users",
+    "request only user administration scopes even if the existing client grant is broader",
+  );
 });
 test("new email/password identity never exposes initial random password; retry recovers provider success after lost response", async () => {
   let created = false;

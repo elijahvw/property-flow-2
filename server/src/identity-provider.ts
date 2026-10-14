@@ -64,6 +64,7 @@ export function identityProvider(
               client_id: clientId,
               client_secret: secret,
               audience: base + "/api/v2/",
+              scope: "read:users create:users update:users",
             }),
           });
           const b = (await r.json()) as any;
