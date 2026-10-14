@@ -20,5 +20,9 @@ RUN npm ci --omit=dev
 # Generate prisma client for the runtime OS
 RUN DATABASE_URL="postgresql://dummy@localhost:5432/dummy" npx prisma generate
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/certs ./certs
+ENV NODE_EXTRA_CA_CERTS=/app/certs/rds-global-bundle.pem
+ENV PGSSLROOTCERT=/app/certs/rds-global-bundle.pem
 EXPOSE 5011
 CMD ["npm", "start"]

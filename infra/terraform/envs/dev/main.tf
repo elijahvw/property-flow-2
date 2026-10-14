@@ -2,6 +2,10 @@ terraform {
   required_version = ">= 1.0"
 
   required_providers {
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
@@ -36,6 +40,11 @@ module "rds" {
   ecs_security_group_id = module.network.ecs_security_group_id
 }
 
+resource "random_password" "runtime_database" {
+  length  = 40
+  special = false
+}
+
 module "ecr" {
   source = "../../modules/ecr"
   vars = {
@@ -45,6 +54,10 @@ module "ecr" {
     public_subnets          = module.network.public_subnets
     alb_security_group_id   = module.network.alb_security_group_id
     ecs_security_group_id   = module.network.ecs_security_group_id
+    app_origin              = var.app_origin
+    auth0_web_client_id     = var.auth0_web_client_id
+    auth0_web_client_secret = var.auth0_web_client_secret
+    runtime_db_password     = random_password.runtime_database.result
     auth0_domain            = var.auth0_domain
     auth0_audience          = var.auth0_audience
     auth0_m2m_client_id     = var.auth0_m2m_client_id

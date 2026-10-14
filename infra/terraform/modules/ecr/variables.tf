@@ -1,5 +1,9 @@
 variable "vars" {
   type = object({
+    app_origin              = string
+    auth0_web_client_id     = string
+    auth0_web_client_secret = string
+    runtime_db_password     = string
     environment             = string
     aws_region              = string
     vpc_id                  = string

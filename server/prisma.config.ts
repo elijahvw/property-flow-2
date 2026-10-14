@@ -17,13 +17,13 @@ const migrationDatabaseUrl = (() => {
 
   try {
     const parsedUrl = new URL(databaseUrl);
-    parsedUrl.searchParams.set('sslmode', 'no-verify');
+    parsedUrl.searchParams.set('sslmode', 'verify-full');
     return parsedUrl.toString();
   } catch {
     const separator = databaseUrl.includes('?') ? '&' : '?';
     return databaseUrl.includes('sslmode=')
-      ? databaseUrl.replace(/sslmode=[^&]*/i, 'sslmode=no-verify')
-      : `${databaseUrl}${separator}sslmode=no-verify`;
+      ? databaseUrl.replace(/sslmode=[^&]*/i, 'sslmode=verify-full')
+      : `${databaseUrl}${separator}sslmode=verify-full`;
   }
 })();
 

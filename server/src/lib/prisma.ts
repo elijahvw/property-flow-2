@@ -33,13 +33,14 @@ function withoutSslMode(databaseUrl?: string): string | undefined {
 }
 
 const poolConfig: ConstructorParameters<typeof Pool>[0] = {
-  connectionString: withoutSslMode(process.env.DATABASE_URL),
+  connectionString: withoutSslMode(process.env.RUNTIME_DATABASE_URL || process.env.DATABASE_URL),
 };
 
 if (isProduction) {
-  poolConfig.ssl = { rejectUnauthorized: false };
+  poolConfig.ssl = { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT };
 }
 
+if (isProduction && !process.env.RUNTIME_DATABASE_URL) throw new Error('Restricted runtime database credentials are required');
 const pool = new Pool(poolConfig);
 const adapter = new PrismaPg(pool);
 
@@ -47,7 +48,7 @@ export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
     adapter,
-    log: ['query'],
+    log: [],
   });
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;

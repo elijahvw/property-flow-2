@@ -1,279 +1,262 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { addReactError } from '@datadog/browser-rum-react';
-import { Routes } from '@datadog/browser-rum-react/react-router-v6';
-import { BrowserRouter as Router, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { Auth0Provider } from '@auth0/auth0-react';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import ProtectedRoute from './components/ProtectedRoute';
-import Home from './pages/Home';
-import About from './pages/About';
-import LandlordDashboard from './pages/LandlordDashboard';
-import TenantPortal from './pages/TenantPortal';
-import AdminDashboard from './pages/AdminDashboard';
-import Properties from './pages/Properties';
-import './App.css';
-
-class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
-  constructor(props: { children: ReactNode }) {
-    super(props);
-    this.state = { hasError: false, error: null };
+import React, { Component, useEffect, useRef } from "react";
+import { addReactError } from "@datadog/browser-rum-react";
+import { Routes } from "@datadog/browser-rum-react/react-router-v6";
+import {
+  BrowserRouter,
+  Route,
+  Link,
+  NavLink,
+  Navigate,
+  useLocation,
+} from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { routes, visibleRoutes } from "./navigation";
+import {
+  Companies,
+  CompanyDetail,
+  People,
+  Properties,
+  Team,
+  CompanySettings,
+  Account,
+  AccessStatus,
+  Resident,
+  AcceptInvitation,
+  Audit,
+} from "./pages/Workspace";
+import "./App.css";
+class ErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
   }
-
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error };
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    addReactError(error, info);
   }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    addReactError(error, errorInfo);
-    console.error("Uncaught error:", error, errorInfo);
-  }
-
   render() {
-    if (this.state.hasError) {
-      return (
-        <div className="error-container">
-          <h1>Something went wrong.</h1>
-          <pre>{this.state.error?.message}</pre>
-          <button className="btn-primary" onClick={() => window.location.reload()}>Reload Page</button>
-        </div>
-      );
-    }
-    return this.props.children;
+    return this.state.failed ? (
+      <section className="status-panel">
+        <h1>Something went wrong</h1>
+        <p>Please reload this page to continue.</p>
+        <button onClick={() => window.location.reload()}>Reload</button>
+      </section>
+    ) : (
+      this.props.children
+    );
   }
 }
-
-const Navbar = () => {
-  const navigate = useNavigate();
+function Shell({ children }: { children: React.ReactNode }) {
+  const { data, user, signIn, signOut, error } = useAuth();
   const location = useLocation();
-  const { user, signOut, signIn, loading } = useAuth();
-
-  // If user is logged in and not on public pages, we don't show the public navbar
-  // instead they get the PortalLayout.
-  const isPublicPage = location.pathname === '/' || location.pathname === '/about';
-  if (user && !isPublicPage) return null;
-
-  if (loading) return (
-    <nav className="navbar">
-      <div className="nav-brand">PropertyFlow</div>
-    </nav>
-  );
-
+  const main = useRef<HTMLElement>(null);
+  const route = routes.find((r) => r.path === location.pathname);
+  useEffect(() => {
+    document.title = `${route?.title || "Property Flow"} · Property Flow`;
+    main.current?.focus();
+  }, [location.pathname, route?.title]);
   return (
-    <nav className="navbar">
-      <div className="nav-brand" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>PropertyFlow</div>
-      <div className="nav-actions">
-        <button 
-          className={`nav-btn ${location.pathname === '/' ? 'active' : ''}`}
-          onClick={() => navigate('/')}
-        >
-          Home
-        </button>
-        <button 
-          className={`nav-btn ${location.pathname === '/about' ? 'active' : ''}`}
-          onClick={() => navigate('/about')}
-        >
-          About
-        </button>
-
-        {!user ? (
-          <button className="nav-btn active" onClick={signIn}>
-            Sign In
-          </button>
-        ) : (
-          <button className="nav-btn active" onClick={() => {
-            // Redirect based on role if they are on home page
-            window.location.href = '/dashboard';
-          }}>
-            Go to Portal
-          </button>
-        )}
-      </div>
-    </nav>
-  );
-};
-
-const PortalLayout = ({ children }: { children: React.ReactNode }) => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { user, role, signOut } = useAuth();
-
-  const navItems = [
-    { name: 'Dashboard', path: '/dashboard', icon: '📊', roles: ['tenant', 'landlord', 'admin'] },
-    { name: 'Properties', path: '/properties', icon: '🏠', roles: ['tenant', 'landlord', 'admin'] },
-    { name: 'Messages', path: '/messages', icon: '💬', roles: ['tenant', 'landlord', 'admin'] },
-    { name: 'Admin', path: '/admin', icon: '⚙️', roles: ['admin'] },
-  ];
-
-  const filteredNavItems = navItems.filter(item => 
-    role === 'admin' || item.roles.includes(role || '')
-  );
-
-  return (
-    <div className="portal-container">
-      <aside className="portal-sidebar">
-        <div className="portal-logo" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
-          <span className="portal-logo-text">PropertyFlow</span>
-        </div>
-        
-        <nav className="portal-nav">
-          {filteredNavItems.map(item => (
-            <button
-              key={item.path}
-              className={`portal-nav-item ${location.pathname === item.path ? 'active' : ''}`}
-              onClick={() => navigate(item.path)}
-            >
-              <span className="portal-nav-icon">{item.icon}</span>
-              <span className="portal-nav-text">{item.name}</span>
-            </button>
-          ))}
+    <div className="workspace">
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
+      <aside className="sidebar">
+        <Link className="brand" to={user ? "/dashboard" : "/"}>
+          <span className="brand-mark">P</span>Property Flow
+        </Link>
+        <p className="workspace-label">
+          {user?.platformRole === "owner"
+            ? "Platform workspace"
+            : data?.membership?.company.name || "Your workspace"}
+        </p>
+        <nav aria-label="Main navigation">
+          {visibleRoutes(data?.permissions || [])
+            .filter((r) => user || r.path === "/")
+            .map((r) => (
+              <NavLink key={r.path} to={r.path}>
+                {r.title}
+              </NavLink>
+            ))}
         </nav>
-
-        <div className="portal-user">
-          <div className="portal-user-info">
-            <span className="portal-user-name">{user?.name}</span>
-            <span className="portal-user-role">{role}</span>
-          </div>
-          <button className="btn-secondary" onClick={signOut} style={{ padding: '0.5rem' }}>
-            Sign Out
-          </button>
+        <div className="sidebar-footer">
+          {user ? (
+            <>
+              <strong>{user.name || user.email}</strong>
+              <span>
+                {user.platformRole === "owner"
+                  ? "Platform owner"
+                  : data?.membership?.role || "Access pending"}
+              </span>
+              <button className="secondary" onClick={signOut}>
+                Sign out
+              </button>
+            </>
+          ) : (
+            <button onClick={signIn}>Sign in</button>
+          )}
         </div>
       </aside>
-
-      <main className="portal-main">
-        <div className="portal-content">
+      <div className="workspace-main">
+        <header className="topbar">
+          <span>Property Flow / {route?.section || "Workspace"}</span>
+          <span className="badge">Development</span>
+        </header>
+        <main ref={main} id="main" tabIndex={-1}>
+          {error && user && (
+            <p role="alert" className="notice error">
+              {error}
+            </p>
+          )}
           {children}
-        </div>
-      </main>
+        </main>
+        <footer className="app-footer">
+          Property Flow · A clearer place to manage your properties
+        </footer>
+      </div>
     </div>
   );
-};
-
-function AppRoutes() {
-  const { user, role, loading } = useAuth();
-
-// Public pages render immediately; protected routes own sign-in recovery.
-
+}
+function Destination() {
+  const { data } = useAuth();
+  return <Navigate to={data?.destination || "/access"} replace />;
+}
+function Home() {
+  const { user, signIn } = useAuth();
+  const failed = new URLSearchParams(window.location.search).has("authError");
+  return (
+    <div className="landing">
+      <Link className="brand" to="/">
+        <span className="brand-mark">P</span>Property Flow
+      </Link>
+      <section className="landing-content">
+        <p className="eyebrow">Your property workspace</p>
+        <h1>
+          Less friction.
+          <br />
+          More clarity.
+        </h1>
+        <p>
+          Bring your companies, people and properties together in one organized
+          workspace.
+        </p>
+        {failed && (
+          <p className="notice error" role="alert">
+            Sign-in could not be completed. Try again, or contact your
+            administrator.
+          </p>
+        )}
+        {user ? (
+          <Link className="button" to="/dashboard">
+            Open workspace
+          </Link>
+        ) : (
+          <button onClick={signIn}>Sign in to Property Flow</button>
+        )}
+      </section>
+    </div>
+  );
+}
+function Pages() {
+  const pages: Record<string, React.ReactNode> = {
+    "/platform/companies": <Companies />,
+    "/platform/users": <People />,
+    "/platform/audit": <Audit />,
+    "/company/properties": <Properties />,
+    "/company/members": <Team />,
+    "/company/settings": <CompanySettings />,
+    "/resident": <Resident />,
+    "/account": <Account />,
+  };
   return (
     <Routes>
-      <Route 
-        path="/" 
+      <Route path="/" element={<Home />} />
+      {routes.map((r) => (
+        <Route
+          key={r.path}
+          path={r.path}
+          element={
+            <Shell>
+              <ProtectedRoute permission={r.permission}>
+                {pages[r.path]}
+              </ProtectedRoute>
+            </Shell>
+          }
+        />
+      ))}
+      <Route
+        path="/platform/companies/:companyId"
         element={
-          <>
-            <Navbar />
-            <main className="main">
-              <Home />
-            </main>
-          </>
-        } 
+          <Shell>
+            <ProtectedRoute permission="platform.manage">
+              <CompanyDetail />
+            </ProtectedRoute>
+          </Shell>
+        }
       />
-      <Route 
-        path="/about" 
+      <Route
+        path="/dashboard"
         element={
-          <>
-            <Navbar />
-            <main className="main">
-              <About />
-            </main>
-          </>
-        } 
+          <Shell>
+            <ProtectedRoute>
+              <Destination />
+            </ProtectedRoute>
+          </Shell>
+        }
       />
-      
-      <Route 
-        path="/dashboard" 
+      <Route
+        path="/access"
         element={
-          <ProtectedRoute allowedRoles={['tenant', 'landlord', 'admin']}>
-            <PortalLayout>
-              {role === 'tenant' ? <TenantPortal /> : <LandlordDashboard />}
-            </PortalLayout>
-          </ProtectedRoute>
-        } 
+          <Shell>
+            <ProtectedRoute>
+              <AccessStatus />
+            </ProtectedRoute>
+          </Shell>
+        }
       />
-
-      <Route 
-        path="/properties" 
+      <Route
+        path="/invite"
         element={
-          <ProtectedRoute allowedRoles={['tenant', 'landlord', 'admin']}>
-            <PortalLayout>
-              <Properties />
-            </PortalLayout>
-          </ProtectedRoute>
-        } 
+          <Shell>
+            <ProtectedRoute>
+              <AcceptInvitation />
+            </ProtectedRoute>
+          </Shell>
+        }
       />
-
-      <Route 
-        path="/messages" 
+      <Route
+        path="/admin"
+        element={<Navigate to="/platform/companies" replace />}
+      />
+      <Route
+        path="/properties"
+        element={<Navigate to="/company/properties" replace />}
+      />
+      <Route
+        path="*"
         element={
-          <ProtectedRoute allowedRoles={['tenant', 'landlord', 'admin']}>
-            <PortalLayout>
-              <div className="page dashboard">
-                <h1>Messages</h1>
-                <p>Messaging system coming soon.</p>
-              </div>
-            </PortalLayout>
-          </ProtectedRoute>
-        } 
+          <Shell>
+            <section className="status-panel">
+              <h1>Page not found</h1>
+              <p>This address does not match an available page.</p>
+              <Link to="/dashboard">Open workspace</Link>
+            </section>
+          </Shell>
+        }
       />
-      
-      <Route 
-        path="/admin" 
-        element={
-          <ProtectedRoute allowedRoles={['admin']}>
-            <PortalLayout>
-              <AdminDashboard />
-            </PortalLayout>
-          </ProtectedRoute>
-        } 
-      />
-
-      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
-
-const auth0Domain = import.meta.env.VITE_AUTH0_DOMAIN;
-const auth0ClientId = import.meta.env.VITE_AUTH0_CLIENT_ID;
-const auth0Audience = import.meta.env.VITE_AUTH0_AUDIENCE;
-
-const OptionalAuth0Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const navigate = useNavigate();
-
-  if (!auth0Domain || !auth0ClientId) {
-    return <AuthProvider>{children}</AuthProvider>;
-  }
-
-  const onRedirectCallback = (appState: any) => {
-    navigate(appState?.returnTo || '/dashboard');
-  };
-
-  return (
-    <Auth0Provider
-      domain={auth0Domain}
-      clientId={auth0ClientId}
-      authorizeTimeoutInSeconds={8}
-      httpTimeoutInSeconds={8}
-      authorizationParams={{
-        redirect_uri: window.location.origin,
-        audience: auth0Audience,
-      }}
-      onRedirectCallback={onRedirectCallback}
-    >
-      <AuthProvider>{children}</AuthProvider>
-    </Auth0Provider>
-  );
-};
-
-function App() {
+export default function App() {
   return (
     <ErrorBoundary>
-      <Router>
-        <OptionalAuth0Provider>
-          <div className="app">
-            <AppRoutes />
-          </div>
-        </OptionalAuth0Provider>
-      </Router>
+      <BrowserRouter>
+        <AuthProvider>
+          <Pages />
+        </AuthProvider>
+      </BrowserRouter>
     </ErrorBoundary>
   );
 }
-
-export default App;

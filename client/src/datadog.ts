@@ -1,6 +1,6 @@
 import { datadogRum } from '@datadog/browser-rum';
 import { reactPlugin } from '@datadog/browser-rum-react';
-import { isFirstPartyApiUrl } from './observability';
+import { isFirstPartyApiUrl, scrubRumEvent } from './observability';
 
 const DEFAULT_SITE = 'datadoghq.com';
 
@@ -52,6 +52,7 @@ export const initDatadogRum = () => {
     sessionReplaySampleRate: parsePercentage(import.meta.env.VITE_DATADOG_SESSION_REPLAY_SAMPLE_RATE, 20),
     defaultPrivacyLevel: 'mask-user-input',
     enableExperimentalFeatures: ['feature_operation_vital'],
+    beforeSend: scrubRumEvent,
     trackResources: true,
     trackLongTasks: true,
     trackUserInteractions: true,
