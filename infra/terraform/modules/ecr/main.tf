@@ -98,6 +98,7 @@ resource "aws_ecs_task_definition" "app" {
         { name = "AUTH0_AUDIENCE", value = var.vars.auth0_audience },
         { name = "VITE_AUTH0_AUDIENCE", value = var.vars.auth0_audience },
         { name = "APP_ORIGIN", value = var.vars.app_origin },
+        { name = "CLOUDFRONT_ORIGIN_SECRET", value = var.vars.cloudfront_origin_secret },
         { name = "AUTH0_WEB_CLIENT_ID", value = var.vars.auth0_web_client_id },
         { name = "AUTH0_WEB_CLIENT_SECRET", value = var.vars.auth0_web_client_secret },
         { name = "RUNTIME_DATABASE_URL", value = local.runtime_database_url },

@@ -1,6 +1,7 @@
 variable "vars" {
   type = object({
-    environment  = string
-    alb_dns_name = string
+    environment              = string
+    cloudfront_origin_secret = string
+    alb_dns_name             = string
   })
 }

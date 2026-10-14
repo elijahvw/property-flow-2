@@ -62,3 +62,19 @@ test('session middleware enforces origin AND CSRF token; logout destroys session
   const logout = await app.inject({ method: 'POST', url: '/api/auth/logout', headers: { cookie: '__Host-pf-session=valid', origin: 'https://example.test', 'x-csrf-token': 'csrf-token' } });
   assert.equal(logout.statusCode, 200); assert.equal(deleted, 1); assert.match(logout.headers['set-cookie'], /Expires=Thu, 01 Jan 1970/);
 });
+
+test('validated CloudFront viewers have independent login limits; spoofed/direct headers are rejected', async t => {
+  const { loginRateKey } = await import('../dist/sessions.js');
+  const headers = address => ({ 'x-propertyflow-origin': 'edge-test-secret', 'cloudfront-viewer-address': address });
+  assert.equal(loginRateKey(headers('198.51.100.1:50000'), 'edge-test-secret', 'alb'), '198.51.100.1');
+  assert.equal(loginRateKey(headers('[2001:db8::1]:50000'), 'edge-test-secret', 'alb'), '2001:db8::1');
+  assert.throws(() => loginRateKey({ ...headers('198.51.100.1:50000'), 'x-propertyflow-origin':'forged' }, 'edge-test-secret', 'alb'), /public/);
+  assert.throws(() => loginRateKey(headers('forged'), 'edge-test-secret', 'alb'), /visitor/);
+  const app = Fastify(); t.after(() => app.close());
+  await registerSessions(app, {}, { origin:'https://example.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true,originSecret:'edge-test-secret' });
+  app.get('/api/throttle-test', {config:{rateLimit:{max:2,timeWindow:'1 minute'}}}, async()=>({ok:true}));
+  for (const port of ['40000','40001']) assert.equal((await app.inject({url:'/api/throttle-test',headers:headers(`198.51.100.1:${port}`)})).statusCode,200);
+  assert.equal((await app.inject({url:'/api/throttle-test',headers:headers('198.51.100.1:40002')})).statusCode,429);
+  assert.equal((await app.inject({url:'/api/throttle-test',headers:headers('198.51.100.2:40000')})).statusCode,200);
+  assert.equal((await app.inject({url:'/api/throttle-test',headers:{'cloudfront-viewer-address':'198.51.100.2:40000'}})).statusCode,403);
+});

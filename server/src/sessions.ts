@@ -1,6 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
+import { isIP } from "node:net";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
 import * as oidc from "openid-client";
@@ -32,6 +33,7 @@ export type AuthConfig = {
   clientId: string;
   clientSecret: string;
   secure: boolean;
+  originSecret?: string;
 };
 export function readAuthConfig(env = process.env): AuthConfig {
   const origin = new URL(env.APP_ORIGIN || "http://localhost:5010");
@@ -53,13 +55,52 @@ export function readAuthConfig(env = process.env): AuthConfig {
     throw new Error("AUTH0_DOMAIN is required");
   if (!env.AUTH0_WEB_CLIENT_ID || !env.AUTH0_WEB_CLIENT_SECRET)
     throw new Error("Auth0 web application credentials are required");
+  if (env.NODE_ENV === "production" && !env.CLOUDFRONT_ORIGIN_SECRET)
+    throw new Error("CloudFront origin validation is required");
   return {
     origin: origin.origin,
+    originSecret: env.CLOUDFRONT_ORIGIN_SECRET,
     domain,
     clientId: env.AUTH0_WEB_CLIENT_ID,
     clientSecret: env.AUTH0_WEB_CLIENT_SECRET,
     secure: origin.protocol === "https:",
   };
+}
+
+export function requireCloudFront(
+  headers: Record<string, unknown>,
+  secret: string,
+) {
+  if (!sameSecret(headers["x-propertyflow-origin"], secret))
+    throw new AccessError(
+      403,
+      "ORIGIN_REJECTED",
+      "Use the public Property Flow address.",
+    );
+}
+export function loginRateKey(
+  headers: Record<string, unknown>,
+  secret: string | undefined,
+  fallback: string,
+): string {
+  if (!secret) return fallback;
+  requireCloudFront(headers, secret);
+  const viewer = headers["cloudfront-viewer-address"];
+  if (typeof viewer !== "string" || viewer.length > 100)
+    throw new AccessError(
+      403,
+      "VIEWER_ADDRESS_MISSING",
+      "Unable to validate the visitor address.",
+    );
+  const bracket = viewer.match(/^\[([^\]]+)\](?::\d+)?$/);
+  const address = bracket ? bracket[1] : viewer.replace(/:\d+$/, "");
+  if (!isIP(address))
+    throw new AccessError(
+      403,
+      "VIEWER_ADDRESS_INVALID",
+      "Unable to validate the visitor address.",
+    );
+  return address;
 }
 
 export async function registerSessions(
@@ -69,6 +110,8 @@ export async function registerSessions(
 ) {
   await server.register(cookie);
   await server.register(rateLimit, {
+    keyGenerator: (request) =>
+      loginRateKey(request.headers, config.originSecret, request.ip),
     global: false,
     max: 30,
     timeWindow: "1 minute",
@@ -98,6 +141,13 @@ export async function registerSessions(
       }));
 
   server.addHook("onRequest", async (request, reply) => {
+    const pathname = request.url.split("?")[0];
+    if (
+      config.originSecret &&
+      pathname.startsWith("/api/") &&
+      !["/api/ready", "/api/health"].includes(pathname)
+    )
+      requireCloudFront(request.headers, config.originSecret);
     if (request.url.startsWith("/api/"))
       reply.header("Cache-Control", "no-store").header("Pragma", "no-cache");
     reply
