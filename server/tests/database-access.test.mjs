@@ -29,7 +29,7 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
   const db = new PrismaClient({ adapter: new PrismaPg(runtimePool) });
   t.after(() => db.$disconnect());
   for (const id of ['a', 'b']) await admin.query('INSERT INTO "Company" (id,name,"updatedAt") VALUES ($1,$1,NOW())', [id]);
-  const users = [['platform',null,null,'owner'], ['owner-a','a','owner',null], ['manager-a','a','manager',null], ['resident-a','a','resident',null], ['owner-b','b','owner',null], ['unassigned',null,null,null], ['invitee',null,null,null]];
+  const users = [['platform',null,null,'owner'], ['owner-a','a','owner',null], ['manager-a','a','manager',null], ['staff-a','a','staff',null], ['resident-a','a','resident',null], ['owner-b','b','owner',null], ['unassigned',null,null,null], ['invitee',null,null,null]];
   for (const [id, companyId, role, platformRole] of users) {
     await admin.query('INSERT INTO "User" (id,email,name,"platformRole","emailVerified","updatedAt") VALUES ($1,$2,$1,$3,true,NOW())', [id, `${id}@test.invalid`, platformRole]);
     if (companyId) await admin.query('INSERT INTO "CompanyMembership" ("userId","companyId",role,"updatedAt") VALUES ($1,$2,$3,NOW())', [id,companyId,role]);
@@ -57,6 +57,34 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
     assert.equal((await call('owner-b','GET','/api/company/properties',undefined,{'x-company-id':'a'})).statusCode,403);
     assert.equal((await call('platform','GET','/api/company/properties')).statusCode,403);
     assert.equal((await call(null,'GET','/api/company/properties')).statusCode,401);
+  });
+  await t.test('property detail and update stay scoped, bounded, audited, and immediately honor revocation', async () => {
+    const id = (await call('manager-a','GET','/api/company/properties')).json()[0].id;
+    const path = `/api/company/properties/${id}`;
+    assert.equal((await call('staff-a','GET',path)).statusCode,200);
+    assert.equal((await call('staff-a','PATCH',path,property)).statusCode,403);
+    for (const method of ['GET','PATCH']) {
+      for (const user of ['resident-a','platform','unassigned']) assert.equal((await call(user,method,path,method === 'PATCH' ? property : undefined)).statusCode,403);
+      assert.equal((await call('owner-b',method,path,method === 'PATCH' ? property : undefined)).statusCode,404);
+      assert.equal((await call('manager-a',method,path,method === 'PATCH' ? property : undefined,{'x-company-id':'b'})).statusCode,403);
+      assert.equal((await call('manager-a',method,'/api/company/properties/missing',method === 'PATCH' ? property : undefined)).statusCode,404);
+    }
+    for (const invalid of [null, [], {}, {...property,name:' '}, {...property,state:'s'.repeat(101)}, {...property,zip:'z'.repeat(31)}, {...property,companyId:'b'}, {...property,address:123}, {...property,name:'x'.repeat(201)}])
+      assert.equal((await call('manager-a','PATCH',path,invalid)).statusCode,400);
+    assert.equal((await call('manager-a','PATCH',path,property,{origin:'https://evil.test'})).statusCode,403);
+    assert.equal((await call('manager-a','PATCH',path,property,{'x-csrf-token':'bad'})).statusCode,403);
+    const saved = await call('owner-a','PATCH',path,{...property,name:'  Updated property  '});
+    assert.equal(saved.statusCode,200,saved.body); assert.equal(saved.json().name,'Updated property');
+    assert.equal((await call('manager-a','GET',path)).json().name,'Updated property');
+    assert.equal(await db.auditEvent.count({where:{action:'property.updated',targetId:id,companyId:'a'}}),1);
+    assert.ok(await db.auditEvent.count({where:{action:'property.viewed',targetId:id,companyId:'a'}}) >= 1);
+    await admin.query(`UPDATE "CompanyMembership" SET status='disabled' WHERE "userId"='manager-a'`);
+    assert.equal((await call('manager-a','GET',path)).statusCode,403);
+    assert.equal((await call('manager-a','PATCH',path,property)).statusCode,403);
+    await admin.query(`UPDATE "CompanyMembership" SET status='active' WHERE "userId"='manager-a'`);
+    // Defense in depth: explicit filters and database policy independently reject another company.
+    assert.equal(await tenantTransaction(db,'b',tx=>tx.property.findFirst({where:{id,companyId:'a'}})),null);
+    assert.equal((await tenantTransaction(db,'b',tx=>tx.property.updateMany({where:{id,companyId:'a'},data:{name:'forbidden'}}))).count,0);
   });
   await t.test('row policies deny unscoped reads/writes and never leak pooled company context', async () => {
     assert.equal((await db.property.findMany()).length,0);

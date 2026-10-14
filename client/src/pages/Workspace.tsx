@@ -567,7 +567,7 @@ export function Properties() {
                 {r.data.map((p) => (
                   <tr key={p.id}>
                     <td>
-                      <strong>{p.name}</strong>
+                      <Link to={`/company/properties/${encodeURIComponent(p.id)}`}>{p.name}</Link>
                     </td>
                     <td>{p.address}</td>
                     <td>

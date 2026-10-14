@@ -25,6 +25,7 @@ import {
   AcceptInvitation,
   Audit,
 } from "./pages/Workspace";
+import PropertyDetail from "./pages/PropertyDetail";
 import "./App.css";
 class ErrorBoundary extends Component<
   { children: React.ReactNode },
@@ -53,7 +54,8 @@ function Shell({ children }: { children: React.ReactNode }) {
   const { data, user, signIn, signOut, error } = useAuth();
   const location = useLocation();
   const main = useRef<HTMLElement>(null);
-  const route = routes.find((r) => r.path === location.pathname);
+  const route = routes.find((r) => r.path === location.pathname)
+    || (location.pathname.startsWith("/company/properties/") ? routes.find(r => r.path === "/company/properties") : undefined);
   useEffect(() => {
     document.title = `${route?.title || "Property Flow"} · Property Flow`;
     main.current?.focus();
@@ -186,6 +188,9 @@ function Pages() {
           }
         />
       ))}
+      <Route path="/company/properties/:propertyId" element={
+        <Shell><ProtectedRoute permission="property.read"><PropertyDetail /></ProtectedRoute></Shell>
+      } />
       <Route
         path="/platform/companies/:companyId"
         element={

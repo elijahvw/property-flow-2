@@ -14,6 +14,7 @@ import {
   requirePermission,
 } from "./access.js";
 import { digest } from "./sessions.js";
+import { registerPropertyDetail } from "./property-detail.js";
 
 type UserWithAccess = Prisma.UserGetPayload<{
   include: { membership: { include: { company: true } } };
@@ -143,6 +144,7 @@ export function registerApplication(
   origin: string,
 ) {
   const auth = { preValidation: authenticate };
+  registerPropertyDetail(server, db, authenticate);
   const serial = <T>(request: FastifyRequest, run: (tx: Tx) => Promise<T>) =>
     db.$transaction(
       async (tx) => {
