@@ -1,4 +1,5 @@
 export type OperationName =
+  | 'unit.create' | 'unit.update' | 'lease.create' | 'lease.update'
   | 'maintenance.create' | 'maintenance.status'
   | 'page.data.load'
   | 'auth.session.restore' | 'auth.profile.load'

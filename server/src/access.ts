@@ -8,7 +8,8 @@ export type Permission =
   | "members.manage"
   | "resident.self"
   | "resident.assignment.manage"
-  | "maintenance.manage";
+  | "maintenance.manage"
+  | "lease.manage";
 export type Principal = {
   id: string;
   status: string;
@@ -28,8 +29,9 @@ const grants: Record<CompanyRole, Permission[]> = {
     "members.manage",
     "resident.assignment.manage",
     "maintenance.manage",
+    "lease.manage",
   ],
-  manager: ["property.read", "property.write", "resident.assignment.manage", "maintenance.manage"],
+  manager: ["property.read", "property.write", "resident.assignment.manage", "maintenance.manage", "lease.manage"],
   staff: ["property.read"],
   resident: ["resident.self"],
 };

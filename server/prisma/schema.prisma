@@ -24,6 +24,8 @@ model Company {
   memberships CompanyMembership[]
   invitations Invitation[]
   maintenanceRequests MaintenanceRequest[]
+  units Unit[]
+  leases Lease[]
 }
 
 model User {
@@ -37,6 +39,9 @@ model User {
   emailVerified Boolean @default(false)
   identities Identity[]
   maintenanceRequests MaintenanceRequest[]
+  leases Lease[] @relation("LeaseResident")
+  createdLeases Lease[] @relation("LeaseCreator")
+  createdUnits Unit[]
   membership CompanyMembership?
   sessions Session[]
   companyId  String?
@@ -121,6 +126,8 @@ model AuditEvent {
 }
 
 model Property {
+  units Unit[]
+  leases Lease[]
   maintenanceRequests MaintenanceRequest[]
   assignments ResidentPropertyAssignment[]
   id          String   @id @default(cuid())
@@ -168,4 +175,52 @@ model MaintenanceRequest {
   requester User @relation(fields: [requesterId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   @@index([companyId, status, propertyId])
   @@index([companyId, requesterId])
+}
+
+model Unit {
+  createdById String
+  submissionKey String
+  submissionHash String
+  creator User @relation(fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([companyId, createdById, submissionKey])
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  label String
+  status String @default("active")
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  property Property @relation(fields: [propertyId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Restrict)
+  leases Lease[]
+  @@unique([id, propertyId, companyId])
+  @@unique([companyId, propertyId, label])
+  @@index([companyId, propertyId, id])
+}
+model Lease {
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  unitId String
+  residentId String
+  createdById String
+  submissionKey String
+  submissionHash String
+  startsOn DateTime @db.Date
+  endsOn DateTime? @db.Date
+  rentCents Int
+  currency String @default("USD")
+  status String @default("draft")
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  property Property @relation(fields: [propertyId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Restrict)
+  unit Unit @relation(fields: [unitId, propertyId, companyId], references: [id, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
+  resident User @relation("LeaseResident", fields: [residentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  creator User @relation("LeaseCreator", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([companyId, createdById, submissionKey])
+  @@index([companyId, propertyId, id])
+  @@index([companyId, unitId])
 }
