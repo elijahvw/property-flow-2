@@ -31,6 +31,9 @@ export function registerMaintenance(server: FastifyInstance, db: PrismaClient, a
     const companyId = companyScope(request.principal!, permission, request.headers["x-company-id"]);
     return serializable(db, async tx => {
       await tx.$queryRaw`UPDATE "User" SET "updatedAt" = "updatedAt" WHERE id = ${request.principal!.id} RETURNING id`;
+      // SHARE conflicts with Company status UPDATEs but permits parallel maintenance
+      // by different users. Serializable rejects a company changed since this snapshot.
+      await tx.$queryRaw`SELECT id FROM "Company" WHERE id = ${companyId} FOR SHARE`;
       const current = await tx.user.findUnique({ where: { id: request.principal!.id }, include: { membership: { include: { company: true } } } });
       if (!current) throw new AccessError(403, "ACCESS_DENIED", "Access is unavailable.");
       companyScope(current, permission, companyId);

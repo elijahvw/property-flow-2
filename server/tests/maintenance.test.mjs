@@ -112,6 +112,70 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  assert.equal((await admin.query('SELECT count(*)::int n FROM "AuditEvent" WHERE action=\'maintenance.created\'')).rows[0].n,2);
  assert.equal((await admin.query('SELECT count(*)::int n FROM "AuditEvent" WHERE action=\'maintenance.status.changed\'')).rows[0].n,4);
  });
+ await t.test('company suspension orders before and after maintenance create/replay/read/status',async()=>{
+  await admin.query(`UPDATE "User" SET "platformRole"='owner' WHERE id='owner'`);
+  const operations=[
+   ['create','resident','POST','/api/resident/maintenance',{...valid,submissionKey:randomUUID(),title:'Suspension race'}],
+   ['replay','resident','POST','/api/resident/maintenance',valid],
+   ['resident read','resident','GET','/api/resident/maintenance',null],
+   ['manager read','manager','GET','/api/company/maintenance',null],
+   ['status','manager','PATCH',`/api/company/maintenance/${id}`,{status:'open'}],
+  ];
+  const waitBlocked=async()=>{
+   for(let attempt=0;attempt<200;attempt++){
+    if((await admin.query(`SELECT pid FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid))>0 AND query LIKE '%Company%'`)).rows.length)return;
+    await new Promise(resolve=>setTimeout(resolve,10));
+   }
+   assert.fail('operation did not reach the shared Company lock');
+  };
+  // Suspension-leading operations must retry their older snapshots and deny access.
+  for(const [label,user,method,path,payload] of operations){
+   const leader=await admin.connect();let pending;
+   const before=(await admin.query(`SELECT count(*)::int n FROM "AuditEvent"`)).rows[0].n;
+   try{
+    await leader.query('BEGIN');await leader.query(`UPDATE "Company" SET status='suspended' WHERE id='a'`);
+    pending=call(user,method,path,payload);await waitBlocked();
+    await leader.query('COMMIT');assert.equal((await pending).statusCode,403,label);
+    assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent"`)).rows[0].n,before,label+' must not write audit');
+   }finally{await leader.query('ROLLBACK');leader.release();if(pending)await pending;await admin.query(`UPDATE "Company" SET status='active' WHERE id='a'`);}
+  }
+  // Pause each real maintenance route AFTER authorization, before its data access.
+  // The actual platform suspension API must wait until that transaction commits.
+  for(const [label,user,method,path,payload] of operations){
+   let entered,release;
+   const reached=new Promise(resolve=>entered=resolve),gate=new Promise(resolve=>release=resolve);
+   let armed=true;
+   const gatedDb=new Proxy(db,{get(target,key){
+    if(key==='$transaction')return (run,options)=>target.$transaction(tx=>run(new Proxy(tx,{get(transaction,field){
+     if(field==='maintenanceRequest')return new Proxy(transaction.maintenanceRequest,{get(delegate,operation){
+      const fn=Reflect.get(delegate,operation);
+      if(typeof fn!=='function')return fn;
+      return async(...args)=>{if(armed){armed=false;entered();await gate;}return fn.apply(delegate,args);};
+     }});
+     const value=Reflect.get(transaction,field);return typeof value==='function'?value.bind(transaction):value;
+    }})),options);
+    const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;
+   }});
+   const gatedApp=Fastify();const gatedAuth=await registerSessions(gatedApp,gatedDb,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(gatedApp,gatedDb,gatedAuth,'https://app.test');
+   let maintenance,suspension;
+   try{
+    maintenance=gatedApp.inject({method,url:path,headers:{cookie:`__Host-pf-session=token-${user}`,origin:'https://app.test','x-csrf-token':'csrf'},...(payload?{payload}:{})});
+    // inject is lazy unless its thenable is consumed.
+    maintenance=Promise.resolve(maintenance);
+    await Promise.race([reached,new Promise((_,reject)=>{const timer=setTimeout(()=>reject(new Error('maintenance gate timed out')),3000);timer.unref();})]);
+    suspension=call('owner','PATCH','/api/platform/companies/a',{name:'a',status:'suspended'});
+    await waitBlocked();
+    assert.equal((await admin.query(`SELECT status FROM "Company" WHERE id='a'`)).rows[0].status,'active',label+' suspension must not commit first');
+    release();assert.equal((await maintenance).statusCode,200,label);
+    assert.equal((await suspension).statusCode,200,label+' suspension');
+    assert.equal((await call(user,method,path,payload)).statusCode,403,label+' after suspension');
+   }finally{release();if(maintenance)await maintenance;if(suspension)await suspension;await gatedApp.close();await admin.query(`UPDATE "Company" SET status='active' WHERE id='a'`);}
+  }
+  // Restore the established fixture and its audit counts for subsequent regressions.
+  await admin.query(`DELETE FROM "AuditEvent" WHERE "targetId" IN (SELECT id FROM "MaintenanceRequest" WHERE title='Suspension race')`);
+  await admin.query(`DELETE FROM "MaintenanceRequest" WHERE title='Suspension race'`);
+  await admin.query(`UPDATE "User" SET "platformRole"=NULL WHERE id='owner'`);
+ });
  await t.test('forced RLS and composite property boundary',async()=>{
  assert.deepEqual((await admin.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE relname='MaintenanceRequest'")).rows[0],{relrowsecurity:true,relforcerowsecurity:true});
  assert.deepEqual(await db.maintenanceRequest.findMany(),[]);
