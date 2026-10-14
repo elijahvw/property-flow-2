@@ -1,122 +1,127 @@
-import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
-import { useAuth0, User } from '@auth0/auth0-react';
-import axios from 'axios';
-import { loadProfile, roleFromClaims, matchingPortalRole } from '../auth-profile';
-import { startOperation, monitorOperation } from '../operations';
-
-export type UserRole = 'tenant' | 'landlord' | 'admin';
-interface AuthContextType {
-  user: User | undefined;
-  dbUser: any | null;
-  role: UserRole | null;
-  companyId: string | null;
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+} from "react";
+import { api, ApiError, setCsrfToken } from "../api";
+import { monitorOperation } from "../operations";
+import type { Capability } from "../navigation";
+export type Bootstrap = {
+  user: {
+    id: string;
+    name: string | null;
+    email: string;
+    emailVerified: boolean;
+    status: string;
+    platformRole: string | null;
+  };
+  membership: null | {
+    companyId: string;
+    version: number;
+    role: string;
+    status: string;
+    company: { id: string; name: string; status: string };
+  };
+  permissions: Capability[];
+  destination: string;
+  csrfToken: string;
+};
+type Auth = {
+  user: Bootstrap["user"] | undefined;
+  data: Bootstrap | null;
   loading: boolean;
   error: string | null;
-  signOut: () => void;
-  signIn: () => void;
-  isConfigured: boolean;
   refreshUser: () => Promise<void>;
-}
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const auth0 = useAuth0();
-  const claimRole = roleFromClaims(auth0.user?.['https://propertyflow.com/roles']);
-  const isConfigured = !!import.meta.env.VITE_AUTH0_DOMAIN && !!import.meta.env.VITE_AUTH0_CLIENT_ID;
-  const [role, setRole] = useState<UserRole | null>(null);
-  const [dbUser, setDbUser] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const requestVersion = useRef(0);
-  const sessionOperation = useRef<ReturnType<typeof startOperation> | null>(null);
-  const sessionTimer = useRef<ReturnType<typeof setTimeout>>();
-
-  useEffect(() => {
-    if (!isConfigured) return;
-    sessionOperation.current = startOperation('auth.session.restore', 11000);
-    sessionTimer.current = setTimeout(() => {
-      sessionOperation.current?.fail(null);
-      setError('We could not restore your sign-in promptly. Sign in again or reload to retry.');
-      setLoading(false);
-    }, 10000);
-    return () => {
-      clearTimeout(sessionTimer.current);
-      sessionOperation.current?.abandon();
-    };
-  }, [isConfigured]);
-
+  signIn: () => void;
+  signOut: () => void;
+  can: (p: Capability) => boolean;
+};
+const AuthContext = createContext<Auth | undefined>(undefined);
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [data, setData] = useState<Bootstrap | null>(null),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState<string | null>(null);
+  const version = useRef(0);
   const refreshUser = useCallback(async () => {
-    const version = ++requestVersion.current;
-    if (!isConfigured || !auth0.isAuthenticated) return;
-    setLoading(true);
-    setError(null);
+    const current = ++version.current;
     try {
-      const profile = await monitorOperation('auth.profile.load', () => loadProfile(
-        () => auth0.getAccessTokenSilently({ timeoutInSeconds: 8 }),
-        async (token, signal) => (await axios.get('/api/me', {
-          headers: { Authorization: `Bearer ${token}` }, timeout: 8000, signal,
-        })).data,
-      ));
-      if (version !== requestVersion.current) return;
-      setDbUser(profile);
-      setRole(matchingPortalRole(claimRole, profile.role));
-    } catch {
-      if (version !== requestVersion.current) return;
-      setDbUser(null);
-      setRole(null);
-      setError('We could not load your account. Sign in again or reload to retry.');
+      const result = await monitorOperation("auth.session.restore", () =>
+        api<Bootstrap>("/api/bootstrap"),
+      );
+      if (current !== version.current) return;
+      setCsrfToken(result.csrfToken);
+      setData(result);
+      setError(null);
+    } catch (error) {
+      if (current !== version.current) return;
+      setData(null);
+      setCsrfToken("");
+      setError(
+        error instanceof ApiError && error.status === 401
+          ? null
+          : "We could not load your account. Try again.",
+      );
     } finally {
-      if (version === requestVersion.current) setLoading(false);
+      if (current === version.current) setLoading(false);
     }
-  }, [isConfigured, auth0.isAuthenticated, auth0.getAccessTokenSilently, claimRole]);
-
+  }, []);
   useEffect(() => {
-    if (!isConfigured) {
-      setLoading(false);
-      return;
-    }
-    if (auth0.isLoading) return;
-    clearTimeout(sessionTimer.current);
-    if (auth0.error) {
-      sessionOperation.current?.fail(null);
-      setError('We could not restore your sign-in. Sign in again to continue.');
-      setRole(null);
-      setDbUser(null);
-      setLoading(false);
-    } else {
-      sessionOperation.current?.succeed();
-      if (auth0.isAuthenticated) {
-        void refreshUser();
-      } else {
-        setError(null);
-        setRole(null);
-        setDbUser(null);
-        setLoading(false);
-      }
-    }
-    return () => { ++requestVersion.current; };
-  }, [isConfigured, auth0.isLoading, auth0.isAuthenticated, auth0.error, refreshUser]);
-
+    void refreshUser();
+    const expired = () => {
+      setData(null);
+      setCsrfToken("");
+    };
+    const focus = () => {
+      void refreshUser();
+    };
+    window.addEventListener("session-expired", expired);
+    window.addEventListener("focus", focus);
+    return () => {
+      ++version.current;
+      window.removeEventListener("session-expired", expired);
+      window.removeEventListener("focus", focus);
+    };
+  }, [refreshUser]);
   const signIn = () => {
-    if (!isConfigured) return;
-    setError(null);
-    // Interactive redirect can use the Auth0 first-party session when silent
-    // restoration is blocked by browser cookie privacy settings.
-    void auth0.loginWithRedirect({
-      appState: { returnTo: window.location.pathname === '/' ? '/dashboard' : window.location.pathname },
-    }).catch(() => setError('Unable to open sign-in. Please try again.'));
+    window.location.assign(
+      `/api/auth/login?returnTo=${encodeURIComponent(window.location.pathname === "/" ? "/dashboard" : window.location.pathname)}`,
+    );
   };
   const signOut = () => {
-    if (isConfigured) void auth0.logout({ logoutParams: { returnTo: window.location.origin } });
+    void api<{ logoutUrl: string }>("/api/auth/logout", {
+      method: "POST",
+      body: {},
+    })
+      .then((result) => {
+        ++version.current;
+        setData(null);
+        setCsrfToken("");
+        window.location.assign(result.logoutUrl);
+      })
+      .catch(() => setError("Unable to sign out. Please try again."));
   };
   return (
-    <AuthContext.Provider value={{
-      user: auth0.user, dbUser, role, companyId: dbUser?.companyId || null,
-      loading, error, signOut, signIn, isConfigured, refreshUser,
-    }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider
+      value={{
+        data,
+        user: data?.user,
+        loading,
+        error,
+        refreshUser,
+        signIn,
+        signOut,
+        can: (p) => !!data?.permissions.includes(p),
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
   );
-};
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within an AuthProvider');
-  return context;
-};
+}
+export function useAuth() {
+  const value = useContext(AuthContext);
+  if (!value) throw new Error("AuthProvider is required");
+  return value;
+}

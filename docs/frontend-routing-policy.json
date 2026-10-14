@@ -1,0 +1,23 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CreateFrontendRoutingFunction",
+      "Effect": "Allow",
+      "Action": "cloudfront:CreateFunction",
+      "Resource": "*"
+    },
+    {
+      "Sid": "ManagePropertyFlowDevFrontendRouting",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:DescribeFunction",
+        "cloudfront:GetFunction",
+        "cloudfront:UpdateFunction",
+        "cloudfront:PublishFunction",
+        "cloudfront:DeleteFunction"
+      ],
+      "Resource": "arn:aws:cloudfront::800754316001:function/propertyflow-dev-routes"
+    }
+  ]
+}

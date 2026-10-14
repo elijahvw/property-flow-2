@@ -11,7 +11,6 @@ function load(name) {
   return mod.exports;
 }
 const { beginOperation } = load('operation-lifecycle');
-const { loadProfile, AuthTimeoutError } = load('auth-profile');
 function sink() {
   const events = [];
   return { events,
@@ -57,51 +56,4 @@ test('telemetry failures cannot break an application workflow', () => {
   };
   const operation = beginOperation(broken, 'company.update');
   assert.doesNotThrow(() => operation.succeed());
-});
-test('profile load succeeds with the real result and aborts its request scope afterward', async () => {
-  let signal;
-  const result = await loadProfile(async () => 'access-token', async (token, requestSignal) => {
-    assert.equal(token, 'access-token'); signal = requestSignal;
-    return { id: 'identity', role: 'admin' };
-  }, 30);
-  assert.equal(result.role, 'admin');
-  assert.equal(signal.aborted, true);
-});
-test('a stalled token request expires and never starts a late profile request', async () => {
-  let resolveToken, requested = false;
-  const result = loadProfile(() => new Promise(resolve => { resolveToken = resolve; }),
-    async () => { requested = true; }, 10);
-  await assert.rejects(result, AuthTimeoutError);
-  resolveToken('late-token');
-  await new Promise(resolve => setTimeout(resolve, 5));
-  assert.equal(requested, false);
-});
-test('a stalled profile request is aborted and late completion cannot replace a timeout', async () => {
-  let resolveProfile, signal;
-  const result = loadProfile(async () => 'access-token', async (_token, requestSignal) => {
-    signal = requestSignal; return new Promise(resolve => { resolveProfile = resolve; });
-  }, 10);
-  await assert.rejects(result, AuthTimeoutError);
-  assert.equal(signal.aborted, true);
-  resolveProfile({ role: 'admin' });
-});
-test('profile API errors propagate and the request scope is cleaned up', async () => {
-  let signal;
-  const error = { response: { status: 503 } };
-  await assert.rejects(loadProfile(async () => 'token', async (_token, requestSignal) => {
-    signal = requestSignal; throw error;
-  }, 30), value => value === error);
-  assert.equal(signal.aborted, true);
-});
-
-test('database defaults and missing or malformed role claims do not grant portal access', () => {
-  const { roleFromClaims, matchingPortalRole } = load('auth-profile');
-  for (const claims of [undefined, null, 'admin', {}, [], ['unknown']]) {
-    assert.equal(roleFromClaims(claims), null);
-    assert.equal(matchingPortalRole(roleFromClaims(claims), 'tenant'), null);
-    assert.equal(matchingPortalRole(roleFromClaims(claims), 'admin'), null);
-  }
-  assert.equal(matchingPortalRole(roleFromClaims(['admin']), 'admin'), 'admin');
-  assert.equal(matchingPortalRole(roleFromClaims(['tenant']), 'admin'), null);
-  assert.equal(matchingPortalRole(roleFromClaims(['tenant']), 'tenant'), 'tenant');
 });

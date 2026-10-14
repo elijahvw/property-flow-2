@@ -4,8 +4,9 @@ resource "aws_ecr_repository" "app" {
 }
 
 locals {
+  runtime_database_url = format("postgresql://propertyflow_runtime:%s@%s:5432/%s", urlencode(var.vars.runtime_db_password), var.vars.db_endpoint, urlencode(var.vars.db_name))
   database_url = format(
-    "postgresql://%s:%s@%s:5432/%s?schema=public&sslmode=no-verify",
+    "postgresql://%s:%s@%s:5432/%s?schema=public&sslmode=verify-full",
     urlencode(var.vars.db_user),
     urlencode(var.vars.db_password),
     var.vars.db_endpoint,
@@ -96,8 +97,11 @@ resource "aws_ecs_task_definition" "app" {
         { name = "AUTH0_DOMAIN", value = var.vars.auth0_domain },
         { name = "AUTH0_AUDIENCE", value = var.vars.auth0_audience },
         { name = "VITE_AUTH0_AUDIENCE", value = var.vars.auth0_audience },
-        { name = "AUTH0_MANAGEMENT_CLIENT_ID", value = var.vars.auth0_m2m_client_id },
-        { name = "AUTH0_MANAGEMENT_CLIENT_SECRET", value = var.vars.auth0_m2m_client_secret },
+        { name = "APP_ORIGIN", value = var.vars.app_origin },
+        { name = "CLOUDFRONT_ORIGIN_SECRET", value = var.vars.cloudfront_origin_secret },
+        { name = "AUTH0_WEB_CLIENT_ID", value = var.vars.auth0_web_client_id },
+        { name = "AUTH0_WEB_CLIENT_SECRET", value = var.vars.auth0_web_client_secret },
+        { name = "RUNTIME_DATABASE_URL", value = local.runtime_database_url },
         { name = "DATABASE_URL", value = local.database_url },
         { name = "DD_TRACE_AGENT_HOSTNAME", value = "localhost" },
         { name = "DD_LOGS_INJECTION", value = "true" },

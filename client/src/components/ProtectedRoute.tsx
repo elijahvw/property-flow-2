@@ -1,61 +1,42 @@
-import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth, UserRole } from '../context/AuthContext';
-
-interface ProtectedRouteProps {
+import React from "react";
+import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import type { Capability } from "../navigation";
+export default function ProtectedRoute({
+  children,
+  permission,
+}: {
   children: React.ReactNode;
-  allowedRoles?: UserRole[];
-}
-
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
-  const { user, role, loading, error, signIn, isConfigured } = useAuth();
-  const location = useLocation();
-
-  if (loading) {
+  permission?: Capability;
+}) {
+  const { user, loading, error, signIn, refreshUser, can } = useAuth();
+  if (loading)
     return (
-      <div className="loading-container">
-        <div className="loader" role="status">Restoring your sign-in…</div>
-      </div>
+      <section className="status-panel" role="status">
+        Restoring your sign-in…
+      </section>
     );
-  }
-
-  if (!isConfigured) {
+  if (!user || error)
     return (
-      <div className="error-container">
-        <h1>Authentication Not Configured</h1>
-        <p>This page is protected but Auth0 is not configured in the environment variables.</p>
-        <button className="btn-primary" onClick={() => window.location.href = '/'}>Go Home</button>
-      </div>
-    );
-  }
-
-  if (error || !user) {
-    return (
-      <div className="error-container">
-        <h1>{error ? 'Unable to load your account' : 'Sign in to continue'}</h1>
+      <section className="status-panel">
+        <h1>{error ? "Unable to load your account" : "Sign in to continue"}</h1>
         {error && <p role="alert">{error}</p>}
-        <button className="btn-primary" onClick={signIn}>Sign In</button>
-        <button className="btn-secondary" onClick={() => window.location.reload()}>Reload</button>
-        <button className="btn-secondary" onClick={() => window.location.href = '/'}>Go Home</button>
-      </div>
+        <div className="actions">
+          <button onClick={signIn}>Sign in</button>
+          <button className="secondary" onClick={() => void refreshUser()}>
+            Try again
+          </button>
+          <Link to="/">Go home</Link>
+        </div>
+      </section>
     );
-  }
-
-  if (allowedRoles && !role) {
+  if (permission && !can(permission))
     return (
-      <div className="error-container">
-        <h1>Account access pending</h1>
-        <p>Your account needs a role before you can open this page. Contact your administrator, then sign out and sign in again after access is assigned.</p>
-        <button className="btn-secondary" onClick={() => window.location.href = '/'}>Go Home</button>
-      </div>
+      <section className="status-panel">
+        <h1>Access unavailable</h1>
+        <p>Your account does not currently have access to this page.</p>
+        <Link to="/access">View account access</Link>
+      </section>
     );
-  }
-
-  if (allowedRoles && !allowedRoles.includes(role!)) {
-    return <Navigate to="/" replace />;
-  }
-
   return <>{children}</>;
-};
-
-export default ProtectedRoute;
+}

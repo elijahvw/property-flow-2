@@ -10,3 +10,8 @@ dist/
 *.tfstate
 *.tfstate.backup
 .terraform.lock.hcl
+
+work-cache/
+
+__pycache__/
+*.py[cod]

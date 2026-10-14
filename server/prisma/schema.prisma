@@ -20,19 +20,100 @@ model Company {
   updatedAt DateTime   @updatedAt
   users     User[]
   properties Property[]
+  status     String @default("active")
+  memberships CompanyMembership[]
+  invitations Invitation[]
 }
 
 model User {
   id         String   @id // This will be the Auth0 ID
   email      String   @unique
   name       String?
-  role       String   @default("tenant")
+  role       String   @default("unassigned") // Legacy migration evidence; never authorizes requests.
+  platformRole String?
+  status     String   @default("active")
+  accessInitializedAt DateTime?
+  emailVerified Boolean @default(false)
+  identities Identity[]
+  membership CompanyMembership?
+  sessions Session[]
   companyId  String?
   company    Company? @relation(fields: [companyId], references: [id])
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   @@index([companyId])
+}
+
+model Identity {
+  id String @id @default(cuid())
+  issuer String
+  subject String
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  @@unique([issuer, subject])
+}
+
+model CompanyMembership {
+  userId String @id
+  companyId String
+  role String
+  status String @default("active")
+  version Int @default(1)
+  user User @relation(fields: [userId], references: [id])
+  company Company @relation(fields: [companyId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([companyId])
+}
+
+model Invitation {
+  id String @id @default(cuid())
+  companyId String
+  company Company @relation(fields: [companyId], references: [id])
+  email String
+  role String
+  tokenHash String @unique
+  expiresAt DateTime
+  acceptedAt DateTime?
+  revokedAt DateTime?
+  createdBy String
+  createdAt DateTime @default(now())
+  @@index([companyId])
+}
+
+model Session {
+  tokenHash String @id
+  csrfToken String
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  idleExpiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model LoginTransaction {
+  stateHash String @id
+  bindingHash String
+  verifier String
+  nonce String
+  returnTo String
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+
+model AuditEvent {
+  id String @id @default(cuid())
+  actorId String
+  companyId String?
+  action String
+  targetId String?
+  detail Json?
+  requestId String
+  createdAt DateTime @default(now())
+  @@index([companyId, createdAt])
 }
 
 model Property {

@@ -1,6 +1,8 @@
 export type OperationName =
+  | 'page.data.load'
   | 'auth.session.restore' | 'auth.profile.load'
   | 'admin.users.load' | 'admin.companies.load'
+  | 'account.update' | 'account.status' | 'invitation.create' | 'invitation.accept' | 'membership.update' | 'ownership.transfer' | 'property.create'
   | 'company.create' | 'company.details.load' | 'company.update' | 'company.user.assign';
 type Options = { operationKey: string; context?: Record<string, string | number> };
 export interface OperationSink {

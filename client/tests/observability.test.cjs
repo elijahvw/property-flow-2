@@ -28,3 +28,13 @@ test('trace headers are excluded from Auth0, other tenants, assets and lookalike
     assert.equal(isFirstPartyApiUrl(url, origin), false, url);
   }
 });
+
+test('monitoring removes OAuth query parameters and invitation fragments', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/observability.ts'), 'utf8');
+  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+  const mod = { exports: {} };
+  new Function('module', 'exports', compiled)(mod, mod.exports);
+  const event = { view: { url: 'https://app.test/?code=secret&state=private', referrer: 'https://app.test/invite#accept-secret' }, resource: { url: 'https://app.test/api/auth/callback?code=secret' } };
+  mod.exports.scrubRumEvent(event);
+  assert.doesNotMatch(JSON.stringify(event), /secret|private|code=|state=/);
+});

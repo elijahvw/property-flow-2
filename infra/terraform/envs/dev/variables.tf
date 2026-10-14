@@ -53,3 +53,23 @@ variable "datadog_site" {
   type    = string
   default = "datadoghq.com"
 }
+
+variable "app_origin" {
+  type    = string
+  default = "https://drfbeumseaytt.cloudfront.net"
+}
+variable "auth0_web_client_id" {
+  type = string
+  validation {
+    condition     = length(var.auth0_web_client_id) > 0
+    error_message = "Set the AUTH0_WEB_CLIENT_ID GitHub Actions variable before deployment."
+  }
+}
+variable "auth0_web_client_secret" {
+  type      = string
+  sensitive = true
+  validation {
+    condition     = length(var.auth0_web_client_secret) > 0
+    error_message = "Set the AUTH0_WEB_CLIENT_SECRET GitHub Actions secret before deployment."
+  }
+}

@@ -1,501 +1,110 @@
-import fastify from 'fastify';
-import { Auth0ReadError, readError, listAdminUsers, createManagementTokenCache, createManagementReader } from './admin-users.js';
-import { registerCompanyManagement } from './company-management.js';
-import { authenticate } from './authenticate.js';
-import { synchronizeUser, UserProfileError } from './user-sync.js';
-import cors from '@fastify/cors';
-import auth0 from 'fastify-auth0-verify';
-import axios from 'axios';
-import tracer from 'dd-trace';
-import dotenv from 'dotenv';
-import { Prisma } from '@prisma/client';
-import { prisma } from './lib/prisma.js';
-
-// Extend Fastify types
-declare module 'fastify' {
-  interface FastifyRequest {
-    dbUser?: any;
-  }
-}
+import fastify, { type FastifyError } from "fastify";
+import tracer from "dd-trace";
+import dotenv from "dotenv";
+import { prisma } from "./lib/prisma.js";
+import { registerSessions, readAuthConfig } from "./sessions.js";
+import { registerApplication } from "./application.js";
+import { AccessError } from "./access.js";
 
 dotenv.config();
-
-const server = fastify({ logger: true });
-
-server.register(cors, {
-  origin: '*', // In production, restrict this
-});
-
-// Health check endpoint for ALB (registered BEFORE auth)
-server.get('/', async () => {
-  return { status: 'ok', timestamp: new Date().toISOString() };
-});
-
-const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN || '';
-const AUTH0_CLIENT_ID = process.env.AUTH0_MANAGEMENT_CLIENT_ID || '';
-const AUTH0_CLIENT_SECRET = process.env.AUTH0_MANAGEMENT_CLIENT_SECRET || '';
-const AUTH0_AUDIENCE = process.env.AUTH0_AUDIENCE || process.env.VITE_AUTH0_AUDIENCE || '';
-
-server.log.info({
-  auth0Domain: AUTH0_DOMAIN ? 'SET' : 'MISSING',
-  auth0Audience: AUTH0_AUDIENCE ? 'SET' : 'MISSING',
-  auth0ManagementClientId: AUTH0_CLIENT_ID ? 'SET' : 'MISSING',
-}, 'Starting server configuration');
-
-if (AUTH0_DOMAIN && AUTH0_AUDIENCE) {
-  server.register(auth0 as any, {
-    domain: AUTH0_DOMAIN,
-    audience: AUTH0_AUDIENCE,
-  });
-} else {
-  server.log.error('CRITICAL: AUTH0_DOMAIN or AUTH0_AUDIENCE not set. Auth routes will fail.');
-}
-
-
-
-const getPrismaDriverCause = (error: Prisma.PrismaClientKnownRequestError) => {
-  const meta = error.meta as { driverAdapterError?: { cause?: { kind?: string; reason?: string } } } | undefined;
-  return meta?.driverAdapterError?.cause;
-};
-
-const isDatabaseUnavailableError = (error: unknown) => {
-  if (error instanceof Prisma.PrismaClientInitializationError) {
-    return true;
-  }
-
-  if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    if (error.code === 'P2010') {
-      const cause = getPrismaDriverCause(error);
-      if (cause?.kind === 'TlsConnectionError') {
-        return true;
-      }
-    }
-
-    return ['P1001', 'P1002', 'P1008', 'P1017', 'P2021', 'P2022'].includes(error.code);
-  }
-
-  return false;
-};
-
-const getDatabaseErrorResponse = (error: unknown) => {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    if (['P2021', 'P2022'].includes(error.code)) {
-      return {
-        status: 503,
-        payload: {
-          error: 'Database schema is not ready',
-          code: error.code,
-        },
-      };
-    }
-
-    if (['P1001', 'P1002', 'P1008', 'P1017'].includes(error.code)) {
-      return {
-        status: 503,
-        payload: {
-          error: 'Database is unavailable',
-          code: error.code,
-        },
-      };
-    }
-
-    if (error.code === 'P2010') {
-      const cause = getPrismaDriverCause(error);
-      if (cause?.kind === 'TlsConnectionError') {
-        return {
-          status: 503,
-          payload: {
-            error: 'Database TLS connection failed',
-            code: error.code,
-            reason: cause.reason || 'TLS connection error',
-          },
-        };
-      }
-    }
-  }
-
-  if (error instanceof Prisma.PrismaClientInitializationError) {
-    return {
-      status: 503,
-      payload: {
-        error: 'Database is unavailable',
-        code: 'PRISMA_INIT',
-        reason: error.message,
-      },
-    };
-  }
-
-  const fallbackCode =
-    typeof error === 'object' && error !== null && 'code' in error && typeof (error as { code?: unknown }).code === 'string'
-      ? (error as { code: string }).code
-      : 'DB_UNKNOWN';
-  const fallbackReason = error instanceof Error ? error.message : 'Unknown database operation failure';
-
-  return {
-    status: 503,
-    payload: {
-      error: 'Database operation failed',
-      code: fallbackCode,
-      reason: fallbackReason,
+const server = fastify({
+  bodyLimit: 65536,
+  logger: {
+    redact: [
+      "req.headers.cookie",
+      "req.headers.authorization",
+      "res.headers.set-cookie",
+    ],
+    serializers: {
+      req: (request) => ({
+        method: request.method,
+        url: request.url?.split("?")[0],
+        id: request.id,
+      }),
     },
-  };
-};
-
-// Coalesce token requests and honor the real token expiry.
-const managementTokens = createManagementTokenCache(async () => {
-  const params = new URLSearchParams({
-    client_id: AUTH0_CLIENT_ID, client_secret: AUTH0_CLIENT_SECRET,
-    audience: `https://${AUTH0_DOMAIN}/api/v2/`, grant_type: 'client_credentials',
-  });
-  try {
-    const response = await axios.post(`https://${AUTH0_DOMAIN}/oauth/token`, params, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 5000,
-    });
-    return response.data;
-  } catch (error) {
-    // Axios errors include credentials and headers; expose only safe metadata.
-    throw readError('token', error);
-  }
+  },
 });
-const getManagementToken = () => managementTokens.get();
-
-const managementRead = createManagementReader(managementTokens, async (path, token) => {
-  const response = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/${path}`, {
-    headers: { Authorization: `Bearer ${token}` }, timeout: 5000,
-  });
-  return response.data;
+server.setErrorHandler((failure, request, reply) => {
+  const error = (failure instanceof Error ? failure : new Error("REQUEST_FAILED")) as FastifyError;
+  const code = (error as any).code;
+  const status =
+    error instanceof AccessError
+      ? error.statusCode
+      : error.statusCode === 429
+        ? 429
+        : code === "P2025"
+          ? 404
+          : ["P2002", "P2034"].includes(code)
+            ? 409
+            : error.validation
+              ? 400
+              : 503;
+  const message =
+    error instanceof AccessError
+      ? error.message
+      : status === 429
+        ? "Too many sign-in attempts. Please wait a minute."
+        : status === 404
+          ? "Record not found."
+          : status === 409
+            ? "The record changed or conflicts with an existing record. Refresh and try again."
+            : status === 400
+              ? "Check the submitted fields."
+              : "The service is temporarily unavailable. Please try again.";
+  const safeCode =
+    error instanceof AccessError ? error.code : `REQUEST_${status}`;
+  const safeFrames = (error.stack || "")
+    .split("\n")
+    .filter((line) => /^\s+at /.test(line))
+    .slice(0, 12)
+    .join("\n");
+  request.log.warn(
+    {
+      code: safeCode,
+      errorType: error.name,
+      status,
+      requestId: request.id,
+      ...(status >= 500 ? { stack: safeFrames } : {}),
+    },
+    "Request failed",
+  );
+  if (status >= 500) {
+    const safeError = new Error(safeCode);
+    safeError.name = error.name;
+    safeError.stack = `${error.name}: ${safeCode}\n${safeFrames}`;
+    tracer.scope().active()?.setTag("error", safeError);
+  }
+  reply
+    .status(status)
+    .send({ error: message, code: safeCode, requestId: request.id });
 });
-
-// Authenticated routes - move definitions out for better scope visibility
-// Middleware to ensure user is synced with DB and check company access
-const withUserSync = async (request: any, reply: any) => {
-  if (!request.user) {
-    return reply.status(401).send({ error: 'Unauthorized: No user in request' });
-  }
-  
-  const auth0User = request.user;
-  
-  try {
-    const user = await synchronizeUser(prisma.user, auth0User, async () => {
-      const response = await axios.get(`https://${AUTH0_DOMAIN}/userinfo`, {
-        headers: { Authorization: request.headers.authorization },
-        timeout: 5000,
-      });
-      return response.data;
-    });
-
-    request.dbUser = user;
-
-    // Multi-tenant check: if X-Company-ID is provided, verify access
-    const companyId = request.headers['x-company-id'] as string;
-    if (companyId && user.role !== 'admin') {
-      if (user.companyId !== companyId) {
-        return reply.status(403).send({ error: 'Forbidden: You do not belong to this company' });
-      }
-    }
-  } catch (error: any) {
-    if (error instanceof UserProfileError) {
-      server.log.warn({ code: error.code, status: error.status }, 'User profile synchronization failed');
-      return reply.status(error.status).send({ error: error.message, code: error.code });
-    }
-    server.log.error({ err: error }, 'User sync failed');
-    const dbError = getDatabaseErrorResponse(error);
-    return reply.status(dbError.status).send(dbError.payload);
-  }
-};
-
-// --- ROUTES ---
-registerCompanyManagement(server, prisma, [authenticate(server), withUserSync]);
-
-// GET current user profile
-server.get('/api/me', { preValidation: [authenticate(server), withUserSync] }, async (request: any, reply) => {
-  return request.dbUser;
+server.addHook("onResponse", async (request) => {
+  const span = tracer.scope().active();
+  span?.setTag("http.url", request.url.split("?")[0]);
+  span?.setTag("http.query", "");
 });
-
-// Unauthenticated liveness check: never block on dependencies.
-server.get('/api/health', async () => {
-  return { status: 'ok', timestamp: new Date().toISOString() };
+server.get("/", async () => ({ status: "ok" }));
+server.get("/api/health", async () => ({ status: "ok" }));
+server.get("/api/ready", async () => {
+  await prisma.$queryRaw`SELECT 1`;
+  return { status: "ok", db: "connected" };
 });
-
-// Unauthenticated readiness check: verifies database connectivity.
-server.get('/api/ready', async (_request, reply) => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-
-    return { status: 'ok', timestamp: new Date().toISOString(), db: 'connected' };
-  } catch (error) {
-    server.log.error({ err: error }, 'Readiness check failed');
-    const dbError = getDatabaseErrorResponse(error);
-    const payload = dbError.payload as { code?: string; reason?: string; error?: string };
-
-    // Any DB read failure means the service is not ready.
-    return reply.status(503).send({
-      statusCode: 503,
-      status: 'error',
-      timestamp: new Date().toISOString(),
-      db: 'unavailable',
-      code: payload.code ?? 'DB_READY_CHECK_FAILED',
-      reason: payload.reason ?? payload.error ?? (error instanceof Error ? error.message : 'Unknown DB readiness failure'),
-    });
-  }
-});
-
-// GET all companies (Admin only)
-server.get('/api/companies', { preValidation: [authenticate(server), withUserSync] }, async (request: any, reply) => {
-  if (request.dbUser.role !== 'admin') {
-    return reply.status(403).send({ error: 'Forbidden' });
-  }
-  return prisma.company.findMany({
-    include: { _count: { select: { users: true, properties: true } } }
-  });
-});
-
-// CREATE company (Admin only)
-server.post('/api/companies', { preValidation: [authenticate(server), withUserSync] }, async (request: any, reply) => {
-  if (request.dbUser.role !== 'admin') {
-    return reply.status(403).send({ error: 'Forbidden' });
-  }
-  const { name, domain } = request.body as any;
-  try {
-    return await prisma.company.create({
-      data: { name, domain }
-    });
-  } catch (error: any) {
-    return reply.status(400).send({ error: 'Failed to create company', details: error.message });
-  }
-});
-
-// ASSIGN user to company (Admin only)
-server.post('/api/companies/:companyId/users/:userId', { preValidation: [authenticate(server), withUserSync] }, async (request: any, reply) => {
-  if (request.dbUser.role !== 'admin') {
-    return reply.status(403).send({ error: 'Forbidden' });
-  }
-  const { companyId, userId } = request.params as any;
-  try {
-    return await prisma.user.update({
-      where: { id: decodeURIComponent(userId) },
-      data: { companyId: (companyId === 'none' || companyId === '') ? null : companyId }
-    });
-  } catch (error: any) {
-    return reply.status(400).send({ error: 'Failed to assign user', details: error.message });
-  }
-});
-
-// GET all users
-server.get('/api/users', { preValidation: [authenticate(server), withUserSync] }, async (request: any, reply) => {
-  // Only allow admins
-  if (request.dbUser.role !== 'admin') {
-    return reply.status(403).send({ error: 'Forbidden' });
-  }
-  
-  const companyId = request.headers['x-company-id'] as string;
-  
-  try {
-    const allUsers = await managementRead<any[]>('users', 'users');
-    const localUsers = await prisma.user.findMany({ include: { company: true } });
-    return await listAdminUsers(allUsers, localUsers, async id =>
-      managementRead<{ name: string }[]>(`users/${encodeURIComponent(id)}/roles`, 'roles'), companyId);
-  } catch (error) {
-    if (error instanceof Auth0ReadError) {
-      const span = tracer.scope().active();
-      span?.setTag('error', new Error(error.message));
-      span?.setTag('auth0.stage', error.stage);
-      span?.setTag('auth0.error_code', error.code);
-      if (error.upstreamStatus) span?.setTag('auth0.upstream_status', error.upstreamStatus);
-      server.log.warn({
-        code: error.code, auth0Stage: error.stage, upstreamStatus: error.upstreamStatus,
-      }, 'Admin user lookup failed');
-      if (error.retryAfter) reply.header('Retry-After', String(error.retryAfter));
-      return reply.status(error.code === 'AUTH0_RATE_LIMITED' ? 503 : 502).send({
-        error: error.message, code: error.code,
-      });
-    }
-    tracer.scope().active()?.setTag('error', new Error('Unable to load platform users'));
-    server.log.error({ errorType: error instanceof Error ? error.name : 'Unknown' }, 'Admin user lookup failed');
-    return reply.status(500).send({ error: 'Unable to load platform users', code: 'USERS_LOOKUP_FAILED' });
-  }
-});
-
-// GET all properties (scoped by company)
-server.get('/api/properties', { preValidation: [authenticate(server), withUserSync] }, async (request: any, reply) => {
-  const companyId = request.headers['x-company-id'] as string;
-  if (!companyId) return reply.status(400).send({ error: 'X-Company-ID header is required' });
-
-  return prisma.property.findMany({
-    where: { companyId }
-  });
-});
-
-// CREATE property
-server.post('/api/properties', { preValidation: [authenticate(server), withUserSync] }, async (request: any, reply) => {
-  const companyId = request.headers['x-company-id'] as string;
-  if (!companyId) return reply.status(400).send({ error: 'X-Company-ID header is required' });
-
-  const { name, address, city, state, zip } = request.body as any;
-  try {
-    return await prisma.property.create({
-      data: { name, address, city, state, zip, companyId }
-    });
-  } catch (error: any) {
-    return reply.status(400).send({ error: 'Failed to create property', details: error.message });
-  }
-});
-
-// CREATE user in Auth0
-server.post('/api/users', { preValidation: [authenticate(server)] }, async (request: any, reply) => {
-  const adminRoles = request.user['https://propertyflow.com/roles'] || [];
-  if (!adminRoles.includes('admin')) {
-    return reply.status(403).send({ error: 'Forbidden' });
-  }
-
-  const { email, password, name, role } = request.body as any;
-  try {
-    const token = await getManagementToken();
-    const createResponse = await axios.post(`https://${AUTH0_DOMAIN}/api/v2/users`, {
-      email,
-      password,
-      name,
-      connection: 'Username-Password-Authentication',
-      email_verified: true
-    }, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    const userId = createResponse.data.user_id;
-    const allRolesResponse = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/roles`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    
-    const newRole = (allRolesResponse.data as any[]).find((r: any) => r.name === (role || 'tenant'));
-    if (newRole) {
-      await axios.post(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(userId)}/roles`, {
-        roles: [newRole.id]
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-    }
-
-    return createResponse.data;
-  } catch (error: any) {
-    server.log.error(error.response?.data || error.message);
-    return reply.status(error.response?.status || 500).send({ 
-      error: 'Failed to create user', 
-      details: error.response?.data?.message || error.message 
-    });
-  }
-});
-
-// BLOCK/UNBLOCK user
-server.route({
-  method: ['POST', 'PATCH'],
-  url: '/api/users/:id/status',
-  preValidation: [authenticate(server)],
-  handler: async (request: any, reply) => {
-    const adminRoles = request.user['https://propertyflow.com/roles'] || [];
-    if (!adminRoles.includes('admin')) return reply.status(403).send({ error: 'Forbidden' });
-    const { id } = request.params as any;
-    const { blocked } = request.body as any;
-    try {
-      const token = await getManagementToken();
-      const response = await axios.patch(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(id)}`, { blocked }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      return response.data;
-    } catch (error: any) {
-      return reply.status(500).send({ error: 'Failed to update status' });
-    }
-  }
-});
-
-// UPDATE user role
-server.post('/api/users/:id/role', { preValidation: [authenticate(server)] }, async (request: any, reply) => {
-  const adminRoles = request.user['https://propertyflow.com/roles'] || [];
-  if (!adminRoles.includes('admin')) return reply.status(403).send({ error: 'Forbidden' });
-  const { id } = request.params as any;
-  const { role } = request.body as any;
-  try {
-    const token = await getManagementToken();
-    const allRolesResponse = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/roles`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const newRole = (allRolesResponse.data as any[]).find((r: any) => r.name === role);
-    if (!newRole) return reply.status(400).send({ error: 'Role not found' });
-
-    const currentRolesResponse = await axios.get(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(id)}/roles`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const currentRoles = currentRolesResponse.data as any[];
-    if (currentRoles.length > 0) {
-      await axios.delete(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(id)}/roles`, {
-        headers: { Authorization: `Bearer ${token}` },
-        data: { roles: currentRoles.map((r: any) => r.id) }
-      } as any);
-    }
-    await axios.post(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(id)}/roles`, {
-      roles: [newRole.id]
-    }, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return { success: true };
-  } catch (error: any) {
-    return reply.status(500).send({ error: 'Failed to update role' });
-  }
-});
-
-// UPDATE user (name, email)
-server.patch('/api/users/:id', { preValidation: [authenticate(server)] }, async (request: any, reply) => {
-  const adminRoles = request.user['https://propertyflow.com/roles'] || [];
-  if (!adminRoles.includes('admin')) return reply.status(403).send({ error: 'Forbidden' });
-  const { id } = request.params as any;
-  const updateData = request.body as any;
-  try {
-    const token = await getManagementToken();
-    const response = await axios.patch(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(id)}`, updateData, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
-  } catch (error: any) {
-    return reply.status(500).send({ error: 'Failed to update user' });
-  }
-});
-
-// Catch-all for /api/users/* (ID encoding issues)
-server.all('/api/users/*', async (request, reply) => {
-  return reply.status(404).send({ 
-    error: 'Not Found', 
-    message: `Route ${request.method}:${request.url} not found`,
-    suggestion: 'Check if the user ID is correctly encoded'
-  });
-});
-
-const start = async () => {
-  try {
-    await server.listen({ port: 5011, host: '0.0.0.0' });
-    server.log.info('Server listening on port 5011');
-  } catch (err) {
-    server.log.error(err);
-    process.exit(1);
-  }
-};
-
-// Finish in-flight HTTP requests when ECS replaces a task.
-let shuttingDown = false;
+const config = readAuthConfig();
+const authenticate = await registerSessions(server, prisma, config);
+registerApplication(server, prisma, authenticate, config.origin);
+server.setNotFoundHandler((_request, reply) =>
+  reply.code(404).send({ error: "Not found", code: "NOT_FOUND" }),
+);
+let closing = false;
 async function shutdown() {
-  if (shuttingDown) return;
-  shuttingDown = true;
+  if (closing) return;
+  closing = true;
   const deadline = setTimeout(() => process.exit(1), 25000);
   deadline.unref();
-  try {
-    await server.close();
-    await prisma.$disconnect();
-    clearTimeout(deadline);
-    process.exit(0);
-  } catch (error) {
-    server.log.error({ err: error }, 'Graceful shutdown failed');
-    process.exit(1);
-  }
+  await server.close();
+  await prisma.$disconnect();
+  clearTimeout(deadline);
 }
-process.once('SIGTERM', shutdown);
-process.once('SIGINT', shutdown);
-
-start();
+process.once("SIGTERM", () => void shutdown());
+process.once("SIGINT", () => void shutdown());
+await server.listen({ port: 5011, host: "0.0.0.0" });

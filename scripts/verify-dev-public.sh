@@ -26,8 +26,19 @@ done
 
 # Invalid authentication must return a response, not leave an unhandled promise
 # that terminates the process. Check health again after the rejection.
-unauthenticated=$(curl -sS --max-time 15 -o "$temp_dir/auth" -w '%{http_code}' "$BASE_URL/api/me" || true)
+unauthenticated=$(curl -sS --max-time 15 -o "$temp_dir/auth" -w '%{http_code}' "$BASE_URL/api/bootstrap" || true)
 [[ "$unauthenticated" == "401" ]] || { echo "Expected unauthenticated profile HTTP 401, got $unauthenticated."; exit 1; }
 after_auth=$(curl -sS --max-time 15 -o "$temp_dir/ready" -w '%{http_code}' "$BASE_URL/api/ready" || true)
 [[ "$after_auth" == "200" ]] || { echo "Backend failed after rejecting authentication: HTTP $after_auth."; exit 1; }
 echo "Public homepage, database readiness, and authentication rejection passed."
+
+# API errors must not become SPA HTML or HTTP 200 at CloudFront.
+python3 - "$temp_dir/auth" <<'CHECKJSON'
+import json,sys
+with open(sys.argv[1]) as source: result=json.load(source)
+assert result.get('code') == 'SIGN_IN_REQUIRED'
+CHECKJSON
+missing=$(curl -sS --max-time 15 -o "$temp_dir/missing" -w '%{http_code}' "$BASE_URL/api/not-a-route" || true)
+[[ "$missing" == "404" ]] || { echo "Expected API 404, got $missing."; exit 1; }
+route=$(curl -sS --max-time 15 -o "$temp_dir/route" -w '%{http_code}' "$BASE_URL/platform/companies" || true)
+[[ "$route" == "200" ]] || { echo "Frontend deep-link failed: $route."; exit 1; }

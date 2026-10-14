@@ -7,11 +7,23 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: isolated-test-password
+          POSTGRES_DB: propertyflow_access_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
       
       - uses: actions/setup-python@v5
@@ -28,6 +40,7 @@ jobs:
       - name: Build and test server tracing
         env:
           DATABASE_URL: postgresql://dummy@localhost:5432/dummy
+          TEST_DATABASE_URL: postgresql://postgres:isolated-test-password@localhost:5432/propertyflow_access_test
         run: |
           npm ci --prefix server
           npm run build --prefix server
