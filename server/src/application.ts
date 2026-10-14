@@ -89,6 +89,15 @@ export function assignmentId(value: unknown): string {
     throw new AccessError(400, "INVALID_ID", "Choose a valid identifier.");
   return value;
 }
+// Identity-provider subjects are persisted verbatim. Do not interpret their
+// punctuation, normalize or trim them, or apply the property identifier grammar.
+export const MAX_USER_ID_BYTES = 4096;
+export function opaqueUserId(value: unknown): string {
+  if (typeof value !== "string" || !value.length || value.includes("\0") ||
+      Buffer.byteLength(value, "utf8") > MAX_USER_ID_BYTES)
+    throw new AccessError(400, "INVALID_ID", "Choose a valid user identifier.");
+  return value;
+}
 export async function serializable<T>(db: PrismaClient, run: (tx: Tx) => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try { return await db.$transaction(run, { isolationLevel: "Serializable" }); }
@@ -338,7 +347,7 @@ export function registerApplication(
     async (request) => {
       platform(request);
       const body = bodyOf(request),
-        userId = request.params.userId;
+        userId = opaqueUserId(request.params.userId);
       const companyId = requiredString(body.companyId, "Company"),
         role = roleValue(body.role),
         status = stateValue(body.status);
@@ -388,7 +397,7 @@ export function registerApplication(
     async (request) => {
       platform(request);
       const status = stateValue(bodyOf(request).status),
-        userId = request.params.userId;
+        userId = opaqueUserId(request.params.userId);
       return serial(request, async (tx) => {
         await lockTarget(tx, userId);
         const target = await tx.user.findUnique({ where: { id: userId } });
@@ -459,7 +468,7 @@ export function registerApplication(
         body = bodyOf(request),
         role = roleValue(body.role),
         status = stateValue(body.status),
-        userId = request.params.userId;
+        userId = opaqueUserId(request.params.userId);
       if (role === "owner")
         throw new AccessError(
           403,
@@ -494,7 +503,7 @@ export function registerApplication(
   );
   server.post("/api/company/transfer-ownership", auth, async (request) => {
     const companyId = scope(request, "members.manage"),
-      userId = requiredString(bodyOf(request).userId, "New owner");
+      userId = opaqueUserId(bodyOf(request).userId);
     if (userId === request.principal!.id)
       throw new AccessError(
         400,
@@ -567,7 +576,7 @@ export function registerApplication(
       method, url: "/api/company/properties/:propertyId/residents/:userId", ...auth,
       handler: async request => {
         const companyId = scope(request, "resident.assignment.manage"),
-          propertyId = assignmentId(request.params.propertyId), userId = assignmentId(request.params.userId);
+          propertyId = assignmentId(request.params.propertyId), userId = opaqueUserId(request.params.userId);
         return assignmentTx(request, companyId, async tx => {
           await lockTarget(tx, userId);
           await propertyInScope(tx, companyId, propertyId);

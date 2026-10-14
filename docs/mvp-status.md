@@ -1,5 +1,17 @@
 # PropertyFlow MVP status
 
+## PR14 opaque identity review fix — 2026-10-14
+
+PR14 was not merged. Both approval-review attempts were blocked; the user then stopped merge pending the P2 finding [Accept opaque Auth0 subject identifiers](https://github.com/elijahvw/property-flow-2/pull/14#discussion_r4266365871). The existing assignment handler incorrectly applied property-ID syntax and a 200-character limit to persisted identity-provider subjects. [Auth0 documents provider-specific formats and permitted punctuation](https://support.auth0.com/center/s/article/What-is-the-format-of-the-user-id-and-can-I-use-special-characters).
+
+User identifiers now use a separate opaque validator: preserve the exact string, including case and punctuation, without trimming/normalization; reject only nonstrings, empty values, NUL (unsupported by PostgreSQL text), and values above a 4096-byte UTF-8 request safety bound. Property IDs retain their existing grammar/200-character bound. Assignment PUT/DELETE, target membership/account lifecycle routes and ownership transfer all use the opaque user-ID validator. Production Fastify router parameter length now permits 4096 decoded characters; otherwise its default 100-character route limit would still block long subjects before validation. The handler byte bound and existing 64-KiB request body limit remain enforced. These limits comfortably support long external-provider subjects; IDs above 4096 bytes are explicitly unsupported and rejected rather than silently transformed.
+
+Verified safe checks: **38 Node tests passed** (`/tmp/propertyflow-opaque-id-node-tests.txt`), **19 Playwright fixture tests passed**, server Prisma generation/TypeScript build passed with a dummy database URL, database test syntax and `git diff --check` passed. API fixtures round-trip plus, >200-character, external-provider Unicode/punctuation and encoded slash/query/percent IDs, verify exact lock/audit targets, assignment/removal and lifecycle/ownership support, and reject empty/NUL/oversized inputs. Browser fixtures verify exact percent-encoded PUT/DELETE paths for plus, long and external-provider IDs. Added a persisted-ID PostgreSQL regression for CI; it has not run locally, and prior 38-test independent DB evidence predates this fix.
+
+PR comment gate checked all conversation comments, review bodies and inline comments/threads through paginated REST lists (`per_page=100`, counts 2/1/1, so no further page exists) plus thread state. Only the opaque-ID P2 finding is substantive; CodeRabbit explicitly skipped its review, and the Codex summary points to that same finding. The inline thread remains unresolved for renewed reviewer validation; no automated finding was falsely marked resolved. Recheck all comment/review pages before reporting ready and again before any future merge. New head requires renewed review and user approval. No merge, manual migration or deployment occurred.
+
+---
+
 ## Independent PostgreSQL validation and PR handoff — 2026-10-14
 
 The independent reviewer validated a corrected temporary copy of `940c905e05094a454dbc359d5adfed79592f4464`. Applied the reviewed `harness-and-race.patch` locally: each controlled Fastify instance now registers its own session plugin (required for cookie/session authentication), and all five lifecycle changes run in both lock orderings with both absent and preexisting assignments. The final database test file matches the independently tested copy byte-for-byte; application and migration contents are unchanged from the tested correction.

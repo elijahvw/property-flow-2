@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import Fastify from 'fastify';
-import { registerApplication, assignmentId, serializable } from '../dist/application.js';
+import { registerApplication, assignmentId, opaqueUserId, MAX_USER_ID_BYTES, serializable } from '../dist/application.js';
 import { permissions } from '../dist/access.js';
 const person = (id, role = 'resident', companyId = 'a') => ({ id, email: `${id}@test.invalid`, name: id, status: 'active', emailVerified: true, platformRole: null, membership: {userId:id, companyId, role, status:'active', company:{id:companyId,status:'active'}} });
 async function fixture(t, actor = person('owner','owner')) {
@@ -27,7 +27,7 @@ async function fixture(t, actor = person('owner','owner')) {
     auditEvent:{create:async({data})=>audits.push(data)},
   };
   const db={$transaction:async(run,options)=>{assert.equal(options.isolationLevel,'Serializable'); return run(tx);}};
-  const app=Fastify(); t.after(()=>app.close());
+  const app=Fastify({routerOptions:{maxParamLength:MAX_USER_ID_BYTES}}); t.after(()=>app.close());
   registerApplication(app,db,async request=>{request.principal=actor;},'https://example.test');
   const call=(method,url,payload,headers={})=>app.inject({method,url,headers,...(payload?{payload}:{})});
   return {call,users,rows,locks,audits,actor};
@@ -36,7 +36,7 @@ test('assignment permission belongs only to active company owners/managers',()=>
  for(const role of ['owner','manager','staff','resident',null]) assert.equal(permissions(person('u',role)).includes('resident.assignment.manage'),['owner','manager'].includes(role));
  const p=person('p');p.membership=null;p.platformRole='owner'; assert.deepEqual(permissions(p),['platform.manage']);
 });
-test('IDs accept existing Auth0 identifiers and reject malformed inputs',()=>{
+test('property identifiers retain their existing bounded grammar',()=>{
  for(const id of ['auth0|abc','google-oauth2|123','home']) assert.equal(assignmentId(id),id);
  for(const id of ['', ' a','a/b','a?b','a'.repeat(201),null]) assert.throws(()=>assignmentId(id),/identifier/);
 });
@@ -80,4 +80,34 @@ test('serialization failures retry boundedly and expose actionable 409 after exh
 test('ownership transfer removes former resident associations under the shared lock',async t=>{
  const f=await fixture(t);f.rows.push({companyId:'a',propertyId:'home',userId:'resident'});
  assert.equal((await f.call('POST','/api/company/transfer-ownership',{userId:'resident'})).statusCode,200);assert.equal(f.rows.length,0);assert.deepEqual(f.locks,['resident']);
+});
+
+const opaqueSubjects = ['auth0|abc+def', 'auth0|' + 'x'.repeat(240), 'samlp|directory|!@£$%^&*()+}{:;|P9/opaque?#%', 'oidc|provider|CaseSensitive'];
+test('opaque subjects round-trip verbatim; only empty, NUL and oversized user IDs are invalid',()=>{
+ for(const id of [...opaqueSubjects,' auth0|preserve ']) assert.equal(opaqueUserId(id),id);
+ for(const id of ['',null,undefined,42,'abc\0def','a'.repeat(MAX_USER_ID_BYTES+1),'£'.repeat(MAX_USER_ID_BYTES)]) assert.throws(()=>opaqueUserId(id),/user identifier/);
+});
+test('eligible opaque IDs including plus, long and external provider subjects can be assigned and removed',async t=>{
+ const f=await fixture(t);
+ for(const id of opaqueSubjects) {
+  f.users.set(id,person(id));
+  assert.ok((await f.call('GET','/api/company/residents')).json().some(row=>row.userId===id));
+  const path=`/api/company/properties/home/residents/${encodeURIComponent(id)}`;
+  assert.equal((await f.call('PUT',path)).statusCode,200,id);
+  assert.ok(f.rows.some(row=>row.userId===id));assert.equal(f.locks.at(-1),id);
+  assert.equal((await f.call('DELETE',path)).statusCode,200,id);assert.equal(f.rows.length,0);assert.equal(f.audits.at(-1).targetId,id);
+ }
+ assert.equal((await f.call('PUT','/api/company/properties/home/residents/%00')).statusCode,400);
+ assert.equal((await f.call('PUT','/api/company/properties/home/residents/')).statusCode,400);
+});
+test('access lifecycle and ownership routes preserve opaque user IDs',async t=>{
+ for(const id of opaqueSubjects) {
+  const actor=person('owner','owner');actor.platformRole='owner';const f=await fixture(t,actor);f.users.set(id,person(id));
+  const path=`/api/platform/users/${encodeURIComponent(id)}/membership`;
+  assert.equal((await f.call('PUT',path,{companyId:'a',role:'resident',status:'active'})).statusCode,200,id);
+  assert.equal((await f.call('PATCH',`/api/platform/users/${encodeURIComponent(id)}/status`,{status:'active'})).statusCode,200,id);
+  assert.equal((await f.call('PATCH',`/api/company/members/${encodeURIComponent(id)}`,{role:'resident',status:'active'})).statusCode,200,id);
+  assert.equal((await f.call('POST','/api/company/transfer-ownership',{userId:id})).statusCode,200,id);
+ }
+ const f=await fixture(t);assert.equal((await f.call('POST','/api/company/transfer-ownership',{userId:''})).statusCode,400);
 });
