@@ -21,7 +21,8 @@ body {
 }
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 a {
@@ -70,7 +71,8 @@ select:focus-visible {
   outline-offset: 3px;
 }
 input,
-select {
+select,
+textarea {
   width: 100%;
   min-height: 44px;
   background: #fff;
@@ -79,6 +81,9 @@ select {
   border-radius: 7px;
   padding: 0.65rem 0.8rem;
 }
+textarea { resize: vertical; min-height: 110px; line-height: 1.5; }
+textarea:focus-visible { outline: 3px solid #327ea7; outline-offset: 3px; }
+legend { font-weight: 700; margin: 1rem 0; color: #193f36; }
 label {
   display: flex;
   flex-direction: column;

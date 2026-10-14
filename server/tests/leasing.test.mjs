@@ -153,12 +153,12 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
     }
     await route.fulfill({status:response.statusCode,contentType:'application/json',body:response.body});
    });
-   await page.goto(process.env.TEST_LEASING_BROWSER_URL+'/company/properties/home/units');await page.getByLabel('Unit name',{exact:true}).fill('Browser unit');
-   await page.getByRole('button',{name:'Create unit',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create unit',exact:true}).click();await expect(page.getByText('Saved.',{exact:true})).toBeVisible();assert.equal(keys.unit[0],keys.unit[1]);
+   await page.goto(process.env.TEST_LEASING_BROWSER_URL+'/company/properties/home/units');await page.getByRole('button',{name:'Add a unit',exact:true}).click();await page.getByLabel('Unit name',{exact:true}).fill('Browser unit');
+   await page.getByRole('button',{name:'Create unit',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create unit',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();assert.equal(keys.unit[0],keys.unit[1]);
    const browserUnit=(await admin.query(`SELECT id FROM "Unit" WHERE label='Browser unit'`)).rows;assert.equal(browserUnit.length,1);
-   await page.getByRole('link',{name:'Leases',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await page.getByLabel('Unit for new lease').selectOption(browserUnit[0].id);
+   await page.getByRole('link',{name:'Leases',exact:true}).click();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await page.getByLabel('Unit for new lease').selectOption(browserUnit[0].id);
    await page.getByLabel('New lease start date').fill('2026-11-01');await page.getByLabel('New lease end date',{exact:true}).fill('2027-10-31');await page.getByLabel('New lease monthly rent (USD)').fill('1250.50');
-   await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByText('Saved.',{exact:true})).toBeVisible();assert.equal(keys.lease[0],keys.lease[1]);
+   await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();assert.equal(keys.lease[0],keys.lease[1]);
    assert.equal((await admin.query(`SELECT count(*)::int n FROM "Lease" WHERE "unitId"=$1`,[browserUnit[0].id])).rows[0].n,1);
    assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='lease.created' AND "targetId" IN (SELECT id FROM "Lease" WHERE "unitId"=$1)`,[browserUnit[0].id])).rows[0].n,1);
   }finally{await browser.close();}

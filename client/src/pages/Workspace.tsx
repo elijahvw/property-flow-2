@@ -2,10 +2,13 @@ import {
   UserProvisioning,
   UserVerificationControls,
 } from "../components/UserProvisioning";
-import React, { useEffect, useState } from "react";
+import { EditorDialog, useEditorBusy } from "../components/EditorDialog";
+import { UserActivity } from "../components/UserActivity";
+import React, { useEffect, useId, useState } from "react";
 import { useUserDirectory } from "../useUserDirectory";
 import {
   Link,
+  Navigate,
   useNavigate,
   useParams,
   useSearchParams,
@@ -68,14 +71,20 @@ export function Form({
   label?: string;
   operation?: OperationName;
 }) {
+  const editor = useEditorBusy(),
+    formId = useId();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [saved, setSaved] = useState(false);
+  useEffect(() => {
+    editor.register(formId, busy);
+    return () => editor.register(formId, false);
+  }, [busy, editor.register, formId]);
   return (
     <form
       onSubmit={async (event) => {
         event.preventDefault();
-        if (busy) return;
+        if (busy || editor.busy) return;
         const data = new FormData(event.currentTarget);
         setBusy(true);
         setError("");
@@ -90,7 +99,7 @@ export function Form({
         }
       }}
     >
-      <fieldset disabled={busy}>
+      <fieldset disabled={busy || editor.busy}>
         {children}
         <div className="actions">
           <button type="submit">{busy ? "Saving…" : label}</button>
@@ -311,10 +320,13 @@ function PeopleWorkspace() {
           have not signed in. Assign company access when you are ready.
         </p>
       </header>
-      <button onClick={() => setCreating((value) => !value)}>
-        {creating ? "Cancel new user" : "Add user"}
-      </button>
-      {creating && (
+      <button onClick={() => setCreating(true)}>Add user</button>
+      <EditorDialog
+        open={creating}
+        title="Add user"
+        onClose={() => setCreating(false)}
+        description="Create a sign-in account, then assign company access. Your draft is kept when you close this form."
+      >
         <UserProvisioning
           saved={(id) => {
             r.reload();
@@ -322,7 +334,7 @@ function PeopleWorkspace() {
             setCreating(false);
           }}
         />
-      )}
+      </EditorDialog>
       <p className="help">
         New accounts start without a company role. Existing roles and disabled
         access are preserved.
@@ -476,76 +488,115 @@ function PeopleWorkspace() {
         )}
       </section>
       {person && (
-        <section className="panel" key={person.id}>
-          <div className="section-heading">
-            <h2>Access for {person.name || person.email}</h2>
-            <button className="secondary" onClick={() => setSelected("")}>
-              Close
-            </button>
+        <EditorDialog
+          open
+          title={`Manage ${person.name || person.email}`}
+          onClose={() => {
+            setSelected("");
+            setDraft(null);
+          }}
+          description="Manage the application profile, company membership, sign-in assistance and account status in one place."
+        >
+          <div className="profile-summary">
+            <span className="avatar">
+              {(person.name || person.email).slice(0, 1).toUpperCase()}
+            </span>
+            <div>
+              <strong>{person.name || person.email}</strong>
+              <p>{person.email}</p>
+            </div>
+            <Badge>{person.status}</Badge>
           </div>
-          {!companies.data ? (
-            <LoadState error={companies.error} retry={companies.reload} />
-          ) : (
+          <details open className="editor-section">
+            <summary>Application profile</summary>
             <Form
-              key={`${person.id}:${person.membership?.version ?? 0}`}
-              operation="company.user.assign"
-              submit={async (data) => {
-                try {
-                  const changed = await api<Member>(
-                    `/api/platform/users/${encodeURIComponent(person.id)}/membership`,
-                    {
-                      method: "PUT",
-                      body: {
-                        expectedVersion: person.membership?.version ?? null,
-                        companyId: text(data, "companyId"),
-                        role: text(data, "role"),
-                        status: text(data, "status"),
-                      },
-                    },
-                  );
-                  setDraft({
-                    ...person,
-                    companyId: null,
-                    role: "unassigned",
-                    membership: {
-                      ...changed,
-                      company: companies.data!.find(
-                        (c) => c.id === changed.companyId,
-                      )!,
-                    },
-                  });
-                  r.reload();
-                } catch (error) {
-                  if (
-                    error instanceof ApiError &&
-                    error.code === "RECORD_CHANGED"
-                  )
-                    r.reload();
-                  throw error;
-                }
+              label="Save display name"
+              submit={async (form) => {
+                const changed = await api<{ name: string }>(
+                  `/api/platform/users/${encodeURIComponent(person.id)}/profile`,
+                  { method: "PATCH", body: { name: text(form, "name") } },
+                );
+                setDraft({ ...person, name: changed.name });
+                r.reload();
               }}
             >
-              <div className="form-grid">
-                <AssignmentCompanySelect
-                  companies={companies.data}
-                  initialValue={
-                    person.membership?.companyId ||
-                    params.get("companyId") ||
-                    ""
-                  }
-                />
-                <RoleSelect
-                  value={person.membership?.role || "resident"}
-                  owner
-                />
-                <StatusSelect value={person.membership?.status} />
-              </div>
+              <Field
+                name="name"
+                label="Display name"
+                value={person.name || ""}
+              />
               <p className="help">
-                Changing the company removes access to the previous company. An
-                active company must retain an owner.
+                Sign-in email and identity are managed by Auth0. Company roles
+                are managed below.
               </p>
             </Form>
-          )}
+          </details>
+          <details open className="editor-section">
+            <summary>Company access</summary>
+            {!companies.data ? (
+              <LoadState error={companies.error} retry={companies.reload} />
+            ) : (
+              <Form
+                key={`${person.id}:${person.membership?.version ?? 0}`}
+                operation="company.user.assign"
+                submit={async (data) => {
+                  try {
+                    const changed = await api<Member>(
+                      `/api/platform/users/${encodeURIComponent(person.id)}/membership`,
+                      {
+                        method: "PUT",
+                        body: {
+                          expectedVersion: person.membership?.version ?? null,
+                          companyId: text(data, "companyId"),
+                          role: text(data, "role"),
+                          status: text(data, "status"),
+                        },
+                      },
+                    );
+                    setDraft({
+                      ...person,
+                      companyId: null,
+                      role: "unassigned",
+                      membership: {
+                        ...changed,
+                        company: companies.data!.find(
+                          (c) => c.id === changed.companyId,
+                        )!,
+                      },
+                    });
+                    r.reload();
+                  } catch (error) {
+                    if (
+                      error instanceof ApiError &&
+                      error.code === "RECORD_CHANGED"
+                    )
+                      r.reload();
+                    throw error;
+                  }
+                }}
+              >
+                <div className="form-grid">
+                  <AssignmentCompanySelect
+                    companies={companies.data}
+                    initialValue={
+                      person.membership?.companyId ||
+                      params.get("companyId") ||
+                      ""
+                    }
+                  />
+                  <RoleSelect
+                    value={person.membership?.role || "resident"}
+                    owner
+                  />
+                  <StatusSelect value={person.membership?.status} />
+                </div>
+                <p className="help">
+                  Changing the company removes access to the previous company.
+                  An active company must retain an owner.
+                </p>
+              </Form>
+            )}
+          </details>
           <UserVerificationControls
             key={person.id}
             id={person.id}
@@ -570,7 +621,11 @@ function PeopleWorkspace() {
               </Form>
             </div>
           )}
-        </section>
+          <UserActivity
+            id={person.id}
+            revision={`${person.name}:${person.membership?.version}:${person.status}:${person.emailVerified}`}
+          />
+        </EditorDialog>
       )}
       <Invitations platform />
     </>
@@ -578,6 +633,14 @@ function PeopleWorkspace() {
 }
 
 export function Properties() {
+  const { data } = useAuth();
+  return (
+    <PropertyDirectory
+      key={`${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}`}
+    />
+  );
+}
+function PropertyDirectory() {
   const { can } = useAuth();
   const r = useResource<
     {
@@ -588,9 +651,12 @@ export function Properties() {
       state: string;
       zip: string;
     }[]
-  >("/api/company/properties");
+  >("/api/company/properties", true, true);
   const [adding, setAdding] = useState(false);
-  const [managing, setManaging] = useState<{id: string; name: string} | null>(null);
+  const [propertyQuery, setPropertyQuery] = useState("");
+  const [managing, setManaging] = useState<{ id: string; name: string } | null>(
+    null,
+  );
   return (
     <>
       <header className="page-heading">
@@ -604,9 +670,13 @@ export function Properties() {
         )}
       </header>
       <OwnerOnboarding properties={r} onAddProperty={() => setAdding(true)} />
-      {adding && can("property.write") && (
-        <section className="panel">
-          <h2>Add a property</h2>
+      {can("property.write") && (
+        <EditorDialog
+          open={adding}
+          title="Add a property"
+          onClose={() => setAdding(false)}
+          description="Start with the address. Add units and residents from the property workspace after saving."
+        >
           <Form
             operation="property.create"
             label="Create property"
@@ -627,9 +697,21 @@ export function Properties() {
               <Field name="zip" label="Postal code" />
             </div>
           </Form>
-        </section>
+        </EditorDialog>
       )}
       <section className="panel">
+        <div className="section-heading">
+          <h2>Property directory</h2>
+          <span className="badge">{r.data?.length ?? "…"} properties</span>
+        </div>
+        <label className="search-field">
+          Find property
+          <input
+            placeholder="Name, address or city"
+            value={propertyQuery}
+            onChange={(event) => setPropertyQuery(event.target.value)}
+          />
+        </label>
         {!r.data ? (
           <LoadState error={r.error} retry={r.reload} />
         ) : r.data.length ? (
@@ -644,18 +726,37 @@ export function Properties() {
                 </tr>
               </thead>
               <tbody>
-                {r.data.map((p) => (
-                  <tr key={p.id}>
-                    <td>
-                      <Link to={`/company/properties/${encodeURIComponent(p.id)}`}>{p.name}</Link>
-                    </td>
-                    <td>{p.address}</td>
-                    <td>
-                      {p.city}, {p.state} {p.zip}
-                    </td>
-                    {can("resident.assignment.manage") && <td><button className="secondary" onClick={() => setManaging(p)}>Manage residents</button></td>}
-                  </tr>
-                ))}
+                {r.data
+                  .filter((p) =>
+                    `${p.name} ${p.address} ${p.city}`
+                      .toLowerCase()
+                      .includes(propertyQuery.trim().toLowerCase()),
+                  )
+                  .map((p) => (
+                    <tr key={p.id}>
+                      <td>
+                        <Link
+                          to={`/company/properties/${encodeURIComponent(p.id)}`}
+                        >
+                          {p.name}
+                        </Link>
+                      </td>
+                      <td>{p.address}</td>
+                      <td>
+                        {p.city}, {p.state} {p.zip}
+                      </td>
+                      {can("resident.assignment.manage") && (
+                        <td>
+                          <button
+                            className="secondary"
+                            onClick={() => setManaging(p)}
+                          >
+                            Manage residents
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
@@ -663,13 +764,30 @@ export function Properties() {
           <p>No properties have been added to your company.</p>
         )}
       </section>
-      {managing && can("resident.assignment.manage") && <ManageResidents key={managing.id} property={managing} close={() => setManaging(null)} />}
+      {managing && can("resident.assignment.manage") && (
+        <ManageResidents
+          key={managing.id}
+          property={managing}
+          close={() => setManaging(null)}
+        />
+      )}
     </>
   );
 }
 export function Team() {
+  const { data } = useAuth();
+  return (
+    <TeamDirectory
+      key={`${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}`}
+    />
+  );
+}
+function TeamDirectory() {
   const r = useResource<Member[]>("/api/company/members");
   const { user, data, refreshUser } = useAuth();
+  const [params] = useSearchParams();
+  const [inviting, setInviting] = useState(params.has("invite")),
+    [transferring, setTransferring] = useState(false);
   const [selected, setSelected] = useState("");
   const [invitationRevision, setInvitationRevision] = useState(0);
   const member = r.data?.find((m) => m.userId === selected);
@@ -679,6 +797,13 @@ export function Team() {
         <p className="eyebrow">Company</p>
         <h1>Team</h1>
         <p>Invite people and control their access to your company.</p>
+        <div className="actions">
+          <button onClick={() => setInviting(true)}>Invite a person</button>
+          <button className="secondary" onClick={() => setTransferring(true)}>
+            Transfer ownership
+          </button>
+          <Link to="/company/residents">Manage resident profiles</Link>
+        </div>
       </header>
       <section className="panel">
         {!r.data ? (
@@ -707,8 +832,11 @@ export function Team() {
         )}
       </section>
       {member && (
-        <section className="panel" key={member.userId}>
-          <h2>{member.user.name || member.user.email}</h2>
+        <EditorDialog
+          open
+          title={`Access for ${member.user.name || member.user.email}`}
+          onClose={() => setSelected("")}
+        >
           <Form
             operation="membership.update"
             submit={async (data) => {
@@ -729,53 +857,57 @@ export function Team() {
             <RoleSelect value={member.role} />
             <StatusSelect value={member.status} />
           </Form>
-        </section>
+        </EditorDialog>
       )}
-      <div className="split">
-        <section className="panel">
-          <h2>Invite a person</h2>
-          <InvitationForm
-            companyId={data?.membership?.companyId}
-            reload={() => setInvitationRevision((v) => v + 1)}
-          />
-        </section>
-        <section className="panel">
-          <h2>Transfer ownership</h2>
-          <p>You will become a manager after transferring ownership.</p>
-          <Form
-            label="Transfer ownership"
-            operation="ownership.transfer"
-            submit={async (data) => {
-              await api("/api/company/transfer-ownership", {
-                method: "POST",
-                body: { userId: text(data, "userId") },
-              });
-              await refreshUser();
-            }}
-          >
-            <label>
-              New owner
-              <select required name="userId" defaultValue="">
-                <option value="" disabled>
-                  Choose an active member
-                </option>
-                {r.data
-                  ?.filter(
-                    (m) =>
-                      m.userId !== user?.id &&
-                      m.status === "active" &&
-                      m.user.status === "active",
-                  )
-                  .map((m) => (
-                    <option key={m.userId} value={m.userId}>
-                      {m.user.name || m.user.email}
-                    </option>
-                  ))}
-              </select>
-            </label>
-          </Form>
-        </section>
-      </div>
+      <EditorDialog
+        open={inviting}
+        title="Invite a person"
+        onClose={() => setInviting(false)}
+      >
+        <InvitationForm
+          companyId={data?.membership?.companyId}
+          reload={() => setInvitationRevision((v) => v + 1)}
+        />
+      </EditorDialog>
+      <EditorDialog
+        open={transferring}
+        title="Transfer ownership"
+        onClose={() => setTransferring(false)}
+      >
+        <p>You will become a manager after transferring ownership.</p>
+        <Form
+          label="Transfer ownership"
+          operation="ownership.transfer"
+          submit={async (data) => {
+            await api("/api/company/transfer-ownership", {
+              method: "POST",
+              body: { userId: text(data, "userId") },
+            });
+            await refreshUser();
+          }}
+        >
+          <label>
+            New owner
+            <select required name="userId" defaultValue="">
+              <option value="" disabled>
+                Choose an active member
+              </option>
+              {r.data
+                ?.filter(
+                  (m) =>
+                    m.userId !== user?.id &&
+                    m.status === "active" &&
+                    m.user.status === "active",
+                )
+                .map((m) => (
+                  <option key={m.userId} value={m.userId}>
+                    {m.user.name || m.user.email}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </Form>
+      </EditorDialog>
       <Invitations key={invitationRevision} />
     </>
   );
@@ -928,6 +1060,8 @@ export function AccessStatus() {
     data?.user.status !== "active" ||
     data?.membership?.status === "disabled" ||
     data?.membership?.company.status === "suspended";
+  if (data?.destination && data.destination !== "/access")
+    return <Navigate to={data.destination} replace />;
   return (
     <section className="status-panel">
       <h1>{suspended ? "Access is disabled" : "Account access pending"}</h1>
@@ -941,35 +1075,162 @@ export function AccessStatus() {
     </section>
   );
 }
-function ManageResidents({ property, close }: { property: { id: string; name: string }; close: () => void }) {
+export function ManageResidents({
+  property,
+  close,
+}: {
+  property: { id: string; name: string };
+  close: () => void;
+}) {
   const base = `/api/company/properties/${encodeURIComponent(property.id)}/residents`;
-  const eligible = useResource<{ userId: string; user: { name: string | null; email: string } }[]>("/api/company/residents");
-  const assigned = useResource<{ userId: string; membership: { user: { name: string | null; email: string } } }[]>(base);
-  const [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const choices = eligible.data?.filter(person => !assigned.data?.some(row => row.userId === person.userId));
+  const eligible = useResource<
+    { userId: string; user: { name: string | null; email: string } }[]
+  >("/api/company/residents");
+  const assigned = useResource<
+    {
+      userId: string;
+      membership: { user: { name: string | null; email: string } };
+    }[]
+  >(base);
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  const choices = eligible.data?.filter(
+    (person) => !assigned.data?.some((row) => row.userId === person.userId),
+  );
   const change = async (userId: string, method: "PUT" | "DELETE") => {
-    setBusy(true); setError("");
-    try { await api(`${base}/${encodeURIComponent(userId)}`, { method }); assigned.reload(); eligible.reload(); }
-    catch (e) { setError(e instanceof Error ? e.message : "Unable to update assignment."); }
-    finally { setBusy(false); }
+    setBusy(true);
+    setError("");
+    try {
+      await api(`${base}/${encodeURIComponent(userId)}`, { method });
+      assigned.reload();
+      eligible.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to update assignment.");
+    } finally {
+      setBusy(false);
+    }
   };
-  return <section className="panel">
-    <div className="section-heading"><h2>Residents for {property.name}</h2><button className="secondary" onClick={close}>Close</button></div>
-    <p className="help">An assignment provides property access. It is not a lease or proof of occupancy. Pending invitations are not eligible; residents must accept first.</p>
-    {error && <p className="notice error" role="alert">{error}</p>}
-    {!eligible.data || !assigned.data ? <LoadState error={eligible.error || assigned.error} retry={() => { eligible.reload(); assigned.reload(); }} /> : <>
-      {assigned.data.length ? <ul className="record-list">{assigned.data.map(row => <li key={row.userId}><strong>{row.membership.user.name || row.membership.user.email}</strong><Badge>Assigned</Badge><button disabled={busy} className="secondary" onClick={() => change(row.userId, "DELETE")}>Remove assignment</button></li>)}</ul> : <p>No residents assigned.</p>}
-      {choices?.length ? <form onSubmit={event => { event.preventDefault(); if (!busy) void change(String(new FormData(event.currentTarget).get("resident")), "PUT"); }}><fieldset disabled={busy}><label>Accepted resident<select name="resident" required defaultValue=""><option value="" disabled>Choose a resident</option>{choices.map(person => <option key={person.userId} value={person.userId}>{person.user.name || person.user.email}</option>)}</select></label><button type="submit">{busy ? "Updating…" : "Assign resident"}</button></fieldset></form> : <p>No additional active accepted residents available.</p>}
-    </>}
-  </section>;
+  return (
+    <EditorDialog
+      open
+      title={`Residents for ${property.name}`}
+      onClose={close}
+      busy={busy}
+    >
+      <p className="help">
+        An assignment provides property access. It is not a lease or proof of
+        occupancy. Pending invitations are not eligible; residents must accept
+        first.
+      </p>
+      {error && (
+        <p className="notice error" role="alert">
+          {error}
+        </p>
+      )}
+      {!eligible.data || !assigned.data ? (
+        <LoadState
+          error={eligible.error || assigned.error}
+          retry={() => {
+            eligible.reload();
+            assigned.reload();
+          }}
+        />
+      ) : (
+        <>
+          {assigned.data.length ? (
+            <ul className="record-list">
+              {assigned.data.map((row) => (
+                <li key={row.userId}>
+                  <strong>
+                    {row.membership.user.name || row.membership.user.email}
+                  </strong>
+                  <Badge>Assigned</Badge>
+                  <button
+                    disabled={busy}
+                    className="secondary"
+                    onClick={() => change(row.userId, "DELETE")}
+                  >
+                    Remove assignment
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No residents assigned.</p>
+          )}
+          {choices?.length ? (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!busy)
+                  void change(
+                    String(new FormData(event.currentTarget).get("resident")),
+                    "PUT",
+                  );
+              }}
+            >
+              <fieldset disabled={busy}>
+                <label>
+                  Accepted resident
+                  <select name="resident" required defaultValue="">
+                    <option value="" disabled>
+                      Choose a resident
+                    </option>
+                    {choices.map((person) => (
+                      <option key={person.userId} value={person.userId}>
+                        {person.user.name || person.user.email}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button type="submit">
+                  {busy ? "Updating…" : "Assign resident"}
+                </button>
+              </fieldset>
+            </form>
+          ) : (
+            <p>No additional active accepted residents available.</p>
+          )}
+        </>
+      )}
+    </EditorDialog>
+  );
 }
 export function Resident() {
-  const r = useResource<{ id: string; name: string; address: string }[]>("/api/resident/properties");
-  return <>
-    <header className="page-heading"><p className="eyebrow">Resident</p><h1>My properties</h1><p>These associations are not leases or proof of occupancy.</p></header>
-    {!r.data ? <LoadState error={r.error} retry={r.reload} /> : r.data.length ? r.data.map(property => <section className="panel" key={property.id}><h2>{property.name}</h2><p>{property.address}</p></section>) : <section className="panel"><h2>No properties assigned</h2><p>Your company membership is active. Contact your property manager for a property assignment.</p></section>}
-    <p className="help">Use My requests for maintenance. Lease and financial records are managed by your property manager.</p>
-  </>;
+  const r = useResource<{ id: string; name: string; address: string }[]>(
+    "/api/resident/properties",
+  );
+  return (
+    <>
+      <header className="page-heading">
+        <p className="eyebrow">Resident</p>
+        <h1>My properties</h1>
+        <p>These associations are not leases or proof of occupancy.</p>
+      </header>
+      {!r.data ? (
+        <LoadState error={r.error} retry={r.reload} />
+      ) : r.data.length ? (
+        r.data.map((property) => (
+          <section className="panel" key={property.id}>
+            <h2>{property.name}</h2>
+            <p>{property.address}</p>
+          </section>
+        ))
+      ) : (
+        <section className="panel">
+          <h2>No properties assigned</h2>
+          <p>
+            Your company membership is active. Contact your property manager for
+            a property assignment.
+          </p>
+        </section>
+      )}
+      <p className="help">
+        Use My requests for maintenance. Lease and financial records are managed
+        by your property manager.
+      </p>
+    </>
+  );
 }
 export function AcceptInvitation() {
   const { refreshUser } = useAuth();

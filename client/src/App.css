@@ -403,3 +403,86 @@ tbody tr:last-child td {
   margin-bottom: 1rem;
 }
 .onboarding-list h3 { margin: 0.5rem 0; }
+
+/* A consistent workspace and focused editors across every operation. */
+.sidebar { background: #123c34; border: 0; padding: 1.6rem 1rem; overflow-y: auto; }
+.sidebar .brand { color: #fff; }
+.brand-mark { background: #d9ef8c; color: #173d34; border-radius: 11px; }
+.sidebar .workspace-label { color: #b8d2c8; font-size: .82rem; border-bottom: 1px solid #ffffff20; padding-bottom: 1rem; }
+.sidebar nav a { color: #cfdfd8; display: flex; align-items: center; gap: .8rem; font-size: .9rem; }
+.sidebar nav a:hover { background: #ffffff0d; color: white; }
+.sidebar nav a.active { background: #d9ef8c; color: #173d34; }
+.nav-icon { width: 20px; text-align: center; font-size: 1.15rem; line-height: 1; }
+.sidebar-footer { color: #fff; border-top: 1px solid #ffffff20; padding-top: 1.2rem; margin-top: auto; }
+.sidebar-footer span { color: #b8d2c8; text-transform: capitalize; }
+.sidebar-footer strong { font-size: .84rem; }
+.sidebar-footer button.secondary { background: transparent; color: #e5eee9; border-color: #ffffff40; }
+.sidebar-footer button.secondary:hover { background: #ffffff10; }
+.workspace-main main { max-width: 1500px; padding: 2rem 2.5rem; }
+.topbar { background: #ffffffb8; height: 60px; }
+.page-heading { margin-bottom: 1.5rem; }
+.page-heading > p:not(.eyebrow) { max-width: 760px; font-size: .93rem; }
+.page-heading > .actions { margin-top: 1.2rem; }
+.page-heading h1 { font-size: clamp(1.9rem, 3vw, 2.5rem); }
+.panel { border-color: #e1e6e3; border-radius: 14px; box-shadow: 0 3px 14px #17392b04; }
+thead { background: #f7f9f7; }
+tbody tr:hover { background: #f8faf8; }
+.table-wrap { margin-top: .8rem; }
+.table-wrap td { padding: 1.1rem 1rem; }
+.search-field { max-width: 440px; }
+.panel > form:has(input[placeholder="Name or email"]) { display: flex; align-items: end; gap: .8rem; max-width: 620px; }
+.panel > form:has(input[placeholder="Name or email"]) label { flex: 1; margin-bottom: 0; }
+.panel > form:has(input[placeholder="Name or email"]) button { margin-bottom: 0; }
+.onboarding-list { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1.5rem; padding-left: 1.2rem; }
+.onboarding-list li { border-bottom: 0; padding-bottom: .3rem; margin-bottom: 0; font-size: .85rem; }
+.onboarding-list .help { font-size: .77rem; }
+.details { grid-template-columns: repeat(2,minmax(0,1fr)); border: 0; padding: 0; gap: 1.2rem 2rem; }
+.details dt { font-size: .78rem; margin-bottom: .25rem; }
+.details dd { font-weight: 550; overflow-wrap: anywhere; }
+.details > div { min-width: 0; }
+.profile-summary { display: flex; align-items: center; gap: 1rem; padding-bottom: 1.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid #e1e6e3; }
+.profile-summary p { margin-bottom: 0; font-size: .85rem; overflow-wrap: anywhere; }
+.profile-summary > .badge { margin-left: auto; }
+.avatar { display: inline-grid; place-items: center; flex-shrink: 0; width: 48px; height: 48px; border-radius: 14px; background: #eaf1dd; color: #2d5a32; font-size: 1.3rem; font-weight: 700; }
+.editor-dialog { width: min(820px,calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: 0; border: 1px solid #d9e3dc; border-radius: 18px; color: #172b36; box-shadow: 0 24px 100px #0a291a40; overflow: auto; }
+.editor-dialog::backdrop { background: #0d251e80; backdrop-filter: blur(3px); }
+.editor-heading { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; padding: 1.25rem 1.6rem; background: #fff; border-bottom: 1px solid #e0e7e2; }
+.editor-heading h2 { font-size: 1.35rem; margin: 0; overflow-wrap: anywhere; }
+.editor-heading .eyebrow { font-size: .65rem; margin-bottom: .35rem; }
+.editor-body { padding: 1.6rem; }
+.editor-body > .panel { border: 0; padding: 0; box-shadow: none; }
+.editor-body form .actions { border-top: 1px solid #e5ebe7; padding-top: 1.1rem; }
+.editor-body .form-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.editor-section { border-top: 1px solid #e0e7e2; padding-top: 1.2rem; margin-top: 1.3rem; }
+.editor-section summary { font-weight: 700; cursor: pointer; padding-bottom: 1rem; }
+.editor-section summary:hover { color: #126b5c; }
+.editor-body .details { margin-bottom: 1.5rem; }
+.activity-list { padding-left: 1.25rem; font-size: .85rem; }
+.activity-list li { padding: .65rem .4rem; border-bottom: 1px solid #e4eae5; }
+.activity-list time { display: block; color: #607267; font-size: .78rem; }
+.metric-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1rem; margin: 1.4rem 0; }
+.metric-grid > div { padding: 1.2rem; border: 1px solid #dfe7dc; background: #f4f8ee; border-radius: 12px; }
+.metric-grid span { display: block; font-size: .8rem; color: #566955; }
+.metric-grid strong { display: block; font-size: 1.7rem; color: #24482c; overflow-wrap: anywhere; }
+.quick-links { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; }
+.quick-links a { display: flex; flex-direction: column; gap: .35rem; padding: 1.2rem; border: 1px solid #dfe6de; border-radius: 10px; text-decoration: none; }
+.quick-links a:hover { background: #f3f8ed; border-color: #a8bd97; }
+.quick-links span { font-size: .85rem; color: #607267; }
+.empty-state { text-align: center; padding: 3rem 1rem; }
+.empty-state p { max-width: 400px; margin: auto; }
+.preserve-lines { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media(max-width:1050px) { .onboarding-list { grid-template-columns: 1fr; gap: .75rem; } .workspace-main main { padding: 1.5rem; } }
+@media(max-width:700px) {
+  .sidebar { padding: 1rem; }
+  .sidebar nav a { flex-shrink: 0; }
+  .sidebar-footer { margin-top: 1rem; }
+  .workspace-main main { padding: 1.25rem 1rem; }
+  .editor-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); border-radius: 12px; }
+  .editor-heading { padding: 1rem; gap: .6rem; }
+  .editor-heading h2 { font-size: 1.1rem; }
+  .editor-body { padding: 1rem; }
+  .editor-body .form-grid, .metric-grid, .quick-links, .details { grid-template-columns: 1fr; }
+  .profile-summary { flex-wrap: wrap; }
+  .metric-grid { gap: .6rem; }
+  .metric-grid > div { padding: .8rem 1rem; }
+}

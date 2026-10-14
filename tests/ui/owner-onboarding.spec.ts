@@ -54,11 +54,11 @@ test('owner landing creates a property and invitation, refreshes Team, and retur
   await page.getByRole('button', {name:'Create property', exact:true}).click();
   await expect(page.getByText('Property added', {exact:true})).toBeVisible();
   await page.getByRole('link', {name:'Invite a resident in Team'}).click();
-  await page.getByLabel('Email address', {exact:true}).fill('resident@example.test');
+  await page.getByRole('button',{name:'Invite a person',exact:true}).click();await page.getByLabel('Email address', {exact:true}).fill('resident@example.test');
   await page.getByRole('button', {name:'Create invitation', exact:true}).click();
   await expect(page.getByText('resident@example.test', {exact:true})).toBeVisible();
   await expect(page.getByText('Pending', {exact:true})).toBeVisible();
-  await page.getByRole('link', {name:'Properties', exact:true}).click();
+  await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('link', {name:'Properties', exact:true}).click();
   await expect(page.getByText('Resident invitation issued', {exact:true})).toBeVisible();
   await expect(page.getByText(/assign accepted residents using Manage residents/)).toBeVisible();
 });
@@ -161,12 +161,12 @@ test('company owner with platform authority supplies its membership company when
   const records = await fixture(page, bootstrap('owner', 'active', true));
   await page.goto('/company/properties');
   await page.getByRole('link', {name:'Invite a resident in Team'}).click();
-  await page.getByLabel('Email address', {exact:true}).fill('dual-role-resident@example.test');
+  await page.getByRole('button',{name:'Invite a person',exact:true}).click();await page.getByLabel('Email address', {exact:true}).fill('dual-role-resident@example.test');
   await page.getByRole('button', {name:'Create invitation', exact:true}).click();
   await expect(page.getByLabel('Invitation acceptance link')).toBeVisible();
   expect(records.invitationPosts).toEqual([{email:'dual-role-resident@example.test', role:'resident', companyId:'company-a'}]);
   await expect(page.getByText('dual-role-resident@example.test', {exact:true})).toBeVisible();
-  await page.getByRole('link', {name:'Properties', exact:true}).click();
+  await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('link', {name:'Properties', exact:true}).click();
   await expect(page.getByText('Resident invitation issued', {exact:true})).toBeVisible();
 });
 

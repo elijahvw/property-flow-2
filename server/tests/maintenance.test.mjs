@@ -76,12 +76,13 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  if(req.method()==='POST'){keys.push(req.postDataJSON().submissionKey);assert.equal(response.statusCode,200,response.body);if(lose){lose=false;return route.abort('failed');}}
  await route.fulfill({status:response.statusCode,contentType:'application/json',body:response.body});});
  await page.goto(process.env.TEST_MAINTENANCE_BROWSER_URL+'/resident/maintenance');
- await page.getByLabel('Title',{exact:true}).fill('Lost response regression');await page.getByLabel('Description',{exact:true}).fill('Committed before transport loss');
+ await page.getByRole('button',{name:'Submit a request',exact:true}).click();await page.getByLabel('Title',{exact:true}).fill('Lost response regression');await page.getByLabel('Description',{exact:true}).fill('Committed before transport loss');
  await page.getByRole('button',{name:'Submit request',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();
- await page.getByRole('button',{name:'Submit request',exact:true}).click();await expect(page.getByText('Saved.',{exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Lost response regression'})).toHaveCount(1);
+ await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:'Submit a request',exact:true}).click();await expect(page.getByLabel('Title',{exact:true})).toHaveValue('Lost response regression');
+ await page.getByRole('button',{name:'Submit request',exact:true}).click();await expect(page.getByText('Request submitted.',{exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Lost response regression'})).toHaveCount(1);
  assert.equal(keys.length,2);assert.equal(keys[0],keys[1]);
  assert.equal((await admin.query(`SELECT count(*)::int n FROM "MaintenanceRequest"`)).rows[0].n,1);assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='maintenance.created'`)).rows[0].n,1);
- await page.getByRole('button',{name:'Start a new request'}).click();await page.getByLabel('Title',{exact:true}).fill('Deliberate second request');await page.getByLabel('Description',{exact:true}).fill('New submission');await page.getByRole('button',{name:'Submit request',exact:true}).click();await expect(page.getByText('Saved.',{exact:true})).toBeVisible();assert.notEqual(keys[2],keys[0]);
+ await page.getByRole('button',{name:'Submit a request',exact:true}).click();await page.getByLabel('Title',{exact:true}).fill('Deliberate second request');await page.getByLabel('Description',{exact:true}).fill('New submission');await page.getByRole('button',{name:'Submit request',exact:true}).click();await expect(page.getByText('Request submitted.',{exact:true})).toBeVisible();assert.notEqual(keys[2],keys[0]);
  }finally{await browser.close();}
  await admin.query(`DELETE FROM "AuditEvent"`);await admin.query(`DELETE FROM "MaintenanceRequest"`);
  });

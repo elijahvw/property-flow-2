@@ -39,6 +39,7 @@ export const routes: {
     permission: "property.read",
     section: "Company",
   },
+  {path:"/company/residents",title:"Residents",permission:"resident.assignment.manage",section:"Company"},
   {
     path: "/company/members",
     title: "Team",

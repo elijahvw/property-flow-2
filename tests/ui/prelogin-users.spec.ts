@@ -101,6 +101,7 @@ async function fixture(page: Page, { verified = true, platform = true } = {}) {
         }
         return json({ id: "auth0|created" });
       }
+      if (path.endsWith("/profile")) { state.people[0].name = req.postDataJSON().name; return json({id:state.people[0].id,name:state.people[0].name}); }
       if (path.endsWith("/verification-status"))
         return json({ emailVerified: state.verified });
       if (path.endsWith("/verification"))
@@ -247,7 +248,7 @@ test("new-account retry keeps submission key and a new account gets a fresh key"
   await page
     .getByRole("button", { name: "Create account", exact: true })
     .click();
-  await expect(page.getByLabel("New user email")).toHaveCount(0);
+  await expect(page.getByLabel("New user email")).not.toBeVisible();
   expect(state.provisions).toHaveLength(2);
   expect(state.provisions[0].submissionKey).toBe(
     state.provisions[1].submissionKey,
@@ -262,6 +263,19 @@ test("new-account retry keeps submission key and a new account gets a fresh key"
   expect(state.provisions[2].submissionKey).not.toBe(
     state.provisions[0].submissionKey,
   );
+});
+test("user management opens profile, access and server-filtered activity together and blocks conflicting actions during saves",async({page})=>{
+  await fixture(page);await page.goto("/platform/users");const activity=page.waitForRequest(r=>new URL(r.url()).pathname==="/api/platform/audit");await page.getByRole("button",{name:"Manage",exact:true}).click();const dialog=page.getByRole("dialog");
+  await expect(dialog.getByLabel("Display name",{exact:true})).toHaveValue("Before Login");
+  // Activity is loaded for exactly the selected account, rather than filtering
+  // the most recent global page in the browser.
+  const requested=await activity;expect(new URL(requested.url()).searchParams.get("targetId")).toBe("auth0|before");
+  await dialog.getByLabel("Display name",{exact:true}).fill("Updated Person");await dialog.getByRole("button",{name:"Save display name"}).click();await expect(dialog.getByRole("heading",{name:"Manage Updated Person",exact:true})).toBeVisible();
+  await dialog.getByText("Account activity",{exact:true}).click();await expect(dialog.getByText("No recorded activity for this account.")).toBeVisible();
+  let release!:()=>void;const gate=new Promise<void>(resolve=>release=resolve);
+  await page.route("**/verification-status",async route=>{await gate;await route.fallback();});
+  try {await dialog.getByRole("button",{name:"Refresh verification status"}).click();await expect(dialog.getByLabel("Display name",{exact:true})).toBeDisabled();await expect(dialog.getByRole("button",{name:"Close",exact:true})).toBeDisabled();await page.keyboard.press("Escape");await expect(dialog).toBeVisible();release();await expect(dialog.getByLabel("Display name",{exact:true})).toBeEnabled();}
+  finally {release();}
 });
 test("automatic sync follows all pages and discovers accounts on tab return without losing an access draft", async ({
   page,
