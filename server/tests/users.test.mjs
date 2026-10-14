@@ -1182,10 +1182,19 @@ test(
       finally { await admin.query(`DROP TRIGGER reject_profile_audit ON "AuditEvent"; DROP FUNCTION reject_profile_audit()`); }
       assert.equal((await call("profile-owner","GET",path)).json().contactName,"Resident Contact");
       assert.equal((await call("profile-owner","GET",path)).json().version,2);
+      const privateKeys=["contactName","contactPhone","emergencyContactName","emergencyContactPhone","managementNotes"];
+      const directory=(await call("platform","GET","/api/platform/users")).json();
+      const company=(await call("platform","GET","/api/platform/companies/profile-a")).json();
+      for(const row of [directory.find(p=>p.id==="profile-resident").membership,company.memberships.find(m=>m.userId==="profile-resident"),(await call("profile-owner","GET","/api/company/members")).json().find(m=>m.userId==="profile-resident")]) for(const key of privateKeys) assert.equal(Object.hasOwn(row,key),false,"access responses must omit "+key);
+      const unchanged=await call("platform","PUT","/api/platform/users/profile-resident/membership",{companyId:"profile-a",role:"resident",status:"active",expectedVersion:2});assert.equal(unchanged.statusCode,200,unchanged.body);
+      for(const key of privateKeys) assert.equal(Object.hasOwn(unchanged.json(),key),false,"membership mutations must omit "+key);
+      assert.equal((await call("profile-owner","GET",path)).json().managementNotes,"Company A private note");
+      await db.auditEvent.createMany({data:[{id:"profile-authored-a",companyId:"profile-a",actorId:"profile-resident",targetId:"maintenance-one",action:"maintenance.created",requestId:"fixture"},{id:"profile-authored-foreign",companyId:"profile-b",actorId:"profile-resident",targetId:"maintenance-other",action:"maintenance.created",requestId:"fixture"}]});
+      const recent=(await call("profile-owner","GET",path)).json().activity;assert.ok(recent.some(e=>e.id==="profile-authored-a"));assert.equal(recent.some(e=>e.id==="profile-authored-foreign"),false);
       const audit=(await call("profile-owner","GET",path)).json().activity;assert.equal(audit.filter(x=>x.action==="resident.profile.updated").length,1);assert.equal(JSON.stringify(audit).includes("private note"),false);
       await db.companyMembership.update({where:{userId:"profile-manager"},data:{status:"disabled"}});
       assert.equal((await call("profile-manager","PATCH",path,{...valid,expectedVersion:2})).statusCode,403);
-      const transfer=await call("platform","PUT","/api/platform/users/profile-resident/membership",{companyId:"profile-b",role:"resident",status:"active",expectedVersion:2});assert.equal(transfer.statusCode,200,transfer.body);
+      const transfer=await call("platform","PUT","/api/platform/users/profile-resident/membership",{companyId:"profile-b",role:"resident",status:"active",expectedVersion:3});assert.equal(transfer.statusCode,200,transfer.body);
       assert.equal((await call("profile-owner","GET",path)).statusCode,404);
       const moved=(await call("profile-foreign","GET",path)).json();assert.equal(moved.contactName,null);assert.equal(moved.managementNotes,null);assert.equal(moved.activity.some(e=>e.action==="resident.profile.updated"),false);
     });

@@ -13,6 +13,7 @@ import {
   permissions,
   requirePermission,
 } from "./access.js";
+import { membershipAccessSelect } from "./membership-view.js";
 import { registerResidentProfiles } from "./resident-profiles.js";
 import { input, mutation, boundedText } from "./operational.js";
 import { registerCompanyAdministration } from "./company-administration.js";
@@ -287,7 +288,7 @@ export function registerApplication(
         platformRole: true,
         emailVerified: true,
         firstSignedInAt: true,
-        membership: { include: { company: true } },
+        membership: { select: { ...membershipAccessSelect, company: true } },
         companyId: true,
         role: true,
       },
@@ -326,6 +327,7 @@ export function registerApplication(
           where: { userId },
           create: { userId, companyId, role, status },
           update: { companyId, role, status, ...resetContact, version: { increment: 1 } },
+          select: membershipAccessSelect,
         });
         // Clear obsolete assignment evidence after explicit review. Local membership is authoritative.
         await tx.user.update({
@@ -430,8 +432,8 @@ export function registerApplication(
     const companyId = scope(request, "members.manage");
     return db.companyMembership.findMany({
       where: { companyId },
-      include: {
-        user: { select: { id: true, name: true, email: true, status: true } },
+      select: {
+        ...membershipAccessSelect, user: { select: { id: true, name: true, email: true, status: true } },
       },
       orderBy: { createdAt: "asc" },
     });
@@ -468,6 +470,7 @@ export function registerApplication(
         const result = await tx.companyMembership.update({
           where: { userId },
           data: { role, status, version: { increment: 1 } },
+          select: membershipAccessSelect,
         });
         await audit(tx, request, "membership.updated", companyId, userId, {
           role,

@@ -91,7 +91,7 @@ export function registerResidentProfiles(
             },
           });
           const activity = await tx.auditEvent.findMany({
-            where: { companyId, targetId: userId },
+            where: { companyId, OR: [{targetId:userId},{actorId:userId}] },
             select: { id: true, action: true, createdAt: true },
             orderBy: [{ createdAt: "desc" }, { id: "desc" }],
             take: 100,
