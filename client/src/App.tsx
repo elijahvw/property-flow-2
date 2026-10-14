@@ -25,6 +25,7 @@ import {
   AcceptInvitation,
   Audit,
 } from "./pages/Workspace";
+import { Maintenance } from "./pages/Maintenance";
 import PropertyDetail from "./pages/PropertyDetail";
 import "./App.css";
 class ErrorBoundary extends Component<
@@ -170,6 +171,8 @@ function Pages() {
     "/company/members": <Team />,
     "/company/settings": <CompanySettings />,
     "/resident": <Resident />,
+    "/resident/maintenance": <Maintenance resident />,
+    "/company/maintenance": <Maintenance />,
     "/account": <Account />,
   };
   return (

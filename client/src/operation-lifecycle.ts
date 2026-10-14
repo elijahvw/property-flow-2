@@ -1,4 +1,5 @@
 export type OperationName =
+  | 'maintenance.create' | 'maintenance.status'
   | 'page.data.load'
   | 'auth.session.restore' | 'auth.profile.load'
   | 'admin.users.load' | 'admin.companies.load'

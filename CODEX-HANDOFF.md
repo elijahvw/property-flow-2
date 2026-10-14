@@ -1,0 +1,54 @@
+> Publication update: user authorized pushing maintenance-requests-mvp and opening PR #16 (https://github.com/elijahvw/property-flow-2/pull/16). Review all comments/reviews/threads and exact-head CI, then ask the user before merge. Do not deploy. Initial CI found only an ambiguous loading-fixture assertion, corrected with deterministic independent-resource loading and section-scoped assertions; 29 integrated fixtures passed locally. See docs/mvp-status.md for details. Earlier local-only instructions below are historical and superseded by the explicit publication authorization.
+
+> Continuation update — 2026-10-13 (America/New_York): the historical blocker below has now been fixed locally. Main 8098802 is integrated by merge 1999787; durable company/requester submission keys, authorization-safe replay and regression tests pass. Current evidence and limits are recorded at the top of docs/mvp-status.md. Run `node scripts/test-maintenance.mjs` after builds with cached postgres:17-alpine and installed Chromium for isolated real PostgreSQL/browser validation. Independent Bugbot found no actionable core implementation issues. All disposable resources were cleaned up. Branch remains maintenance-requests-mvp, local/unpublished; obtain user authorization before publication/merge, and do not deploy or modify live/shared databases. The original handoff below is retained as historical evidence.
+
+## Trey guidance supplied by the user
+
+This is a development environment. PRs #13–15 were merged and checked; nothing was deployed during wrap-up. Maintenance idempotency is implemented locally in `3c5def0`, but publication, remote CI, review of every PR conversation comment/review body/inline thread, and explicit user merge approval remain required. Confirm durable committed-response-loss replay and regression coverage against the exact proposed head before merging; CI alone does not establish readiness. Deployment requires separate user authorization.
+
+After an approved dev deployment, perform real authenticated acceptance with owner, manager and resident accounts: invitations and acceptance, property assignments, role/company boundaries and revocation, and maintenance submission/retry/list/status changes end to end. No acceptance run or deployment is authorized by this guidance alone.
+
+Keep implementation in this Codex chat to avoid overlapping changes with Trey. Maintain the landlord/manager-first direction. Next build order: units/lease records, basic manual financial tracking, then documents unless usability testing establishes greater document urgency. Manual financial tracking does not authorize payment processing or paid integrations. Private documents require secure private storage and authorization-controlled access; never store them in the existing public frontend bucket. Secure storage design and provisioning are future separately scoped work.
+
+# PropertyFlow continuation handoff — 2026-10-14
+
+Stop point: **maintenance is implemented locally but blocked from publication by duplicate submissions after a lost committed response.** This handoff is documentation only; do not mistake passing checks for release readiness.
+
+## Workspace and dependencies
+
+- Worktree: `/Users/elijahward/Documents/Codex/2026-10-13/task-7/maintenance-requests`
+- Branch: `maintenance-requests-mvp`; implementation/dependency head before this handoff: `4e2b78d`.
+- Maintenance implementation: `c7aef20`; assignment harness `496a663` retained as `1cf022e`; opaque Auth0 subject fix `d3f5c3081c086a7141e82c1a702302b9806dae92` integrated as `7764a31`; integration handoff `4e2b78d`.
+- Source assignment worktree `/Users/elijahward/Documents/Codex/2026-10-13/task-5/resident-assignments` must remain untouched. Preserve all user work.
+- Last locally observed `origin/main`: `163df0b` (PR13 onboarding merged). Read-only GitHub check at handoff found [PR14](https://github.com/elijahvw/property-flow-2/pull/14) open/unmerged, head `d3f5c30`, base `163df0b`. Parent handles its approval/merge. Refresh current remote state before integrating; these are observations, not permanent status.
+- Maintenance has no pushed branch/new PR. No deployment or existing database change was performed. All author disposable test containers and fixture server were cleaned up.
+
+## Product direction and implemented slice
+
+Build adequate landlord/property-manager operations across properties, finances, documents and maintenance. Maintenance is one bounded workflow, not the overriding product focus. No paid integrations or payment processing are authorized by financial tracking intent. Do not expand scope at this stopping point.
+
+Residents can submit title/description and low/normal/high priority for assigned properties, and view their own requests only while currently authorized. Owners/managers list company requests, filter property/status, and update open/in_progress/resolved (including reopening). UI has actual matching counts and loading/empty/error/retry/success states. No attachments, vendors, notifications, assignees, due dates or fictional overdue policy.
+
+Company/requester derive from session; Origin/CSRF protects mutations. Serializable transactions share the resident User-row revocation lock; scoped RLS plus composite company/property FK protects company boundaries. Application separately enforces same-company resident ownership/current assignment. Managers retain company history after removal/transfer; residents lose access. Reactivation requires explicit reassignment. Creation/status changes audit transactionally. See `server/src/maintenance.ts`, `client/src/pages/Maintenance.tsx`, additive migration `202610140004_maintenance_requests`, and `docs/mvp-status.md`.
+
+## Review blocker and next bounded task
+
+The browser can lose/abort the response **after PostgreSQL commits**. The form reports failure and retains input. Clicking Submit again sends a new POST and creates a second request and a second creation audit. Disabling the form while busy or retrying Serializable transactions does not prevent this cross-request duplicate.
+
+Independent reviewer evidence is preserved in `/tmp/propertyflow-maintenance-review.AQgsal` (temporary files may not survive indefinitely):
+
+- `browser-api.log` and `review-browser-api.mjs`: real UI → cookie/CSRF Fastify → runtime Prisma → PostgreSQL reproduction; committed response loss followed by retry produces two rows/audits. Actual manager PATCH/filter also passed.
+- `focused.log` and `review-focused.mjs`: repeated POST duplicate proof, creation-leading revocation ordering, concurrent manager audit chain, audit rollback and real SQLSTATE exhaustion.
+- `build.log`, `maintenance-pg.log`, `regressions.log`, `browser-rerun.log`, `migration-deploy.log`, `dependency-verification.log`: supporting independent evidence. Earlier `browser.log` contains an initial failed run; do not present it as passing.
+
+Next task: add a **durable submission key/idempotency contract**, scoped to authenticated requester/company, with atomic persistence and uniqueness. Retain the same key for retry of the same logical submission after ambiguous response loss; reject mismatched payload reuse; rotate only for a deliberate new request. Always recheck current authorization before returning a replay response so revoked residents cannot recover inaccessible content. Concurrent/replayed attempts must yield one request and one creation audit. Preserve rollback and tenant isolation. Add real browser/API/PostgreSQL regression for commit-then-response-loss, concurrent replay, mismatch, cross-user/company keys and revocation; run independent review again. Do not fix this in the current stopping-point task.
+
+## Evidence and remaining limits
+
+Author builds passed; focused PostgreSQL **6 passed**, browser fixtures **4 passed**, original safe regression subset **25 passed**, dependency integration safe subset **28 passed**. Author logs: `/tmp/propertyflow-maintenance-final-postgres.txt`, `/tmp/propertyflow-maintenance-final-regressions.txt`, `/tmp/propertyflow-maintenance-dependency-tests.txt`. Independent `focused.log` reports **7 passed** and confirms additional concurrency/rollback behavior, but also reproduces the blocker. Existing fixture tests do not cover lost committed responses. Lists remain unpaginated; live Auth0 acceptance and maintenance remote CI remain outstanding. No claims of tenant readiness.
+
+Before each PR readiness/merge decision, read all conversation comments, inline threads and review bodies with pagination, resolve substantive findings against the exact head, check CI and refresh merge state. Obtain the required parent/user approval for each PR; never infer merge/deployment authorization from tests or prior approval of another head. No push/new PR without parent request. No existing/shared DB operations; any real DB test must use already authorized cached-image, unique exact container ID, tmpfs/no-volume, loopback ephemeral-port disposable procedure and cleanup only its own resources.
+
+## Continuation prompt
+
+“Continue PropertyFlow from `/Users/elijahward/Documents/Codex/2026-10-13/task-7/maintenance-requests` on `maintenance-requests-mvp`. Read CODEX-HANDOFF.md and docs/mvp-status.md, inspect status and current PR14/main state, and preserve all work. Implement only the durable maintenance submission-key/idempotency fix for committed response loss and retry duplicates, including authorization-safe replay and meaningful concurrent/browser/real PostgreSQL tests. Use reviewer reproduction references in `/tmp/propertyflow-maintenance-review.AQgsal`. Keep manager-first balanced product direction; no feature expansion, deployment, existing database modification, push/new PR or merge without applicable parent/user authorization. Return a focused local commit and exact evidence for independent review.”

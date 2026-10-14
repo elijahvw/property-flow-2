@@ -23,6 +23,7 @@ model Company {
   status     String @default("active")
   memberships CompanyMembership[]
   invitations Invitation[]
+  maintenanceRequests MaintenanceRequest[]
 }
 
 model User {
@@ -35,6 +36,7 @@ model User {
   accessInitializedAt DateTime?
   emailVerified Boolean @default(false)
   identities Identity[]
+  maintenanceRequests MaintenanceRequest[]
   membership CompanyMembership?
   sessions Session[]
   companyId  String?
@@ -119,6 +121,7 @@ model AuditEvent {
 }
 
 model Property {
+  maintenanceRequests MaintenanceRequest[]
   assignments ResidentPropertyAssignment[]
   id          String   @id @default(cuid())
   name        String
@@ -144,4 +147,25 @@ model ResidentPropertyAssignment {
   membership CompanyMembership @relation(fields: [userId, companyId], references: [userId, companyId], onDelete: Restrict, onUpdate: Restrict)
   @@id([propertyId, userId])
   @@index([companyId, userId])
+}
+
+model MaintenanceRequest {
+  submissionKey String?
+  submissionHash String?
+  @@unique([companyId, requesterId, submissionKey])
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  requesterId String
+  title String
+  description String
+  priority String @default("normal")
+  status String @default("open")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  property Property @relation(fields: [propertyId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Restrict)
+  requester User @relation(fields: [requesterId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@index([companyId, status, propertyId])
+  @@index([companyId, requesterId])
 }
