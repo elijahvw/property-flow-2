@@ -1,7 +1,16 @@
-import {UserProvisioning, UserVerificationControls} from "../components/UserProvisioning";
-import React, { useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { api } from "../api";
+import {
+  UserProvisioning,
+  UserVerificationControls,
+} from "../components/UserProvisioning";
+import React, { useEffect, useState } from "react";
+import { useUserDirectory } from "../useUserDirectory";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
+import { api, ApiError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { monitorOperation } from "../operations";
 import { useResource } from "../useResource";
@@ -145,6 +154,55 @@ function RoleSelect({
     </label>
   );
 }
+function AssignmentCompanySelect({
+  companies,
+  initialValue,
+}: {
+  companies: Company[];
+  initialValue: string;
+}) {
+  const [value, setValue] = useState(initialValue);
+  const unavailable =
+    !!value && !companies.some((c) => c.id === value && c.status === "active");
+  return (
+    <>
+      <label htmlFor="person-company">
+        Company
+        <select
+          id="person-company"
+          required
+          name="companyId"
+          aria-describedby={unavailable ? "company-availability" : undefined}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+        >
+          <option value="" disabled>
+            Select company
+          </option>
+          {value && !companies.some((c) => c.id === value) && (
+            <option value={value} disabled>
+              Previously selected company (unavailable)
+            </option>
+          )}
+          {companies
+            .filter((c) => c.status === "active" || c.id === value)
+            .map((c) => (
+              <option key={c.id} value={c.id} disabled={c.status !== "active"}>
+                {c.name}
+                {c.status !== "active" ? " (suspended)" : ""}
+              </option>
+            ))}
+        </select>
+      </label>
+      {unavailable && (
+        <span id="company-availability" role="alert">
+          The selected company is unavailable. Choose an active company before
+          saving.
+        </span>
+      )}
+    </>
+  );
+}
 function StatusSelect({ value = "active" }: { value?: string }) {
   return (
     <label>
@@ -160,7 +218,7 @@ function Badge({ children }: { children: React.ReactNode }) {
   return <span className="badge">{children}</span>;
 }
 
-export {Companies,CompanyDetail} from "./CompanyAdministration";
+export { Companies, CompanyDetail } from "./CompanyAdministration";
 function InvitationForm({
   companyId,
   owner = false,
@@ -216,28 +274,126 @@ function InvitationForm({
     </>
   );
 }
-export function People(){const {data}=useAuth();return <PeopleWorkspace key={`${data?.user.id}:${data?.permissions.join(",")}`}/>;}
+export function People() {
+  const { data } = useAuth();
+  return (
+    <PeopleWorkspace key={`${data?.user.id}:${data?.permissions.join(",")}`} />
+  );
+}
 function PeopleWorkspace() {
-  const r = useResource<Person[]>("/api/platform/users"),
-    companies = useResource<Company[]>("/api/platform/companies");
+  const r = useResource<Person[]>("/api/platform/users", true),
+    companies = useResource<Company[]>("/api/platform/companies", true, true);
   const [params] = useSearchParams();
-  const [selected, setSelected] = useState(params.get("userId")||"");
-  const [query,setQuery] = useState("");
-  const person = r.data?.find((p) => p.id === selected);
+  const [selected, setSelected] = useState(params.get("userId") || "");
+  const [query, setQuery] = useState("");
+  const [creating, setCreating] = useState(false);
+  const directory = useUserDirectory(r.reload);
+  const [draft, setDraft] = useState<Person | null>(null);
+  const currentPerson = r.data?.find((p) => p.id === selected);
+  const person =
+    draft?.id === selected
+      ? {
+          ...draft,
+          emailVerified: currentPerson?.emailVerified ?? draft.emailVerified,
+          status: currentPerson?.status ?? draft.status,
+        }
+      : currentPerson;
+  useEffect(() => {
+    if (currentPerson && draft?.id !== selected) setDraft(currentPerson);
+  }, [selected, currentPerson, draft?.id]);
   return (
     <>
       <header className="page-heading">
         <p className="eyebrow">Platform</p>
-        <h1>People & access</h1>
+        <h1>Users</h1>
         <p>
-          Set up identities, company assignments and roles before a person’s first sign-in. Email verification is tracked separately.
+          All sign-in accounts appear here automatically, including people who
+          have not signed in. Assign company access when you are ready.
         </p>
       </header>
-      <p className="help">Auth0 manages sign-in identities; PropertyFlow manages company roles. Importing an account does not assign access.</p>
-      <UserProvisioning saved={(id)=>{r.reload();if(id)setSelected(id);}} />
-      {params.get("companyId")&&<section className="panel"><h2>Invite by email</h2><p>Create an invitation for {companies.data?.find(c=>c.id===params.get("companyId"))?.name||"this company"}. The person signs in when accepting; no separate first login is needed.</p><InvitationForm companyId={params.get("companyId")!} owner /></section>}
+      <button onClick={() => setCreating((value) => !value)}>
+        {creating ? "Cancel new user" : "Add user"}
+      </button>
+      {creating && (
+        <UserProvisioning
+          saved={(id) => {
+            r.reload();
+            if (id) setSelected(id);
+            setCreating(false);
+          }}
+        />
+      )}
+      <p className="help">
+        New accounts start without a company role. Existing roles and disabled
+        access are preserved.
+      </p>
+      {params.get("companyId") && (
+        <section className="panel">
+          <h2>Invite by email</h2>
+          <p>
+            Create an invitation for{" "}
+            {companies.data?.find((c) => c.id === params.get("companyId"))
+              ?.name || "this company"}
+            . The person signs in when accepting; no separate first login is
+            needed.
+          </p>
+          <InvitationForm companyId={params.get("companyId")!} owner />
+        </section>
+      )}
       <section className="panel">
-        <h2>Application people</h2><label>Search application people<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Name or email"/></label><button className="secondary" onClick={r.reload}>Reload people</button>
+        <h2>All users</h2>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(query.trim()))
+              directory.refresh(query.trim());
+          }}
+        >
+          <label>
+            Search users
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Name or email"
+            />
+          </label>
+          <button type="submit" disabled={directory.syncing}>
+            Search
+          </button>
+        </form>
+        {directory.syncing && <p role="status">Checking for new accounts…</p>}
+        {directory.error && (
+          <div role="alert">
+            <p>
+              {directory.error} Some accounts may be missing. Existing users
+              remain available.
+            </p>
+            <button className="secondary" onClick={() => directory.refresh()}>
+              Try again
+            </button>
+          </div>
+        )}
+        {r.data && r.error && <p role="alert">{r.error}</p>}
+        {directory.limited && (
+          <p role="status">
+            The sign-in provider lists at most 1,000 accounts. Search a complete
+            email to find an account beyond that list.
+          </p>
+        )}
+        {!!directory.conflicts.length && (
+          <details>
+            <summary>
+              {directory.conflicts.length} accounts need identity review
+            </summary>
+            <ul>
+              {directory.conflicts.map((c) => (
+                <li key={c.id}>
+                  {c.email} ({c.id}): {c.message}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         {!r.data ? (
           <LoadState error={r.error} retry={r.reload} />
         ) : (
@@ -256,39 +412,66 @@ function PeopleWorkspace() {
                 </tr>
               </thead>
               <tbody>
-                {r.data.filter(p=>`${p.name||""} ${p.email}`.toLowerCase().includes(query.toLowerCase())).map((p) => (
-                  <tr key={p.id}>
-                    <td>
-                      <strong>{p.name || p.email}</strong>
-                      <span className="cell-detail">{p.email}</span>
-                    </td>
-                    <td>{p.emailVerified ? "Verified" : "Not verified"}<span className="cell-detail">{p.firstSignedInAt ? "Has signed in" : "Awaiting first sign-in"}</span></td>
-                    <td>
-                      {p.membership?.company.name || "Unassigned"}
-                      {!p.membership && p.companyId && (
+                {r.data
+                  .filter((p) =>
+                    `${p.name || ""} ${p.email}`
+                      .toLowerCase()
+                      .includes(query.trim().toLowerCase()),
+                  )
+                  .map((p) => (
+                    <tr key={p.id}>
+                      <td>
+                        <strong>{p.name || p.email}</strong>
+                        <span className="cell-detail">{p.email}</span>
+                      </td>
+                      <td>
+                        {p.emailVerified ? "Verified" : "Not verified"}
                         <span className="cell-detail">
-                          Previous assignment needs review
+                          {p.firstSignedInAt
+                            ? "Has signed in"
+                            : "Awaiting first sign-in"}
                         </span>
-                      )}
-                    </td>
-                    <td>
-                      {p.platformRole === "owner"
-                        ? "Platform owner"
-                        : p.membership?.role || "No role assigned"}
-                    </td>
-                    <td>{p.status}</td>
-                    <td>
-                      <button
-                        className="secondary"
-                        onClick={() => setSelected(p.id)}
-                      >
-                        Manage
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td>
+                        {p.membership?.company.name || "Unassigned"}
+                        {!p.membership && p.companyId && (
+                          <span className="cell-detail">
+                            Previous assignment needs review
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        {p.platformRole === "owner"
+                          ? "Platform owner"
+                          : p.membership?.role || "No role assigned"}
+                      </td>
+                      <td>{p.status}</td>
+                      <td>
+                        <button
+                          className="secondary"
+                          onClick={() => {
+                            setDraft(p);
+                            setSelected(p.id);
+                          }}
+                        >
+                          Manage
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
+            {!r.data.some((p) =>
+              `${p.name || ""} ${p.email}`
+                .toLowerCase()
+                .includes(query.trim().toLowerCase()),
+            ) && (
+              <p>
+                {query
+                  ? "No users match this search. Search a complete email to check for a newly created account."
+                  : "No users yet."}
+              </p>
+            )}
           </div>
         )}
       </section>
@@ -304,47 +487,53 @@ function PeopleWorkspace() {
             <LoadState error={companies.error} retry={companies.reload} />
           ) : (
             <Form
-              key={`${person.id}:${person.membership?.version??0}`}
+              key={`${person.id}:${person.membership?.version ?? 0}`}
               operation="company.user.assign"
               submit={async (data) => {
-                await api(
-                  `/api/platform/users/${encodeURIComponent(person.id)}/membership`,
-                  {
-                    method: "PUT",
-                    body: {
-                      expectedVersion: person.membership?.version ?? null,
-                      companyId: text(data, "companyId"),
-                      role: text(data, "role"),
-                      status: text(data, "status"),
+                try {
+                  const changed = await api<Member>(
+                    `/api/platform/users/${encodeURIComponent(person.id)}/membership`,
+                    {
+                      method: "PUT",
+                      body: {
+                        expectedVersion: person.membership?.version ?? null,
+                        companyId: text(data, "companyId"),
+                        role: text(data, "role"),
+                        status: text(data, "status"),
+                      },
                     },
-                  },
-                );
-                r.reload();
+                  );
+                  setDraft({
+                    ...person,
+                    companyId: null,
+                    role: "unassigned",
+                    membership: {
+                      ...changed,
+                      company: companies.data!.find(
+                        (c) => c.id === changed.companyId,
+                      )!,
+                    },
+                  });
+                  r.reload();
+                } catch (error) {
+                  if (
+                    error instanceof ApiError &&
+                    error.code === "RECORD_CHANGED"
+                  )
+                    r.reload();
+                  throw error;
+                }
               }}
             >
               <div className="form-grid">
-                <label htmlFor="person-company">
-                  Company
-                  <select
-                    id="person-company"
-                    required
-                    name="companyId"
-                    defaultValue={
-                      person.membership?.companyId || params.get("companyId") || ""
-                    }
-                  >
-                    <option value="" disabled>
-                      Select company
-                    </option>
-                    {companies.data
-                      .filter((c) => c.status === "active")
-                      .map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
+                <AssignmentCompanySelect
+                  companies={companies.data}
+                  initialValue={
+                    person.membership?.companyId ||
+                    params.get("companyId") ||
+                    ""
+                  }
+                />
                 <RoleSelect
                   value={person.membership?.role || "resident"}
                   owner
@@ -357,7 +546,12 @@ function PeopleWorkspace() {
               </p>
             </Form>
           )}
-          <UserVerificationControls key={person.id} id={person.id} verified={person.emailVerified} saved={r.reload} />
+          <UserVerificationControls
+            key={person.id}
+            id={person.id}
+            verified={person.emailVerified}
+            saved={r.reload}
+          />
           {person.platformRole !== "owner" && (
             <div className="divider">
               <h3>Platform account</h3>
@@ -382,6 +576,7 @@ function PeopleWorkspace() {
     </>
   );
 }
+
 export function Properties() {
   const { can } = useAuth();
   const r = useResource<

@@ -77,8 +77,8 @@ async function fixture(page: Page) {
       }
       return json(row);
     }
-    if (path === "/api/platform/identity-users")
-      return json({ users: [], nextPage: null });
+    if (path === "/api/platform/users/sync")
+      return json({ conflicts: [], nextPage: null, limited: false });
     return json([]);
   });
   return state;
@@ -155,11 +155,55 @@ test("company-specific add person preserves context and offers verified-email in
   await page.getByRole("link", { name: "Add existing person to FAP" }).click();
   await expect(page).toHaveURL(/companyId=a/);
   await expect(
-    page.getByRole("heading", { name: "Auth0 sign-in directory" }),
+    page.getByRole("heading", { name: "Users", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Invite by email" }),
   ).toBeVisible();
   await expect(page.getByLabel("Email address", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Company role")).toBeVisible();
+});
+
+test("Companies automatically refreshes on tab return and in the foreground while preserving new-company input", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  await page.clock.install();
+  await page.goto("/platform/companies");
+  await expect(
+    page.getByRole("link", { name: "FAP", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Reload companies" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Add company", exact: true }).click();
+  await page
+    .getByLabel("Company name", { exact: true })
+    .fill("Unsaved company");
+  state.companies.push({
+    id: "other",
+    name: "Other Company",
+    status: "active",
+    version: 1,
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(
+    page.getByRole("link", { name: "Other Company", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Company name", { exact: true })).toHaveValue(
+    "Unsaved company",
+  );
+  state.companies.push({
+    id: "later",
+    name: "Later Company",
+    status: "active",
+    version: 1,
+  });
+  await page.clock.fastForward(60000);
+  await expect(
+    page.getByRole("link", { name: "Later Company", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Company name", { exact: true })).toHaveValue(
+    "Unsaved company",
+  );
 });

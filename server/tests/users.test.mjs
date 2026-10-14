@@ -106,16 +106,21 @@ test(
     let createCalls = 0,
       verificationCalls = 0,
       setupCalls = 0;
-    let providerError = false;
+    let providerError = false,
+      listHook;
     const provider = {
       issuer: "https://unused.auth0.com/",
       databaseConnection: "Username-Password-Authentication",
       async list(page, email) {
+        if (providerError) throw Error("provider unavailable");
+        const source = [...remote.values()].filter(
+          (u) => !email || u.email === email,
+        );
+        if (listHook) await listHook();
         return {
-          users: [...remote.values()]
-            .filter((u) => !email || u.email === email)
-            .slice(page * 50, page * 50 + 50),
-          nextPage: null,
+          users: source.slice(page * 50, page * 50 + 50),
+          nextPage:
+            (page + 1) * 50 < Math.min(source.length, 1000) ? page + 1 : null,
         };
       },
       async get(id) {
@@ -872,7 +877,286 @@ test(
       },
     );
     await t.test(
-      "real browser can add an Auth0 account without any target-user sign-in",
+      "automatic reconciliation is platform-only, CSRF protected, repeatable and preserves existing access",
+      async () => {
+        const saved = new Map(remote);
+        remote.clear();
+        const candidate = {
+          ...identity,
+          user_id: "auth0|automatic",
+          email: "automatic@test.invalid",
+          app_metadata: { role: "admin" },
+        };
+        remote.set(candidate.user_id, candidate);
+        const path = "/api/platform/users/sync";
+        try {
+          await call("platform", "GET", "/api/platform/users");
+          assert.equal(
+            await db.user.findUnique({ where: { id: candidate.user_id } }),
+            null,
+            "GET never provisions accounts",
+          );
+          for (const actor of ["owner", "manager", "staff", "resident"])
+            assert.equal(
+              (await call(actor, "POST", path, { page: 0 })).statusCode,
+              403,
+            );
+          for (const headers of [
+            { origin: "https://evil.test" },
+            { "x-csrf-token": "bad" },
+          ])
+            assert.equal(
+              (await call("platform", "POST", path, { page: 0 }, headers))
+                .statusCode,
+              403,
+            );
+          for (const body of [
+            { page: -1 },
+            { page: 20 },
+            { page: "0" },
+            { page: 0, role: "owner" },
+            { email: "bad" },
+          ])
+            assert.equal(
+              (await call("platform", "POST", path, body)).statusCode,
+              400,
+            );
+          await db.user.create({
+            data: {
+              id: "platform2",
+              email: "platform2@test.invalid",
+              emailVerified: true,
+              platformRole: "owner",
+            },
+          });
+          await db.session.create({
+            data: {
+              tokenHash: digest("token-platform2"),
+              csrfToken: "csrf",
+              userId: "platform2",
+              expiresAt: new Date(Date.now() + 3600000),
+              idleExpiresAt: new Date(Date.now() + 3600000),
+            },
+          });
+          const responses = await Promise.all([
+            call("platform", "POST", path, { page: 0 }),
+            call("platform", "POST", path, { page: 0 }),
+            call("platform2", "POST", path, { page: 0 }),
+          ]);
+          for (const r of responses) assert.equal(r.statusCode, 200, r.body);
+          let row = await db.user.findUnique({
+            where: { id: candidate.user_id },
+            include: { membership: true },
+          });
+          assert.equal(row.firstSignedInAt, null);
+          assert.equal(row.membership, null);
+          assert.equal(row.platformRole, null);
+          assert.equal(row.role, "unassigned");
+          assert.equal(
+            await db.auditEvent.count({
+              where: {
+                action: "user.preprovisioned",
+                targetId: candidate.user_id,
+              },
+            }),
+            1,
+          );
+          await db.user.update({
+            where: { id: candidate.user_id },
+            data: {
+              status: "disabled",
+              name: "Local display name",
+              emailVerified: true,
+            },
+          });
+          await db.companyMembership.create({
+            data: {
+              userId: candidate.user_id,
+              companyId: "a",
+              role: "staff",
+              status: "disabled",
+            },
+          });
+          assert.equal(
+            (await call("platform", "POST", path, { page: 0 })).statusCode,
+            200,
+          );
+          row = await db.user.findUnique({
+            where: { id: candidate.user_id },
+            include: { membership: true },
+          });
+          assert.equal(row.status, "disabled");
+          assert.equal(row.name, "Local display name");
+          assert.equal(row.emailVerified, true);
+          assert.equal(row.membership.role, "staff");
+          assert.equal(row.membership.status, "disabled");
+          assert.equal(row.membership.version, 1);
+          assert.equal(
+            await db.auditEvent.count({
+              where: {
+                action: "user.preprovisioned",
+                targetId: candidate.user_id,
+              },
+            }),
+            1,
+          );
+        } finally {
+          remote.clear();
+          for (const [id, u] of saved) remote.set(id, u);
+        }
+      },
+    );
+    await t.test(
+      "automatic reconciliation paginates, isolates identity conflicts and supports exact email beyond the listing limit",
+      async () => {
+        const saved = new Map(remote);
+        remote.clear();
+        const path = "/api/platform/users/sync";
+        try {
+          remote.set("auth0|email-conflict", {
+            ...identity,
+            user_id: "auth0|email-conflict",
+            email: "owner@test.invalid",
+          });
+          for (let i = 0; i < 51; i++)
+            remote.set(`auth0|automatic-page-${i}`, {
+              ...identity,
+              user_id: `auth0|automatic-page-${i}`,
+              email: `automatic-page-${i}@test.invalid`,
+            });
+          let r = await call("platform", "POST", path, { page: 0 });
+          assert.equal(r.statusCode, 200, r.body);
+          assert.equal(r.json().nextPage, 1);
+          assert.equal(r.json().conflicts[0].id, "auth0|email-conflict");
+          r = await call("platform", "POST", path, { page: 1 });
+          assert.equal(r.statusCode, 200, r.body);
+          assert.equal(r.json().nextPage, null);
+          assert.equal(
+            await db.user.count({
+              where: { id: { startsWith: "auth0|automatic-page-" } },
+            }),
+            51,
+          );
+          assert.equal(
+            await db.user.findUnique({ where: { id: "auth0|email-conflict" } }),
+            null,
+          );
+          assert.equal(
+            (
+              await db.companyMembership.findUnique({
+                where: { userId: "owner" },
+              })
+            ).role,
+            "owner",
+          );
+          // Only the last listing page is reconciled here; exact search can reach
+          // a fresh account outside that page without scanning or importing it.
+          remote.clear();
+          for (let i = 0; i < 1001; i++)
+            remote.set(`auth0|limit-${i}`, {
+              ...identity,
+              user_id: `auth0|limit-${i}`,
+              email: `limit-${i}@test.invalid`,
+            });
+          r = await call("platform", "POST", path, { page: 19 });
+          assert.equal(r.statusCode, 200, r.body);
+          assert.equal(r.json().limited, true);
+          assert.equal(
+            await db.user.findUnique({ where: { id: "auth0|limit-1000" } }),
+            null,
+          );
+          r = await call("platform", "POST", path, {
+            page: 0,
+            email: "LIMIT-1000@test.invalid",
+          });
+          assert.equal(r.statusCode, 200, r.body);
+          assert.equal(r.json().limited, false);
+          assert.equal(
+            (await db.user.findUnique({ where: { id: "auth0|limit-1000" } }))
+              .firstSignedInAt,
+            null,
+          );
+        } finally {
+          remote.clear();
+          for (const [id, u] of saved) remote.set(id, u);
+        }
+      },
+    );
+    await t.test(
+      "a failed automatic reconciliation page rolls back its accounts and audit entries together",
+      async () => {
+        const saved = new Map(remote);
+        remote.clear();
+        const ids = ["auth0|auto-rollback-a", "auth0|auto-rollback-b"];
+        for (const id of ids)
+          remote.set(id, {
+            ...identity,
+            user_id: id,
+            email: id.replace("|", "-") + "@test.invalid",
+          });
+        await admin.query(
+          `CREATE FUNCTION reject_sync_audit() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN IF NEW.\"targetId\"='auth0|auto-rollback-b' THEN RAISE EXCEPTION 'audit unavailable'; END IF; RETURN NEW; END$$; CREATE TRIGGER reject_sync_audit BEFORE INSERT ON "AuditEvent" FOR EACH ROW EXECUTE FUNCTION reject_sync_audit()`,
+        );
+        try {
+          assert.equal(
+            (
+              await call("platform", "POST", "/api/platform/users/sync", {
+                page: 0,
+              })
+            ).statusCode,
+            500,
+          );
+          assert.equal(await db.user.count({ where: { id: { in: ids } } }), 0);
+          assert.equal(
+            await db.auditEvent.count({ where: { targetId: { in: ids } } }),
+            0,
+          );
+        } finally {
+          await admin.query(
+            `DROP TRIGGER reject_sync_audit ON "AuditEvent";DROP FUNCTION reject_sync_audit()`,
+          );
+          remote.clear();
+          for (const [id, u] of saved) remote.set(id, u);
+        }
+      },
+    );
+    await t.test(
+      "provider failure keeps local users available and revoked administrator cannot reconcile after a provider read",
+      async () => {
+        const path = "/api/platform/users/sync";
+        try {
+          providerError = true;
+          assert.ok(
+            (await call("platform", "POST", path, { page: 0 })).statusCode >=
+              500,
+          );
+          assert.equal(
+            (await call("platform", "GET", "/api/platform/users")).statusCode,
+            200,
+          );
+          providerError = false;
+          listHook = async () => {
+            await db.user.update({
+              where: { id: "platform" },
+              data: { platformRole: null },
+            });
+          };
+          assert.equal(
+            (await call("platform", "POST", path, { page: 0 })).statusCode,
+            403,
+          );
+        } finally {
+          providerError = false;
+          listHook = undefined;
+          await db.user.update({
+            where: { id: "platform" },
+            data: { platformRole: "owner" },
+          });
+        }
+      },
+    );
+    await t.test(
+      "real browser automatically discovers an Auth0 account with no import action or target sign-in",
       { skip: !process.env.TEST_USERS_BROWSER_URL },
       async () => {
         const browser = await chromium.launch({ headless: true });
@@ -908,16 +1192,6 @@ test(
           await page.goto(
             process.env.TEST_USERS_BROWSER_URL + "/platform/users",
           );
-          await page.getByLabel("Exact email (optional)").fill(candidate.email);
-          await page
-            .getByRole("button", {
-              name: "Search or refresh Auth0 accounts",
-              exact: true,
-            })
-            .click();
-          await page
-            .getByRole("button", { name: "Add all accounts on this page" })
-            .click();
           await expect(
             page.getByRole("row").filter({ hasText: candidate.email }),
           ).toContainText("Awaiting first sign-in");

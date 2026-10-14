@@ -82,7 +82,12 @@ export function registerUserAdministration(
       },
     });
   }
-  async function add(tx: Tx, request: FastifyRequest, p: ProviderUser) {
+  async function add(
+    tx: Tx,
+    request: FastifyRequest,
+    p: ProviderUser,
+    refresh = true,
+  ) {
     const id = opaqueUserId(p.user_id),
       issuer = configured().issuer;
     const identity = await tx.identity.findUnique({
@@ -115,10 +120,11 @@ export function registerUserAdministration(
         update: {},
         create: { issuer, subject: id, userId: existing.id },
       });
-      await tx.user.update({
-        where: { id: existing.id },
-        data: { email: p.email, emailVerified: p.email_verified },
-      });
+      if (refresh)
+        await tx.user.update({
+          where: { id: existing.id },
+          data: { email: p.email, emailVerified: p.email_verified },
+        });
       return tx.user.findUniqueOrThrow({
         where: { id: existing.id },
         select: userSelect,
@@ -197,6 +203,72 @@ export function registerUserAdministration(
       for (const p of remote) items.push(await add(tx, request, p));
       return { items };
     });
+  });
+  // Opening Users reconciles missing identities through an authenticated POST,
+  // never a GET side effect. Existing local profiles and access are preserved.
+  server.post("/api/platform/users/sync", auth, async (request) => {
+    platform(request);
+    mutation(request, origin);
+    const b = input(request, ["page", "email"]);
+    const page = b.page ?? 0;
+    if (
+      typeof page !== "number" ||
+      !Number.isInteger(page) ||
+      page < 0 ||
+      page > 19
+    )
+      throw new AccessError(
+        400,
+        "INVALID_INPUT",
+        "Choose a valid directory page.",
+      );
+    const email =
+      b.email === undefined
+        ? undefined
+        : boundedText(b.email, 254, "Email").toLowerCase();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      throw new AccessError(400, "INVALID_INPUT", "Enter a complete email.");
+    const source = await configured().list(page, email);
+    let conflicts: { id: string; email: string; message: string }[];
+    // One page is atomic and shares the administrator revocation fence. A
+    // concurrent callback may win an identity insert; retry the entire page
+    // with a fresh snapshot so uniqueness never becomes a duplicate account.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        conflicts = await checked(request, async (tx) => {
+          const issues: { id: string; email: string; message: string }[] = [];
+          for (const profile of source.users) {
+            try {
+              await add(tx, request, profile, false);
+            } catch (error) {
+              if (
+                !(error instanceof AccessError) ||
+                !["IDENTITY_EMAIL_CONFLICT", "IDENTITY_CONFLICT"].includes(
+                  error.code,
+                )
+              )
+                throw error;
+              issues.push({
+                id: profile.user_id,
+                email: profile.email,
+                message: error.message,
+              });
+            }
+          }
+          return issues;
+        });
+        break;
+      } catch (error) {
+        if (attempt < 2 && (error as { code?: string }).code === "P2002")
+          continue;
+        throw error;
+      }
+    }
+    return {
+      nextPage: source.nextPage,
+      conflicts,
+      limited: !email && page === 19 && source.users.length === 50,
+    };
   });
   server.post("/api/platform/users/provision", auth, async (request) => {
     platform(request);
