@@ -93,11 +93,14 @@ export async function serializable<T>(db: PrismaClient, run: (tx: Tx) => Promise
   for (let attempt = 0; ; attempt++) {
     try { return await db.$transaction(run, { isolationLevel: "Serializable" }); }
     catch (error) {
-      const failure = error as { code?: string; meta?: { code?: string } };
+      const failure = error as { code?: string; meta?: { code?: string; driverAdapterError?: { cause?: { originalCode?: string } } } };
       // Raw lock queries can report PostgreSQL SQLSTATE through P2010.
       const retryable = failure.code === "P2034" ||
         ["40001", "40P01"].includes(failure.code ?? "") ||
-        (failure.code === "P2010" && ["40001", "40P01"].includes(failure.meta?.code ?? ""));
+        (failure.code === "P2010" && [
+          failure.meta?.code,
+          failure.meta?.driverAdapterError?.cause?.originalCode,
+        ].some(code => ["40001", "40P01"].includes(code ?? "")));
       if (!retryable) throw error;
       if (attempt >= 2) throw new AccessError(409, "ACCESS_CONFLICT", "Access changed. Refresh and try again.");
     }
