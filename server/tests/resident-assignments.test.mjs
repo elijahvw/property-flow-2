@@ -29,7 +29,7 @@ async function fixture(t, actor = person('owner','owner')) {
   const db={$transaction:async(run,options)=>{assert.equal(options.isolationLevel,'Serializable'); return run(tx);}};
   const app=Fastify({routerOptions:{maxParamLength:MAX_USER_ID_BYTES}}); t.after(()=>app.close());
   registerApplication(app,db,async request=>{request.principal=actor;},'https://example.test');
-  const call=(method,url,payload,headers={})=>app.inject({method,url,headers,...(payload?{payload}:{})});
+  const call=(method,url,payload,headers={})=>{if(payload&&url.endsWith('/membership'))payload={...payload,expectedVersion:null};return app.inject({method,url,headers,...(payload?{payload}:{})});};
   return {call,users,rows,locks,audits,actor};
 }
 test('assignment permission belongs only to active company owners/managers',()=>{

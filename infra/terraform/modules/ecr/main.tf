@@ -101,6 +101,8 @@ resource "aws_ecs_task_definition" "app" {
         { name = "CLOUDFRONT_ORIGIN_SECRET", value = var.vars.cloudfront_origin_secret },
         { name = "AUTH0_WEB_CLIENT_ID", value = var.vars.auth0_web_client_id },
         { name = "AUTH0_WEB_CLIENT_SECRET", value = var.vars.auth0_web_client_secret },
+        { name = "AUTH0_MANAGEMENT_CLIENT_ID", value = var.vars.auth0_m2m_client_id },
+        { name = "AUTH0_MANAGEMENT_CLIENT_SECRET", value = var.vars.auth0_m2m_client_secret },
         { name = "RUNTIME_DATABASE_URL", value = local.runtime_database_url },
         { name = "DATABASE_URL", value = local.database_url },
         { name = "DD_TRACE_AGENT_HOSTNAME", value = "localhost" },

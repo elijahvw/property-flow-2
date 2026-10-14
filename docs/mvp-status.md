@@ -1,3 +1,9 @@
+## Administrator foundation correction — 2026-10-14
+
+Main e842ae1 (PR17+18) is deployed and public/backend checks passed. User's FAP company is Company A. The administrator setup was confusing because local users were conflated with Auth0 identities and company creation accepted only a name. The prelogin-user-management branch now supports pre-login Auth0 discovery/provisioning, explicit verification/setup controls, clear local-role assignment and complete persisted company profiles. Both creation and editing have retry/concurrency protection; no placeholder company feature controls were added. Existing pre-login work was retained before modification. Detailed audit, setup and test evidence is maintained at the top of docs/access-overhaul.md.
+
+This is implementation/test evidence, not deployed acceptance. New M2M environment bindings require a reviewed Terraform plan/apply and Auth0 permissions validation during the later user-run deployment. No live account or database change was made as part of this code work. Obtain merge approval after PR comments/reviews/CI.
+
 ## Manual property finances — review checkpoint, 2026-10-14
 
 The second feature slice follows units/leases PR #17 and remains separate on `codex/manual-finances-mvp`. Owners and managers can record income received or expenses paid by property, date, USD amount, category and optional memo. Staff, residents and platform-only users have no financial access. No payment processing, bank connections, balances owed, deposits or transfers are included.

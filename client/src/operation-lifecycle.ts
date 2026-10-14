@@ -1,4 +1,5 @@
 export type OperationName =
+  | 'user.provision' | 'account.verification'
   | 'finance.create' | 'finance.void'
   | 'unit.create' | 'unit.update' | 'lease.create' | 'lease.update'
   | 'maintenance.create' | 'maintenance.status'

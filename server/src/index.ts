@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { prisma } from "./lib/prisma.js";
 import { registerSessions, readAuthConfig } from "./sessions.js";
 import { MAX_USER_ID_BYTES, registerApplication } from "./application.js";
+import { identityProvider } from "./identity-provider.js";
 import { AccessError } from "./access.js";
 
 dotenv.config();
@@ -92,7 +93,7 @@ server.get("/api/ready", async () => {
 });
 const config = readAuthConfig();
 const authenticate = await registerSessions(server, prisma, config);
-registerApplication(server, prisma, authenticate, config.origin);
+registerApplication(server, prisma, authenticate, config.origin, identityProvider());
 server.setNotFoundHandler((_request, reply) =>
   reply.code(404).send({ error: "Not found", code: "NOT_FOUND" }),
 );

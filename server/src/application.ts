@@ -13,6 +13,9 @@ import {
   permissions,
   requirePermission,
 } from "./access.js";
+import { registerCompanyAdministration } from "./company-administration.js";
+import { registerUserAdministration } from "./user-administration.js";
+import type { IdentityProvider } from "./identity-provider.js";
 import { registerFinances } from "./finances.js";
 import { registerLeasing } from "./leasing.js";
 import { registerMaintenance } from "./maintenance.js";
@@ -187,10 +190,13 @@ export function registerApplication(
   db: PrismaClient,
   authenticate: preValidationHookHandler,
   origin: string,
+  identityProvider?: IdentityProvider,
 ) {
   registerMaintenance(server, db, authenticate, origin);
   registerLeasing(server, db, authenticate, origin);
   registerFinances(server, db, authenticate, origin);
+  registerUserAdministration(server, db, authenticate, origin, identityProvider);
+  registerCompanyAdministration(server, db, authenticate, origin);
   const auth = { preValidation: authenticate };
   registerPropertyDetail(server, db, authenticate);
   const serial = <T>(request: FastifyRequest, run: (tx: Tx) => Promise<T>) =>
@@ -247,7 +253,7 @@ export function registerApplication(
         status: u.status,
         platformRole: u.platformRole,
       },
-      membership: u.membership,
+      membership: u.membership ? {...u.membership, company: {id:u.membership.company.id,name:u.membership.company.name,status:u.membership.company.status}} : null,
       permissions: permissions(u),
       destination: defaultDestination(u),
       csrfToken: request.appSession!.csrfToken,
@@ -266,73 +272,6 @@ export function registerApplication(
     });
   });
 
-  server.get("/api/platform/companies", auth, async (request) => {
-    platform(request);
-    return db.company.findMany({
-      orderBy: { name: "asc" },
-      include: { _count: { select: { memberships: true } } },
-    });
-  });
-  server.post("/api/platform/companies", auth, async (request) => {
-    platform(request);
-    const body = bodyOf(request),
-      name = requiredString(body.name, "Company name");
-    return serial(request, async (tx) => {
-      const company = await tx.company.create({ data: { name } });
-      await audit(tx, request, "company.created", company.id);
-      return company;
-    });
-  });
-  server.get<{ Params: { companyId: string } }>(
-    "/api/platform/companies/:companyId",
-    auth,
-    async (request) => {
-      platform(request);
-      const company = await db.company.findUnique({
-        where: { id: request.params.companyId },
-        include: {
-          memberships: {
-            include: {
-              user: {
-                select: { id: true, email: true, name: true, status: true },
-              },
-            },
-          },
-        },
-      });
-      if (!company)
-        throw new AccessError(404, "NOT_FOUND", "Company not found.");
-      await serial(request, (tx) =>
-        audit(tx, request, "platform.company.viewed", company.id),
-      );
-      return company;
-    },
-  );
-  server.patch<{ Params: { companyId: string } }>(
-    "/api/platform/companies/:companyId",
-    auth,
-    async (request) => {
-      platform(request);
-      const body = bodyOf(request);
-      const name = requiredString(body.name, "Company name");
-      if (!["active", "suspended"].includes(body.status as string))
-        throw new AccessError(
-          400,
-          "INVALID_STATUS",
-          "Choose a company status.",
-        );
-      return serial(request, async (tx) => {
-        const result = await tx.company.update({
-          where: { id: request.params.companyId },
-          data: { name, status: body.status as string },
-        });
-        await audit(tx, request, "company.updated", result.id, undefined, {
-          status: result.status,
-        });
-        return result;
-      });
-    },
-  );
   server.get("/api/platform/users", auth, async (request) => {
     platform(request);
     return db.user.findMany({
@@ -343,6 +282,8 @@ export function registerApplication(
         email: true,
         status: true,
         platformRole: true,
+        emailVerified: true,
+        firstSignedInAt: true,
         membership: { include: { company: true } },
         companyId: true,
         role: true,
@@ -373,6 +314,8 @@ export function registerApplication(
         const old = await tx.companyMembership.findUnique({
           where: { userId },
         });
+        if (!Object.hasOwn(body, 'expectedVersion') || body.expectedVersion !== (old?.version ?? null))
+          throw new AccessError(409, 'RECORD_CHANGED', 'This assignment changed. Reload people before editing again.');
         if (old && (old.companyId !== companyId || old.role !== role || status !== "active"))
           await clearAssignments(tx, userId, old.companyId);
         const result = await tx.companyMembership.upsert({
@@ -443,7 +386,10 @@ export function registerApplication(
 
   server.get("/api/company", auth, async (request) => {
     const companyId = scope(request, "company.manage");
-    return db.company.findUnique({ where: { id: companyId } });
+    const company = await db.company.findUnique({ where: { id: companyId } });
+    if (!company) throw new AccessError(404, 'NOT_FOUND', 'Company not found.');
+    const {adminNotes,createdById,submissionKey,submissionHash,...profile}=company;
+    return profile;
   });
   server.patch("/api/company", auth, async (request) => {
     const companyId = scope(request, "company.manage"),
@@ -452,10 +398,11 @@ export function registerApplication(
       await activeCompany(tx, companyId);
       const company = await tx.company.update({
         where: { id: companyId },
-        data: { name },
+        data: { name, version: { increment: 1 } },
       });
       await audit(tx, request, "company.profile.updated", companyId);
-      return company;
+      const {adminNotes,createdById,submissionKey,submissionHash,...profile}=company;
+      return profile;
     });
   });
   server.get("/api/company/members", auth, async (request) => {

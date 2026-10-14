@@ -31,7 +31,9 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  for(const [id,company] of [['home','a'],['foreign-home','b']])await admin.query('INSERT INTO "Property" (id,name,address,city,state,zip,"companyId","updatedAt") VALUES ($1,$1,\'street\',\'city\',\'state\',\'zip\',$2,NOW())',[id,company]);
  await admin.query('INSERT INTO "ResidentPropertyAssignment" ("companyId","propertyId","userId") VALUES (\'a\',\'home\',\'resident\'),(\'a\',\'home\',\'other\')');
  const app=Fastify();t.after(()=>app.close());const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(app,db,auth,'https://app.test');
- const call=(user,method,path,payload,extra={})=>app.inject({method,url:path,headers:{...(user?{cookie:`__Host-pf-session=token-${user}`} : {}),origin:'https://app.test','x-csrf-token':'csrf',...extra},...(payload?{payload}:{})});
+ const call=async(user,method,path,payload,extra={})=>{
+ if(payload&&method==='PATCH'&&path.startsWith('/api/platform/companies/')&&!Object.hasOwn(payload,'expectedVersion'))payload={...payload,expectedVersion:(await db.company.findUnique({where:{id:path.split('/').pop()}}))?.version};
+ return app.inject({method,url:path,headers:{...(user?{cookie:`__Host-pf-session=token-${user}`} : {}),origin:'https://app.test','x-csrf-token':'csrf',...extra},...(payload?{payload}:{})});};
  const valid={submissionKey:randomUUID(),propertyId:'home',title:'Leaking tap',description:'Kitchen tap leaks.',priority:'normal'};
 
  await t.test('durable replay, concurrent attempts, mismatch, requester/company scopes and rollback',async()=>{

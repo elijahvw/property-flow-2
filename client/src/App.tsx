@@ -27,6 +27,7 @@ import {
 } from "./pages/Workspace";
 import { Maintenance } from "./pages/Maintenance";
 import { Finances } from "./pages/Finances";
+import { EmailVerification } from "./components/EmailVerification";
 import { Units, Leases } from "./pages/Leasing";
 import PropertyDetail from "./pages/PropertyDetail";
 import "./App.css";
@@ -115,6 +116,7 @@ function Shell({ children }: { children: React.ReactNode }) {
               {error}
             </p>
           )}
+          <EmailVerification />
           {children}
         </main>
         <footer className="app-footer">

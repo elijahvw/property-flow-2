@@ -5,6 +5,7 @@ import { isIP } from "node:net";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
 import * as oidc from "openid-client";
+import { synchronizeIdentity } from "./identity-sync.js";
 import { AccessError, safeReturnTo } from "./access.js";
 
 export const digest = (value: string) =>
@@ -184,6 +185,9 @@ export async function registerSessions(
     // Current membership/status is read every time. Session grants never cache roles.
     request.principal = session.user;
     request.appSession = session;
+    const verificationAllowed = ["/api/auth/logout", "/api/bootstrap", "/api/account", "/api/account/verification", "/api/account/verification-status"].includes(request.url.split("?")[0]);
+    if (session.user.emailVerified === false && !verificationAllowed)
+      throw new AccessError(403, "EMAIL_VERIFICATION_REQUIRED", "Verify your email before using your assigned workspace.");
     if (session.idleExpiresAt.getTime() - Date.now() < IDLE_MS - 60000) {
       await db.session.updateMany({
         where: { tokenHash: session.tokenHash },
@@ -288,57 +292,7 @@ export async function registerSessions(
         csrfToken = random();
       const previous = request.cookies[sessionName];
       await db.$transaction(async (tx) => {
-        const identity = await tx.identity.findUnique({
-          where: { issuer_subject: { issuer, subject: claims.sub } },
-        });
-        let user = await tx.user.findUnique({
-          where: { id: identity?.userId ?? claims.sub },
-        });
-        if (
-          !identity &&
-          user &&
-          (await tx.identity.count({ where: { userId: user.id } }))
-        )
-          throw new Error("Identity issuer mismatch");
-        if (!user)
-          user = await tx.user.create({
-            data: {
-              id: claims.sub,
-              email: claims.email as string,
-              name: typeof claims.name === "string" ? claims.name : null,
-              role: "unassigned",
-            },
-          });
-        // One-time upgrade needs both the old explicit admin assignment AND a
-        // freshly verified identity-provider admin claim; the default tenant
-        // field is never converted into membership or permissions.
-        const roles = claims["https://propertyflow.com/roles"];
-        const upgradeOwner =
-          !user.accessInitializedAt &&
-          user.role === "admin" &&
-          Array.isArray(roles) &&
-          roles.includes("admin");
-        if (
-          !user.accessInitializedAt &&
-          user.role === "admin" &&
-          !upgradeOwner
-        ) {
-          throw new Error("OWNER_UPGRADE_CLAIM_REQUIRED");
-        }
-        user = await tx.user.update({
-          where: { id: user.id },
-          data: {
-            email: claims.email as string,
-            emailVerified: claims.email_verified === true,
-            ...(upgradeOwner ? { platformRole: "owner" } : {}),
-            accessInitializedAt: user.accessInitializedAt ?? new Date(),
-          },
-        });
-        await tx.identity.upsert({
-          where: { issuer_subject: { issuer, subject: claims.sub } },
-          update: {},
-          create: { issuer, subject: claims.sub, userId: user.id },
-        });
+        const {user,upgradeOwner} = await synchronizeIdentity(tx,issuer,{...claims,sub:claims.sub,email:claims.email as string});
         if (previous)
           await tx.session.deleteMany({
             where: { tokenHash: digest(previous) },

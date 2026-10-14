@@ -16,6 +16,23 @@ model Company {
   id        String     @id @default(cuid())
   name      String
   domain    String?    @unique
+  legalName String?
+  contactName String?
+  contactEmail String?
+  contactPhone String?
+  website String?
+  addressLine1 String?
+  addressLine2 String?
+  city String?
+  region String?
+  postalCode String?
+  country String?
+  timezone String @default("America/New_York")
+  adminNotes String?
+  version Int @default(1)
+  createdById String?
+  submissionKey String?
+  submissionHash String?
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   users     User[]
@@ -27,6 +44,7 @@ model Company {
   units Unit[]
   leases Lease[]
   ledgerEntries LedgerEntry[]
+  @@unique([createdById, submissionKey])
 }
 
 model User {
@@ -38,6 +56,10 @@ model User {
   status     String   @default("active")
   accessInitializedAt DateTime?
   emailVerified Boolean @default(false)
+  verificationSentAt DateTime?
+  passwordSetupSentAt DateTime?
+  firstSignedInAt DateTime?
+  provisions UserProvision[]
   identities Identity[]
   maintenanceRequests MaintenanceRequest[]
   leases Lease[] @relation("LeaseResident")
@@ -250,4 +272,14 @@ model LedgerEntry {
  creator User @relation(fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
  @@unique([companyId, createdById, submissionKey])
  @@index([companyId, propertyId, occurredOn, id])
+}
+
+model UserProvision {
+ targetId String?
+ actorId String
+ submissionKey String
+ submissionHash String
+ createdAt DateTime @default(now())
+ actor User @relation(fields: [actorId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+ @@id([actorId, submissionKey])
 }

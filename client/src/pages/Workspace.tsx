@@ -1,5 +1,6 @@
+import {UserProvisioning, UserVerificationControls} from "../components/UserProvisioning";
 import React, { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { monitorOperation } from "../operations";
@@ -19,9 +20,12 @@ type Member = {
   companyId: string;
   role: string;
   status: string;
+  version?: number;
   user: { name: string | null; email: string; status: string };
 };
 type Person = {
+  emailVerified?: boolean;
+  firstSignedInAt?: string | null;
   id: string;
   name: string | null;
   email: string;
@@ -156,140 +160,7 @@ function Badge({ children }: { children: React.ReactNode }) {
   return <span className="badge">{children}</span>;
 }
 
-export function Companies() {
-  const r = useResource<Company[]>("/api/platform/companies");
-  return (
-    <>
-      <header className="page-heading">
-        <p className="eyebrow">Platform</p>
-        <h1>Companies</h1>
-        <p>Create and oversee the businesses on Property Flow.</p>
-      </header>
-      <div className="split">
-        <section className="panel">
-          <h2>Company directory</h2>
-          {!r.data ? (
-            <LoadState error={r.error} retry={r.reload} />
-          ) : r.data.length === 0 ? (
-            <p>No companies yet. Create your first company to begin.</p>
-          ) : (
-            <ul className="record-list">
-              {r.data.map((c) => (
-                <li key={c.id}>
-                  <div>
-                    <Link to={`/platform/companies/${c.id}`}>{c.name}</Link>
-                    <p>{c._count?.memberships || 0} assigned people</p>
-                  </div>
-                  <Badge>{c.status}</Badge>
-                  <Link
-                    className="button secondary"
-                    to={`/platform/companies/${c.id}`}
-                  >
-                    Manage
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-        <section className="panel">
-          <h2>Create a company</h2>
-          <Form
-            label="Create company"
-            operation="company.create"
-            submit={async (data) => {
-              await api("/api/platform/companies", {
-                method: "POST",
-                body: { name: text(data, "name") },
-              });
-              r.reload();
-            }}
-          >
-            <Field name="name" label="Company name" />
-          </Form>
-        </section>
-      </div>
-    </>
-  );
-}
-export function CompanyDetail() {
-  const { companyId } = useParams();
-  const r = useResource<Company>(
-    `/api/platform/companies/${encodeURIComponent(companyId || "")}`,
-  );
-  if (!r.data) return <LoadState error={r.error} retry={r.reload} />;
-  const company = r.data;
-  return (
-    <>
-      <Link to="/platform/companies">← Companies</Link>
-      <header className="page-heading">
-        <p className="eyebrow">Company administration</p>
-        <h1>{company.name}</h1>
-        <p>
-          Changes here apply only to this company and are recorded in Activity.
-        </p>
-      </header>
-      <div className="split">
-        <section className="panel">
-          <h2>Company profile</h2>
-          <Form
-            key={company.name + company.status}
-            operation="company.update"
-            submit={async (data) => {
-              await api(`/api/platform/companies/${company.id}`, {
-                method: "PATCH",
-                body: {
-                  name: text(data, "name"),
-                  status: text(data, "status"),
-                },
-              });
-              r.reload();
-            }}
-          >
-            <Field name="name" label="Company name" value={company.name} />
-            <label>
-              Company status
-              <select name="status" defaultValue={company.status}>
-                <option value="active">Active</option>
-                <option value="suspended">Suspended</option>
-              </select>
-            </label>
-            <p className="help">
-              Suspension blocks all company access, including its owners.
-            </p>
-          </Form>
-        </section>
-        <section className="panel">
-          <h2>Invite a person</h2>
-          <InvitationForm companyId={company.id} owner />
-        </section>
-      </div>
-      <section className="panel">
-        <h2>Assigned people</h2>
-        {company.memberships?.length ? (
-          <ul className="record-list">
-            {company.memberships.map((m) => (
-              <li key={m.userId}>
-                <div>
-                  <strong>{m.user.name || m.user.email}</strong>
-                  <p>{m.user.email}</p>
-                </div>
-                <Badge>{m.role}</Badge>
-                <Badge>{m.status}</Badge>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>
-            No memberships assigned. Invite an owner or assign an existing
-            person.
-          </p>
-        )}
-        <Link to="/platform/users">Manage people and assignments</Link>
-      </section>
-    </>
-  );
-}
+export {Companies,CompanyDetail} from "./CompanyAdministration";
 function InvitationForm({
   companyId,
   owner = false,
@@ -345,10 +216,13 @@ function InvitationForm({
     </>
   );
 }
-export function People() {
+export function People(){const {data}=useAuth();return <PeopleWorkspace key={`${data?.user.id}:${data?.permissions.join(",")}`}/>;}
+function PeopleWorkspace() {
   const r = useResource<Person[]>("/api/platform/users"),
     companies = useResource<Company[]>("/api/platform/companies");
-  const [selected, setSelected] = useState("");
+  const [params] = useSearchParams();
+  const [selected, setSelected] = useState(params.get("userId")||"");
+  const [query,setQuery] = useState("");
   const person = r.data?.find((p) => p.id === selected);
   return (
     <>
@@ -356,11 +230,14 @@ export function People() {
         <p className="eyebrow">Platform</p>
         <h1>People & access</h1>
         <p>
-          Each person has one company assignment. These are people who have
-          signed into Property Flow.
+          Set up identities, company assignments and roles before a person’s first sign-in. Email verification is tracked separately.
         </p>
       </header>
+      <p className="help">Auth0 manages sign-in identities; PropertyFlow manages company roles. Importing an account does not assign access.</p>
+      <UserProvisioning saved={(id)=>{r.reload();if(id)setSelected(id);}} />
+      {params.get("companyId")&&<section className="panel"><h2>Invite by email</h2><p>Create an invitation for {companies.data?.find(c=>c.id===params.get("companyId"))?.name||"this company"}. The person signs in when accepting; no separate first login is needed.</p><InvitationForm companyId={params.get("companyId")!} owner /></section>}
       <section className="panel">
+        <h2>Application people</h2><label>Search application people<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Name or email"/></label><button className="secondary" onClick={r.reload}>Reload people</button>
         {!r.data ? (
           <LoadState error={r.error} retry={r.reload} />
         ) : (
@@ -369,6 +246,7 @@ export function People() {
               <thead>
                 <tr>
                   <th>Person</th>
+                  <th>Email verification</th>
                   <th>Company</th>
                   <th>Role</th>
                   <th>Access</th>
@@ -378,12 +256,13 @@ export function People() {
                 </tr>
               </thead>
               <tbody>
-                {r.data.map((p) => (
+                {r.data.filter(p=>`${p.name||""} ${p.email}`.toLowerCase().includes(query.toLowerCase())).map((p) => (
                   <tr key={p.id}>
                     <td>
                       <strong>{p.name || p.email}</strong>
                       <span className="cell-detail">{p.email}</span>
                     </td>
+                    <td>{p.emailVerified ? "Verified" : "Not verified"}<span className="cell-detail">{p.firstSignedInAt ? "Has signed in" : "Awaiting first sign-in"}</span></td>
                     <td>
                       {p.membership?.company.name || "Unassigned"}
                       {!p.membership && p.companyId && (
@@ -425,6 +304,7 @@ export function People() {
             <LoadState error={companies.error} retry={companies.reload} />
           ) : (
             <Form
+              key={`${person.id}:${person.membership?.version??0}`}
               operation="company.user.assign"
               submit={async (data) => {
                 await api(
@@ -432,6 +312,7 @@ export function People() {
                   {
                     method: "PUT",
                     body: {
+                      expectedVersion: person.membership?.version ?? null,
                       companyId: text(data, "companyId"),
                       role: text(data, "role"),
                       status: text(data, "status"),
@@ -442,13 +323,14 @@ export function People() {
               }}
             >
               <div className="form-grid">
-                <label>
+                <label htmlFor="person-company">
                   Company
                   <select
+                    id="person-company"
                     required
                     name="companyId"
                     defaultValue={
-                      person.membership?.companyId || person.companyId || ""
+                      person.membership?.companyId || params.get("companyId") || ""
                     }
                   >
                     <option value="" disabled>
@@ -475,6 +357,7 @@ export function People() {
               </p>
             </Form>
           )}
+          <UserVerificationControls key={person.id} id={person.id} verified={person.emailVerified} saved={r.reload} />
           {person.platformRole !== "owner" && (
             <div className="divider">
               <h3>Platform account</h3>
