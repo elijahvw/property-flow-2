@@ -1,5 +1,11 @@
 # PropertyFlow MVP status
 
+## Maintenance dependency integration stopping point — 2026-10-14
+
+Maintenance commit `c7aef20` retains validated harness `1cf022e` (source `496a663`). The assignment opaque-subject fix `d3f5c3081c086a7141e82c1a702302b9806dae92` is now integrated as `7764a31`. Only the docs insertion conflicted; both maintenance and upstream evidence sections were preserved. This supersedes the pending opaque-ID integration statements below. No feature expansion or source-worktree modification occurred. Server Prisma/TypeScript build passed; affected safe Node subset passed **28 tests, zero failures/skips** (`/tmp/propertyflow-maintenance-dependency-tests.txt`). Existing maintenance PostgreSQL/browser evidence remains as recorded below; no database rerun was needed for this dependency-only integration. Independent maintenance review is in progress; do not publish/merge/deploy without parent/user approval.
+
+---
+
 ## Bounded maintenance requests — 2026-10-14
 
 Implemented on `maintenance-requests-mvp` in `/Users/elijahward/Documents/Codex/2026-10-13/task-7/maintenance-requests`, starting from committed assignment head `940c905`. The source's dirty harness was left untouched; final harness commit `496a663caf65706a54460022fb0021afdc0466d0` was safely cherry-picked as `1cf022e`. The assignment author is separately correcting opaque Auth0 subject validation; that upcoming dependency must be integrated before publication. Maintenance never validates authenticated subject IDs with the property/request ID whitelist.
