@@ -1,5 +1,13 @@
 > Continuation update — 2026-10-13 (America/New_York): the historical blocker below has now been fixed locally. Main 8098802 is integrated by merge 1999787; durable company/requester submission keys, authorization-safe replay and regression tests pass. Current evidence and limits are recorded at the top of docs/mvp-status.md. Run `node scripts/test-maintenance.mjs` after builds with cached postgres:17-alpine and installed Chromium for isolated real PostgreSQL/browser validation. Independent Bugbot found no actionable core implementation issues. All disposable resources were cleaned up. Branch remains maintenance-requests-mvp, local/unpublished; obtain user authorization before publication/merge, and do not deploy or modify live/shared databases. The original handoff below is retained as historical evidence.
 
+## Trey guidance supplied by the user
+
+This is a development environment. PRs #13–15 were merged and checked; nothing was deployed during wrap-up. Maintenance idempotency is implemented locally in `3c5def0`, but publication, remote CI, review of every PR conversation comment/review body/inline thread, and explicit user merge approval remain required. Confirm durable committed-response-loss replay and regression coverage against the exact proposed head before merging; CI alone does not establish readiness. Deployment requires separate user authorization.
+
+After an approved dev deployment, perform real authenticated acceptance with owner, manager and resident accounts: invitations and acceptance, property assignments, role/company boundaries and revocation, and maintenance submission/retry/list/status changes end to end. No acceptance run or deployment is authorized by this guidance alone.
+
+Keep implementation in this Codex chat to avoid overlapping changes with Trey. Maintain the landlord/manager-first direction. Next build order: units/lease records, basic manual financial tracking, then documents unless usability testing establishes greater document urgency. Manual financial tracking does not authorize payment processing or paid integrations. Private documents require secure private storage and authorization-controlled access; never store them in the existing public frontend bucket. Secure storage design and provisioning are future separately scoped work.
+
 # PropertyFlow continuation handoff — 2026-10-14
 
 Stop point: **maintenance is implemented locally but blocked from publication by duplicate submissions after a lost committed response.** This handoff is documentation only; do not mistake passing checks for release readiness.

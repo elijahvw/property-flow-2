@@ -1,5 +1,13 @@
 # PropertyFlow MVP status
 
+## Trey guidance supplied by the user
+
+This is a development environment. PRs #13–15 were merged and checked; nothing was deployed during wrap-up. Maintenance idempotency is implemented locally in `3c5def0`, but publication, remote CI, review of every PR conversation comment/review body/inline thread, and explicit user merge approval remain required. Confirm durable committed-response-loss replay and regression coverage against the exact proposed head before merging; CI alone does not establish readiness. Deployment requires separate user authorization.
+
+After an approved dev deployment, perform real authenticated acceptance with owner, manager and resident accounts: invitations and acceptance, property assignments, role/company boundaries and revocation, and maintenance submission/retry/list/status changes end to end. No acceptance run or deployment is authorized by this guidance alone.
+
+Keep implementation in this Codex chat to avoid overlapping changes with Trey. Maintain the landlord/manager-first direction. Next build order: units/lease records, basic manual financial tracking, then documents unless usability testing establishes greater document urgency. Manual financial tracking does not authorize payment processing or paid integrations. Private documents require secure private storage and authorization-controlled access; never store them in the existing public frontend bucket. Secure storage design and provisioning are future separately scoped work.
+
 ## Durable maintenance submission continuation — 2026-10-13 (America/New_York)
 
 Integrated fetched main `80988021799712a80b8d0bcfd64041e705706d94` with ordinary merge `1999787`, preserving existing maintenance/assignment commits and main's property detail/edit routes. Resolved only App imports and status-document markers by retaining both sides. Source assignment checkout was untouched. PRs 13–15 are confirmed merged; read their complete conversation timelines, review bodies and inline threads through GitHub tools. PR14's sole substantive opaque-subject finding is resolved and its implementation retained; the CodeRabbit default docstring warning is nonblocking. Maintenance has no remote PR.
