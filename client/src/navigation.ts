@@ -23,7 +23,7 @@ export const routes: {
   },
   {
     path: "/platform/users",
-    title: "People & access",
+    title: "Users",
     permission: "platform.manage",
     section: "Platform",
   },

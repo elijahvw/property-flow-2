@@ -315,7 +315,7 @@ export function registerApplication(
           where: { userId },
         });
         if (!Object.hasOwn(body, 'expectedVersion') || body.expectedVersion !== (old?.version ?? null))
-          throw new AccessError(409, 'RECORD_CHANGED', 'This assignment changed. Reload people before editing again.');
+          throw new AccessError(409, 'RECORD_CHANGED', 'This assignment changed. Close and reopen access before editing again.');
         if (old && (old.companyId !== companyId || old.role !== role || status !== "active"))
           await clearAssignments(tx, userId, old.companyId);
         const result = await tx.companyMembership.upsert({

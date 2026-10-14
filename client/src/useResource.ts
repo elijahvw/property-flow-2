@@ -3,7 +3,11 @@ import { api } from "./api";
 import { useAuth } from "./context/AuthContext";
 import { startOperation } from "./operations";
 
-export function useResource<T>(url: string) {
+export function useResource<T>(
+  url: string,
+  keepPreviousData = false,
+  refreshWhenVisible = false,
+) {
   const { data: auth } = useAuth();
   const scope = `${auth?.user.id}:${auth?.user.status}:${auth?.membership?.companyId}:${auth?.membership?.version}:${auth?.permissions.join(",")}`;
   const key = `${scope}:${url}`;
@@ -14,8 +18,34 @@ export function useResource<T>(url: string) {
   }>({ key });
   const [revision, setRevision] = useState(0);
   useEffect(() => {
+    if (!refreshWhenVisible) return;
+    let lastRefresh = 0;
+    const refresh = () => {
+      if (
+        document.visibilityState !== "visible" ||
+        Date.now() - lastRefresh < 250
+      )
+        return;
+      lastRefresh = Date.now();
+      setRevision((value) => value + 1);
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    const timer = window.setInterval(refresh, 60000);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      window.clearInterval(timer);
+    };
+  }, [key, refreshWhenVisible]);
+  useEffect(() => {
     const controller = new AbortController();
-    setResult({ key });
+    setResult((previous) => ({
+      key,
+      ...(keepPreviousData && previous.key === key
+        ? { data: previous.data }
+        : {}),
+    }));
     const operation = startOperation(
       url === "/api/platform/users"
         ? "admin.users.load"
@@ -33,20 +63,23 @@ export function useResource<T>(url: string) {
       .catch((error) => {
         if (!controller.signal.aborted) {
           operation.fail(error);
-          setResult({
+          setResult((previous) => ({
             key,
+            ...(keepPreviousData && previous.key === key
+              ? { data: previous.data }
+              : {}),
             error:
               error instanceof Error
                 ? error.message
                 : "Unable to load this page.",
-          });
+          }));
         }
       });
     return () => {
       controller.abort();
       operation.abandon();
     };
-  }, [url, key, revision]);
+  }, [url, key, revision, keepPreviousData]);
   return {
     data: result.key === key ? result.data : undefined,
     error: result.key === key ? result.error : undefined,

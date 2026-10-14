@@ -4,8 +4,23 @@ async function fixture(page: Page, { verified = true, platform = true } = {}) {
     verified,
     people: [] as any[],
     imports: 0,
+    membershipRequests: [] as any[],
+    syncs: [] as number[],
+    remote: [
+      {
+        user_id: "auth0|before",
+        email: "before@test.invalid",
+        email_verified: false,
+        name: "Before Login",
+      },
+    ] as any[],
+    loseProvision: false,
     provisions: [] as any[],
     fail: false,
+    companies: [
+      { id: "a", name: "Company A", status: "active" },
+      { id: "b", name: "Company B", status: "active" },
+    ],
   };
   await page.route("**/api/**", async (route) => {
     const req = route.request(),
@@ -29,23 +44,37 @@ async function fixture(page: Page, { verified = true, platform = true } = {}) {
       });
     if (path === "/api/platform/users" && req.method() === "GET")
       return json(state.people);
-    if (path === "/api/platform/companies")
-      return json([{ id: "a", name: "Company A", status: "active" }]);
+    if (path === "/api/platform/companies") return json(state.companies);
     if (path === "/api/platform/invitations") return json([]);
-    if (path === "/api/platform/identity-users")
-      return state.fail
-        ? json({ error: "Identity service unavailable" }, 503)
-        : json({
-            users: [
-              {
-                user_id: "auth0|before",
-                email: "before@test.invalid",
-                email_verified: false,
-                name: "Before Login",
-              },
-            ],
-            nextPage: null,
+    if (path === "/api/platform/users/sync") {
+      expect(req.method()).toBe("POST");
+      expect(req.headers()["x-csrf-token"]).toBe("fixture");
+      const b = req.postDataJSON();
+      state.syncs.push(b.page);
+      if (state.fail)
+        return json({ error: "Identity service unavailable" }, 503);
+      const source = state.remote.filter(
+        (u) => !b.email || u.email === b.email,
+      );
+      for (const u of source.slice(b.page * 50, b.page * 50 + 50)) {
+        if (!state.people.some((p) => p.id === u.user_id))
+          state.people.push({
+            id: u.user_id,
+            email: u.email,
+            name: u.name,
+            emailVerified: u.email_verified,
+            firstSignedInAt: null,
+            status: "active",
+            platformRole: null,
+            membership: null,
           });
+      }
+      return json({
+        nextPage: (b.page + 1) * 50 < source.length ? b.page + 1 : null,
+        limited: false,
+        conflicts: [],
+      });
+    }
     if (req.method() !== "GET") {
       expect(req.headers()["x-csrf-token"]).toBe("fixture");
       if (path.endsWith("/import")) {
@@ -66,6 +95,10 @@ async function fixture(page: Page, { verified = true, platform = true } = {}) {
       }
       if (path.endsWith("/provision")) {
         state.provisions.push(req.postDataJSON());
+        if (state.loseProvision) {
+          state.loseProvision = false;
+          return route.abort("failed");
+        }
         return json({ id: "auth0|created" });
       }
       if (path.endsWith("/verification-status"))
@@ -75,12 +108,29 @@ async function fixture(page: Page, { verified = true, platform = true } = {}) {
       if (path.endsWith("/password-setup"))
         return json({ message: "Password setup email requested." });
       if (path.endsWith("/membership")) {
+        state.membershipRequests.push(req.postDataJSON());
+        if (
+          req.postDataJSON().expectedVersion !==
+          (state.people[0].membership?.version ?? null)
+        )
+          return json(
+            {
+              error:
+                "This assignment changed. Close and reopen access before editing again.",
+              code: "RECORD_CHANGED",
+            },
+            409,
+          );
         state.people[0].membership = {
-          companyId: "a",
-          version: 1,
+          companyId: req.postDataJSON().companyId,
+          version: (state.people[0].membership?.version ?? 0) + 1,
           role: req.postDataJSON().role,
           status: "active",
-          company: { name: "Company A" },
+          company: {
+            name: state.companies.find(
+              (c) => c.id === req.postDataJSON().companyId,
+            )!.name,
+          },
         };
         return json(state.people[0].membership);
       }
@@ -89,27 +139,31 @@ async function fixture(page: Page, { verified = true, platform = true } = {}) {
   });
   return state;
 }
-test("admin adds imported identity and assigns company/owner without first sign-in", async ({
+test("opening Users automatically discovers identities and allows company/owner assignment without first sign-in", async ({
   page,
 }) => {
   const state = await fixture(page);
   await page.goto("/platform/users");
-  await page
-    .getByRole("button", {
-      name: "Search or refresh Auth0 accounts",
-      exact: true,
-    })
-    .click();
-  await page
-    .getByRole("button", { name: "Add all accounts on this page" })
-    .click();
   await expect(
     page.getByRole("row").filter({ hasText: "before@test.invalid" }),
   ).toContainText("Not verified");
   await expect(
     page.getByRole("row").filter({ hasText: "before@test.invalid" }),
   ).toContainText("Awaiting first sign-in");
-  expect(state.imports).toBe(1);
+  expect(state.imports).toBe(0);
+  expect(state.syncs).toContain(0);
+  await expect(
+    page.getByRole("button", {
+      name: /Add all accounts|Add or refresh|Reload people|Refresh users/,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Auth0 sign-in directory" }),
+  ).toHaveCount(0);
+  await page.screenshot({
+    path: "/tmp/propertyflow-auto-users-preview.png",
+    fullPage: true,
+  });
   await page.getByRole("button", { name: "Manage", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Company", exact: true })
@@ -136,24 +190,13 @@ test("directory failure is recoverable and unverified user sees reminder/profile
   const state = await fixture(page);
   state.fail = true;
   await page.goto("/platform/users");
-  await page
-    .getByRole("button", {
-      name: "Search or refresh Auth0 accounts",
-      exact: true,
-    })
-    .click();
   await expect(page.getByRole("alert")).toContainText(
     "Identity service unavailable",
   );
   state.fail = false;
-  await page
-    .getByRole("button", {
-      name: "Search or refresh Auth0 accounts",
-      exact: true,
-    })
-    .click();
+  await page.getByRole("button", { name: "Try again", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Add all accounts on this page" }),
+    page.getByRole("row").filter({ hasText: "before@test.invalid" }),
   ).toBeVisible();
   await page.unroute("**/api/**");
   await fixture(page, { verified: false, platform: false });
@@ -188,24 +231,180 @@ test("verification status refresh updates profile and dismisses persistent remin
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
   await expect(page.getByText(/user@test.invalid · Verified/)).toBeVisible();
 });
-test("new-account retry keeps submission key; explicit new action resets", async ({
+test("new-account retry keeps submission key and a new account gets a fresh key", async ({
   page,
 }) => {
   const state = await fixture(page);
+  state.loseProvision = true;
   await page.goto("/platform/users");
+  await page.getByRole("button", { name: "Add user", exact: true }).click();
   await page.getByLabel("New user name").fill("New Person");
   await page.getByLabel("New user email").fill("new@test.invalid");
   await page
     .getByRole("button", { name: "Create account", exact: true })
     .click();
-  await expect(page.getByText("Saved.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("alert")).toBeVisible();
   await page
     .getByRole("button", { name: "Create account", exact: true })
     .click();
-  await expect.poll(() => state.provisions.length).toBe(2);
+  await expect(page.getByLabel("New user email")).toHaveCount(0);
+  expect(state.provisions).toHaveLength(2);
   expect(state.provisions[0].submissionKey).toBe(
     state.provisions[1].submissionKey,
   );
-  await page.getByRole("button", { name: "Start another account" }).click();
-  await expect(page.getByLabel("New user email")).toHaveValue("");
+  await page.getByRole("button", { name: "Add user", exact: true }).click();
+  await page.getByLabel("New user name").fill("Next Person");
+  await page.getByLabel("New user email").fill("next@test.invalid");
+  await page
+    .getByRole("button", { name: "Create account", exact: true })
+    .click();
+  await expect.poll(() => state.provisions.length).toBe(3);
+  expect(state.provisions[2].submissionKey).not.toBe(
+    state.provisions[0].submissionKey,
+  );
+});
+test("automatic sync follows all pages and discovers accounts on tab return without losing an access draft", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  state.remote.push(
+    ...Array.from({ length: 51 }, (_, n) => ({
+      user_id: `auth0|page-${n}`,
+      email: `page-${n}@test.invalid`,
+      email_verified: true,
+      name: `Person ${n}`,
+    })),
+  );
+  await page.goto("/platform/users");
+  await expect(
+    page.getByRole("button", { name: "Manage", exact: true }),
+  ).toHaveCount(52);
+  expect(state.syncs).toContain(1);
+  expect(state.people).toHaveLength(52);
+  await page
+    .getByRole("row")
+    .filter({ hasText: "before@test.invalid" })
+    .getByRole("button", { name: "Manage" })
+    .click();
+  await page
+    .getByRole("combobox", { name: "Company", exact: true })
+    .selectOption("a");
+  await page.getByLabel("Company role").selectOption("manager");
+  state.people[0].membership = {
+    companyId: "a",
+    role: "staff",
+    status: "active",
+    version: 2,
+    company: { name: "Company A" },
+  };
+  state.remote.push({
+    user_id: "auth0|new-tab",
+    email: "new-tab@test.invalid",
+    email_verified: false,
+    name: "Created in another tab",
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(
+    page.getByRole("row").filter({ hasText: "new-tab@test.invalid" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "Company", exact: true }),
+  ).toHaveValue("a");
+  await expect(page.getByLabel("Company role")).toHaveValue("manager");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "This assignment changed",
+  );
+  await expect(page.getByLabel("Company role")).toHaveValue("manager");
+  expect(state.membershipRequests.at(-1).expectedVersion).toBeNull();
+  expect(state.people[0].membership.role).toBe("staff");
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page
+    .getByRole("row")
+    .filter({ hasText: "before@test.invalid" })
+    .getByRole("button", { name: "Manage" })
+    .click();
+  await expect(page.getByLabel("Company role")).toHaveValue("staff");
+});
+test("visible Users page refreshes automatically after a minute", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  await page.clock.install();
+  await page.goto("/platform/users");
+  await expect(
+    page.getByRole("row").filter({ hasText: "before@test.invalid" }),
+  ).toBeVisible();
+  state.remote.push({
+    user_id: "auth0|timer",
+    email: "timer@test.invalid",
+    email_verified: false,
+    name: "Timer Person",
+  });
+  await page.clock.fastForward(60000);
+  await expect(
+    page.getByRole("row").filter({ hasText: "timer@test.invalid" }),
+  ).toBeVisible();
+});
+
+test("background company suspension preserves the selected company until an explicit new selection", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  await page.goto("/platform/users");
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Company", exact: true })
+    .selectOption("a");
+  state.companies[0].status = "suspended";
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(
+    page.getByRole("option", { name: "Company A (suspended)", exact: true }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole("combobox", { name: "Company", exact: true }),
+  ).toHaveValue("a");
+  await expect(page.getByRole("alert")).toContainText(
+    "selected company is unavailable",
+  );
+  expect(state.membershipRequests).toHaveLength(0);
+  await page
+    .getByRole("combobox", { name: "Company", exact: true })
+    .selectOption("b");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect.poll(() => state.membershipRequests.length).toBe(1);
+  expect(state.membershipRequests[0].companyId).toBe("b");
+});
+test("assignment conflict loads the current row while preserving the draft until close and reopen", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  await page.goto("/platform/users");
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Company", exact: true })
+    .selectOption("a");
+  await page.getByLabel("Company role").selectOption("manager");
+  state.people[0].membership = {
+    companyId: "a",
+    role: "staff",
+    status: "active",
+    version: 7,
+    company: { name: "Company A" },
+  };
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "This assignment changed",
+  );
+  await expect(
+    page.getByRole("row").filter({ hasText: "before@test.invalid" }),
+  ).toContainText("staff");
+  await expect(page.getByLabel("Company role")).toHaveValue("manager");
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
+  await expect(page.getByLabel("Company role")).toHaveValue("staff");
+  await page.getByLabel("Company role").selectOption("manager");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect.poll(() => state.membershipRequests.length).toBe(2);
+  expect(state.membershipRequests[1].expectedVersion).toBe(7);
 });

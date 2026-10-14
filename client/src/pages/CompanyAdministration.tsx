@@ -172,7 +172,11 @@ export function Companies() {
   );
 }
 function CompanyDirectory() {
-  const r = useResource<CompanyProfile[]>("/api/platform/companies"),
+  const r = useResource<CompanyProfile[]>(
+      "/api/platform/companies",
+      true,
+      true,
+    ),
     navigate = useNavigate();
   const [adding, setAdding] = useState(false),
     [key, setKey] = useState(() => crypto.randomUUID()),
@@ -257,9 +261,7 @@ function CompanyDirectory() {
             </select>
           </label>
         </div>
-        <button className="secondary" onClick={r.reload}>
-          Reload companies
-        </button>
+        {r.data && r.error && <Load error={r.error} retry={r.reload} />}
         {!r.data ? (
           <Load error={r.error} retry={r.reload} />
         ) : !rows?.length ? (
