@@ -587,7 +587,7 @@ export function Properties() {
 }
 export function Team() {
   const r = useResource<Member[]>("/api/company/members");
-  const { user, refreshUser } = useAuth();
+  const { user, data, refreshUser } = useAuth();
   const [selected, setSelected] = useState("");
   const [invitationRevision, setInvitationRevision] = useState(0);
   const member = r.data?.find((m) => m.userId === selected);
@@ -652,7 +652,10 @@ export function Team() {
       <div className="split">
         <section className="panel">
           <h2>Invite a person</h2>
-          <InvitationForm reload={() => setInvitationRevision((v) => v + 1)} />
+          <InvitationForm
+            companyId={data?.membership?.companyId}
+            reload={() => setInvitationRevision((v) => v + 1)}
+          />
         </section>
         <section className="panel">
           <h2>Transfer ownership</h2>
