@@ -25,6 +25,7 @@ import {
   AcceptInvitation,
   Audit,
 } from "./pages/Workspace";
+import { Maintenance } from "./pages/Maintenance";
 import "./App.css";
 class ErrorBoundary extends Component<
   { children: React.ReactNode },
@@ -168,6 +169,8 @@ function Pages() {
     "/company/members": <Team />,
     "/company/settings": <CompanySettings />,
     "/resident": <Resident />,
+    "/resident/maintenance": <Maintenance resident />,
+    "/company/maintenance": <Maintenance />,
     "/account": <Account />,
   };
   return (

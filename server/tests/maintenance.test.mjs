@@ -1,0 +1,109 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync} from 'node:fs';
+import pg from 'pg';
+import Fastify from 'fastify';
+import {PrismaClient} from '@prisma/client';
+import {PrismaPg} from '@prisma/adapter-pg';
+import {registerApplication} from '../dist/application.js';
+import {registerSessions,digest} from '../dist/sessions.js';
+import {permissions} from '../dist/access.js';
+const url=process.env.TEST_MAINTENANCE_DATABASE_URL;
+test('maintenance grants only active company owners/managers',()=>{
+ for(const role of ['owner','manager','staff','resident']) for(const status of ['active','disabled']) assert.equal(permissions({id:'u',status,platformRole:null,membership:{companyId:'a',role,status:'active',company:{status:'active'}}}).includes('maintenance.manage'),status==='active'&&['owner','manager'].includes(role));
+});
+test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, async t=>{
+ const target=new URL(url);assert.equal(target.hostname,'127.0.0.1');assert.equal(target.pathname,'/propertyflow_maintenance_test');assert.equal(process.env.MAINTENANCE_DISPOSABLE,'tmpfs-verified');
+ const admin=new pg.Pool({connectionString:url});t.after(()=>admin.end());
+ assert.equal((await admin.query("SELECT count(*)::int n FROM information_schema.tables WHERE table_schema='public'")).rows[0].n,0,'requires empty disposable database');
+ for(const name of readdirSync(new URL('../prisma/migrations/',import.meta.url)).filter(n=>/^\d/.test(n)).sort())await admin.query(readFileSync(new URL(`../prisma/migrations/${name}/migration.sql`,import.meta.url),'utf8'));
+ await admin.query("ALTER ROLE propertyflow_runtime LOGIN PASSWORD 'maintenance-test-only'");
+ const runtime=new URL(url);runtime.username='propertyflow_runtime';runtime.password='maintenance-test-only';
+ const pool=new pg.Pool({connectionString:runtime.href,max:6});const db=new PrismaClient({adapter:new PrismaPg(pool)});t.after(async()=>{await db.$disconnect();await pool.end();});
+ for(const id of ['a','b'])await admin.query('INSERT INTO "Company" (id,name,"updatedAt") VALUES ($1,$1,NOW())',[id]);
+ for(const [id,company,role] of [['owner','a','owner'],['manager','a','manager'],['resident','a','resident'],['other','a','resident'],['staff','a','staff'],['foreign','b','owner']]){
+ await admin.query('INSERT INTO "User" (id,email,"emailVerified","updatedAt") VALUES ($1,$2,true,NOW())',[id,`${id}@test.invalid`]);
+ await admin.query('INSERT INTO "CompanyMembership" ("userId","companyId",role,"updatedAt") VALUES ($1,$2,$3,NOW())',[id,company,role]);
+ await db.session.create({data:{tokenHash:digest(`token-${id}`),csrfToken:'csrf',userId:id,expiresAt:new Date(Date.now()+3600000),idleExpiresAt:new Date(Date.now()+3600000)}});
+ }
+ for(const [id,company] of [['home','a'],['foreign-home','b']])await admin.query('INSERT INTO "Property" (id,name,address,city,state,zip,"companyId","updatedAt") VALUES ($1,$1,\'street\',\'city\',\'state\',\'zip\',$2,NOW())',[id,company]);
+ await admin.query('INSERT INTO "ResidentPropertyAssignment" ("companyId","propertyId","userId") VALUES (\'a\',\'home\',\'resident\'),(\'a\',\'home\',\'other\')');
+ const app=Fastify();t.after(()=>app.close());const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(app,db,auth,'https://app.test');
+ const call=(user,method,path,payload,extra={})=>app.inject({method,url:path,headers:{...(user?{cookie:`__Host-pf-session=token-${user}`} : {}),origin:'https://app.test','x-csrf-token':'csrf',...extra},...(payload?{payload}:{})});
+ const valid={propertyId:'home',title:'Leaking tap',description:'Kitchen tap leaks.',priority:'normal'};
+ let id;
+ await t.test('creation validates identities, assigned property, bounded fields and CSRF',async()=>{
+ for(const payload of [{...valid,companyId:'b'},{...valid,requesterId:'other'},{...valid,title:' '},{...valid,title:'x'.repeat(161)},{...valid,description:'x'.repeat(4001)},{...valid,priority:'urgent'}])assert.equal((await call('resident','POST','/api/resident/maintenance',payload)).statusCode,400);
+ for(const propertyId of ['foreign-home','missing'])assert.equal((await call('resident','POST','/api/resident/maintenance',{...valid,propertyId})).statusCode,404);
+ for(const extra of [{origin:'https://evil.test'},{'x-csrf-token':'bad'}])assert.equal((await call('resident','POST','/api/resident/maintenance',valid,extra)).statusCode,403);
+ for(const role of ['owner','manager','staff','foreign'])assert.equal((await call(role,'POST','/api/resident/maintenance',valid)).statusCode,403);
+ assert.equal((await call(null,'GET','/api/resident/maintenance')).statusCode,401);
+ const response=await call('resident','POST','/api/resident/maintenance',valid);assert.equal(response.statusCode,200);id=response.json().id;
+ assert.deepEqual(Object.keys(response.json()).sort(),['id','propertyId','title','description','priority','status','createdAt','updatedAt','property'].sort());
+ assert.equal((await call('other','POST','/api/resident/maintenance',{...valid,title:'Other request',priority:'high'})).statusCode,200);
+ });
+ await t.test('same-company ownership, filters, status transitions and audits',async()=>{
+ assert.equal((await call('resident','GET','/api/resident/maintenance')).json().length,1);
+ assert.equal((await call('other','GET','/api/resident/maintenance')).json()[0].title,'Other request');
+ for(const actor of ['owner','manager'])assert.equal((await call(actor,'GET','/api/company/maintenance')).json().length,2);
+ for(const actor of ['staff','resident'])assert.equal((await call(actor,'GET','/api/company/maintenance')).statusCode,403);
+ assert.deepEqual((await call('foreign','GET','/api/company/maintenance')).json(),[]);
+ assert.equal((await call('foreign','PATCH',`/api/company/maintenance/${id}`,{status:'resolved'})).statusCode,404);
+ assert.equal((await call('manager','GET','/api/company/maintenance',null,{'x-company-id':'b'})).statusCode,403);
+ for(const status of ['in_progress','resolved','open','resolved'])assert.equal((await call('manager','PATCH',`/api/company/maintenance/${id}`,{status})).json().status,status);
+ for(const extra of [{origin:'https://evil.test'},{'x-csrf-token':'bad'}])assert.equal((await call('manager','PATCH',`/api/company/maintenance/${id}`,{status:'open'},extra)).statusCode,403);
+ assert.equal((await call('resident','PATCH',`/api/company/maintenance/${id}`,{status:'open'})).statusCode,403);
+ assert.equal((await call('manager','PATCH',`/api/company/maintenance/${id}`,{status:'closed'})).statusCode,400);
+ assert.equal((await call('manager','GET','/api/company/maintenance?status=resolved&propertyId=home')).json().length,1);
+ assert.equal((await call('manager','GET','/api/company/maintenance?status=bad')).statusCode,400);
+ assert.equal((await call('manager','GET','/api/company/maintenance?propertyId=foreign-home')).statusCode,404);
+ assert.equal((await admin.query('SELECT count(*)::int n FROM "AuditEvent" WHERE action=\'maintenance.created\'')).rows[0].n,2);
+ assert.equal((await admin.query('SELECT count(*)::int n FROM "AuditEvent" WHERE action=\'maintenance.status.changed\'')).rows[0].n,4);
+ });
+ await t.test('forced RLS and composite property boundary',async()=>{
+ assert.deepEqual((await admin.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE relname='MaintenanceRequest'")).rows[0],{relrowsecurity:true,relforcerowsecurity:true});
+ assert.deepEqual(await db.maintenanceRequest.findMany(),[]);
+ await assert.rejects(db.$transaction(async tx=>{await tx.$queryRaw`SELECT set_config('app.company_id', 'a', true)`;return tx.maintenanceRequest.create({data:{...valid,companyId:'b',requesterId:'resident'}});}),/row-level security|foreign key/i);
+ await assert.rejects(db.$transaction(async tx=>{await tx.$queryRaw`SELECT set_config('app.company_id', 'a', true)`;return tx.maintenanceRequest.create({data:{...valid,propertyId:'foreign-home',companyId:'a',requesterId:'resident'}});}),/foreign key/i);
+ });
+ await t.test('revocation locks block creation/read; manager history survives removal and transfer',async()=>{
+ const leader=await admin.connect();try{
+ await leader.query('BEGIN');await leader.query('UPDATE "User" SET "updatedAt"="updatedAt" WHERE id=\'resident\'');
+ const pending=call('resident','POST','/api/resident/maintenance',valid); // injection begins immediately
+ let blocked=false;for(let i=0;i<100;i++){const rows=(await admin.query("SELECT pid FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid)) > 0 AND query LIKE 'UPDATE%User%'" )).rows;if(rows.length){blocked=true;break;}await new Promise(r=>setTimeout(r,10));}assert.ok(blocked,'resident operation reached shared lock');
+ await leader.query('DELETE FROM "ResidentPropertyAssignment" WHERE "userId"=\'resident\'');await leader.query('COMMIT');assert.equal((await pending).statusCode,404);
+ }finally{await leader.query('ROLLBACK');leader.release();}
+ assert.deepEqual((await call('resident','GET','/api/resident/maintenance')).json(),[]);
+ assert.equal((await call('manager','GET','/api/company/maintenance')).json().length,2);
+ // Explicit reassignment restores own history, never another resident's requests.
+ assert.equal((await call('manager','PUT','/api/company/properties/home/residents/resident')).statusCode,200);
+ assert.equal((await call('resident','GET','/api/resident/maintenance')).json().length,1);
+ for(const change of [{role:'resident',status:'disabled'},{role:'staff',status:'active'}]) {
+   assert.equal((await call('owner','PATCH','/api/company/members/resident',change)).statusCode,200);
+   assert.equal((await call('resident','GET','/api/resident/maintenance')).statusCode,403);
+   assert.equal((await call('owner','PATCH','/api/company/members/resident',{role:'resident',status:'active'})).statusCode,200);
+   assert.deepEqual((await call('resident','GET','/api/resident/maintenance')).json(),[]);
+   assert.equal((await call('manager','PUT','/api/company/properties/home/residents/resident')).statusCode,200);
+ }
+ // Reads use the same lock and must discard pre-revocation snapshots too.
+ const readerLeader=await admin.connect();try {
+   await readerLeader.query('BEGIN');await readerLeader.query('UPDATE "User" SET "updatedAt"="updatedAt" WHERE id=\'resident\'');
+   const pending=call('resident','GET','/api/resident/maintenance');
+   let blocked=false;for(let i=0;i<100;i++){if((await admin.query("SELECT pid FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid)) > 0 AND query LIKE 'UPDATE%User%'" )).rows.length){blocked=true;break;}await new Promise(r=>setTimeout(r,10));}assert.ok(blocked);
+   await readerLeader.query('DELETE FROM "ResidentPropertyAssignment" WHERE "userId"=\'resident\'');await readerLeader.query('COMMIT');assert.deepEqual((await pending).json(),[]);
+ } finally {await readerLeader.query('ROLLBACK');readerLeader.release();}
+ await admin.query('UPDATE "CompanyMembership" SET "companyId"=\'b\' WHERE "userId"=\'resident\'');
+ assert.deepEqual((await call('resident','GET','/api/resident/maintenance')).json(),[]);
+ assert.equal((await call('manager','PATCH',`/api/company/maintenance/${id}`,{status:'in_progress'})).statusCode,200);
+ await admin.query('UPDATE "User" SET "platformRole"=\'owner\' WHERE id=\'owner\'');
+ assert.equal((await call('owner','PATCH','/api/platform/users/resident/status',{status:'disabled'})).statusCode,200);
+ assert.equal((await call('resident','GET','/api/resident/maintenance')).statusCode,403);
+ assert.equal((await call('owner','PATCH','/api/platform/users/resident/status',{status:'active'})).statusCode,200);
+ assert.deepEqual((await call('resident','GET','/api/resident/maintenance')).json(),[]);
+ await admin.query('UPDATE "Company" SET status=\'suspended\' WHERE id=\'a\'');
+ assert.equal((await call('manager','GET','/api/company/maintenance')).statusCode,403);
+ await admin.query('UPDATE "Company" SET status=\'active\' WHERE id=\'a\'');
+ assert.equal((await call('manager','GET','/api/company/maintenance')).json().length,2);
+ assert.equal((await admin.query('SELECT count(*)::int n FROM "MaintenanceRequest"')).rows[0].n,2);
+ });
+});

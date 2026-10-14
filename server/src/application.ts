@@ -13,6 +13,7 @@ import {
   permissions,
   requirePermission,
 } from "./access.js";
+import { registerMaintenance } from "./maintenance.js";
 import { digest } from "./sessions.js";
 
 type UserWithAccess = Prisma.UserGetPayload<{
@@ -175,6 +176,7 @@ export function registerApplication(
   authenticate: preValidationHookHandler,
   origin: string,
 ) {
+  registerMaintenance(server, db, authenticate, origin);
   const auth = { preValidation: authenticate };
   const serial = <T>(request: FastifyRequest, run: (tx: Tx) => Promise<T>) =>
     serializable(db,
