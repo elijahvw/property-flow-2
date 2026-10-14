@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshUser]);
   const signIn = () => {
     window.location.assign(
-      `/api/auth/login?returnTo=${encodeURIComponent(window.location.pathname === "/" ? "/dashboard" : window.location.pathname)}`,
+      `/api/auth/login?returnTo=${encodeURIComponent(window.location.pathname === "/invite" ? "/invite" : "/dashboard")}`,
     );
   };
   const signOut = () => {

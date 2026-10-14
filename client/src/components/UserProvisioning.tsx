@@ -29,6 +29,7 @@ export function UserProvisioning({ saved }: { saved: (id?: string) => void }) {
             },
           );
           saved(created.id);
+          setKey(crypto.randomUUID());
         }}
       >
         <label>

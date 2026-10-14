@@ -86,6 +86,11 @@ model Identity {
 }
 
 model CompanyMembership {
+  contactName String?
+  contactPhone String?
+  emergencyContactName String?
+  emergencyContactPhone String?
+  managementNotes String?
   userId String @id
   companyId String
   role String
@@ -147,6 +152,8 @@ model AuditEvent {
   requestId String
   createdAt DateTime @default(now())
   @@index([companyId, createdAt])
+  @@index([targetId, createdAt])
+  @@index([actorId, createdAt])
 }
 
 model Property {

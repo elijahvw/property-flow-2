@@ -13,6 +13,9 @@ import {
   permissions,
   requirePermission,
 } from "./access.js";
+import { membershipAccessSelect } from "./membership-view.js";
+import { registerResidentProfiles } from "./resident-profiles.js";
+import { input, mutation, boundedText } from "./operational.js";
 import { registerCompanyAdministration } from "./company-administration.js";
 import { registerUserAdministration } from "./user-administration.js";
 import type { IdentityProvider } from "./identity-provider.js";
@@ -197,6 +200,7 @@ export function registerApplication(
   registerFinances(server, db, authenticate, origin);
   registerUserAdministration(server, db, authenticate, origin, identityProvider);
   registerCompanyAdministration(server, db, authenticate, origin);
+  registerResidentProfiles(server, db, authenticate, origin);
   const auth = { preValidation: authenticate };
   registerPropertyDetail(server, db, authenticate);
   const serial = <T>(request: FastifyRequest, run: (tx: Tx) => Promise<T>) =>
@@ -253,7 +257,7 @@ export function registerApplication(
         status: u.status,
         platformRole: u.platformRole,
       },
-      membership: u.membership ? {...u.membership, company: {id:u.membership.company.id,name:u.membership.company.name,status:u.membership.company.status}} : null,
+      membership: u.membership ? {companyId:u.membership.companyId,version:u.membership.version,role:u.membership.role,status:u.membership.status,company: {id:u.membership.company.id,name:u.membership.company.name,status:u.membership.company.status}} : null,
       permissions: permissions(u),
       destination: defaultDestination(u),
       csrfToken: request.appSession!.csrfToken,
@@ -284,7 +288,7 @@ export function registerApplication(
         platformRole: true,
         emailVerified: true,
         firstSignedInAt: true,
-        membership: { include: { company: true } },
+        membership: { select: { ...membershipAccessSelect, company: true } },
         companyId: true,
         role: true,
       },
@@ -318,10 +322,12 @@ export function registerApplication(
           throw new AccessError(409, 'RECORD_CHANGED', 'This assignment changed. Close and reopen access before editing again.');
         if (old && (old.companyId !== companyId || old.role !== role || status !== "active"))
           await clearAssignments(tx, userId, old.companyId);
+        const resetContact = old && old.companyId !== companyId ? {contactName:null,contactPhone:null,emergencyContactName:null,emergencyContactPhone:null,managementNotes:null} : {};
         const result = await tx.companyMembership.upsert({
           where: { userId },
           create: { userId, companyId, role, status },
-          update: { companyId, role, status, version: { increment: 1 } },
+          update: { companyId, role, status, ...resetContact, version: { increment: 1 } },
+          select: membershipAccessSelect,
         });
         // Clear obsolete assignment evidence after explicit review. Local membership is authoritative.
         await tx.user.update({
@@ -376,10 +382,27 @@ export function registerApplication(
       });
     },
   );
+  server.patch<{Params:{userId:string}}>("/api/platform/users/:userId/profile", auth, async request => {
+    platform(request); mutation(request, origin);
+    const userId = opaqueUserId(request.params.userId), body = input(request, ["name"]);
+    const name = boundedText(body.name, 200, "Display name");
+    return serial(request, async tx => {
+      await lockTarget(tx, request.principal!.id);
+      await lockTarget(tx, userId);
+      if (!await tx.user.findUnique({where:{id:userId}})) throw new AccessError(404,"NOT_FOUND","User not found.");
+      const result = await tx.user.update({where:{id:userId},data:{name},select:{id:true,name:true}});
+      await audit(tx, request, "user.profile.updated", undefined, userId);
+      return result;
+    });
+  });
   server.get("/api/platform/audit", auth, async (request) => {
     platform(request);
+    const query = request.query as Record<string, unknown>;
+    if (Object.keys(query).some(key => key !== "targetId")) throw new AccessError(400, "INVALID_INPUT", "Unknown activity filter.");
+    const targetId = query.targetId === undefined ? undefined : opaqueUserId(query.targetId);
     return db.auditEvent.findMany({
-      orderBy: { createdAt: "desc" },
+      where: targetId ? { OR: [{targetId}, {actorId:targetId}] } : undefined,
+      orderBy: [{ createdAt: "desc" }, {id:"desc"}],
       take: 100,
     });
   });
@@ -409,8 +432,8 @@ export function registerApplication(
     const companyId = scope(request, "members.manage");
     return db.companyMembership.findMany({
       where: { companyId },
-      include: {
-        user: { select: { id: true, name: true, email: true, status: true } },
+      select: {
+        ...membershipAccessSelect, user: { select: { id: true, name: true, email: true, status: true } },
       },
       orderBy: { createdAt: "asc" },
     });
@@ -447,6 +470,7 @@ export function registerApplication(
         const result = await tx.companyMembership.update({
           where: { userId },
           data: { role, status, version: { increment: 1 } },
+          select: membershipAccessSelect,
         });
         await audit(tx, request, "membership.updated", companyId, userId, {
           role,

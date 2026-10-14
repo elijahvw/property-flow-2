@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api";
 import { useResource } from "../useResource";
+import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "./Workspace";
 export type CompanyProfile = {
   id: string;
@@ -198,7 +199,6 @@ function CompanyDirectory() {
         {!adding && (
           <button
             onClick={() => {
-              setKey(crypto.randomUUID());
               setAdding(true);
             }}
           >
@@ -206,41 +206,37 @@ function CompanyDirectory() {
           </button>
         )}
       </header>
-      {adding && (
-        <section className="panel">
-          <div className="section-heading">
-            <h2>Create company profile</h2>
-            <button className="secondary" onClick={() => setAdding(false)}>
-              Cancel company creation
-            </button>
-          </div>
-          <p>
-            Save the business profile first, then assign an existing sign-in
-            account or invite the initial owner.
+      <EditorDialog
+        open={adding}
+        title="Create company profile"
+        onClose={() => setAdding(false)}
+      >
+        <p>
+          Save the business profile first, then assign an existing sign-in
+          account or invite the initial owner.
+        </p>
+        <Form
+          key={key}
+          operation="company.create"
+          label="Create company"
+          submit={async (form) => {
+            const company = await api<CompanyProfile>(
+              "/api/platform/companies",
+              {
+                method: "POST",
+                body: { ...payload(form), submissionKey: key },
+              },
+            );
+            navigate(`/platform/companies/${company.id}`);
+          }}
+        >
+          <ProfileFields />
+          <p className="help">
+            If a response fails, retry with the same details. The submission is
+            protected from duplicate creation.
           </p>
-          <Form
-            key={key}
-            operation="company.create"
-            label="Create company"
-            submit={async (form) => {
-              const company = await api<CompanyProfile>(
-                "/api/platform/companies",
-                {
-                  method: "POST",
-                  body: { ...payload(form), submissionKey: key },
-                },
-              );
-              navigate(`/platform/companies/${company.id}`);
-            }}
-          >
-            <ProfileFields />
-            <p className="help">
-              If a response fails, retry with the same details. The submission
-              is protected from duplicate creation.
-            </p>
-          </Form>
-        </section>
-      )}
+        </Form>
+      </EditorDialog>
       <section className="panel">
         <h2>Company directory</h2>
         <div className="form-grid">
@@ -363,7 +359,11 @@ function CompanyRecord() {
             {editing ? "Cancel profile edit" : "Edit company profile"}
           </button>
         </div>
-        {editing ? (
+        <EditorDialog
+          open={editing}
+          title="Edit company profile"
+          onClose={() => setEditing(false)}
+        >
           <Form
             key={c.version}
             operation="company.update"
@@ -407,39 +407,38 @@ function CompanyRecord() {
               Discard edits and reload
             </button>
           </Form>
-        ) : (
-          <>
-            <dl>
-              <dt>Legal business name</dt>
-              <dd>{c.legalName || "Not supplied"}</dd>
-              <dt>Primary contact</dt>
-              <dd>
-                {[c.contactName, c.contactEmail, c.contactPhone]
-                  .filter(Boolean)
-                  .join(" · ") || "Not supplied"}
-              </dd>
-              <dt>Website</dt>
-              <dd>{c.website || "Not supplied"}</dd>
-              <dt>Mailing address</dt>
-              <dd>
-                {[
-                  c.addressLine1,
-                  c.addressLine2,
-                  c.city,
-                  c.region,
-                  c.postalCode,
-                  c.country,
-                ]
-                  .filter(Boolean)
-                  .join(", ") || "Not supplied"}
-              </dd>
-              <dt>Timezone</dt>
-              <dd>{c.timezone}</dd>
-              <dt>Internal notes</dt>
-              <dd>{c.adminNotes || "None"}</dd>
-            </dl>
-          </>
-        )}
+        </EditorDialog>
+        <>
+          <dl>
+            <dt>Legal business name</dt>
+            <dd>{c.legalName || "Not supplied"}</dd>
+            <dt>Primary contact</dt>
+            <dd>
+              {[c.contactName, c.contactEmail, c.contactPhone]
+                .filter(Boolean)
+                .join(" · ") || "Not supplied"}
+            </dd>
+            <dt>Website</dt>
+            <dd>{c.website || "Not supplied"}</dd>
+            <dt>Mailing address</dt>
+            <dd>
+              {[
+                c.addressLine1,
+                c.addressLine2,
+                c.city,
+                c.region,
+                c.postalCode,
+                c.country,
+              ]
+                .filter(Boolean)
+                .join(", ") || "Not supplied"}
+            </dd>
+            <dt>Timezone</dt>
+            <dd>{c.timezone}</dd>
+            <dt>Internal notes</dt>
+            <dd>{c.adminNotes || "None"}</dd>
+          </dl>
+        </>
       </section>
       <section className="panel">
         <h2>People and owner setup</h2>

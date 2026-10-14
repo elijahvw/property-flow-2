@@ -25,6 +25,8 @@ import {
   AcceptInvitation,
   Audit,
 } from "./pages/Workspace";
+import { NavigationIcon } from "./components/NavigationIcon";
+import { ResidentProfiles } from "./pages/ResidentProfiles";
 import { Maintenance } from "./pages/Maintenance";
 import { Finances } from "./pages/Finances";
 import { EmailVerification } from "./components/EmailVerification";
@@ -58,8 +60,11 @@ function Shell({ children }: { children: React.ReactNode }) {
   const { data, user, signIn, signOut, error } = useAuth();
   const location = useLocation();
   const main = useRef<HTMLElement>(null);
-  const route = routes.find((r) => r.path === location.pathname)
-    || (location.pathname.startsWith("/company/properties/") ? routes.find(r => r.path === "/company/properties") : undefined);
+  const route =
+    routes.find((r) => r.path === location.pathname) ||
+    (location.pathname.startsWith("/company/properties/")
+      ? routes.find((r) => r.path === "/company/properties")
+      : undefined);
   useEffect(() => {
     document.title = `${route?.title || "Property Flow"} · Property Flow`;
     main.current?.focus();
@@ -83,6 +88,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             .filter((r) => user || r.path === "/")
             .map((r) => (
               <NavLink key={r.path} to={r.path}>
+                <NavigationIcon path={r.path} />
                 {r.title}
               </NavLink>
             ))}
@@ -173,6 +179,7 @@ function Pages() {
     "/platform/audit": <Audit />,
     "/company/properties": <Properties />,
     "/company/members": <Team />,
+    "/company/residents": <ResidentProfiles />,
     "/company/settings": <CompanySettings />,
     "/resident": <Resident />,
     "/resident/maintenance": <Maintenance resident />,
@@ -197,10 +204,26 @@ function Pages() {
           }
         />
       ))}
-      <Route path="/company/properties/:propertyId/units" element={<Shell><ProtectedRoute permission="property.read"><Units /></ProtectedRoute></Shell>} />
-      <Route path="/company/properties/:propertyId" element={
-        <Shell><ProtectedRoute permission="property.read"><PropertyDetail /></ProtectedRoute></Shell>
-      } />
+      <Route
+        path="/company/properties/:propertyId/units"
+        element={
+          <Shell>
+            <ProtectedRoute permission="property.read">
+              <Units />
+            </ProtectedRoute>
+          </Shell>
+        }
+      />
+      <Route
+        path="/company/properties/:propertyId"
+        element={
+          <Shell>
+            <ProtectedRoute permission="property.read">
+              <PropertyDetail />
+            </ProtectedRoute>
+          </Shell>
+        }
+      />
       <Route
         path="/platform/companies/:companyId"
         element={

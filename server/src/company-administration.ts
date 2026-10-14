@@ -4,6 +4,7 @@ import type {
   preValidationHookHandler,
 } from "fastify";
 import type { PrismaClient } from "@prisma/client";
+import { membershipAccessSelect } from "./membership-view.js";
 import { AccessError, requirePermission } from "./access.js";
 import { assignmentId, serializable } from "./application.js";
 import {
@@ -165,7 +166,8 @@ export function registerCompanyAdministration(
           where: { id: assignmentId(request.params.companyId) },
           include: {
             memberships: {
-              include: {
+              select: {
+                ...membershipAccessSelect,
                 user: {
                   select: {
                     id: true,

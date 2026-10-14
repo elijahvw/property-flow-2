@@ -1158,6 +1158,68 @@ test(
         }
       },
     );
+    await t.test("resident profiles are scoped, versioned, private, audited and cleared on transfer", async () => {
+      for (const id of ["profile-a","profile-b"]) await admin.query(`INSERT INTO "Company"(id,name,"updatedAt") VALUES($1,$1,NOW())`,[id]);
+      for (const [id,company,role] of [["profile-owner","profile-a","owner"],["profile-manager","profile-a","manager"],["profile-resident","profile-a","resident"],["profile-foreign","profile-b","owner"]]) {
+        await db.user.create({data:{id,email:id+"@test.invalid",emailVerified:true,membership:{create:{companyId:company,role}}}});
+        await db.session.create({data:{tokenHash:digest("token-"+id),csrfToken:"csrf",userId:id,expiresAt:new Date(Date.now()+3600000),idleExpiresAt:new Date(Date.now()+3600000)}});
+      }
+      const path="/api/company/resident-profiles/profile-resident";
+      const valid={expectedVersion:1,contactName:"Resident Contact",contactPhone:"555-0100",emergencyContactName:"Emergency Contact",emergencyContactPhone:"555-0101",managementNotes:"Company A private note"};
+      for (const actor of ["staff","resident","platform"]) assert.equal((await call(actor,"GET",path)).statusCode,403);
+      assert.equal((await call("profile-foreign","GET",path)).statusCode,404);
+      assert.equal((await call("profile-manager","GET",path,null,{"x-company-id":"profile-b"})).statusCode,403);
+      assert.equal((await call("profile-manager","GET","/api/company/resident-profiles")).json().length,1);
+      for(const body of [{...valid,role:"owner"},{...valid,companyId:"profile-b"},{...valid,contactPhone:"x".repeat(41)},{...valid,managementNotes:"x".repeat(2001)}]) assert.equal((await call("profile-manager","PATCH",path,body)).statusCode,400);
+      for(const extra of [{origin:"https://evil.test"},{"x-csrf-token":"wrong"}]) assert.equal((await call("profile-manager","PATCH",path,valid,extra)).statusCode,403);
+      const saved=await call("profile-manager","PATCH",path,valid);assert.equal(saved.statusCode,200,saved.body);assert.equal(saved.json().version,2);
+      assert.equal((await call("profile-owner","GET",path)).json().contactPhone,"555-0100");
+      assert.equal((await call("profile-manager","PATCH",path,{...valid,contactName:"Stale overwrite"})).statusCode,409);
+      const bootstrap=(await call("profile-resident","GET","/api/bootstrap")).json();
+      for(const key of ["contactName","contactPhone","managementNotes","emergencyContactName","emergencyContactPhone"]) assert.equal(Object.hasOwn(bootstrap.membership,key),false);
+      await admin.query(`CREATE FUNCTION reject_profile_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='resident.profile.updated' THEN RAISE EXCEPTION 'audit unavailable'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_profile_audit BEFORE INSERT ON "AuditEvent" FOR EACH ROW EXECUTE FUNCTION reject_profile_audit()`);
+      try { assert.equal((await call("profile-manager","PATCH",path,{...valid,expectedVersion:2,contactName:"Must roll back"})).statusCode,500); }
+      finally { await admin.query(`DROP TRIGGER reject_profile_audit ON "AuditEvent"; DROP FUNCTION reject_profile_audit()`); }
+      assert.equal((await call("profile-owner","GET",path)).json().contactName,"Resident Contact");
+      assert.equal((await call("profile-owner","GET",path)).json().version,2);
+      const privateKeys=["contactName","contactPhone","emergencyContactName","emergencyContactPhone","managementNotes"];
+      const directory=(await call("platform","GET","/api/platform/users")).json();
+      const company=(await call("platform","GET","/api/platform/companies/profile-a")).json();
+      for(const row of [directory.find(p=>p.id==="profile-resident").membership,company.memberships.find(m=>m.userId==="profile-resident"),(await call("profile-owner","GET","/api/company/members")).json().find(m=>m.userId==="profile-resident")]) for(const key of privateKeys) assert.equal(Object.hasOwn(row,key),false,"access responses must omit "+key);
+      const unchanged=await call("platform","PUT","/api/platform/users/profile-resident/membership",{companyId:"profile-a",role:"resident",status:"active",expectedVersion:2});assert.equal(unchanged.statusCode,200,unchanged.body);
+      for(const key of privateKeys) assert.equal(Object.hasOwn(unchanged.json(),key),false,"membership mutations must omit "+key);
+      assert.equal((await call("profile-owner","GET",path)).json().managementNotes,"Company A private note");
+      await db.auditEvent.createMany({data:[{id:"profile-authored-a",companyId:"profile-a",actorId:"profile-resident",targetId:"maintenance-one",action:"maintenance.created",requestId:"fixture"},{id:"profile-authored-foreign",companyId:"profile-b",actorId:"profile-resident",targetId:"maintenance-other",action:"maintenance.created",requestId:"fixture"}]});
+      const recent=(await call("profile-owner","GET",path)).json().activity;assert.ok(recent.some(e=>e.id==="profile-authored-a"));assert.equal(recent.some(e=>e.id==="profile-authored-foreign"),false);
+      const audit=(await call("profile-owner","GET",path)).json().activity;assert.equal(audit.filter(x=>x.action==="resident.profile.updated").length,1);assert.equal(JSON.stringify(audit).includes("private note"),false);
+      await db.companyMembership.update({where:{userId:"profile-manager"},data:{status:"disabled"}});
+      assert.equal((await call("profile-manager","PATCH",path,{...valid,expectedVersion:2})).statusCode,403);
+      const transfer=await call("platform","PUT","/api/platform/users/profile-resident/membership",{companyId:"profile-b",role:"resident",status:"active",expectedVersion:3});assert.equal(transfer.statusCode,200,transfer.body);
+      assert.equal((await call("profile-owner","GET",path)).statusCode,404);
+      const moved=(await call("profile-foreign","GET",path)).json();assert.equal(moved.contactName,null);assert.equal(moved.managementNotes,null);assert.equal(moved.activity.some(e=>e.action==="resident.profile.updated"),false);
+    });
+    await t.test("platform profile writes cannot pass a queued administrator revocation", async () => {
+      const lock = await admin.connect();let pending;
+      try {
+        await lock.query("BEGIN");await lock.query(`UPDATE "User" SET "platformRole"=NULL WHERE id='platform'`);
+        pending=call("platform","PATCH","/api/platform/users/profile-resident/profile",{name:"Revoked overwrite"});
+        let blocked=false;
+        for(let attempt=0;attempt<200;attempt++) { if((await admin.query(`SELECT pid FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid))>0 AND query LIKE '%User%'`)).rows.length){blocked=true;break;} await new Promise(resolve=>setTimeout(resolve,10)); }
+        assert.ok(blocked,"profile mutation must wait at the administrator lock");await lock.query("COMMIT");assert.equal((await pending).statusCode,403);
+        assert.notEqual((await db.user.findUnique({where:{id:"profile-resident"}})).name,"Revoked overwrite");
+      } finally {await lock.query("ROLLBACK");lock.release();if(pending) await pending;await db.user.update({where:{id:"platform"},data:{platformRole:"owner"}});}
+    });
+    await t.test("platform profile and target activity require platform authority and filter before the limit", async () => {
+      const path="/api/platform/users/profile-resident/profile";
+      assert.equal((await call("profile-owner","PATCH",path,{name:"Changed"})).statusCode,403);
+      assert.equal((await call("platform","PATCH",path,{name:"Changed",platformRole:"owner"})).statusCode,400);
+      assert.equal((await call("platform","PATCH",path,{name:"Changed"},{"x-csrf-token":"wrong"})).statusCode,403);
+      assert.equal((await call("platform","PATCH",path,{name:"Changed"})).statusCode,200);
+      await db.auditEvent.createMany({data:Array.from({length:105},(_,n)=>({id:"unrelated-profile-"+n,actorId:"platform",action:"unrelated",targetId:"someone-else",requestId:"fixture",createdAt:new Date(Date.now()+10000)}))});
+      const activity=await call("platform","GET","/api/platform/audit?targetId=profile-resident");assert.equal(activity.statusCode,200);
+      assert.ok(activity.json().some(e=>e.action==="user.profile.updated"));assert.equal(activity.json().some(e=>e.action==="unrelated"),false);
+      assert.equal((await call("profile-manager","GET","/api/platform/audit?targetId=profile-resident")).statusCode,403);
+    });
     await t.test(
       "real browser automatically discovers an Auth0 account with no import action or target sign-in",
       { skip: !process.env.TEST_USERS_BROWSER_URL },
