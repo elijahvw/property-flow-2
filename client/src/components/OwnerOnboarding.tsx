@@ -66,7 +66,7 @@ function OwnerChecklist({ properties, onAddProperty, company }: Props & {
           <h3>Issue a resident invitation</h3>
           <Progress resource={invitations} complete={issued ? "Resident invitation issued" : null} empty="No resident invitation in the available records" />
           <p>This step records invitation creation only. Share the link directly from Team. Review its acceptance, expiry or revocation there.</p>
-          <p className="help">Only the latest 100 invitations are available. Accepted residents receive company membership; property assignment and maintenance setup are still unavailable.</p>
+          <p className="help">Only the latest 100 invitations are available. Accepted residents receive company membership; assign accepted residents using Manage residents; maintenance setup is still unavailable.</p>
           <Link to="/company/members">{issued ? "Review invitations in Team" : "Invite a resident in Team"}</Link>
         </li>
       </ol>

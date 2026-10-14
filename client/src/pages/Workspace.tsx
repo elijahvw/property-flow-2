@@ -512,6 +512,7 @@ export function Properties() {
     }[]
   >("/api/company/properties");
   const [adding, setAdding] = useState(false);
+  const [managing, setManaging] = useState<{id: string; name: string} | null>(null);
   return (
     <>
       <header className="page-heading">
@@ -561,6 +562,7 @@ export function Properties() {
                   <th>Property</th>
                   <th>Street address</th>
                   <th>Location</th>
+                  {can("resident.assignment.manage") && <th>Residents</th>}
                 </tr>
               </thead>
               <tbody>
@@ -573,6 +575,7 @@ export function Properties() {
                     <td>
                       {p.city}, {p.state} {p.zip}
                     </td>
+                    {can("resident.assignment.manage") && <td><button className="secondary" onClick={() => setManaging(p)}>Manage residents</button></td>}
                   </tr>
                 ))}
               </tbody>
@@ -582,6 +585,7 @@ export function Properties() {
           <p>No properties have been added to your company.</p>
         )}
       </section>
+      {managing && can("resident.assignment.manage") && <ManageResidents key={managing.id} property={managing} close={() => setManaging(null)} />}
     </>
   );
 }
@@ -859,23 +863,35 @@ export function AccessStatus() {
     </section>
   );
 }
+function ManageResidents({ property, close }: { property: { id: string; name: string }; close: () => void }) {
+  const base = `/api/company/properties/${encodeURIComponent(property.id)}/residents`;
+  const eligible = useResource<{ userId: string; user: { name: string | null; email: string } }[]>("/api/company/residents");
+  const assigned = useResource<{ userId: string; membership: { user: { name: string | null; email: string } } }[]>(base);
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const choices = eligible.data?.filter(person => !assigned.data?.some(row => row.userId === person.userId));
+  const change = async (userId: string, method: "PUT" | "DELETE") => {
+    setBusy(true); setError("");
+    try { await api(`${base}/${encodeURIComponent(userId)}`, { method }); assigned.reload(); eligible.reload(); }
+    catch (e) { setError(e instanceof Error ? e.message : "Unable to update assignment."); }
+    finally { setBusy(false); }
+  };
+  return <section className="panel">
+    <div className="section-heading"><h2>Residents for {property.name}</h2><button className="secondary" onClick={close}>Close</button></div>
+    <p className="help">An assignment provides property access. It is not a lease or proof of occupancy. Pending invitations are not eligible; residents must accept first.</p>
+    {error && <p className="notice error" role="alert">{error}</p>}
+    {!eligible.data || !assigned.data ? <LoadState error={eligible.error || assigned.error} retry={() => { eligible.reload(); assigned.reload(); }} /> : <>
+      {assigned.data.length ? <ul className="record-list">{assigned.data.map(row => <li key={row.userId}><strong>{row.membership.user.name || row.membership.user.email}</strong><Badge>Assigned</Badge><button disabled={busy} className="secondary" onClick={() => change(row.userId, "DELETE")}>Remove assignment</button></li>)}</ul> : <p>No residents assigned.</p>}
+      {choices?.length ? <form onSubmit={event => { event.preventDefault(); if (!busy) void change(String(new FormData(event.currentTarget).get("resident")), "PUT"); }}><fieldset disabled={busy}><label>Accepted resident<select name="resident" required defaultValue=""><option value="" disabled>Choose a resident</option>{choices.map(person => <option key={person.userId} value={person.userId}>{person.user.name || person.user.email}</option>)}</select></label><button type="submit">{busy ? "Updating…" : "Assign resident"}</button></fieldset></form> : <p>No additional active accepted residents available.</p>}
+    </>}
+  </section>;
+}
 export function Resident() {
-  return (
-    <>
-      <header className="page-heading">
-        <p className="eyebrow">Resident</p>
-        <h1>My rental</h1>
-      </header>
-      <section className="panel">
-        <h2>No rental records available</h2>
-        <p>
-          Your company membership is active. Lease, payment and maintenance
-          features are not available yet. Contact your property manager for
-          rental documents or requests.
-        </p>
-      </section>
-    </>
-  );
+  const r = useResource<{ id: string; name: string; address: string }[]>("/api/resident/properties");
+  return <>
+    <header className="page-heading"><p className="eyebrow">Resident</p><h1>My properties</h1><p>These associations are not leases or proof of occupancy.</p></header>
+    {!r.data ? <LoadState error={r.error} retry={r.reload} /> : r.data.length ? r.data.map(property => <section className="panel" key={property.id}><h2>{property.name}</h2><p>{property.address}</p></section>) : <section className="panel"><h2>No properties assigned</h2><p>Your company membership is active. Contact your property manager for a property assignment.</p></section>}
+    <p className="help">Lease, payment and maintenance features are not available yet.</p>
+  </>;
 }
 export function AcceptInvitation() {
   const { refreshUser } = useAuth();

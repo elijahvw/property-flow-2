@@ -1,5 +1,43 @@
 # PropertyFlow MVP status
 
+## Resident property assignment slice — 2026-10-14
+
+Implemented on `resident-property-assignments` from clean owner-onboarding `cb80edeb93eeec2275671eb0f2c21b0b9df2f26e`, in an isolated local clone at `/Users/elijahward/Documents/Codex/2026-10-13/task-5/resident-assignments`. The reviewed source checkout and its Git metadata were not modified. No ancestor/repository AGENTS.md was found. No push, merge, deployment, infrastructure provision, package installation, migration application, or existing database operation occurred. Stop here for independent review before publication.
+
+### Completed behavior
+
+- Added `ResidentPropertyAssignment(companyId, propertyId, userId, createdAt)`, primary/unique property-user pair, composite foreign keys to Property and CompanyMembership, and their required unique keys. Migration `202610140001_resident_assignments` is additive, grants runtime table access, and enables **forced company RLS** using transaction-local `app.company_id`. Existing one-company membership and property RLS remain unchanged.
+- Owners/managers receive `resident.assignment.manage`; staff, residents, and platform-only authority do not. `GET /api/company/residents` lists active resident memberships with active accounts/companies, excluding unaccepted invitations. `GET /api/company/properties/:propertyId/residents` lists associations; `PUT` and `DELETE /api/company/properties/:propertyId/residents/:userId` assign/remove idempotently. Assignment uses an existing user ID, not email/invitation ID. Foreign/missing property or member returns 404; a same-company ineligible target returns 409; malformed IDs return 400; forged company headers return 403. Existing authentication, Origin/CSRF hooks and manager invitation restrictions are preserved. Mutations audit property and target IDs.
+- `GET /api/resident/properties` derives company and user identity from the authenticated principal, freshly validates access transactionally, filters self even within the same company, and selects only property `id/name/address`. Query parameters cannot select another resident. Suspension denies access while retaining associations.
+- Membership disable, company transfer, role change, account disable, and ownership transfer clear associations under the old company context in the same transaction. Reactivation does not restore rows. Target mutations share a user-row write lock via a no-op `updatedAt = updatedAt` UPDATE: changing the MVCC tuple forces older Serializable snapshots to retry before target validation. Serializable transactions retry at most three attempts, handling Prisma P2034 and raw PostgreSQL serialization/deadlock SQLSTATEs, then return an actionable 409. This applies to existing serial lifecycle handlers too; no externally delivered side effects occur in their callbacks.
+- Property directory offers **Manage residents** to owners/managers, with accepted choices, assigned badges, removal, loading, error/retry, and empty states. Resident portal renders assigned-property cards or no-assignment guidance. UI explicitly says association is not a lease or occupancy proof. Onboarding retains truthful invitation issuance/acceptance wording and now points to Manage residents. No payment/maintenance workflows were added.
+
+### Verified checks
+
+Used Node v24.1.0, existing cached dependency versions, and copied ignored node_modules using APFS cloning from the source checkout. Prisma generation used a dummy localhost URL and copied schema-engine cache under `/tmp/pf-prisma-cache` after the default cache location was blocked; no database connection or download occurred. Deployment/CI remains documented for Node 22, which was not executed locally.
+
+- `XDG_CACHE_HOME=/tmp/pf-prisma-cache DATABASE_URL=postgresql://dummy@127.0.0.1:5432/dummy npm run build --workspace=server`: passed (Prisma generation + TypeScript). Final subsequent server compilation passed after adding raw serialization retry handling.
+- `npm run build --workspace=@property-flow/client`: passed (TypeScript + Vite). `./node_modules/.bin/tsc -p client/tsconfig.json --noEmit`: passed.
+- `env -u TEST_DATABASE_URL -u DATABASE_URL -u RUNTIME_DATABASE_URL node --test server/tests/access.test.mjs server/tests/resident-assignments.test.mjs server/tests/tracing.test.mjs client/tests/*.test.cjs`: **29 passed** (21 existing, 8 new). Final output: `/tmp/propertyflow-resident-node-tests.txt`. New route fixtures cover permission boundaries, forged headers, invalid IDs, foreign/missing equivalence, inactive/disabled/suspended eligibility, duplicates/removal, same-company self isolation/minimal fields, lifecycle cleanup including ownership transfer, reactivation, and bounded ORM/raw serialization retry behavior. These fixtures assert transaction scopes/locks and do not prove real database concurrency.
+- `./node_modules/.bin/playwright test -c playwright.onboarding.config.ts --reporter=line`: **16 passed** (12 existing, 4 new). Localhost listening required sandbox escalation, which was approved. All APIs were intercepted; no real sessions/accounts/database. New browser fixtures cover manager assignment/removal, 409 recovery, staff gating, resident cards/empty/error retry, and pending resource loading. Existing onboarding mobile/scope-change coverage remains green.
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/operations -p 'test_*.py'`: **24 passed**, with no infrastructure dispatch.
+- `git diff --check`: passed.
+- `env -u TEST_DATABASE_URL -u DATABASE_URL -u RUNTIME_DATABASE_URL node --test server/tests/database-access.test.mjs`: **skipped**, explicitly without any database URL. No schema-resetting suite ran against a database.
+
+### Unverified database checks and review risks
+
+Added PostgreSQL integration cases for forced RLS, unscoped/foreign-company reads and inserts, both composite foreign keys, duplicate assignment/self minimal output, and repeated overlapping assignment versus membership/account revocation. Increased the isolated suite pool to four connections so future Promise.all race tests can actually overlap. **These cases have not executed.** No local PostgreSQL binary was found; Docker daemon access was sandbox-blocked. PGlite packages exist but are not a substitute for real multi-connection PostgreSQL locking/concurrency validation.
+
+Safe future approach: start a fresh throwaway PostgreSQL cluster/container on an unused loopback port with a unique container/volume or a new temporary data directory, verify the listener/process and empty cluster, create only `propertyflow_access_test`, and supply its local admin URL to the integration suite. That suite intentionally drops/recreates public and changes its cluster-local runtime role, so the hostname/database-name guard alone is insufficient evidence of disposability. Never point it at an existing development/test/shared database. The cluster must be verified disposable before execution and removed afterward. No cluster/container was created in this task.
+
+Independent review should focus on the no-op user write-lock/snapshot fence and adapter serialization error mapping, old-company RLS cleanup before composite-key membership changes, migration rollout/index lock impact, and fresh actor/self authorization. Authenticated acceptance, real PostgreSQL race/RLS/constraint tests, and remote CI remain required before release. Direct administrative SQL that changes role/status is outside these application handlers and must clear associations explicitly; company suspension intentionally retains rows. Pending invitations remain unassignable; no email is automatically delivered.
+
+### Remaining MVP work
+
+Independent review and the database/live-auth checks above; maintenance submission/manager queue/status lifecycle; lease/payment workflows; property detail/edit/units. The prior owner-onboarding evidence below is historical, and its statement that property assignment was absent is superseded by this slice.
+
+---
+
 Updated 2026-10-14 for the focused owner onboarding slice. Source baseline: `f15e7b43256790ba3acabf08025f707d3771cbc9` (PR12 head), verified clean on `codex/access-overhaul`. Implementation branch: `codex/owner-onboarding`. No push, merge, infrastructure changes, deployment or database operations in this task.
 
 ## Cohort decision and implemented behavior

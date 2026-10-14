@@ -25,7 +25,7 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
   }
   await admin.query("ALTER ROLE propertyflow_runtime LOGIN PASSWORD 'isolated-runtime-test-password'");
   const runtimeUrl = new URL(url); runtimeUrl.username = 'propertyflow_runtime'; runtimeUrl.password = 'isolated-runtime-test-password';
-  const runtimePool = new pg.Pool({ connectionString: runtimeUrl.href, max: 1 });
+  const runtimePool = new pg.Pool({ connectionString: runtimeUrl.href, max: 4 });
   const db = new PrismaClient({ adapter: new PrismaPg(runtimePool) });
   t.after(() => db.$disconnect());
   for (const id of ['a', 'b']) await admin.query('INSERT INTO "Company" (id,name,"updatedAt") VALUES ($1,$1,NOW())', [id]);
@@ -65,6 +65,46 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
     assert.equal((await db.property.findMany()).length,0);
     await assert.rejects(tenantTransaction(db,'a',tx=>tx.property.create({data:{...property,companyId:'b'}})), /row-level security/);
     assert.equal((await db.property.findMany()).length,0);
+  });
+  // These execute only in the existing explicitly isolated PostgreSQL suite.
+  await t.test('assignment forced RLS and both composite foreign keys', async () => {
+    const a = (await tenantTransaction(db,'a',tx=>tx.property.findMany()))[0];
+    const b = await tenantTransaction(db,'b',tx=>tx.property.create({data:{...property,companyId:'b'}}));
+    const policy = (await admin.query(`SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE relname='ResidentPropertyAssignment'`)).rows[0];
+    assert.deepEqual(policy,{relrowsecurity:true,relforcerowsecurity:true});
+    await assert.rejects(db.residentPropertyAssignment.create({data:{companyId:'a',propertyId:a.id,userId:'resident-a'}}),/row-level security/);
+    await assert.rejects(tenantTransaction(db,'a',tx=>tx.residentPropertyAssignment.create({data:{companyId:'a',propertyId:b.id,userId:'resident-a'}})),/foreign key/i);
+    await assert.rejects(tenantTransaction(db,'a',tx=>tx.residentPropertyAssignment.create({data:{companyId:'a',propertyId:a.id,userId:'owner-b'}})),/foreign key/i);
+    assert.equal((await call('manager-a','PUT',`/api/company/properties/${a.id}/residents/resident-a`)).statusCode,200);
+    assert.equal((await call('manager-a','PUT',`/api/company/properties/${a.id}/residents/resident-a`)).statusCode,200);
+    assert.equal((await tenantTransaction(db,'a',tx=>tx.residentPropertyAssignment.findMany())).length,1);
+    assert.deepEqual(await db.residentPropertyAssignment.findMany(),[]);
+    assert.deepEqual(await tenantTransaction(db,'b',tx=>tx.residentPropertyAssignment.findMany()),[]);
+    const visible=(await call('resident-a','GET','/api/resident/properties')).json();
+    assert.deepEqual(visible,[{id:a.id,name:a.name,address:a.address}]);
+    assert.equal((await call('owner-b','PUT',`/api/company/properties/${a.id}/residents/resident-a`)).statusCode,404);
+    // Restore the prior suite's empty company-b directory assertion.
+    await tenantTransaction(db,'b',tx=>tx.property.delete({where:{id:b.id}}));
+  });
+  await t.test('concurrent assignment versus membership/account revocation never leaves access behind', async () => {
+    const a=(await tenantTransaction(db,'a',tx=>tx.property.findMany()))[0];
+    for(const account of [false,true]) {
+      for(let attempt=0;attempt<4;attempt++) {
+        await call('platform','PATCH','/api/platform/users/resident-a/status',{status:'active'});
+        await call('platform','PUT','/api/platform/users/resident-a/membership',{companyId:'a',role:'resident',status:'active'});
+        const results=await Promise.all([
+          call('manager-a','PUT',`/api/company/properties/${a.id}/residents/resident-a`),
+          account ? call('platform','PATCH','/api/platform/users/resident-a/status',{status:'disabled'}) : call('owner-a','PATCH','/api/company/members/resident-a',{role:'resident',status:'disabled'}),
+        ]);
+        assert.equal(results[1].statusCode,200,results[1].body);
+        assert.ok([200,409].includes(results[0].statusCode),results[0].body);
+        assert.deepEqual(await tenantTransaction(db,'a',tx=>tx.residentPropertyAssignment.findMany({where:{userId:'resident-a'}})),[]);
+        assert.equal((await call('resident-a','GET','/api/resident/properties')).statusCode,403);
+      }
+    }
+    await call('platform','PATCH','/api/platform/users/resident-a/status',{status:'active'});
+    await call('platform','PUT','/api/platform/users/resident-a/membership',{companyId:'a',role:'resident',status:'active'});
+    assert.deepEqual((await call('resident-a','GET','/api/resident/properties')).json(),[]);
   });
   await t.test('company suspension revokes an existing session’s access immediately', async () => {
     assert.equal((await call('platform','PATCH','/api/platform/companies/a',{name:'a',status:'suspended'})).statusCode,200);
