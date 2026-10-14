@@ -113,10 +113,11 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
       })),{...options,timeout:10000});
     },
   });
-  const controlledApp = database => {
+  const controlledApp = async database => {
     const instance=Fastify();t.after(()=>instance.close());
     instance.setErrorHandler((error,_request,reply)=>reply.code(error.statusCode||500).send({code:error.code,error:error.message}));
-    registerApplication(instance,database,auth,'https://app.test');return instance;
+    const instanceAuth=await registerSessions(instance,database,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test-web',clientSecret:'test-only',secure:true});
+    registerApplication(instance,database,instanceAuth,'https://app.test');return instance;
   };
   const controlledCall = (instance,user,method,path,body) => instance.inject({method,url:path,headers:{cookie:`__Host-pf-session=token-${user}`,origin:'https://app.test','x-csrf-token':'test-csrf'},...(body===undefined?{}:{payload:body})});
   const seedRaceUser = async (id,role) => {
@@ -128,17 +129,18 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
     const a=(await tenantTransaction(db,'a',tx=>tx.property.findMany()))[0];
     for(const change of ['membership-disable','account-disable','transfer','role-change','ownership-promotion']) {
       for(const first of ['assignment','lifecycle']) {
-        await raceTest.test(`${change}: ${first} locks first`,async()=>{
-          const targetId=`race-${change}-${first}`,ownerId=`owner-${targetId}`;
+       for(const preexisting of [false,true]) {
+        await raceTest.test(`${change}: ${first} locks first, preexisting=${preexisting}`,async()=>{
+          const targetId=`race-${change}-${first}-${preexisting}`,ownerId=`owner-${targetId}`;
           await seedRaceUser(targetId,'resident');await seedRaceUser(ownerId,'owner');
-          // Existing associations must also be cleared; the concurrent PUT is idempotent.
-          assert.equal((await call('manager-a','PUT',`/api/company/properties/${a.id}/residents/${targetId}`)).statusCode,200);
+          // Exercise both new assignments and cleanup of existing associations.
+          if(preexisting) assert.equal((await call('manager-a','PUT',`/api/company/properties/${a.id}/residents/${targetId}`)).statusCode,200);
           const locked=deferred(),release=deferred(),followerPid=deferred();let leaderAttempts=0,followerAttempts=0;
-          const leader=controlledApp(coordinatedDb(async(_tx,execute)=>{
+          const leader=await controlledApp(coordinatedDb(async(_tx,execute)=>{
             leaderAttempts++;const result=await execute();
             if(leaderAttempts===1) {locked.resolve();await bounded(release.promise);}return result;
           }));
-          const follower=controlledApp(coordinatedDb(async(tx,execute)=>{
+          const follower=await controlledApp(coordinatedDb(async(tx,execute)=>{
             followerAttempts++;
             if(followerAttempts===1) followerPid.resolve((await tx.$queryRaw`SELECT pg_backend_pid() AS pid`)[0].pid);
             return execute();
@@ -182,13 +184,14 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
           await admin.query('DELETE FROM "Session" WHERE "userId" = ANY($1::text[])',[[targetId,ownerId]]);
           await admin.query('DELETE FROM "User" WHERE id = ANY($1::text[])',[[targetId,ownerId]]);
         });
+       }
       }
     }
   });
   await t.test('real stale snapshots exhaust three retries with 409 and no assignment/audit write',async()=>{
     const targetId='race-exhaustion';await seedRaceUser(targetId,'resident');
     const a=(await tenantTransaction(db,'a',tx=>tx.property.findMany()))[0];let attempts=0;
-    const controlled=controlledApp(coordinatedDb(async(_tx,execute)=>{
+    const controlled=await controlledApp(coordinatedDb(async(_tx,execute)=>{
       attempts++;
       // Actor lookup has established the Serializable snapshot. Commit a target
       // tuple change externally before each lock query to force SQLSTATE 40001.
