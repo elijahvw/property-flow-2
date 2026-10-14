@@ -1,4 +1,5 @@
 import pg from "pg";
+import { readFileSync } from "node:fs";
 // Executed with migration credentials before the HTTP process starts.
 const runtimeUrl = process.env.RUNTIME_DATABASE_URL;
 if (!runtimeUrl) throw new Error("RUNTIME_DATABASE_URL is required");
@@ -9,7 +10,7 @@ const admin = new pg.Client({
   connectionString: process.env.DATABASE_URL,
   ssl:
     process.env.NODE_ENV === "production"
-      ? { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT }
+      ? { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT || readFileSync(new URL('../certs/rds-global-bundle.pem', import.meta.url), 'utf8') }
       : undefined,
 });
 await admin.connect();

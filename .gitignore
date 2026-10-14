@@ -12,3 +12,6 @@ dist/
 .terraform.lock.hcl
 
 work-cache/
+
+__pycache__/
+*.py[cod]

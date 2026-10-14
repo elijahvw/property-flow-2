@@ -1,38 +1,18 @@
 import 'dotenv/config';
 import { defineConfig } from 'prisma/config';
-
+import { fileURLToPath } from 'node:url';
 const databaseUrl = process.env.DATABASE_URL;
-const isProduction = process.env.NODE_ENV === 'production';
-
-if (!databaseUrl) {
-  throw new Error('DATABASE_URL is required');
+if (!databaseUrl) throw new Error('DATABASE_URL is required');
+const migrationUrl = new URL(databaseUrl);
+if (process.env.NODE_ENV === 'production') {
+  // Prisma Migrate's engine has its own documented TLS URL parameters.
+  // The pg adapter's TLS configuration is handled separately.
+  migrationUrl.searchParams.set('sslmode', 'require');
+  migrationUrl.searchParams.set('sslaccept', 'strict');
+  migrationUrl.searchParams.set('sslcert', process.env.DATABASE_CA_FILE || fileURLToPath(new URL('./certs/rds-global-bundle.pem', import.meta.url)));
 }
-
-const isPostgresUrl = /^postgres(?:ql)?:\/\//i.test(databaseUrl);
-
-const migrationDatabaseUrl = (() => {
-  if (!isProduction || !isPostgresUrl) {
-    return databaseUrl;
-  }
-
-  try {
-    const parsedUrl = new URL(databaseUrl);
-    parsedUrl.searchParams.set('sslmode', 'verify-full');
-    return parsedUrl.toString();
-  } catch {
-    const separator = databaseUrl.includes('?') ? '&' : '?';
-    return databaseUrl.includes('sslmode=')
-      ? databaseUrl.replace(/sslmode=[^&]*/i, 'sslmode=verify-full')
-      : `${databaseUrl}${separator}sslmode=verify-full`;
-  }
-})();
-
 export default defineConfig({
   schema: 'prisma/schema.prisma',
-  migrations: {
-    path: 'prisma/migrations',
-  },
-  datasource: {
-    url: migrationDatabaseUrl,
-  },
+  migrations: { path: 'prisma/migrations' },
+  datasource: { url: migrationUrl.href },
 });

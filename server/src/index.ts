@@ -1,4 +1,4 @@
-import fastify from "fastify";
+import fastify, { type FastifyError } from "fastify";
 import tracer from "dd-trace";
 import dotenv from "dotenv";
 import { prisma } from "./lib/prisma.js";
@@ -24,7 +24,8 @@ const server = fastify({
     },
   },
 });
-server.setErrorHandler((error, request, reply) => {
+server.setErrorHandler((failure, request, reply) => {
+  const error = (failure instanceof Error ? failure : new Error("REQUEST_FAILED")) as FastifyError;
   const code = (error as any).code;
   const status =
     error instanceof AccessError
