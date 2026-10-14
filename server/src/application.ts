@@ -73,6 +73,48 @@ async function audit(
     },
   });
 }
+// All target access changes and assignment mutations write-lock the same User row.
+// The no-op UPDATE also changes the MVCC tuple: a transaction that waited with
+// an older Serializable snapshot must retry before validating target access.
+async function lockTarget(tx: Tx, userId: string) {
+  await tx.$queryRaw`UPDATE "User" SET "updatedAt" = "updatedAt" WHERE id = ${userId} RETURNING id`;
+}
+async function clearAssignments(tx: Tx, userId: string, companyId?: string) {
+  if (!companyId) return;
+  await tx.$queryRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
+  await tx.residentPropertyAssignment.deleteMany({ where: { companyId, userId } });
+}
+export function assignmentId(value: unknown): string {
+  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_|:@.\-]{0,199}$/.test(value))
+    throw new AccessError(400, "INVALID_ID", "Choose a valid identifier.");
+  return value;
+}
+// Identity-provider subjects are persisted verbatim. Do not interpret their
+// punctuation, normalize or trim them, or apply the property identifier grammar.
+export const MAX_USER_ID_BYTES = 4096;
+export function opaqueUserId(value: unknown): string {
+  if (typeof value !== "string" || !value.length || value.includes("\0") ||
+      Buffer.byteLength(value, "utf8") > MAX_USER_ID_BYTES)
+    throw new AccessError(400, "INVALID_ID", "Choose a valid user identifier.");
+  return value;
+}
+export async function serializable<T>(db: PrismaClient, run: (tx: Tx) => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try { return await db.$transaction(run, { isolationLevel: "Serializable" }); }
+    catch (error) {
+      const failure = error as { code?: string; meta?: { code?: string; driverAdapterError?: { cause?: { originalCode?: string } } } };
+      // Raw lock queries can report PostgreSQL SQLSTATE through P2010.
+      const retryable = failure.code === "P2034" ||
+        ["40001", "40P01"].includes(failure.code ?? "") ||
+        (failure.code === "P2010" && [
+          failure.meta?.code,
+          failure.meta?.driverAdapterError?.cause?.originalCode,
+        ].some(code => ["40001", "40P01"].includes(code ?? "")));
+      if (!retryable) throw error;
+      if (attempt >= 2) throw new AccessError(409, "ACCESS_CONFLICT", "Access changed. Refresh and try again.");
+    }
+  }
+}
 async function activeCompany(tx: Tx, id: string) {
   const company = await tx.company.findUnique({ where: { id } });
   if (!company) throw new AccessError(404, "NOT_FOUND", "Company not found.");
@@ -144,7 +186,7 @@ export function registerApplication(
 ) {
   const auth = { preValidation: authenticate };
   const serial = <T>(request: FastifyRequest, run: (tx: Tx) => Promise<T>) =>
-    db.$transaction(
+    serializable(db,
       async (tx) => {
         const current = await tx.user.findUnique({
           where: { id: request.principal!.id },
@@ -167,7 +209,6 @@ export function registerApplication(
           );
         return run(tx);
       },
-      { isolationLevel: "Serializable" },
     );
   const platform = (request: FastifyRequest) =>
     requirePermission(request.principal!, "platform.manage");
@@ -177,7 +218,9 @@ export function registerApplication(
       | "property.read"
       | "property.write"
       | "company.manage"
-      | "members.manage",
+      | "members.manage"
+      | "resident.assignment.manage"
+      | "resident.self",
   ) =>
     companyScope(
       request.principal!,
@@ -304,11 +347,12 @@ export function registerApplication(
     async (request) => {
       platform(request);
       const body = bodyOf(request),
-        userId = request.params.userId;
+        userId = opaqueUserId(request.params.userId);
       const companyId = requiredString(body.companyId, "Company"),
         role = roleValue(body.role),
         status = stateValue(body.status);
       return serial(request, async (tx) => {
+        await lockTarget(tx, userId);
         await activeCompany(tx, companyId);
         const target = await tx.user.findUnique({ where: { id: userId } });
         if (!target || target.status !== "active")
@@ -321,6 +365,8 @@ export function registerApplication(
         const old = await tx.companyMembership.findUnique({
           where: { userId },
         });
+        if (old && (old.companyId !== companyId || old.role !== role || status !== "active"))
+          await clearAssignments(tx, userId, old.companyId);
         const result = await tx.companyMembership.upsert({
           where: { userId },
           create: { userId, companyId, role, status },
@@ -351,8 +397,9 @@ export function registerApplication(
     async (request) => {
       platform(request);
       const status = stateValue(bodyOf(request).status),
-        userId = request.params.userId;
+        userId = opaqueUserId(request.params.userId);
       return serial(request, async (tx) => {
+        await lockTarget(tx, userId);
         const target = await tx.user.findUnique({ where: { id: userId } });
         if (!target) throw new AccessError(404, "NOT_FOUND", "User not found.");
         if (target.platformRole === "owner")
@@ -361,7 +408,11 @@ export function registerApplication(
             "PLATFORM_OWNER_PROTECTED",
             "Platform-owner status requires the administrative recovery procedure.",
           );
-        if (status !== "active") await preserveOwner(tx, userId, null);
+        if (status !== "active") {
+          await preserveOwner(tx, userId, null);
+          const membership = await tx.companyMembership.findUnique({ where: { userId } });
+          await clearAssignments(tx, userId, membership?.companyId);
+        }
         const result = await tx.user.update({
           where: { id: userId },
           data: { status },
@@ -417,7 +468,7 @@ export function registerApplication(
         body = bodyOf(request),
         role = roleValue(body.role),
         status = stateValue(body.status),
-        userId = request.params.userId;
+        userId = opaqueUserId(request.params.userId);
       if (role === "owner")
         throw new AccessError(
           403,
@@ -425,6 +476,7 @@ export function registerApplication(
           "Use ownership transfer to assign an owner.",
         );
       return serial(request, async (tx) => {
+        await lockTarget(tx, userId);
         const member = await tx.companyMembership.findUnique({
           where: { userId },
         });
@@ -436,6 +488,7 @@ export function registerApplication(
             "OWNER_PROTECTED",
             "Use ownership transfer to change an owner.",
           );
+        if (member.role !== role || status !== "active") await clearAssignments(tx, userId, companyId);
         const result = await tx.companyMembership.update({
           where: { userId },
           data: { role, status, version: { increment: 1 } },
@@ -450,7 +503,7 @@ export function registerApplication(
   );
   server.post("/api/company/transfer-ownership", auth, async (request) => {
     const companyId = scope(request, "members.manage"),
-      userId = requiredString(bodyOf(request).userId, "New owner");
+      userId = opaqueUserId(bodyOf(request).userId);
     if (userId === request.principal!.id)
       throw new AccessError(
         400,
@@ -458,6 +511,7 @@ export function registerApplication(
         "Choose another active company member.",
       );
     return serial(request, async (tx) => {
+      await lockTarget(tx, userId);
       const current = await tx.companyMembership.findUnique({
         where: { userId: request.principal!.id },
       });
@@ -479,6 +533,7 @@ export function registerApplication(
           "INVALID_OWNER",
           "Choose an active member of this company.",
         );
+      await clearAssignments(tx, userId, companyId);
       await tx.companyMembership.update({
         where: { userId },
         data: { role: "owner", version: { increment: 1 } },
@@ -489,6 +544,64 @@ export function registerApplication(
       });
       await audit(tx, request, "ownership.transferred", companyId, userId);
       return { success: true };
+    });
+  });
+
+  const assignmentTx = <T>(request: FastifyRequest, companyId: string, run: (tx: Tx) => Promise<T>) =>
+    serial(request, async tx => {
+      await tx.$queryRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
+      return run(tx);
+    });
+  server.get("/api/company/residents", auth, async request => {
+    const companyId = scope(request, "resident.assignment.manage");
+    return assignmentTx(request, companyId, tx => tx.companyMembership.findMany({
+      where: { companyId, role: "resident", status: "active", user: { status: "active" }, company: { status: "active" } },
+      select: { userId: true, user: { select: { name: true, email: true } } },
+      orderBy: { createdAt: "asc" },
+    }));
+  });
+  const propertyInScope = async (tx: Tx, companyId: string, propertyId: string) => {
+    if (!await tx.property.findFirst({ where: { id: propertyId, companyId } }))
+      throw new AccessError(404, "NOT_FOUND", "Property not found.");
+  };
+  server.get<{ Params: { propertyId: string } }>("/api/company/properties/:propertyId/residents", auth, async request => {
+    const companyId = scope(request, "resident.assignment.manage"), propertyId = assignmentId(request.params.propertyId);
+    return assignmentTx(request, companyId, async tx => {
+      await propertyInScope(tx, companyId, propertyId);
+      return tx.residentPropertyAssignment.findMany({ where: { companyId, propertyId }, select: { userId: true, createdAt: true, membership: { select: { user: { select: { name: true, email: true } } } } } });
+    });
+  });
+  for (const method of ["PUT", "DELETE"] as const) {
+    server.route<{ Params: { propertyId: string; userId: string } }>({
+      method, url: "/api/company/properties/:propertyId/residents/:userId", ...auth,
+      handler: async request => {
+        const companyId = scope(request, "resident.assignment.manage"),
+          propertyId = assignmentId(request.params.propertyId), userId = opaqueUserId(request.params.userId);
+        return assignmentTx(request, companyId, async tx => {
+          await lockTarget(tx, userId);
+          await propertyInScope(tx, companyId, propertyId);
+          const member = await tx.companyMembership.findUnique({ where: { userId }, include: { user: true, company: true } });
+          if (!member || member.companyId !== companyId) throw new AccessError(404, "NOT_FOUND", "Resident not found.");
+          if (method === "PUT") {
+            if (member.role !== "resident" || member.status !== "active" || member.user.status !== "active" || member.company.status !== "active")
+              throw new AccessError(409, "RESIDENT_INELIGIBLE", "Choose an active accepted resident.");
+            await tx.residentPropertyAssignment.upsert({ where: { propertyId_userId: { propertyId, userId } }, create: { companyId, propertyId, userId }, update: {} });
+          } else await tx.residentPropertyAssignment.deleteMany({ where: { companyId, propertyId, userId } });
+          await audit(tx, request, method === "PUT" ? "resident.assignment.assigned" : "resident.assignment.removed", companyId, userId, { propertyId });
+          return { success: true };
+        });
+      },
+    });
+  }
+  server.get("/api/resident/properties", auth, async request => {
+    const companyId = scope(request, "resident.self");
+    return assignmentTx(request, companyId, async tx => {
+      const rows = await tx.residentPropertyAssignment.findMany({
+        where: { companyId, userId: request.principal!.id },
+        select: { property: { select: { id: true, name: true, address: true } } },
+        orderBy: { createdAt: "asc" },
+      });
+      return rows.map(row => row.property);
     });
   });
 

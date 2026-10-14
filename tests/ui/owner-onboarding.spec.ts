@@ -60,7 +60,7 @@ test('owner landing creates a property and invitation, refreshes Team, and retur
   await expect(page.getByText('Pending', {exact:true})).toBeVisible();
   await page.getByRole('link', {name:'Properties', exact:true}).click();
   await expect(page.getByText('Resident invitation issued', {exact:true})).toBeVisible();
-  await expect(page.getByText(/property assignment and maintenance setup are still unavailable/)).toBeVisible();
+  await expect(page.getByText(/assign accepted residents using Manage residents/)).toBeVisible();
 });
 
 test('partial failures do not invent progress and retry recovers independently', async ({page}) => {

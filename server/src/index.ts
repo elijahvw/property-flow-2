@@ -3,12 +3,13 @@ import tracer from "dd-trace";
 import dotenv from "dotenv";
 import { prisma } from "./lib/prisma.js";
 import { registerSessions, readAuthConfig } from "./sessions.js";
-import { registerApplication } from "./application.js";
+import { MAX_USER_ID_BYTES, registerApplication } from "./application.js";
 import { AccessError } from "./access.js";
 
 dotenv.config();
 const server = fastify({
   bodyLimit: 65536,
+  routerOptions: { maxParamLength: MAX_USER_ID_BYTES },
   logger: {
     redact: [
       "req.headers.cookie",
