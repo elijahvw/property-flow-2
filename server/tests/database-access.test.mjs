@@ -5,7 +5,7 @@ import pg from 'pg';
 import Fastify from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { registerApplication, tenantTransaction } from '../dist/application.js';
+import { registerApplication, tenantTransaction, MAX_USER_ID_BYTES } from '../dist/application.js';
 import { registerSessions, digest } from '../dist/sessions.js';
 
 const url = process.env.TEST_DATABASE_URL;
@@ -35,7 +35,7 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
     if (companyId) await admin.query('INSERT INTO "CompanyMembership" ("userId","companyId",role,"updatedAt") VALUES ($1,$2,$3,NOW())', [id,companyId,role]);
     await db.session.create({ data: { tokenHash: digest(`token-${id}`), csrfToken: 'test-csrf', userId: id, expiresAt: new Date(Date.now()+3600000), idleExpiresAt: new Date(Date.now()+3600000) } });
   }
-  const app = Fastify(); t.after(() => app.close());
+  const app = Fastify({routerOptions:{maxParamLength:MAX_USER_ID_BYTES}}); t.after(() => app.close());
   const auth = await registerSessions(app, db, { origin: 'https://app.test', domain: 'unused.auth0.com', clientId: 'test-web', clientSecret: 'test-only', secure: true });
   registerApplication(app, db, auth, 'https://app.test');
   const call = (user, method, path, body, extra = {}) => app.inject({ method, url: path, headers: { ...(user ? { cookie: `__Host-pf-session=token-${user}` } : {}), origin: 'https://app.test', 'x-csrf-token': 'test-csrf', ...extra }, ...(body === undefined ? {} : { payload: body }) });
@@ -114,7 +114,7 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
     },
   });
   const controlledApp = async database => {
-    const instance=Fastify();t.after(()=>instance.close());
+    const instance=Fastify({routerOptions:{maxParamLength:MAX_USER_ID_BYTES}});t.after(()=>instance.close());
     instance.setErrorHandler((error,_request,reply)=>reply.code(error.statusCode||500).send({code:error.code,error:error.message}));
     const instanceAuth=await registerSessions(instance,database,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test-web',clientSecret:'test-only',secure:true});
     registerApplication(instance,database,instanceAuth,'https://app.test');return instance;
@@ -125,6 +125,18 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
     await admin.query('INSERT INTO "CompanyMembership" ("userId","companyId",role,"updatedAt") VALUES ($1,$2,$3,NOW())',[id,'a',role]);
     await db.session.create({data:{tokenHash:digest(`token-${id}`),csrfToken:'test-csrf',userId:id,expiresAt:new Date(Date.now()+3600000),idleExpiresAt:new Date(Date.now()+3600000)}});
   };
+  await t.test('persisted opaque resident subjects are assignable/removable without normalization',async()=>{
+    const a=(await tenantTransaction(db,'a',tx=>tx.property.findMany()))[0];
+    for(const userId of ['auth0|abc+def','auth0|'+'x'.repeat(240),'samlp|provider|!@£$%^&*()+}{:;|P9/opaque?#%']) {
+      await seedRaceUser(userId,'resident');
+      assert.ok((await call('manager-a','GET','/api/company/residents')).json().some(row=>row.userId===userId));
+      const path=`/api/company/properties/${a.id}/residents/${encodeURIComponent(userId)}`;
+      assert.equal((await call('manager-a','PUT',path)).statusCode,200);
+      assert.equal((await tenantTransaction(db,'a',tx=>tx.residentPropertyAssignment.findMany({where:{userId}}))).length,1);
+      assert.equal((await call('manager-a','DELETE',path)).statusCode,200);
+      assert.deepEqual(await tenantTransaction(db,'a',tx=>tx.residentPropertyAssignment.findMany({where:{userId}})),[]);
+    }
+  });
   await t.test('deterministic overlapping assignment and all target lifecycle changes in both lock orders', async raceTest => {
     const a=(await tenantTransaction(db,'a',tx=>tx.property.findMany()))[0];
     for(const change of ['membership-disable','account-disable','transfer','role-change','ownership-promotion']) {
