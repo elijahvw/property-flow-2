@@ -5,6 +5,7 @@ import io
 import json
 from pathlib import Path
 import unittest
+from types import SimpleNamespace
 import urllib.error
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -42,6 +43,117 @@ class FakeGrafana:
 
 
 class MonitoringTests(unittest.TestCase):
+    def test_secret_bootstrap_refuses_app_database_or_destructive_changes(self):
+        secret = {
+            "address": "module.ecr.aws_secretsmanager_secret.grafana[0]",
+            "change": {
+                "actions": ["create"],
+                "after": {"name": "propertyflow-dev-grafana-otlp"},
+            },
+        }
+        m.validate_bootstrap_plan({"resource_changes": [secret]})
+        for actions in [["create"], ["update"], ["delete", "create"]]:
+            for address in [
+                "module.rds.aws_db_instance.app",
+                "module.ecs.aws_ecs_service.app",
+            ]:
+                with self.assertRaises(m.SafeFailure):
+                    m.validate_bootstrap_plan(
+                        {
+                            "resource_changes": [
+                                secret,
+                                {"address": address, "change": {"actions": actions}},
+                            ]
+                        }
+                    )
+        for change in [
+            {
+                "actions": ["delete", "create"],
+                "after": {"name": "propertyflow-dev-grafana-otlp"},
+            },
+            {"actions": ["create"], "after": {"name": "unrelated-secret"}},
+        ]:
+            with self.assertRaises(m.SafeFailure):
+                m.validate_bootstrap_plan(
+                    {"resource_changes": [{**secret, "change": change}]}
+                )
+        with self.assertRaises(m.SafeFailure):
+            m.validate_bootstrap_plan({})
+        m.validate_bootstrap_plan(
+            {
+                "resource_changes": [
+                    secret,
+                    {
+                        "address": "module.rds.aws_db_instance.app",
+                        "change": {"actions": ["no-op"]},
+                    },
+                ]
+            }
+        )
+
+    def test_secret_bootstrap_checks_plan_before_apply_then_populates_value(self):
+        calls = []
+        arn = "arn:aws:secretsmanager:us-east-1:800754316001:secret:propertyflow-dev-grafana-otlp-ABC123"
+        plan = {
+            "resource_changes": [
+                {
+                    "address": "module.ecr.aws_secretsmanager_secret.grafana[0]",
+                    "change": {
+                        "actions": ["create"],
+                        "after": {"name": "propertyflow-dev-grafana-otlp"},
+                    },
+                }
+            ]
+        }
+
+        def runner(args, **kwargs):
+            calls.append(args[1])
+            self.assertTrue(kwargs["capture_output"])
+            return SimpleNamespace(
+                returncode=0, stdout=json.dumps(plan) if args[1] == "show" else arn
+            )
+
+        class Client:
+            def put_secret_value(self, **kwargs):
+                calls.append("put-secret")
+
+        env = {
+            "GRAFANA_OTLP_ENDPOINT": "https://otlp-gateway-prod-us-east-2.grafana.net/otlp",
+            "GRAFANA_OTLP_HEADERS": "Authorization=Basic "
+            + base64.b64encode(b"fixture:ingestion-fixture").decode(),
+        }
+        with contextlib.redirect_stdout(io.StringIO()):
+            m.bootstrap_ingestion(env, runner, Client())
+        self.assertEqual(calls, ["plan", "show", "apply", "output", "put-secret"])
+        calls.clear()
+        plan["resource_changes"].append(
+            {
+                "address": "module.ecs.aws_ecs_service.app",
+                "change": {"actions": ["update"]},
+            }
+        )
+        with self.assertRaises(m.SafeFailure):
+            m.bootstrap_ingestion(env, runner, Client())
+        self.assertEqual(calls, ["plan", "show"])
+
+    def test_bootstrap_failure_does_not_print_captured_state_or_credentials(self):
+        def runner(*args, **kwargs):
+            return SimpleNamespace(
+                returncode=1, stdout="private state", stderr="private credentials"
+            )
+
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), self.assertRaises(m.SafeFailure) as error:
+            m.bootstrap_ingestion(
+                {
+                    "GRAFANA_OTLP_ENDPOINT": "https://otlp-gateway-prod-us-east-2.grafana.net/otlp",
+                    "GRAFANA_OTLP_HEADERS": "Authorization=Basic "
+                    + base64.b64encode(b"fixture:ingestion-fixture").decode(),
+                },
+                runner,
+            )
+        self.assertNotIn("private", str(error.exception) + out.getvalue())
+
     def test_gateway_validation_rejects_credential_urls_lookalikes_and_insecure_protocols(
         self,
     ):
@@ -353,6 +465,186 @@ class MonitoringTests(unittest.TestCase):
         self.assertEqual(
             rule["data"][1]["model"]["conditions"][0]["evaluator"]["params"], [0.5]
         )
+
+
+class RetirementLifecycleTests(unittest.TestCase):
+    def clients(self, legacy_running=False, other_group=False):
+        mutations = []
+
+        class Pager:
+            def __init__(self, operation):
+                self.operation = operation
+
+            def paginate(self, **kwargs):
+                if self.operation == "list_stack_resources":
+                    return [
+                        {
+                            "StackResourceSummaries": [
+                                {
+                                    "ResourceType": "AWS::IAM::Role",
+                                    "PhysicalResourceId": "DatadogIntegrationRole",
+                                }
+                            ]
+                        }
+                    ]
+                if self.operation == "describe_log_groups":
+                    return [
+                        {
+                            "logGroups": [
+                                {
+                                    "logGroupName": (
+                                        "/other"
+                                        if other_group
+                                        else "/ecs/propertyflow-dev"
+                                    )
+                                }
+                            ]
+                        }
+                    ]
+                if self.operation == "describe_subscription_filters":
+                    return [
+                        {
+                            "subscriptionFilters": [
+                                {"filterName": "legacy", "destinationArn": r.FORWARDER}
+                            ]
+                        }
+                    ]
+                if self.operation == "list_tasks":
+                    return [{"taskArns": []}]
+                if self.operation == "list_task_definitions":
+                    return [
+                        {
+                            "taskDefinitionArns": (
+                                ["old"] if kwargs["status"] == "ACTIVE" else []
+                            )
+                        }
+                    ]
+                raise AssertionError("Unexpected API")
+
+        class Client:
+            def get_paginator(self, operation):
+                return Pager(operation)
+
+        class CF(Client):
+            def describe_stacks(self, **kwargs):
+                return {
+                    "Stacks": [
+                        {
+                            "StackId": "arn:aws:cloudformation:us-east-1:800754316001:stack/DatadogIntegration/id"
+                        }
+                    ]
+                }
+
+            def delete_stack(self, **kwargs):
+                mutations.append("delete-stack")
+
+            def get_waiter(self, name):
+                return self
+
+            def wait(self, **kwargs):
+                mutations.append("wait-stack-deleted")
+
+        class Logs(Client):
+            def delete_subscription_filter(self, **kwargs):
+                mutations.append("remove-subscription")
+
+        class ECS(Client):
+            def describe_services(self, **kwargs):
+                return {
+                    "services": [
+                        {
+                            "runningCount": 1,
+                            "pendingCount": 0,
+                            "deployments": [
+                                {"taskDefinition": "old" if legacy_running else "new"}
+                            ],
+                        }
+                    ]
+                }
+
+            def describe_task_definition(self, **kwargs):
+                return {
+                    "taskDefinition": {
+                        "family": "propertyflow-dev",
+                        "containerDefinitions": [
+                            {
+                                "name": "datadog-agent",
+                                "image": "vendor/agent",
+                                "environment": [
+                                    {
+                                        "name": "DD_API_KEY",
+                                        "value": "private-fixture-key",
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                }
+
+            def deregister_task_definition(self, **kwargs):
+                mutations.append("deregister-agent")
+
+            def delete_task_definitions(self, **kwargs):
+                mutations.append("delete-agent-definition")
+                return {}
+
+        class Secrets:
+            def describe_secret(self, **kwargs):
+                return {}
+
+            def delete_secret(self, **kwargs):
+                self.recovery = kwargs["RecoveryWindowInDays"]
+                mutations.append("schedule-secret-delete")
+
+        class STS:
+            def get_caller_identity(self):
+                return {"Account": r.ACCOUNT}
+
+        return {
+            "sts": STS(),
+            "cf": CF(),
+            "logs": Logs(),
+            "s3": object(),
+            "ecs": ECS(),
+            "secrets": Secrets(),
+        }, mutations
+
+    def test_retirement_dry_run_has_no_mutations_and_no_credential_output(self):
+        clients, changes = self.clients()
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            r.retire(clients)
+        self.assertEqual(changes, [])
+        self.assertNotIn("private-fixture-key", output.getvalue())
+
+    def test_retirement_orders_dependency_cleanup_and_retains_secret_recovery(self):
+        clients, changes = self.clients()
+        with contextlib.redirect_stdout(io.StringIO()):
+            r.retire(clients, True)
+        self.assertEqual(
+            changes,
+            [
+                "remove-subscription",
+                "delete-stack",
+                "wait-stack-deleted",
+                "schedule-secret-delete",
+                "deregister-agent",
+                "delete-agent-definition",
+            ],
+        )
+        self.assertEqual(clients["secrets"].recovery, 7)
+
+    def test_retirement_does_not_stop_or_delete_attached_agent_tasks(self):
+        clients, changes = self.clients(legacy_running=True)
+        with self.assertRaisesRegex(r.SafeFailure, "still attached or running"):
+            r.retire(clients, True)
+        self.assertEqual(changes, [])
+
+    def test_other_forwarder_dependency_blocks_all_retirement_mutations(self):
+        clients, changes = self.clients(other_group=True)
+        with self.assertRaisesRegex(r.SafeFailure, "Another log group"):
+            r.retire(clients, True)
+        self.assertEqual(changes, [])
 
 
 if __name__ == "__main__":

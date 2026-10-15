@@ -23,7 +23,12 @@ import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-proto";
 import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
 import { logs } from "@opentelemetry/api-logs";
 import { PgInstrumentation } from "@opentelemetry/instrumentation-pg";
-import type { SpanExporter, ReadableSpan } from "@opentelemetry/sdk-trace-base";
+import {
+  BatchSpanProcessor,
+  type SpanExporter,
+  type ReadableSpan,
+  type SpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
 import type { ExportResult } from "@opentelemetry/core";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
@@ -86,9 +91,6 @@ export class PrivateMetricExporter implements PushMetricExporter {
 export class PrivateSpanExporter implements SpanExporter {
   constructor(private readonly delegate: SpanExporter) {}
   export(spans: ReadableSpan[], callback: (result: ExportResult) => void) {
-    for (const span of spans)
-      if (span.instrumentationScope.name.includes("pg"))
-        databaseDuration.record(span.duration[0] + span.duration[1] / 1e9);
     this.delegate.export(
       spans.map((span) => ({
         ...span,
@@ -111,6 +113,21 @@ export class PrivateSpanExporter implements SpanExporter {
   shutdown() {
     return this.delegate.shutdown();
   }
+}
+// Measure at span completion, independently of exporter batching, drops and
+// shutdown order. Network failures must not change measured database latency.
+export class DatabaseMetricsProcessor implements SpanProcessor {
+  constructor(
+    private readonly record = (seconds: number) =>
+      databaseDuration.record(seconds),
+  ) {}
+  onStart() {}
+  onEnd(span: ReadableSpan) {
+    if (span.instrumentationScope.name.includes("pg"))
+      this.record(span.duration[0] + span.duration[1] / 1e9);
+  }
+  async forceFlush() {}
+  async shutdown() {}
 }
 const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim();
 let sdk: NodeSDK | undefined;
@@ -146,9 +163,20 @@ if (endpoint && process.env.OTEL_SDK_DISABLED !== "true") {
         ? { "cloud.platform": "aws_ecs", "aws.ecs.launchtype": "fargate" }
         : {}),
     }),
-    traceExporter: new PrivateSpanExporter(
-      new OTLPTraceExporter({ url: url("traces"), timeoutMillis: 2000 }),
-    ),
+    spanProcessors: [
+      new DatabaseMetricsProcessor(),
+      new BatchSpanProcessor(
+        new PrivateSpanExporter(
+          new OTLPTraceExporter({ url: url("traces"), timeoutMillis: 2000 }),
+        ),
+        {
+          maxQueueSize: 512,
+          maxExportBatchSize: 128,
+          scheduledDelayMillis: 1000,
+          exportTimeoutMillis: 3000,
+        },
+      ),
+    ],
     instrumentations: [
       new PgInstrumentation({
         enhancedDatabaseReporting: false,
@@ -204,13 +232,11 @@ const duration = meter.createHistogram("propertyflow.http.duration", {
     ],
   },
 });
-meter
-  .createObservableGauge("propertyflow.build.info")
-  .addCallback((result) =>
-    result.observe(1, {
-      "build.version": process.env.APP_VERSION || "development",
-    }),
-  );
+meter.createObservableGauge("propertyflow.build.info").addCallback((result) =>
+  result.observe(1, {
+    "build.version": process.env.APP_VERSION || "development",
+  }),
+);
 const databaseDuration = meter.createHistogram(
   "propertyflow.database.duration",
   { unit: "s" },

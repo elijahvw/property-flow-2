@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { PrivateSpanExporter, PrivateMetricExporter } from '../dist/tracing.js';
+import { PrivateSpanExporter, PrivateMetricExporter, DatabaseMetricsProcessor } from '../dist/tracing.js';
 
 const serverRoot = fileURLToPath(new URL('../', import.meta.url));
 async function run(source, env = {}) {
@@ -102,4 +102,11 @@ test('metric export accepts only explicit application instruments and safe label
   assert.equal(exported.scopeMetrics.length,1);
   assert.deepEqual(exported.scopeMetrics[0].metrics[0].dataPoints[0].attributes,{'http.route':'/api/leases/:id'});
   assert.doesNotMatch(JSON.stringify(exported),/private|secret|db.statement/);
+});
+
+test('database latency is measured when spans finish independently of export transport', async () => {
+  const values=[];const processor=new DatabaseMetricsProcessor(value=>values.push(value));
+  processor.onEnd({instrumentationScope:{name:'@opentelemetry/instrumentation-pg'},duration:[2,500000000]});
+  processor.onEnd({instrumentationScope:{name:'propertyflow-http'},duration:[9,0]});
+  assert.deepEqual(values,[2.5]);await processor.forceFlush();await processor.shutdown();
 });

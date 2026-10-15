@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 import time
 import urllib.error
@@ -78,6 +79,67 @@ def store_ingestion(env=os.environ, client=None):
         ClientRequestToken=str(uuid.uuid4()),
     )
     print("Stored the write-only ingestion credential for ECS injection.")
+
+
+def validate_bootstrap_plan(plan):
+    """A targeted bootstrap must never mutate the app, database or dependencies."""
+    address = "module.ecr.aws_secretsmanager_secret.grafana[0]"
+    if not any(
+        row.get("address") == address for row in plan.get("resource_changes", [])
+    ):
+        raise SafeFailure(
+            "Ingestion-secret metadata is missing from the bootstrap plan."
+        )
+    for row in plan.get("resource_changes", []):
+        change = row.get("change", {})
+        actions = change.get("actions", [])
+        if actions in (["no-op"], ["read"]):
+            continue
+        if (
+            row.get("address") != address
+            or actions not in (["create"], ["update"])
+            or (change.get("after") or {}).get("name")
+            != "propertyflow-dev-grafana-otlp"
+        ):
+            raise SafeFailure(
+                "Ingestion bootstrap would change resources beyond the reviewed secret metadata; aborting before apply."
+            )
+
+
+def bootstrap_ingestion(env=os.environ, runner=subprocess.run, client=None):
+    validate_endpoint(env.get("GRAFANA_OTLP_ENDPOINT"))
+    validate_headers(env.get("GRAFANA_OTLP_HEADERS"))
+    directory = ROOT / "infra/terraform/envs/dev"
+
+    def terraform(*args):
+        # Plan JSON/state may contain existing app secrets. Capture privately;
+        # never emit subprocess output, even on a failed command.
+        result = runner(
+            ["terraform", *args],
+            cwd=directory,
+            env=env,
+            text=True,
+            capture_output=True,
+        )
+        if result.returncode:
+            raise SafeFailure(
+                "Ingestion-secret bootstrap failed; inspect Terraform permissions/state. No app update was attempted."
+            )
+        return result.stdout
+
+    terraform(
+        "plan",
+        "-input=false",
+        "-target=module.ecr.aws_secretsmanager_secret.grafana",
+        "-out=ingestion-bootstrap.tfplan",
+    )
+    validate_bootstrap_plan(
+        json.loads(terraform("show", "-json", "ingestion-bootstrap.tfplan"))
+    )
+    terraform("apply", "-input=false", "ingestion-bootstrap.tfplan")
+    arn = terraform("output", "-raw", "grafana_secret_arn").strip()
+    store_ingestion({**env, "GRAFANA_SECRET_ARN": arn}, client)
+    print("Ingestion secret is populated before the full infrastructure plan/apply.")
 
 
 class Grafana:
@@ -414,7 +476,14 @@ def verify(api, attempts=1, delay=10):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "action", choices=["preflight", "store-ingestion", "provision", "verify"]
+        "action",
+        choices=[
+            "preflight",
+            "bootstrap-ingestion",
+            "store-ingestion",
+            "provision",
+            "verify",
+        ],
     )
     parser.add_argument("--attempts", type=int, default=1)
     args = parser.parse_args()
@@ -425,6 +494,8 @@ def main():
         print("Grafana configuration is present and structurally valid.")
     elif args.action == "store-ingestion":
         store_ingestion()
+    elif args.action == "bootstrap-ingestion":
+        bootstrap_ingestion()
     elif args.action == "provision":
         provision(Grafana())
     else:

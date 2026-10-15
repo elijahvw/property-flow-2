@@ -118,10 +118,14 @@ scenarios = [
     },
 ]
 with tempfile.TemporaryDirectory(prefix="pf-promql-") as directory:
+    # Prometheus runs as an unprivileged user. These synthetic, nonsecret
+    # fixtures must be traversable on Linux bind mounts as well as Docker Desktop.
+    Path(directory).chmod(0o755)
     path = Path(directory) / "rules.json"
     path.write_text(
         json.dumps({"rule_files": [], "evaluation_interval": "1m", "tests": scenarios})
     )
+    path.chmod(0o644)
     subprocess.run(
         [
             "docker",
