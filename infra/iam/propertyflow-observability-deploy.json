@@ -95,7 +95,10 @@
         "events:DescribeApiDestination",
         "events:DeleteApiDestination"
       ],
-      "Resource": "arn:aws:events:us-east-1:800754316001:api-destination/datadog-agent-resource-update-intake-destination/*"
+      "Resource": [
+        "arn:aws:events:us-east-1:800754316001:api-destination/datadog-agent-resource-update-intake-destination",
+        "arn:aws:events:us-east-1:800754316001:api-destination/datadog-agent-resource-update-intake-destination/*"
+      ]
     },
     {
       "Sid": "RetireOwnedConnection",
@@ -104,7 +107,10 @@
         "events:DescribeConnection",
         "events:DeleteConnection"
       ],
-      "Resource": "arn:aws:events:us-east-1:800754316001:connection/datadog-agent-resource-update-intake-connection/*"
+      "Resource": [
+        "arn:aws:events:us-east-1:800754316001:connection/datadog-agent-resource-update-intake-connection",
+        "arn:aws:events:us-east-1:800754316001:connection/datadog-agent-resource-update-intake-connection/*"
+      ]
     },
     {
       "Sid": "RetireOwnedIntegrationRoles",
