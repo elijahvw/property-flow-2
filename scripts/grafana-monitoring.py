@@ -189,20 +189,20 @@ class Grafana:
     def sources(self):
         rows = self.request("GET", "/api/datasources")
         selected = {}
-        for name, kind in [
-            ("metrics", "prometheus"),
-            ("logs", "loki"),
-            ("traces", "tempo"),
+        # Cloud also provisions Loki sources for alert history and usage
+        # insights. Match the primary stack UIDs, independent of display names,
+        # rather than treating every source of a signal's type as app data.
+        for name, kind, uid in [
+            ("metrics", "prometheus", "grafanacloud-prom"),
+            ("logs", "loki", "grafanacloud-logs"),
+            ("traces", "tempo", "grafanacloud-traces"),
         ]:
             candidates = [
-                row
-                for row in rows
-                if row.get("type") == kind
-                and "usage" not in row.get("name", "").lower()
+                row for row in rows if row.get("type") == kind and row.get("uid") == uid
             ]
             if len(candidates) != 1:
                 raise SafeFailure(
-                    f"Expected one hosted {kind} data source; review the stack data sources."
+                    f"Expected the primary hosted {kind} data source ({uid}); review the stack data sources."
                 )
             selected[name] = candidates[0]["uid"]
         return selected

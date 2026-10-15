@@ -43,6 +43,80 @@ class FakeGrafana:
 
 
 class MonitoringTests(unittest.TestCase):
+    def cloud_catalog(self):
+        return [
+            {
+                "uid": "grafanacloud-prom",
+                "name": "grafanacloud-slimpillar2069-prom",
+                "type": "prometheus",
+            },
+            {
+                "uid": "grafanacloud-logs",
+                "name": "grafanacloud-slimpillar2069-logs",
+                "type": "loki",
+            },
+            {
+                "uid": "grafanacloud-traces",
+                "name": "grafanacloud-slimpillar2069-traces",
+                "type": "tempo",
+            },
+            {
+                "uid": "grafanacloud-alert-state-history",
+                "name": "grafanacloud-slimpillar2069-alert-state-history",
+                "type": "loki",
+            },
+            {
+                "uid": "grafanacloud-usage-insights",
+                "name": "grafanacloud-slimpillar2069-usage-insights",
+                "type": "loki",
+            },
+            {
+                "uid": "grafanacloud-usage",
+                "name": "grafanacloud-usage",
+                "type": "prometheus",
+            },
+            {"uid": "custom-logs", "name": "Other application", "type": "loki"},
+        ]
+
+    def catalog_api(self, rows):
+        api = m.Grafana({"GRAFANA_SERVICE_ACCOUNT_TOKEN": "fixture"})
+
+        def request(method, path):
+            self.assertEqual((method, path), ("GET", "/api/datasources"))
+            return rows
+
+        api.request = request
+        return api
+
+    def test_primary_cloud_sources_are_selected_among_builtin_and_custom_sources(self):
+        self.assertEqual(
+            self.catalog_api(self.cloud_catalog()).sources(),
+            {
+                "metrics": "grafanacloud-prom",
+                "logs": "grafanacloud-logs",
+                "traces": "grafanacloud-traces",
+            },
+        )
+
+    def test_renaming_primary_sources_does_not_change_selection(self):
+        rows = self.cloud_catalog()
+        for row in rows:
+            row["name"] = "renamed"
+        self.assertEqual(self.catalog_api(rows).sources()["logs"], "grafanacloud-logs")
+
+    def test_missing_primary_logs_never_falls_back_to_alert_history(self):
+        rows = [
+            row for row in self.cloud_catalog() if row["uid"] != "grafanacloud-logs"
+        ]
+        with self.assertRaisesRegex(m.SafeFailure, "grafanacloud-logs"):
+            self.catalog_api(rows).sources()
+
+    def test_primary_uid_with_wrong_signal_type_is_rejected(self):
+        rows = self.cloud_catalog()
+        rows[1]["type"] = "prometheus"
+        with self.assertRaisesRegex(m.SafeFailure, "grafanacloud-logs"):
+            self.catalog_api(rows).sources()
+
     def test_secret_bootstrap_refuses_app_database_or_destructive_changes(self):
         secret = {
             "address": "module.ecr.aws_secretsmanager_secret.grafana[0]",

@@ -78,17 +78,22 @@ try:
         with urllib.request.urlopen(req, timeout=10) as response:
             return json.load(response)
 
-    for name, kind in [
-        ("metrics", "prometheus"),
-        ("logs", "loki"),
-        ("traces", "tempo"),
+    # Reproduce Cloud's complete signal catalogue, including the extra Loki
+    # sources that blocked the first real deployment.
+    for uid, kind in [
+        ("grafanacloud-prom", "prometheus"),
+        ("grafanacloud-logs", "loki"),
+        ("grafanacloud-traces", "tempo"),
+        ("grafanacloud-alert-state-history", "loki"),
+        ("grafanacloud-usage-insights", "loki"),
+        ("grafanacloud-usage", "prometheus"),
     ]:
         request(
             "POST",
             "/api/datasources",
             {
-                "name": "fixture-" + name,
-                "uid": "fixture-" + name,
+                "name": uid.replace("grafanacloud-", "grafanacloud-slimpillar2069-"),
+                "uid": uid,
                 "type": kind,
                 "access": "proxy",
                 "url": "http://127.0.0.1:1",
@@ -108,9 +113,15 @@ try:
         m.provision(api)
     dashboard = request("GET", "/api/dashboards/uid/" + m.DASHBOARD)
     assert len(dashboard["dashboard"]["panels"]) == 13
-    for rule in m.alert_rules("fixture-metrics"):
+    assert api.sources() == {
+        "metrics": "grafanacloud-prom",
+        "logs": "grafanacloud-logs",
+        "traces": "grafanacloud-traces",
+    }
+    for rule in m.alert_rules("grafanacloud-prom"):
         saved = request("GET", "/api/v1/provisioning/alert-rules/" + rule["uid"])
         assert saved["isPaused"] and saved["condition"] == "B"
+        assert saved["data"][0]["datasourceUid"] == "grafanacloud-prom"
     with contextlib.redirect_stdout(io.StringIO()):
         m.provision(api)  # Repeated setup must update existing resources safely.
     print(
