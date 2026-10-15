@@ -45,6 +45,13 @@ type OverviewData = {
       property: { name: string };
     }[];
   };
+  rentCollections?: {
+    pastDueCents: string;
+    afterGraceCents: string;
+    withinGraceCents: string;
+    pastDueLeaseCount: number;
+    afterGraceLeaseCount: number;
+  };
   cash?: {
     dateFrom: string;
     dateTo: string;
@@ -169,13 +176,29 @@ function OverviewWorkspace() {
           </section>
           <div className="workspace-columns">
             <div>
-              {(d.leases || d.maintenance) && (
+              {(d.leases || d.maintenance || d.rentCollections) && (
                 <section className="panel">
                   <div className="section-heading">
                     <h2>Needs attention</h2>
                     <span className="badge">Saved records</span>
                   </div>
                   <div className="attention-list">
+                    {d.rentCollections && (
+                      <Link to={url("/company/rent", { view: "after_grace" })}>
+                        <span className="attention-icon">↗</span>
+                        <div>
+                          <strong>Follow up rent past grace</strong>
+                          <span>
+                            {dollars(d.rentCollections.afterGraceCents)} across{" "}
+                            {d.rentCollections.afterGraceLeaseCount} lease
+                            accounts ·{" "}
+                            {dollars(d.rentCollections.withinGraceCents)} still
+                            within grace
+                          </span>
+                        </div>
+                        <span aria-hidden="true">→</span>
+                      </Link>
+                    )}
                     {d.maintenance && (
                       <Link
                         to={url("/company/maintenance", {

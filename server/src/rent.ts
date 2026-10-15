@@ -1,3 +1,4 @@
+import { chargeTiming } from "./payment-policy.js";
 import type {
   FastifyInstance,
   preValidationHookHandler,
@@ -22,6 +23,9 @@ import {
   type Tx,
 } from "./operational.js";
 const leaseSelect = {
+  rentDueDay: true,
+  graceDays: true,
+  paymentInstructions: true,
   id: true,
   propertyId: true,
   residentId: true,
@@ -35,6 +39,7 @@ const leaseSelect = {
   resident: { select: { name: true, email: true } },
 } as const;
 const chargeSelect = {
+  graceDays: true,
   id: true,
   leaseId: true,
   periodOn: true,
@@ -144,14 +149,40 @@ export function rentBalances(
     paid = 0n,
     outstanding = 0n,
     overdue = 0n,
-    credit = 0n;
+    credit = 0n,
+    afterGrace = 0n,
+    withinGrace = 0n,
+    dueToday = 0n,
+    upcoming = 0n;
+  const aging = {
+    age1To30Cents: 0n,
+    age31To60Cents: 0n,
+    age61To90Cents: 0n,
+    age91PlusCents: 0n,
+  };
   for (const c of data.charges)
     if (!c.voidedAt) {
       charged += BigInt(c.amountCents);
       const remaining = BigInt(c.amountCents) - (chargeApplied.get(c.id) || 0n);
       if (remaining < 0n) throw new Error("Rent charge overallocated");
       outstanding += remaining;
-      if (c.dueOn.toISOString().slice(0, 10) < today) overdue += remaining;
+      const timing = chargeTiming(c.dueOn, c.graceDays, today, remaining);
+      if (timing.daysPastDue > 0) {
+        overdue += remaining;
+        const bucket =
+          timing.daysPastDue <= 30
+            ? "age1To30Cents"
+            : timing.daysPastDue <= 60
+              ? "age31To60Cents"
+              : timing.daysPastDue <= 90
+                ? "age61To90Cents"
+                : "age91PlusCents";
+        aging[bucket] += remaining;
+      }
+      if (timing.collectionStatus === "past_grace") afterGrace += remaining;
+      if (timing.collectionStatus === "within_grace") withinGrace += remaining;
+      if (timing.collectionStatus === "due_today") dueToday += remaining;
+      if (timing.collectionStatus === "upcoming") upcoming += remaining;
     }
   for (const p of data.payments)
     if (!p.voidedAt) {
@@ -166,6 +197,13 @@ export function rentBalances(
     paidCents: String(paid),
     outstandingCents: String(outstanding),
     overdueCents: String(overdue),
+    afterGraceCents: String(afterGrace),
+    withinGraceCents: String(withinGrace),
+    dueTodayCents: String(dueToday),
+    upcomingCents: String(upcoming),
+    ...Object.fromEntries(
+      Object.entries(aging).map(([key, value]) => [key, String(value)]),
+    ),
     creditCents: String(credit),
     netCents: String(charged - paid),
     chargeApplied,
@@ -313,6 +351,20 @@ export function registerRent(
                   ? {
                       charges: scopedData.charges.map((c) => ({
                         ...c,
+                        ...chargeTiming(
+                          c.dueOn,
+                          c.graceDays,
+                          today,
+                          BigInt(c.amountCents) -
+                            (chargeApplied.get(c.id) || 0n),
+                          !!c.voidedAt,
+                        ),
+                        remainingCents: c.voidedAt
+                          ? "0"
+                          : String(
+                              BigInt(c.amountCents) -
+                                (chargeApplied.get(c.id) || 0n),
+                            ),
                         voidReason: resident ? undefined : c.voidReason,
                         appliedCents: String(chargeApplied.get(c.id) || 0n),
                       })),
@@ -421,6 +473,7 @@ export function registerRent(
             periodOn,
             dueOn,
             amountCents,
+            graceDays: lease.graceDays,
             memo,
             ...key,
           },

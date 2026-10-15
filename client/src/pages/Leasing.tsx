@@ -16,6 +16,9 @@ type Unit = UnitExtras & {
   version: number;
 };
 type Lease = {
+  rentDueDay?: number;
+  graceDays?: number;
+  paymentInstructions?: string | null;
   id: string;
   propertyId: string;
   unitId: string;
@@ -518,6 +521,10 @@ function LeaseList() {
                     monthlyRent: form.get("monthlyRent"),
                     status: form.get("status"),
                     expectedVersion: selected.version,
+                    rentDueDay: Number(form.get("rentDueDay")),
+                    graceDays: Number(form.get("graceDays")),
+                    paymentInstructions:
+                      form.get("paymentInstructions") || null,
                   },
                 },
               );
@@ -615,6 +622,10 @@ function LeaseCreate({
                     monthlyRent: form.get("monthlyRent"),
                     status: form.get("status"),
                     submissionKey: key,
+                    rentDueDay: Number(form.get("rentDueDay")),
+                    graceDays: Number(form.get("graceDays")),
+                    paymentInstructions:
+                      form.get("paymentInstructions") || null,
                   },
                 });
                 saved();
@@ -667,49 +678,128 @@ function LeaseCreate({
 }
 function LeaseTerms({ prefix, value }: { prefix: string; value?: Lease }) {
   return (
-    <div className="form-grid">
-      <label>
-        {prefix} start date
-        <input
-          name="startsOn"
-          type="date"
-          required
-          defaultValue={value?.startsOn.slice(0, 10)}
-        />
-      </label>
-      <div>
+    <>
+      <div className="form-grid">
         <label>
-          {prefix} end date
+          {prefix} start date
           <input
-            name="endsOn"
+            name="startsOn"
             type="date"
-            defaultValue={value?.endsOn?.slice(0, 10)}
+            required
+            defaultValue={value?.startsOn.slice(0, 10)}
           />
         </label>
-        <p className="help">
-          Leave blank for an open-ended record; ended records require a date.
-        </p>
+        <div>
+          <label>
+            {prefix} end date
+            <input
+              name="endsOn"
+              type="date"
+              defaultValue={value?.endsOn?.slice(0, 10)}
+            />
+          </label>
+          <p className="help">
+            Leave blank for an open-ended record; ended records require a date.
+          </p>
+        </div>
+        <label>
+          {prefix} monthly rent (USD)
+          <input
+            name="monthlyRent"
+            type="number"
+            min="0"
+            max="1000000"
+            step="0.01"
+            required
+            defaultValue={
+              value ? (value.rentCents / 100).toFixed(2) : undefined
+            }
+          />
+        </label>
+        <label>
+          {prefix} status
+          <select name="status" defaultValue={value?.status || "draft"}>
+            <option value="draft">Draft</option>
+            <option value="active">Active</option>
+            <option value="ended">Ended</option>
+          </select>
+        </label>
       </div>
+      <PaymentTerms prefix={prefix} value={value} />
+    </>
+  );
+}
+
+function PaymentTerms({ prefix, value }: { prefix: string; value?: Lease }) {
+  const [due, setDue] = useState(value?.rentDueDay ?? 1),
+    [grace, setGrace] = useState(String(value?.graceDays ?? 0));
+  const preview = new Date("2026-11-01T00:00:00Z");
+  preview.setUTCDate(Math.min(due, 30));
+  const through = new Date(preview);
+  const graceNumber = Number(grace),
+    validGrace =
+      grace !== "" &&
+      Number.isInteger(graceNumber) &&
+      graceNumber >= 0 &&
+      graceNumber <= 30;
+  through.setUTCDate(through.getUTCDate() + (validGrace ? graceNumber : 0));
+  const after = new Date(through);
+  after.setUTCDate(after.getUTCDate() + 1);
+  return (
+    <fieldset className="editor-section payment-terms">
+      <legend>Rent payment terms</legend>
+      <div className="form-grid">
+        <label>
+          {prefix} rent due day
+          <select
+            name="rentDueDay"
+            value={due}
+            onChange={(e) => setDue(Number(e.target.value))}
+          >
+            {Array.from({ length: 31 }, (_, i) => (
+              <option key={i + 1} value={i + 1}>
+                Day {i + 1}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          {prefix} grace period (days after due date)
+          <input
+            name="graceDays"
+            type="number"
+            required
+            min="0"
+            max="30"
+            step="1"
+            value={grace}
+            onChange={(e) => setGrace(e.target.value)}
+          />
+        </label>
+      </div>
+      <p className="help">
+        Due days 29–31 use the last day when a month is shorter. Grace is
+        counted in full calendar days after the due date, in the company
+        timezone.
+      </p>
+      <p className="policy-example">
+        Example: November rent due {preview.toISOString().slice(0, 10)} · grace
+        through {through.toISOString().slice(0, 10)} · past grace from{" "}
+        {after.toISOString().slice(0, 10)}.
+      </p>
       <label>
-        {prefix} monthly rent (USD)
-        <input
-          name="monthlyRent"
-          type="number"
-          min="0"
-          max="1000000"
-          step="0.01"
-          required
-          defaultValue={value ? (value.rentCents / 100).toFixed(2) : undefined}
+        {prefix} payment instructions shared with resident (optional)
+        <textarea
+          name="paymentInstructions"
+          maxLength={1000}
+          defaultValue={value?.paymentInstructions || ""}
+          placeholder="How and where to send manually recorded payments"
         />
       </label>
-      <label>
-        {prefix} status
-        <select name="status" defaultValue={value?.status || "draft"}>
-          <option value="draft">Draft</option>
-          <option value="active">Active</option>
-          <option value="ended">Ended</option>
-        </select>
-      </label>
-    </div>
+      <p className="help">
+        Settings apply to newly posted charges. Existing charges retain their
+        saved grace period. No automatic late fees are charged.
+      </p>
+    </fieldset>
   );
 }

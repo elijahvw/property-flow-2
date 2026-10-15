@@ -1,3 +1,4 @@
+import { rentCollections } from "./rent-collections.js";
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { AccessError, permissions } from "./access.js";
@@ -148,6 +149,7 @@ export function registerOverview(
           };
         }
         if (grants.includes("finance.manage")) {
+          management.rentCollections = await rentCollections(tx,companyId,today,propertyId);
           const from = today.slice(0, 7) + "-01";
           const [totals] = await tx.$queryRaw<
             { income: bigint; expense: bigint }[]

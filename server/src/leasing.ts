@@ -1,3 +1,4 @@
+import { paymentPolicyKeys, paymentPolicyPatch } from "./payment-policy.js";
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { unitDetailKeys, unitDetails, unitDetailSelect } from "./property-fields.js";
@@ -6,7 +7,7 @@ import { AccessError } from "./access.js";
 import { assignmentId, opaqueUserId } from "./application.js";
 import { audit, boundedText, cents, choice, conflict, date, input, mutation, page, paging, sameSubmission, scoped, submission, version, type Tx } from "./operational.js";
 const unitSelect = { ...unitDetailSelect, id: true, propertyId: true, label: true, status: true, version: true } as const;
-const leaseSelect = { id: true, propertyId: true, unitId: true, residentId: true, startsOn: true, endsOn: true, rentCents: true, currency: true, status: true, version: true, unit: { select: { label: true } }, property: { select: { name: true } }, resident: { select: { name: true, email: true } } } as const;
+const leaseSelect = { rentDueDay:true, graceDays:true, paymentInstructions:true, id: true, propertyId: true, unitId: true, residentId: true, startsOn: true, endsOn: true, rentCents: true, currency: true, status: true, version: true, unit: { select: { label: true } }, property: { select: { name: true } }, resident: { select: { name: true, email: true } } } as const;
 async function property(tx: Tx, companyId: string, propertyId: string) {
   if (!await tx.property.findFirst({ where: { id: propertyId, companyId }, select: { id: true } }))
     throw new AccessError(404, "NOT_FOUND", "Property not found.");
@@ -108,9 +109,12 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
   });
   server.post("/api/company/leases", auth, request => {
     mutation(request, origin);
-    const b = input(request, ["propertyId", "unitId", "residentId", "startsOn", "endsOn", "monthlyRent", "status", "submissionKey"]);
+    const b = input(request, ["propertyId", "unitId", "residentId", "startsOn", "endsOn", "monthlyRent", "status", "submissionKey", ...paymentPolicyKeys]);
     const propertyId = assignmentId(b.propertyId), unitId = assignmentId(b.unitId), residentId = opaqueUserId(b.residentId), data = terms(b);
-    const key = submission(b.submissionKey, [propertyId, unitId, residentId, data]);
+    const policy = { rentDueDay:1, graceDays:0, paymentInstructions:null, ...paymentPolicyPatch(b) };
+    // Keep the original fingerprint for default policies and old clients' retries.
+    const fingerprint = policy.rentDueDay===1 && policy.graceDays===0 && policy.paymentInstructions===null ? data : {...data,...policy};
+    const key = submission(b.submissionKey, [propertyId, unitId, residentId, fingerprint]);
     return scoped(db, request, "lease.manage", async (tx, companyId) => {
       const previous = await tx.lease.findFirst({ where: { companyId, createdById: request.principal!.id, submissionKey: key.submissionKey }, select: { ...leaseSelect, submissionHash: true } });
       if (previous) {
@@ -125,14 +129,14 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
       if (unit.propertyId !== propertyId) throw new AccessError(404, "NOT_FOUND", "Unit not found.");
       if (unit.status !== "active") throw new AccessError(409, "UNIT_ARCHIVED", "Restore this unit before creating a lease.");
       if (data.status === "active") await activeSlot(tx, companyId, unitId);
-      const row = await tx.lease.create({ data: { companyId, propertyId, unitId, residentId, createdById: request.principal!.id, ...data, ...key }, select: leaseSelect });
-      await audit(tx, request, companyId, row.id, "lease.created", { unitId, status: data.status });
+      const row = await tx.lease.create({ data: { companyId, propertyId, unitId, residentId, createdById: request.principal!.id, ...data, ...policy, ...key }, select: leaseSelect });
+      await audit(tx, request, companyId, row.id, "lease.created", { unitId, status: data.status, rentDueDay:policy.rentDueDay, graceDays:policy.graceDays });
       return row;
     });
   });
   server.patch<{ Params: { leaseId: string } }>("/api/company/leases/:leaseId", auth, request => {
     mutation(request, origin);
-    const leaseId = assignmentId(request.params.leaseId), b = input(request, ["startsOn", "endsOn", "monthlyRent", "status", "expectedVersion"]), data = terms(b), expectedVersion = version(b.expectedVersion);
+    const leaseId = assignmentId(request.params.leaseId), b = input(request, ["startsOn", "endsOn", "monthlyRent", "status", "expectedVersion", ...paymentPolicyKeys]), data = terms(b), policy = paymentPolicyPatch(b), expectedVersion = version(b.expectedVersion);
     return scoped(db, request, "lease.manage", async (tx, companyId) => {
       // Order term edits against rent posting/allocation before reading the lease.
       await tx.$queryRaw`UPDATE "Lease" SET "updatedAt"="updatedAt" WHERE id=${leaseId} AND "companyId"=${companyId} RETURNING id`;
@@ -151,10 +155,10 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
       const unit = await lockUnit(tx, companyId, previous.unitId);
       if (data.status !== "ended" && unit.status !== "active") throw new AccessError(409, "UNIT_ARCHIVED", "Restore this unit before reopening a lease.");
       if (data.status === "active") await activeSlot(tx, companyId, previous.unitId, leaseId);
-      const updated = await tx.lease.updateMany({ where: { id: leaseId, companyId, version: expectedVersion }, data: { ...data, version: { increment: 1 } } });
+      const updated = await tx.lease.updateMany({ where: { id: leaseId, companyId, version: expectedVersion }, data: { ...data, ...policy, version: { increment: 1 } } });
       if (updated.count !== 1) throw conflict();
       const row = await tx.lease.findFirstOrThrow({ where: { id: leaseId, companyId }, select: leaseSelect });
-      await audit(tx, request, companyId, leaseId, "lease.updated", { from: previous.status, to: data.status });
+      await audit(tx, request, companyId, leaseId, "lease.updated", { from: previous.status, to: data.status, paymentPolicy:{from:{rentDueDay:previous.rentDueDay,graceDays:previous.graceDays},to:{rentDueDay:row.rentDueDay,graceDays:row.graceDays},instructionsChanged:previous.paymentInstructions!==row.paymentInstructions} });
       return row;
     });
   });

@@ -247,6 +247,9 @@ model Unit {
   @@index([companyId, propertyId, id])
 }
 model Lease {
+  rentDueDay Int @default(1)
+  graceDays Int @default(0)
+  paymentInstructions String?
   rentCharges RentCharge[]
   rentPayments LedgerEntry[]
   @@unique([id, propertyId, companyId])
@@ -316,6 +319,7 @@ model UserProvision {
 }
 
 model RentCharge {
+ graceDays Int @default(0)
  id String @id @default(cuid())
  companyId String
  propertyId String
