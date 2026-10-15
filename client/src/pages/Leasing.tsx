@@ -1,3 +1,5 @@
+import { formatDate } from "../dates";
+import { DateField } from "../components/DateField";
 import {
   LeaseReview,
   leasePending,
@@ -520,15 +522,14 @@ function LeaseList() {
                         {lease.status}
                       </p>
                       <p>
-                        {lease.startsOn.slice(0, 10)} to{" "}
-                        {lease.endsOn?.slice(0, 10) || "Open-ended"} ·{" "}
+                        {formatDate(lease.startsOn)} to{" "}
+                        {formatDate(lease.endsOn, "Open ended")} ·{" "}
                         {usd(lease.rentCents)} monthly
                       </p>
                       {lease.previousLeaseId && (
                         <p className="help">
                           Renewal · previous term ended{" "}
-                          {lease.previousLease?.endsOn?.slice(0, 10) ||
-                            "on record"}
+                          {formatDate(lease.previousLease?.endsOn, "on record")}
                         </p>
                       )}
                     </div>
@@ -561,7 +562,7 @@ function LeaseList() {
                       {lease.renewals?.length ? (
                         <span className="help">
                           {lease.renewals[0].status} renewal starts{" "}
-                          {lease.renewals[0].startsOn.slice(0, 10)}
+                          {formatDate(lease.renewals[0].startsOn)}
                         </span>
                       ) : null}
                       <button
@@ -828,9 +829,8 @@ function LeaseTerms({
       <div className="form-grid">
         <label>
           {prefix} start date
-          <input
-            name="startsOn"
-            type="date"
+          <DateField
+            name="startsOn" aria-label={`${prefix} start date`}
             required
             defaultValue={value?.startsOn.slice(0, 10)}
           />
@@ -838,9 +838,8 @@ function LeaseTerms({
         <div>
           <label>
             {prefix} end date
-            <input
-              name="endsOn"
-              type="date"
+            <DateField
+              name="endsOn" aria-label={`${prefix} end date`}
               defaultValue={value?.endsOn?.slice(0, 10)}
             />
           </label>
@@ -933,9 +932,9 @@ function PaymentTerms({ prefix, value }: { prefix: string; value?: Lease }) {
         timezone.
       </p>
       <p className="policy-example">
-        Example: November rent due {preview.toISOString().slice(0, 10)} · grace
-        through {through.toISOString().slice(0, 10)} · past grace from{" "}
-        {after.toISOString().slice(0, 10)}.
+        Example: November rent due {formatDate(preview.toISOString())} · grace
+        through {formatDate(through.toISOString())} · past grace from{" "}
+        {formatDate(after.toISOString())}.
       </p>
       <label>
         {prefix} payment instructions shared with resident (optional)
@@ -1017,7 +1016,7 @@ function LeaseRenewal({
             {previous.resident.name || previous.resident.email}
           </p>
           <p className="notice">
-            Previous term ends {previous.endsOn!.slice(0, 10)}. Review a new
+            Previous term ends {formatDate(previous.endsOn)}. Review a new
             term starting afterward. This does not end the previous lease or
             stop its rent schedule.
           </p>

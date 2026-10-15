@@ -30,3 +30,19 @@ test('report snapshot disappears on company change and staff/residents cannot qu
  const state=await fixture(page);await page.goto('/company/reports');await page.getByRole('button',{name:'Generate report'}).click();await expect(page.getByRole('button',{name:'Download CSV'})).toBeVisible();state.company='b';await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(page.getByRole('button',{name:'Download CSV'})).toHaveCount(0);
  for(const role of ['staff','resident']){await page.unroute('**/api/**');const denied=await fixture(page,role);await page.goto('/company/reports');await expect(page.getByRole('heading',{name:'Access unavailable'})).toBeVisible();expect(denied.requests).toHaveLength(0);}
 });
+
+test('date range fields show month names, preserve ISO submissions and reject an inverted range',async({page})=>{
+ const state=await fixture(page);await page.goto('/company/reports?dateFrom=2026-10-01&dateTo=2026-10-15');
+ await expect(page.locator('.date-field-display')).toHaveText(['October 1, 2026','October 15, 2026']);
+ const from=page.getByLabel('From date',{exact:true}),through=page.getByLabel('Through date',{exact:true});
+ await expect(from).toHaveValue('2026-10-01');await expect(through).toHaveValue('2026-10-15');
+ await from.fill('2026-10-20');await through.blur();
+ expect(await through.evaluate((input:HTMLInputElement)=>input.validity.rangeUnderflow)).toBe(true);
+ await page.getByRole('button',{name:'Generate report'}).click();expect(state.requests).toHaveLength(0);
+ await from.fill('2026-10-01');await through.fill('2026-10-31');await through.blur();
+ await expect(page.locator('.date-field-display')).toHaveText(['October 1, 2026','October 31, 2026']);
+ await page.getByRole('button',{name:'Generate report'}).click();
+ await expect(page.getByRole('button',{name:'Download CSV'})).toBeVisible();
+ expect(state.requests[0]).toContain('dateFrom=2026-10-01');expect(state.requests[0]).toContain('dateTo=2026-10-31');
+ await page.screenshot({path:'/tmp/propertyflow-readable-date-range.png',fullPage:true});
+});

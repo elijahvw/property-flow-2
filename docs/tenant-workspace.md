@@ -1,0 +1,37 @@
+# Connected tenant workspace and shared form polish
+
+Development increment, 2026-10-15. Branch: `codex/tenant-workspace`, based on main `e94fe86`. Implements PF-01 plus the user's requested shared UI/date improvements. PF-02 individual lease pages and PF-03 offline contacts remain subsequent work. No schema, hosting, identity-provider or external-provider changes are required.
+
+## User-visible workflow
+
+Tenants directory → tenant name/View tenant → permanent tenant workspace → chosen rent/deposit ledger → Back to tenant → All tenants with directory search/access filters preserved. Existing `?residentId=` links redirect to the same detail route. Opaque identity values are encoded rather than replaced. Browser refresh and copied links work; the Tenants navigation remains selected.
+
+The workspace connects contact/emergency details, portal status/property assignments, internal notes, tenant activity, all lease records and separate rent/deposit figures. Current in-effect leases appear before upcoming/draft/ended records. A saved active lease whose term is past its end is labeled for review; dates do not silently change its status.
+
+Rent outstanding, past-grace debt, unapplied cash credit and refundable deposits are shown separately. Outstanding includes future posted charges and labels the future portion. Deposit held means recorded nonvoided receipts, not verified bank funds. Individual leases link directly to existing source ledgers; this is not a new statement or a deposit-refund feature.
+
+Editing contact details and owner-only access management use separate focused dialogs. Existing versioned mutations, CSRF, busy/dismissal protection, audit rollback and conflict behavior are retained. Dismissing a contact form retains its draft in the mounted workspace; a background update never silently replaces its version. Discard/reopen explicitly loads current details. Navigating away does not promise durable unsaved-contact storage.
+
+Directory layout, record hierarchy, spacing, borders, status badges, primary/secondary actions and mobile layout were refined. Shared panels/inputs/buttons and sidebar highlights use quieter surfaces. These changes are grouped with the feature at the user's explicit request; they are not a reproduction of a competitor interface.
+
+## Readable dates and form contract
+
+The shared DateField displays month-name calendar dates such as **October 15, 2026**. Focusing it reveals the native date segments for keyboard editing; the native calendar remains available. It retains the input's accessible name, required/min/max constraints, disabled state, form name and ISO submission value. Report From/Through fields reject an inverted range with native validation before requesting a report.
+
+Date fields are shared across lease setup/edit/renewal, rent posting/receipts, deposits, finances, reports and recurring-rent first-due override. Visible lease dates, due/grace/receipt dates, report periods and billing months use readable names. Date-only formatting uses UTC solely to preserve the stored calendar day in any viewer timezone. APIs, draft identities, CSV dates, recurrence keys and download filenames retain their existing machine-readable values.
+
+## Authorization, sources and capacity
+
+GET `/api/company/resident-profiles/:userId/workspace` is management-only. Within the existing scoped serializable transaction and current-user/company authorization fence, it requires current resident-assignment, lease and finance authority. Platform authority alone, staff and residents cannot read it. A foreign or missing target returns the same 404. Unknown selectors are rejected; browser parameters never choose another company.
+
+Management sees its company's historical leases even after a tenant's property assignment or portal membership is disabled. Existing tenant self-service APIs still recheck current membership/property assignment; the new workspace is not a tenant API. Contact and financial requests clear or hide sensitive data on denied responses. Financial refresh failures hide the previous snapshot and offer retry without falsely showing zero or current totals.
+
+The endpoint reuses the rent ledger's bounded source reader and balance calculation, and the existing deposit-summary rules. It batches source reads and groups once by lease; it does not issue a financial query per displayed lease or return raw payment notes. One transaction provides a coherent financial snapshot. Contact/activity are a separate resource, so their load failure is independent.
+
+Limits: 1,000 leases/deposit accounts and 10,000 rows for each rent source collection/deposit receipts in a tenant overview. Exceeding a bound fails explicitly with no partial balances; source ledgers still support narrower lease views. The directory retains the existing all-matching-contacts API; server pagination is future PF-24 work. No measured latency improvement or historical as-of accounting is claimed.
+
+## Validation and release
+
+Local validation: client/server production builds and TypeScript checks passed; 120 browser fixtures passed; disposable PostgreSQL/API/browser finance + tenant-workspace suite 80 passed, leasing 19 passed, users 22 passed; safe Node regressions 61 passed (5 database tests skipped there and covered through the separate relevant disposable suites). Date formatting and native range/label behavior are included. Git diff whitespace and local documentation-link checks passed. Hosted CI/review status belongs with the PR and is not inferred from these local checks. Important coverage includes snapshot/source-ledger reconciliation, exact cents and separate credit/deposits, corrected receipts, draft/future/ended leases, no-lease state, company/role/revocation, capped histories, opaque URLs, preserved navigation/filter state, financial error recovery, stale profile drafts, mobile overflow and native date labels/ranges. Disposable database/browser evidence uses only isolated local test data.
+
+The user approves the merge and performs dev deployment manually. No live tenant/customer record was edited and no invitation/message/payment was sent during implementation. The eventual app release includes both backend and frontend; no migration/Terraform activation is needed for this slice. After deployment, accept the workflow with real owner/manager accounts and verify denied staff/tenant direct links. Stripe and domain setup remain deferred.

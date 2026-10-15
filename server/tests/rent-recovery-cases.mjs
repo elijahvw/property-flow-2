@@ -400,7 +400,7 @@ export async function rentRecoveryCases(t, admin, call, db) {
           .click();
         await page
           .getByRole("button", {
-            name: "Review repost for " + month.slice(0, 7),
+            name: "Review repost for " + new Intl.DateTimeFormat("en-US", {month:"long",year:"numeric",timeZone:"UTC"}).format(new Date(month)),
             exact: true,
           })
           .click();

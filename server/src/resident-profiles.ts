@@ -2,6 +2,7 @@ import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { AccessError } from "./access.js";
 import { opaqueUserId } from "./application.js";
+import { registerResidentWorkspace } from "./resident-workspace.js";
 import {
   audit,
   boundedText,
@@ -55,6 +56,7 @@ export function registerResidentProfiles(
   origin: string,
 ) {
   const auth = { preValidation: authenticate };
+  registerResidentWorkspace(server, db, authenticate);
   server.get("/api/company/resident-profiles", auth, (request) =>
     scoped(db, request, "resident.assignment.manage", (tx, companyId) =>
       tx.companyMembership.findMany({
