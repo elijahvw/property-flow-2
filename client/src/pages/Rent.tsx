@@ -1,3 +1,4 @@
+import { RentSchedule } from "./RentSchedule";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { scheduledDueDate, graceDates } from "../rent-policy";
@@ -14,6 +15,8 @@ import { Form } from "./Workspace";
 import { dollars } from "./Finances";
 import { downloadReport, moneyCell } from "../report-export";
 type Summary = {
+  paidAfterGraceCents?: string;
+  paidLateChargeCount?: string;
   afterGraceCents: string;
   withinGraceCents: string;
   dueTodayCents: string;
@@ -47,6 +50,9 @@ type Entry = {
   daysPastDue?: number;
   collectionStatus?: string;
   remainingCents?: string;
+  paidLate?: boolean;
+  settledOn?: string | null;
+  paidAfterGraceCents?: string;
 };
 type Account = {
   lease: {
@@ -116,6 +122,27 @@ function Metrics({ summary }: { summary: Summary }) {
     </div>
   );
 }
+function PaymentStanding({ summary }: { summary: Summary }) {
+  return (
+    <p className="payment-standing">
+      <strong>
+        {BigInt(summary.overdueCents) > 0n
+          ? "Past-due rent remains"
+          : BigInt(summary.chargedCents) > 0n
+            ? "Up to date — no past-due rent"
+            : "No posted rent yet"}
+      </strong>
+      {BigInt(summary.paidLateChargeCount ?? "0") > 0n && (
+        <span>
+          {" "}
+          · {summary.paidLateChargeCount}{" "}
+          {summary.paidLateChargeCount === "1" ? "charge" : "charges"} paid
+          late; history retained.
+        </span>
+      )}
+    </p>
+  );
+}
 export function Rent({ resident = false }: { resident?: boolean }) {
   const { data } = useAuth(),
     [params] = useSearchParams();
@@ -133,6 +160,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
   const [search, setSearch] = useState(""),
     [view, setView] = useState(
       [
+        "paid_late",
         "past_due",
         "after_grace",
         "within_grace",
@@ -163,6 +191,8 @@ function RentWorkspace({ resident }: { resident: boolean }) {
           .toLowerCase()
           .includes(search.toLowerCase()) &&
         (view === "all" ||
+          (view === "paid_late" &&
+            BigInt(a.summary.paidLateChargeCount ?? "0") > 0n) ||
           (view === "unpaid" && BigInt(a.summary.outstandingCents) > 0n) ||
           (view === "credit" && BigInt(a.summary.creditCents) > 0n) ||
           (view === "past_due" && BigInt(a.summary.overdueCents) > 0n) ||
@@ -170,7 +200,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
           (view === "within_grace" &&
             BigInt(a.summary.withinGraceCents) > 0n) ||
           (view === "due_today" && BigInt(a.summary.dueTodayCents) > 0n)) &&
-        (age === "all" || BigInt(a.summary[age as keyof Summary]) > 0n),
+        (age === "all" || BigInt(a.summary[age as keyof Summary] ?? "0") > 0n),
     ) || [];
   useEffect(
     () =>
@@ -180,6 +210,8 @@ function RentWorkspace({ resident }: { resident: boolean }) {
     [list.length],
   );
   const totals: Summary = {
+    paidAfterGraceCents: "0",
+    paidLateChargeCount: "0",
     afterGraceCents: "0",
     withinGraceCents: "0",
     dueTodayCents: "0",
@@ -197,7 +229,9 @@ function RentWorkspace({ resident }: { resident: boolean }) {
   };
   for (const a of list)
     for (const k of Object.keys(totals) as (keyof Summary)[])
-      totals[k] = String(BigInt(totals[k]) + BigInt(a.summary[k]));
+      totals[k] = String(
+        BigInt(totals[k] ?? "0") + BigInt(a.summary[k] ?? "0"),
+      );
   return (
     <>
       {!resident && (propertyId || (leaseId && account)) && (
@@ -388,6 +422,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                         }}
                       >
                         <option value="all">All accounts</option>
+                        <option value="paid_late">Paid-late history</option>
                         <option value="unpaid">With unpaid charges</option>
                         <option value="credit">With unapplied credit</option>
                         <option value="past_due">Past due</option>
@@ -478,6 +513,20 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                                 {dollars(a.summary.outstandingCents)}
                               </strong>
                               <span>unpaid</span>
+                              {BigInt(a.summary.overdueCents) === 0n &&
+                                BigInt(a.summary.chargedCents) > 0n && (
+                                  <small>Up to date</small>
+                                )}
+                              {BigInt(a.summary.paidLateChargeCount ?? "0") >
+                                0n && (
+                                <small>
+                                  {a.summary.paidLateChargeCount}{" "}
+                                  {a.summary.paidLateChargeCount === "1"
+                                    ? "charge"
+                                    : "charges"}{" "}
+                                  paid late
+                                </small>
+                              )}
                               {BigInt(a.summary.afterGraceCents) > 0n && (
                                 <span className="collection-badge past_grace">
                                   {dollars(a.summary.afterGraceCents)} past
@@ -647,8 +696,12 @@ function LeaseLedger({
           recording a payment.
         </p>
       )}
+      <PaymentStanding summary={summary} />
       <Metrics summary={summary} />
       <Aging summary={summary} />
+      {!resident && (
+        <RentSchedule lease={lease} businessDate={today} changed={reload} />
+      )}
       <section className="panel">
         <div className="section-heading">
           <h2>Account history</h2>
@@ -697,6 +750,9 @@ function LeaseLedger({
                   "Past grace from",
                   "Unpaid USD",
                   "Days past due",
+                  "Payment timing",
+                  "Settled on",
+                  "Received after grace USD",
                 ],
                 ...(account.charges || []).map((c) => [
                   "Charge",
@@ -712,6 +768,15 @@ function LeaseLedger({
                   c.afterGraceOn || "",
                   moneyCell(c.remainingCents || "0"),
                   String(c.daysPastDue || 0),
+                  c.voidedAt
+                    ? "Voided"
+                    : c.paidLate
+                      ? "Paid late"
+                      : c.settledOn
+                        ? "Paid within grace"
+                        : "Not settled",
+                  c.settledOn || "",
+                  moneyCell(c.paidAfterGraceCents || "0"),
                 ]),
                 ...(account.payments || []).map((p) => [
                   "Payment",
@@ -812,14 +877,23 @@ function LeaseLedger({
                     {tab === "charges" && row.collectionStatus && (
                       <>
                         <span
-                          className={`collection-badge ${row.collectionStatus}`}
+                          className={`collection-badge ${row.paidLate ? "paid_late" : row.collectionStatus}`}
                         >
-                          {row.collectionStatus.replace(/_/g, " ")}
+                          {row.paidLate
+                            ? "paid late"
+                            : row.collectionStatus.replace(/_/g, " ")}
                         </span>
                         <p>
-                          {dollars(row.remainingCents || "0")} unpaid ·{" "}
-                          {row.daysPastDue || 0} days past due
+                          {row.settledOn
+                            ? `Paid ${row.settledOn} · fully paid`
+                            : `${dollars(row.remainingCents || "0")} unpaid · ${row.daysPastDue || 0} days past due`}
                         </p>
+                        {BigInt(row.paidAfterGraceCents ?? "0") > 0n && (
+                          <p className="help">
+                            {dollars(row.paidAfterGraceCents!)} received after
+                            grace
+                          </p>
+                        )}
                         <p className="help">
                           {row.graceDays} days grace · through{" "}
                           {row.graceThrough} · past grace from{" "}

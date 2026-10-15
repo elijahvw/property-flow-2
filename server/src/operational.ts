@@ -63,7 +63,8 @@ export function scoped<T>(db: PrismaClient, request: FastifyRequest, permission:
     return run(tx, companyId);
   });
 }
-export function audit(tx: Tx, request: FastifyRequest, companyId: string, targetId: string, action: string, detail?: Prisma.InputJsonValue) {
+export type AuditRequest = { id: string; principal?: { id: string } };
+export function audit(tx: Tx, request: AuditRequest, companyId: string, targetId: string, action: string, detail?: Prisma.InputJsonValue) {
   return tx.auditEvent.create({ data: { actorId: request.principal!.id, companyId, targetId, action, requestId: request.id, detail } });
 }
 export function paging(query: { cursor?: string }) {

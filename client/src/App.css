@@ -620,3 +620,12 @@ button.text-button:hover { background:#f4f7f4; color:#1a4c37; }
 .payment-instructions { white-space:pre-wrap; overflow-wrap:anywhere; max-width:55ch; }
 @media(max-width:900px){.rent-aging{grid-template-columns:repeat(4,1fr)}.rent-aging>div:first-child{grid-column:1/-1}}
 @media(max-width:600px){.rent-aging{grid-template-columns:repeat(2,1fr)}.rent-filters{grid-template-columns:1fr}.payment-terms{padding:.8rem}.rent-account-balance .collection-badge{max-width:130px;white-space:normal;text-align:right}}
+.billing-preview { padding-left: 1.4rem; display: grid; gap: .75rem; }
+.billing-preview li { padding: .6rem; border-left: 3px solid var(--brand, #126e60); background: #f5f8f3; }
+.billing-preview span, .billing-preview small { display: block; margin-top: .25rem; }
+.billing-status { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
+.recurring-rent .actions { align-items: start; }
+.recurring-rent .workflow-form { margin: 0; }
+.payment-standing { padding: .8rem 1rem; border-left: 3px solid #126e60; background: #f5f8f3; }
+
+.collection-badge.paid_late { background: #fff3da; color: #785000; }

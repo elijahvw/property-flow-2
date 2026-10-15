@@ -1,3 +1,4 @@
+import { recurringRentCases } from "./recurring-rent-cases.mjs";
 import { paymentPolicyCases } from './payment-policy-cases.mjs';
 import { rentCases } from './rent-cases.mjs';
 import { overviewCases } from './overview-cases.mjs';
@@ -90,4 +91,5 @@ test('manual finance isolation, replay, corrections and totals',{skip:!url},asyn
  await t.test('company overview and connected drilldowns',async overviewTest=>overviewCases(overviewTest,admin,call,db));
  await t.test('rent workflow',async rentTest=>rentCases(rentTest,admin,call,app,db));
  await t.test('lease payment policy and collections',async policyTest=>paymentPolicyCases(policyTest,admin,call,db));
+ await t.test('recurring rent and payment history',async rentTest=>recurringRentCases(rentTest,admin,call,db));
 });
