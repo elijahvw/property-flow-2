@@ -603,3 +603,20 @@ button.text-button:hover { background:#f4f7f4; color:#1a4c37; }
 @media(max-width:800px){.rent-lease-heading{align-items:start;flex-direction:column}.rent-lease-heading .actions{justify-content:flex-start}}
 @media(max-width:600px){.rent-metrics{grid-template-columns:1fr;gap:.6rem}.rent-metrics>div{padding:1rem}.rent-metrics strong{font-size:1.5rem}.rent-filters{grid-template-columns:1fr}.rent-history>li{flex-direction:column;gap:.75rem}.rent-entry-amount{align-items:flex-start;margin-left:2.8rem}.rent-accounts>li{align-items:start}.rent-accounts .rent-account-balance{min-width:90px}.rent-accounts h3{font-size:.9rem}.rent-property-jump{flex-wrap:wrap}}
 .rent-allocation-list { padding:0; margin:.45rem 0 0; list-style:none; font-size:.75rem; color:#526b5d; }
+
+.payment-terms { margin-top:1.2rem; padding:1rem; border:1px solid #dfe7e1; border-radius:10px; }
+.payment-terms legend { padding:0 .4rem; font-weight:650; font-size:.9rem; }
+.policy-example { font-size:.8rem; line-height:1.5; padding:.8rem 1rem; background:#f3f7f1; border-radius:8px; }
+.rent-aging { display:grid; grid-template-columns:1.6fr repeat(4,1fr); gap:1rem; align-items:center; padding:1.1rem 1.2rem; border:1px solid #dfe7e1; border-radius:10px; margin-bottom:1.5rem; background:#fff; }
+.rent-aging h2 { font-size:.9rem; margin:0 0 .3rem; }
+.rent-aging p { font-size:.73rem; color:#64776b; margin:0; }
+.rent-aging > div:not(:first-child) { display:flex; flex-direction:column; gap:.35rem; }
+.rent-aging span { font-size:.75rem; color:#60736a; }
+.rent-aging strong { font-size:1.05rem; }
+.collection-badge { display:inline-flex; border-radius:5px; padding:.2rem .45rem; background:#edf2ed; color:#476051; font-size:.7rem; text-transform:capitalize; }
+.collection-badge.past_grace { color:#9c3731; background:#faeae7; }
+.collection-badge.within_grace,.collection-badge.due_today { color:#785719; background:#fbf3df; }
+.collection-badge.paid { color:#216b49; background:#e8f4e9; }
+.payment-instructions { white-space:pre-wrap; overflow-wrap:anywhere; max-width:55ch; }
+@media(max-width:900px){.rent-aging{grid-template-columns:repeat(4,1fr)}.rent-aging>div:first-child{grid-column:1/-1}}
+@media(max-width:600px){.rent-aging{grid-template-columns:repeat(2,1fr)}.rent-filters{grid-template-columns:1fr}.payment-terms{padding:.8rem}.rent-account-balance .collection-badge{max-width:130px;white-space:normal;text-align:right}}

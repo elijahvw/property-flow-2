@@ -13,7 +13,7 @@ export async function overviewCases(t,admin,call,db){
  const initial=(await call('overview-owner','GET',base)).json(),today=initial.today,shift=n=>{const d=new Date(today+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);};
  await t.test('overview starts at real zero and isolates staff, resident and platform capabilities',async()=>{
   assert.equal(initial.propertyCount,2);assert.equal(initial.activeUnitCount,0);assert.equal(initial.cash.netCents,'0');assert.equal(initial.company.timezone,'America/Los_Angeles');
-  const staff=(await call('overview-staff','GET',base)).json();assert.equal(staff.propertyCount,2);for(const key of ['cash','leases','maintenance'])assert.ok(!Object.hasOwn(staff,key));
+  const staff=(await call('overview-staff','GET',base)).json();assert.equal(staff.propertyCount,2);for(const key of ['cash','leases','maintenance','rentCollections'])assert.ok(!Object.hasOwn(staff,key));
   for(const user of ['overview-resident','platform'])assert.equal((await call(user,'GET',base)).statusCode,403);
   assert.equal((await call('foreign','GET',base+'?propertyId=overview-home')).statusCode,404);assert.equal((await call('overview-owner','GET',base+'?companyId=b')).statusCode,400);assert.equal((await call('overview-owner','GET',base,undefined,{'x-company-id':'b'})).statusCode,403);
  });
@@ -45,7 +45,7 @@ export async function overviewCases(t,admin,call,db){
    pending=call('overview-manager','GET',base+'?propertyId=overview-home');
    let blocked=false;for(let i=0;i<100;i++){if((await admin.query(`SELECT pid FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid))>0 AND query LIKE '%User%'`)).rows.length){blocked=true;break;}await new Promise(r=>setTimeout(r,10));}assert.ok(blocked);
    await leader.query(`UPDATE "CompanyMembership" SET role='staff' WHERE "userId"='overview-manager'`);await leader.query('COMMIT');
-   const r=await pending;assert.equal(r.statusCode,200,r.body);assert.equal(r.json().activeUnitCount,60);for(const key of ['cash','leases','maintenance'])assert.ok(!Object.hasOwn(r.json(),key));
+   const r=await pending;assert.equal(r.statusCode,200,r.body);assert.equal(r.json().activeUnitCount,60);for(const key of ['cash','leases','maintenance','rentCollections'])assert.ok(!Object.hasOwn(r.json(),key));
   }finally{await leader.query('ROLLBACK');leader.release();if(pending)await pending;await admin.query(`UPDATE "CompanyMembership" SET role='manager' WHERE "userId"='overview-manager'`);}
  });
 

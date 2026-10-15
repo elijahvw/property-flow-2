@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { scheduledDueDate, graceDates } from "../rent-policy";
 import { api, ApiError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
@@ -13,6 +14,14 @@ import { Form } from "./Workspace";
 import { dollars } from "./Finances";
 import { downloadReport, moneyCell } from "../report-export";
 type Summary = {
+  afterGraceCents: string;
+  withinGraceCents: string;
+  dueTodayCents: string;
+  upcomingCents: string;
+  age1To30Cents: string;
+  age31To60Cents: string;
+  age61To90Cents: string;
+  age91PlusCents: string;
   chargedCents: string;
   paidCents: string;
   outstandingCents: string;
@@ -32,9 +41,18 @@ type Entry = {
   periodOn?: string;
   dueOn?: string;
   occurredOn?: string;
+  graceDays?: number;
+  graceThrough?: string;
+  afterGraceOn?: string;
+  daysPastDue?: number;
+  collectionStatus?: string;
+  remainingCents?: string;
 };
 type Account = {
   lease: {
+    rentDueDay?: number;
+    graceDays?: number;
+    paymentInstructions?: string | null;
     id: string;
     propertyId: string;
     property: { name: string };
@@ -86,9 +104,9 @@ function Metrics({ summary }: { summary: Summary }) {
         <small>{dollars(summary.overdueCents)} past due</small>
       </div>
       <div>
-        <span>Payments received</span>
-        <strong>{dollars(summary.paidCents)}</strong>
-        <small>Excludes voided payments</small>
+        <span>Past grace</span>
+        <strong>{dollars(summary.afterGraceCents)}</strong>
+        <small>{dollars(summary.withinGraceCents)} past due within grace</small>
       </div>
       <div>
         <span>Unapplied credit</span>
@@ -109,11 +127,24 @@ export function Rent({ resident = false }: { resident?: boolean }) {
   );
 }
 function RentWorkspace({ resident }: { resident: boolean }) {
-  const [params] = useSearchParams(),
+  const [params, setParams] = useSearchParams(),
     propertyId = params.get("propertyId") || "",
     leaseId = params.get("leaseId") || "";
   const [search, setSearch] = useState(""),
-    [view, setView] = useState("all"),
+    [view, setView] = useState(
+      [
+        "past_due",
+        "after_grace",
+        "within_grace",
+        "due_today",
+        "unpaid",
+        "credit",
+        "all",
+      ].includes(params.get("view") || "")
+        ? params.get("view")!
+        : "all",
+    ),
+    [age, setAge] = useState("all"),
     [listPage, setListPage] = useState(0);
   const query = new URLSearchParams({
     ...(propertyId ? { propertyId } : {}),
@@ -133,7 +164,13 @@ function RentWorkspace({ resident }: { resident: boolean }) {
           .includes(search.toLowerCase()) &&
         (view === "all" ||
           (view === "unpaid" && BigInt(a.summary.outstandingCents) > 0n) ||
-          (view === "credit" && BigInt(a.summary.creditCents) > 0n)),
+          (view === "credit" && BigInt(a.summary.creditCents) > 0n) ||
+          (view === "past_due" && BigInt(a.summary.overdueCents) > 0n) ||
+          (view === "after_grace" && BigInt(a.summary.afterGraceCents) > 0n) ||
+          (view === "within_grace" &&
+            BigInt(a.summary.withinGraceCents) > 0n) ||
+          (view === "due_today" && BigInt(a.summary.dueTodayCents) > 0n)) &&
+        (age === "all" || BigInt(a.summary[age as keyof Summary]) > 0n),
     ) || [];
   useEffect(
     () =>
@@ -143,6 +180,14 @@ function RentWorkspace({ resident }: { resident: boolean }) {
     [list.length],
   );
   const totals: Summary = {
+    afterGraceCents: "0",
+    withinGraceCents: "0",
+    dueTodayCents: "0",
+    upcomingCents: "0",
+    age1To30Cents: "0",
+    age31To60Cents: "0",
+    age61To90Cents: "0",
+    age91PlusCents: "0",
     chargedCents: "0",
     paidCents: "0",
     outstandingCents: "0",
@@ -203,6 +248,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
             !leaseId && (
               <>
                 <Metrics summary={totals} />
+                <Aging summary={totals} />
                 <section className="panel">
                   <div className="section-heading">
                     <h2>Lease accounts</h2>
@@ -214,6 +260,24 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                           `rent-balances-${r.data!.businessDate}.csv`,
                           [
                             ["Business date", r.data!.businessDate],
+                            [
+                              "Past due USD",
+                              moneyCell(totals.overdueCents),
+                              "Past grace USD",
+                              moneyCell(totals.afterGraceCents),
+                              "Within grace USD",
+                              moneyCell(totals.withinGraceCents),
+                            ],
+                            [
+                              "Age 1–30 USD",
+                              moneyCell(totals.age1To30Cents),
+                              "Age 31–60 USD",
+                              moneyCell(totals.age31To60Cents),
+                              "Age 61–90 USD",
+                              moneyCell(totals.age61To90Cents),
+                              "Age 91+ USD",
+                              moneyCell(totals.age91PlusCents),
+                            ],
                             [
                               "Basis",
                               "Posted charges and recorded payments; current balances in USD",
@@ -229,6 +293,12 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                               "Unpaid USD",
                               "Past due USD",
                               "Credit USD",
+                              "Past grace USD",
+                              "Within grace USD",
+                              "Age 1–30 USD",
+                              "Age 31–60 USD",
+                              "Age 61–90 USD",
+                              "Age 91+ USD",
                             ],
                             ...list.map((a) => [
                               a.lease.property.name,
@@ -243,6 +313,12 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                               moneyCell(a.summary.outstandingCents),
                               moneyCell(a.summary.overdueCents),
                               moneyCell(a.summary.creditCents),
+                              moneyCell(a.summary.afterGraceCents),
+                              moneyCell(a.summary.withinGraceCents),
+                              moneyCell(a.summary.age1To30Cents),
+                              moneyCell(a.summary.age31To60Cents),
+                              moneyCell(a.summary.age61To90Cents),
+                              moneyCell(a.summary.age91PlusCents),
                             ]),
                             [
                               "Totals",
@@ -255,6 +331,12 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                               moneyCell(totals.outstandingCents),
                               moneyCell(totals.overdueCents),
                               moneyCell(totals.creditCents),
+                              moneyCell(totals.afterGraceCents),
+                              moneyCell(totals.withinGraceCents),
+                              moneyCell(totals.age1To30Cents),
+                              moneyCell(totals.age31To60Cents),
+                              moneyCell(totals.age61To90Cents),
+                              moneyCell(totals.age91PlusCents),
                             ],
                           ],
                         )
@@ -274,6 +356,17 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                     )}
                   </div>
                   <div className="rent-filters">
+                    {!resident && (
+                      <PropertyScope
+                        value={propertyId}
+                        change={(value) =>
+                          setParams({
+                            ...(value ? { propertyId: value } : {}),
+                            view,
+                          })
+                        }
+                      />
+                    )}
                     <label>
                       Search rent accounts
                       <input
@@ -298,13 +391,34 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                         <option value="all">All accounts</option>
                         <option value="unpaid">With unpaid charges</option>
                         <option value="credit">With unapplied credit</option>
+                        <option value="past_due">Past due</option>
+                        <option value="after_grace">Past grace</option>
+                        <option value="within_grace">Within grace</option>
+                        <option value="due_today">Due today</option>
+                      </select>
+                    </label>
+                    <label>
+                      Past-due age
+                      <select
+                        value={age}
+                        onChange={(e) => {
+                          setAge(e.target.value);
+                          setListPage(0);
+                        }}
+                      >
+                        <option value="all">Any age</option>
+                        <option value="age1To30Cents">1–30 days</option>
+                        <option value="age31To60Cents">31–60 days</option>
+                        <option value="age61To90Cents">61–90 days</option>
+                        <option value="age91PlusCents">91+ days</option>
                       </select>
                     </label>
                   </div>
                   <p className="help">
                     {list.length} matching accounts. Totals include every
-                    matching account, across all pages. Charges appear after
-                    rent is posted.
+                    matching account, across all pages. An age filter selects
+                    accounts with unpaid charges in that band; totals include
+                    all their charges. Charges appear after rent is posted.
                   </p>
                   {!list.length ? (
                     <div className="rent-empty">
@@ -365,6 +479,18 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                                 {dollars(a.summary.outstandingCents)}
                               </strong>
                               <span>unpaid</span>
+                              {BigInt(a.summary.afterGraceCents) > 0n && (
+                                <span className="collection-badge past_grace">
+                                  {dollars(a.summary.afterGraceCents)} past
+                                  grace
+                                </span>
+                              )}
+                              {BigInt(a.summary.withinGraceCents) > 0n && (
+                                <small>
+                                  {dollars(a.summary.withinGraceCents)} within
+                                  grace
+                                </small>
+                              )}
                               {BigInt(a.summary.creditCents) > 0n && (
                                 <small>
                                   {dollars(a.summary.creditCents)} credit
@@ -398,8 +524,9 @@ function RentWorkspace({ resident }: { resident: boolean }) {
           <p className="help">
             As of {r.data.businessDate} in your company timezone. Last updated{" "}
             {new Date(r.data.generatedAt).toLocaleTimeString()}. Past due means
-            a posted unpaid charge has a due date before today; no late fees are
-            added.
+            a posted unpaid charge has a due date before today. Past grace means
+            its saved grace window has also ended. Aging uses the due date; no
+            late fees are added.
           </p>
         </>
       )}
@@ -485,6 +612,13 @@ function LeaseLedger({
             {lease.endsOn?.slice(0, 10) || "Open-ended"} ·{" "}
             {dollars(lease.rentCents)} monthly
           </p>
+          <p>
+            Due day {lease.rentDueDay ?? 1} · {lease.graceDays ?? 0} calendar
+            days of grace after due date
+          </p>
+          {lease.paymentInstructions && (
+            <p className="payment-instructions">{lease.paymentInstructions}</p>
+          )}
         </div>
         {!resident && (
           <div className="actions">
@@ -515,6 +649,7 @@ function LeaseLedger({
         </p>
       )}
       <Metrics summary={summary} />
+      <Aging summary={summary} />
       <section className="panel">
         <div className="section-heading">
           <h2>Account history</h2>
@@ -524,6 +659,14 @@ function LeaseLedger({
             onClick={() =>
               downloadReport(`rent-ledger-${today}.csv`, [
                 ["Property", lease.property.name, "Unit", lease.unit.label],
+                [
+                  "Past due USD",
+                  moneyCell(summary.overdueCents),
+                  "Past grace USD",
+                  moneyCell(summary.afterGraceCents),
+                  "Within grace USD",
+                  moneyCell(summary.withinGraceCents),
+                ],
                 ["Lease reference", lease.id, "Business date", today],
                 [
                   "Basis",
@@ -550,6 +693,11 @@ function LeaseLedger({
                   "Applied USD",
                   "Status",
                   "Description",
+                  "Grace days",
+                  "Grace through",
+                  "Past grace from",
+                  "Unpaid USD",
+                  "Days past due",
                 ],
                 ...(account.charges || []).map((c) => [
                   "Charge",
@@ -560,6 +708,11 @@ function LeaseLedger({
                   moneyCell(c.appliedCents),
                   c.voidedAt ? "Voided" : "Posted",
                   c.memo || "",
+                  String(c.graceDays ?? 0),
+                  c.graceThrough || "",
+                  c.afterGraceOn || "",
+                  moneyCell(c.remainingCents || "0"),
+                  String(c.daysPastDue || 0),
                 ]),
                 ...(account.payments || []).map((p) => [
                   "Payment",
@@ -570,6 +723,11 @@ function LeaseLedger({
                   moneyCell(p.appliedCents),
                   p.voidedAt ? "Voided" : "Received",
                   p.memo || "",
+                  "",
+                  "",
+                  "",
+                  "",
+                  "",
                 ]),
                 [
                   "Allocation reference",
@@ -652,6 +810,24 @@ function LeaseLedger({
                         : row.occurredOn?.slice(0, 10)}
                     </p>
                     {row.memo && <p>{row.memo}</p>}
+                    {tab === "charges" && row.collectionStatus && (
+                      <>
+                        <span
+                          className={`collection-badge ${row.collectionStatus}`}
+                        >
+                          {row.collectionStatus.replace(/_/g, " ")}
+                        </span>
+                        <p>
+                          {dollars(row.remainingCents || "0")} unpaid ·{" "}
+                          {row.daysPastDue || 0} days past due
+                        </p>
+                        <p className="help">
+                          {row.graceDays} days grace · through{" "}
+                          {row.graceThrough} · past grace from{" "}
+                          {row.afterGraceOn}
+                        </p>
+                      </>
+                    )}
                     <small>Reference: {row.id}</small>
                     {tab === "payments" && !row.voidedAt && (
                       <ul
@@ -836,6 +1012,7 @@ type PendingRent = {
   dueOn?: string;
   expectedVersion?: number;
   occurredOn?: string;
+  reviewedPolicy?: { graceDays: number; rentDueDay: number };
 };
 function pendingRent(key: string): PendingRent | undefined {
   try {
@@ -881,9 +1058,15 @@ function RentDraft({
       pending?.amount ||
         (mode === "charge" ? (account.lease.rentCents / 100).toFixed(2) : ""),
     );
-  const first = month + "-01",
-    due =
-      first < lease.startsOn.slice(0, 10) ? lease.startsOn.slice(0, 10) : first;
+  const due = scheduledDueDate(month, lease.rentDueDay ?? 1);
+  const [dueOverride, setDueOverride] = useState<{
+    month: string;
+    value: string;
+  }>();
+  const actualDue =
+    pending?.dueOn || (dueOverride?.month === month ? dueOverride.value : due);
+  const savedGrace = pending?.reviewedPolicy?.graceDays ?? lease.graceDays ?? 0;
+  const grace = graceDates(actualDue, savedGrace);
   return (
     <Form
       operation={mode === "charge" ? "rent.charge" : "rent.payment"}
@@ -899,6 +1082,10 @@ function RentDraft({
                 amount: String(form.get("amount")),
                 memo: String(form.get("memo") || "") || null,
                 expectedVersion: lease.version,
+                reviewedPolicy: {
+                  graceDays: lease.graceDays ?? 0,
+                  rentDueDay: lease.rentDueDay ?? 1,
+                },
                 submissionKey,
               }
             : {
@@ -912,9 +1099,10 @@ function RentDraft({
         sessionStorage.setItem(storageKey, JSON.stringify(body));
         setPending(body);
         try {
+          const { reviewedPolicy: _reviewedPolicy, ...requestBody } = body;
           await api(
             `/api/company/rent/${encodeURIComponent(lease.id)}/${mode === "charge" ? "charges" : "payments"}`,
-            { method: "POST", body },
+            { method: "POST", body: requestBody },
           );
         } catch (error) {
           // A first attempt with a definitive rejection has no committed identity;
@@ -969,7 +1157,10 @@ function RentDraft({
                 name="dueOn"
                 type="date"
                 required
-                defaultValue={pending?.dueOn || due}
+                value={actualDue}
+                onChange={(e) =>
+                  setDueOverride({ month, value: e.target.value })
+                }
               />
             </label>
           </div>
@@ -1009,11 +1200,76 @@ function RentDraft({
           />
         </label>
       </fieldset>
+      {mode === "charge" && (
+        <p className="policy-example">
+          Grace through {grace.through} · past grace from {grace.after}. This
+          charge saves {savedGrace} grace days. No late fee is
+          generated.
+        </p>
+      )}
       <p className="notice">
         {mode === "charge"
           ? `Review ${month}: the default is the full monthly rent. For a partial month, enter the agreed amount yourself. One active charge per lease month. The agreed due date can precede move-in; no automatic proration is performed.`
           : "Record money you have already received. This creates one rent income entry in cash reports, applies it to unpaid rent, and keeps any excess as credit. Do not record it again in Finances."}
       </p>
     </Form>
+  );
+}
+
+function Aging({ summary }: { summary: Summary }) {
+  return (
+    <section className="rent-aging" aria-label="Past-due aging">
+      <div>
+        <h2>Past-due aging</h2>
+        <p>Current unpaid amounts, aged from their original due date.</p>
+      </div>
+      {[
+        ["1–30 days", summary.age1To30Cents],
+        ["31–60 days", summary.age31To60Cents],
+        ["61–90 days", summary.age61To90Cents],
+        ["91+ days", summary.age91PlusCents],
+      ].map(([label, amount]) => (
+        <div key={label}>
+          <span>{label}</span>
+          <strong>{dollars(amount)}</strong>
+        </div>
+      ))}
+    </section>
+  );
+}
+function PropertyScope({
+  value,
+  change,
+}: {
+  value: string;
+  change: (value: string) => void;
+}) {
+  const r = useResource<{ id: string; name: string }[]>(
+    "/api/company/properties",
+  );
+  return (
+    <label>
+      Rent property
+      <select
+        value={value}
+        disabled={!r.data}
+        onChange={(e) => change(e.target.value)}
+      >
+        <option value="">All properties</option>
+        {r.data?.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+      {r.error && (
+        <span role="alert">
+          {r.error}
+          <button className="text-button" onClick={r.reload}>
+            Retry property list
+          </button>
+        </span>
+      )}
+    </label>
   );
 }
