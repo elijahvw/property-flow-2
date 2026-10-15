@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { tenantPath, tenantDirectorySearch } from "../tenant-links";
+import { tenantPortalState } from "../tenant-status";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
@@ -46,13 +47,13 @@ export function ResidentProfiles() {
 function Directory() {
   const [params, setParams] = useSearchParams();
   const r = useResource<Profile[]>("/api/company/resident-profiles", true, true);
-  const query = params.get("q") || "", access = ["active", "disabled"].includes(params.get("access") || "") ? params.get("access")! : "all";
+  const query = params.get("q") || "", access = ["active", "verification", "disabled"].includes(params.get("access") || "") ? params.get("access")! : "all";
   const [inviting, setInviting] = useState(false),
     [invitationRevision, setInvitationRevision] = useState(0);
   const { can, data } = useAuth();
   const rows = r.data?.filter(p =>
     `${p.contactName || ""} ${p.user.name || ""} ${p.user.email}`.toLowerCase().includes(query.trim().toLowerCase()) &&
-    (access === "all" || (access === "disabled" ? p.status !== "active" || p.user.status !== "active" : p.status === "active" && p.user.status === "active")));
+    (access === "all" || tenantPortalState(p) === access));
   const filter = (key: string, value: string) => {
     const next = new URLSearchParams(tenantDirectorySearch(params));
     if (value && value !== "all") next.set(key, value); else next.delete(key);
@@ -66,13 +67,13 @@ function Directory() {
     <section className="panel tenant-directory-panel" aria-label="Tenant directory">
       <div className="tenant-directory-toolbar">
         <label className="tenant-search">Find resident<input type="search" placeholder="Search name or email" value={query} maxLength={200} onChange={e => filter("q", e.target.value)} /></label>
-        <label>Portal access<select aria-label="Portal access" value={access} onChange={e => filter("access", e.target.value)}><option value="all">All access</option><option value="active">Active</option><option value="disabled">Disabled</option></select></label>
+        <label>Portal access<select aria-label="Portal access" value={access} onChange={e => filter("access", e.target.value)}><option value="all">All access</option><option value="active">Active</option><option value="verification">Verification needed</option><option value="disabled">Disabled</option></select></label>
         <span className="directory-count" role="status">{rows ? `${rows.length} ${rows.length === 1 ? "tenant" : "tenants"}` : "Loading tenants…"}</span>
       </div>
       {r.error && <p role="alert" className="notice error">{r.error} <button className="secondary" onClick={r.reload}>Try again</button></p>}
       {!r.data ? (!r.error && <p role="status">Loading residents…</p>) : !rows?.length ? <div className="empty-state"><h2>{query || access !== "all" ? "No matching tenants" : "Your tenant directory starts here"}</h2><p>{query || access !== "all" ? "Try a different name or access filter." : "Invite a tenant to your company. They appear here after accepting."}</p>{(query || access !== "all") && <button className="secondary" onClick={() => setParams({})}>Clear filters</button>}</div> : <div className="table-wrap"><table className="tenant-directory"><thead><tr><th>Tenant</th><th>Phone</th><th>Portal access</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{rows.map(p => <tr key={p.userId}>
         <td><div className="tenant-person"><span className="tenant-avatar small" aria-hidden="true">{(p.contactName || p.user.name || p.user.email).slice(0,1).toUpperCase()}</span><div><Link className="tenant-name" to={tenantPath(p.userId, params)}>{p.contactName || p.user.name || p.user.email}</Link><span className="cell-detail">{p.user.email}</span></div></div></td>
-        <td data-label="Phone">{p.contactPhone || "—"}</td><td data-label="Portal access"><span className={`tenant-status ${p.status === "active" && p.user.status === "active" ? "" : "neutral"}`}>{p.status === "active" && p.user.status === "active" ? p.user.emailVerified ? "Active" : "Verification needed" : "Disabled"}</span></td>
+        <td data-label="Phone">{p.contactPhone || "—"}</td><td data-label="Portal access"><span className={`tenant-status ${tenantPortalState(p) === "active" ? "" : "neutral"}`}>{tenantPortalState(p) === "active" ? "Active" : tenantPortalState(p) === "verification" ? "Verification needed" : "Disabled"}</span></td>
         <td><Link className="tenant-row-action" to={tenantPath(p.userId, params)} aria-label={`View tenant ${p.contactName || p.user.name || p.user.email}`}>View tenant <span aria-hidden="true">→</span></Link></td>
       </tr>)}</tbody></table></div>}
     </section>

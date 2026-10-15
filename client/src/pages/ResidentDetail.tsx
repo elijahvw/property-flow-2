@@ -7,6 +7,7 @@ import { propertyLink } from "../components/PropertyNavigation";
 import { ResidentEditor, type ResidentProfileDetail } from "./ResidentProfiles";
 import { dollars } from "./Finances";
 import { formatDate } from "../dates";
+import { tenantPortalState } from "../tenant-status";
 
 type RentSummary = { outstandingCents: string; creditCents: string; afterGraceCents: string; upcomingCents: string; withinGraceCents: string; dueTodayCents: string };
 type DepositSummary = { requiredCents: string; heldCents: string; outstandingCents: string; excessHeldCents: string; pastDueCents: string };
@@ -34,13 +35,13 @@ function TenantWorkspace({ id }: { id: string }) {
   const directory = "/company/residents" + (search ? `?${search}` : "");
   if (!person) return <section className="panel tenant-load-state"><Link to={directory} aria-label="All tenants">← All tenants</Link>{profile.error ? <><h1>Tenant unavailable</h1><p role="alert">{profile.error}</p><button className="secondary" onClick={profile.reload}>Try again</button></> : <p role="status">Loading tenant workspace…</p>}</section>;
   const name = person.contactName || person.user.name || person.user.email;
-  const active = person.status === "active" && person.user.status === "active";
+  const portal = tenantPortalState(person);
   return <div className="tenant-workspace">
     <nav className="record-breadcrumb" aria-label="Breadcrumb"><Link to={directory} aria-label="All tenants">← All tenants</Link><span aria-hidden="true">/</span><span>{name}</span></nav>
     <header className="tenant-record-header">
       <span className="tenant-avatar" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>
       <div className="tenant-record-title"><p className="record-kicker">Tenant workspace</p><h1>{name}</h1><p>{person.user.email}</p></div>
-      <span className={`tenant-status ${active ? "" : "neutral"}`}>{active ? person.user.emailVerified ? "Portal active" : "Verification needed" : "Portal disabled"}</span>
+      <span className={`tenant-status ${portal === "active" ? "" : "neutral"}`}>{portal === "active" ? "Portal active" : portal === "verification" ? "Verification needed" : "Portal disabled"}</span>
       <button className="secondary" disabled={!!profile.error} onClick={() => { setContactVisited(true); setEditor("contact"); }}>Edit resident profile</button>
     </header>
     {profile.error && <div className="notice error" role="alert">{profile.error} Contact information could not be refreshed. <button className="secondary" onClick={profile.reload}>Try again</button></div>}

@@ -2,7 +2,7 @@ export function tenantDirectorySearch(params: URLSearchParams) {
   const next = new URLSearchParams();
   const query = params.get("q")?.slice(0, 200);
   if (query) next.set("q", query);
-  if (["active", "disabled"].includes(params.get("access") || "")) next.set("access", params.get("access")!);
+  if (["active", "verification", "disabled"].includes(params.get("access") || "")) next.set("access", params.get("access")!);
   return next.toString();
 }
 export function tenantPath(id: string, params = new URLSearchParams()) {

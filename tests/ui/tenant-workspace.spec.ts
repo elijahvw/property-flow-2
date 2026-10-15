@@ -5,14 +5,14 @@ async function fixture(page: Page, role = 'owner') {
   const deposits = {requiredCents:'150000',heldCents:'75050',outstandingCents:'74950',excessHeldCents:'0',pastDueCents:'0'};
   const profile = {userId:'auth0|tenant',status:'active',version:1,contactName:'Jordan Rivera',contactPhone:'555-0142',emergencyContactName:'Alex Rivera',emergencyContactPhone:'555-0143',managementNotes:'Private management note',user:{name:'Jordan Rivera',email:'jordan@test.invalid',status:'active',emailVerified:true},assignments:[{property:{id:'home',name:'Maple House',address:'14 Maple Lane'}}],activity:[]};
   const lease = {id:'lease-a',propertyId:'home',startsOn:'2026-01-01',endsOn:'2026-12-31',status:'active',rentCents:100001,rentDueDay:1,graceDays:5,property:{name:'Maple House'},unit:{label:'Apartment 1'},rent,deposit:{...deposits,id:'deposit-a',reference:'DA-101',dueOn:'2026-01-01'}};
-  const state = {profileStatus:200,financialStatus:200,role,profile,workspace:{businessDate:'2026-10-15',timezone:'America/New_York',generatedAt:'2026-10-15T12:00:00Z',rent,deposits,leases:[lease,{...lease,id:'lease-ended',status:'ended',startsOn:'2025-01-01',endsOn:'2025-12-31',unit:{label:'Former apartment'},rent:{...rent,outstandingCents:'0',afterGraceCents:'0'},deposit:null}] as any[]},requests:[] as string[],writes:[] as any[]};
+  const state = {profileStatus:200,financialStatus:200,role,profile,workspace:{businessDate:'2026-10-15',timezone:'America/New_York',generatedAt:'2026-10-15T12:00:00Z',rent,deposits,leases:[lease,{...lease,id:'lease-ended',status:'ended',startsOn:'2025-01-01',endsOn:'2025-12-31',unit:{label:'Former apartment'},rent:{...rent,outstandingCents:'0',afterGraceCents:'0'},deposit:null}] as any[]},requests:[] as string[],writes:[] as any[],otherProfiles:[] as typeof profile[]};
   await page.route('**/api/**',async route=>{
     const req=route.request(),url=new URL(req.url()),p=url.pathname,json=(v:unknown,status=200)=>route.fulfill({json:v,status});
     state.requests.push(p+url.search);
     if(p==='/api/bootstrap')return json({user:{id:role,email:role+'@test.invalid',status:'active',emailVerified:true},membership:{companyId:'a',role:state.role,status:'active',version:1,company:{name:'Oak & Elm Properties',status:'active'}},permissions:['owner','manager'].includes(state.role)?['property.read','resident.assignment.manage','lease.manage','finance.manage',...(state.role==='owner'?['members.manage']:[])]:state.role==='staff'?['property.read']:state.role==='resident'?['resident.self']:['platform.manage'],csrfToken:'fixture'});
     if(p==='/api/company/properties')return json([{id:'home',name:'Maple House'}]);
     if(p==='/api/company/properties/home')return json({id:'home',name:'Maple House'});
-    if(p==='/api/company/resident-profiles')return json([profile]);
+    if(p==='/api/company/resident-profiles')return json([profile,...state.otherProfiles]);
     if(p.endsWith('/workspace'))return state.financialStatus===200?json(state.workspace):json({error:'Tenant financial information unavailable'},state.financialStatus);
     if(p==='/api/company/resident-profiles/auth0%7Ctenant'||p==='/api/company/resident-profiles/auth0|tenant'){
       if(state.profileStatus!==200)return json({error:'Tenant access unavailable'},state.profileStatus);
@@ -116,4 +116,30 @@ test('empty rental history offers a real next step and an unavailable tenant has
  await expect(page.getByRole('link',{name:'Record a lease',exact:true})).toHaveAttribute('href','/company/leases?new=lease');
  state.profileStatus=404;await page.reload();await expect(page.getByRole('heading',{name:'Tenant unavailable'})).toBeVisible();
  await expect(page.getByRole('link',{name:'All tenants',exact:true})).toHaveAttribute('href','/company/residents');
+});
+
+
+test('active, unverified and disabled portal filters remain distinct and survive a ledger round trip',async({page})=>{
+ const state=await fixture(page);
+ state.otherProfiles.push({...state.profile,userId:'pending',contactName:'Pending Tenant',user:{...state.profile.user,emailVerified:false}}, {...state.profile,userId:'disabled',contactName:'Disabled Tenant',status:'disabled'});
+ await page.goto('/company/residents');
+ const filter=page.getByLabel('Portal access',{exact:true});
+ await filter.selectOption('active');
+ await expect(page.getByRole('link',{name:/View tenant/})).toHaveCount(1);
+ await expect(page.getByRole('link',{name:'View tenant Jordan Rivera',exact:true})).toBeVisible();
+ await filter.selectOption('verification');
+ await expect(page.getByRole('link',{name:/View tenant/})).toHaveCount(1);
+ await expect(page.getByRole('link',{name:'View tenant Pending Tenant',exact:true})).toBeVisible();
+ await page.reload();await expect(filter).toHaveValue('verification');
+ await filter.selectOption('disabled');
+ await expect(page.getByRole('link',{name:/View tenant/})).toHaveCount(1);
+ await expect(page.getByRole('link',{name:'View tenant Disabled Tenant',exact:true})).toBeVisible();
+ state.profile.user.emailVerified=false;
+ await page.goto('/company/residents/auth0%7Ctenant?access=verification');
+ await expect(page.getByText('Verification needed',{exact:true})).toBeVisible();
+ await page.getByRole('link',{name:'Open rent ledger for Apartment 1'}).click();
+ await page.getByRole('link',{name:'Back to tenant'}).click();
+ await page.getByRole('link',{name:'All tenants',exact:true}).click();
+ await expect(filter).toHaveValue('verification');
+ await expect(page.getByRole('link',{name:/View tenant/})).toHaveCount(2);
 });
