@@ -567,3 +567,39 @@ button.text-button:hover { background:#f4f7f4; color:#1a4c37; }
 @media(max-width:1100px){.workspace-columns{grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr)}.overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:800px){.workspace-columns{grid-template-columns:1fr}.page-heading-row{align-items:start;flex-wrap:wrap}.scope-filter{width:100%;min-width:0}.property-context{margin-bottom:1rem}.context-tabs{gap:1rem}.topbar-location{font-size:.75rem}.property-search-trigger kbd{display:none}.property-search-trigger{font-size:.75rem}.topbar .badge{display:none}}
 @media(max-width:700px){.sidebar{width:100%;position:relative;padding:1rem;display:grid;grid-template-columns:1fr auto;height:auto;overflow:visible}.sidebar .brand{font-size:1rem}.mobile-menu-toggle{display:inline-flex;grid-column:2;grid-row:1;min-height:36px;padding:.25rem .6rem;font-size:.75rem}.sidebar .workspace-label{grid-column:1 / -1;margin:.75rem 0 0;border:0;padding:0}.sidebar .nav-sections{grid-column:1 / -1;flex-direction:column;margin-top:.75rem;overflow:visible}.sidebar .nav-sections:not(.expanded){display:none}.sidebar-footer{grid-column:1 / -1;margin-top:.8rem;padding-top:.7rem}.nav-group>p{margin-left:.8rem}.sidebar nav a{font-size:.85rem}.overview-metrics{gap:.65rem}.overview-metrics>a{padding:.85rem}.overview-metrics strong{font-size:1.65rem}.overview-metrics small{font-size:.67rem}.workspace-main main{padding:1.25rem 1rem}.section-heading{flex-wrap:wrap}.property-context-title{overflow-wrap:anywhere}.editor-body .form-actions{bottom:0;margin-right:-1.25rem;margin-left:-1.25rem;padding:.85rem 1.25rem}.editor-body .form-actions button[type=submit]{min-width:150px}.editor-body .form-actions .action-spacer{display:none}.editor-body .form-actions{justify-content:space-between}.overview-events{margin:0}}
+
+/* Rent operations share the workspace forms and focused editor pattern. */
+.rent-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; margin:1.3rem 0 1.5rem; }
+.rent-metrics > div { display:flex; flex-direction:column; padding:1.2rem; background:#fff; border:1px solid #dfe7e1; border-radius:12px; }
+.rent-metrics span { font-size:.8rem; color:#60736a; }
+.rent-metrics strong { font-size:1.7rem; letter-spacing:-.035em; margin:.35rem 0; }
+.rent-metrics small { font-size:.72rem; color:#64776b; }
+.rent-filters { display:grid; grid-template-columns:2fr 1fr; gap:1rem; margin:1.2rem 0; }
+.rent-filters label { display:flex; flex-direction:column; gap:.4rem; font-size:.8rem; }
+.rent-account-balance { display:flex; flex-direction:column; align-items:flex-end; gap:.3rem; }
+.rent-account-balance strong { font-size:1.2rem; }
+.rent-account-balance span,.rent-accounts small { color:#63776b; font-size:.75rem; }
+.rent-lease-heading { display:flex; justify-content:space-between; align-items:center; gap:1.2rem; margin-top:1rem; }
+.rent-lease-heading p { font-size:.85rem; margin:.45rem 0; }
+.rent-lease-heading .actions { flex-wrap:wrap; justify-content:flex-end; }
+.rent-history-tabs { display:flex; gap:.6rem; padding-bottom:1.2rem; border-bottom:1px solid #e1e8e2; }
+.rent-history { list-style:none; padding:0; margin:0; }
+.rent-history > li { display:flex; justify-content:space-between; gap:1.5rem; padding:1.2rem 0; border-bottom:1px solid #edf0ed; }
+.rent-entry-main { display:flex; gap:.8rem; min-width:0; }
+.rent-entry-main h3 { margin:0 0 .3rem; font-size:.95rem; }
+.rent-entry-main p { font-size:.82rem; margin:.3rem 0; overflow-wrap:anywhere; }
+.rent-entry-main small { font-size:.65rem; color:#617468; overflow-wrap:anywhere; }
+.rent-entry-icon { display:grid; place-items:center; width:32px; height:32px; background:#f1f5ee; border-radius:8px; flex-shrink:0; color:#30674c; }
+.rent-entry-amount { display:flex; flex-direction:column; align-items:flex-end; gap:.4rem; flex-shrink:0; }
+.rent-entry-amount small { color:#64766c; font-size:.72rem; }
+.rent-voided { color:#6b756e; background:#fafbf9; }
+.rent-voided .rent-entry-amount > strong { text-decoration:line-through; }
+.rent-empty { padding:1.5rem 0; }
+.rent-empty h3 { margin:0 0 .6rem; }
+.rent-empty p { font-size:.85rem; color:#60736a; }
+.rent-draft-context { padding:.8rem 1rem; border-radius:8px; background:#f3f7f1; margin-bottom:1.2rem; }
+.rent-draft-context p { margin:.35rem 0 0; font-size:.8rem; }
+.rent-property-jump { display:flex; gap:1rem; font-size:.8rem; }
+@media(max-width:800px){.rent-lease-heading{align-items:start;flex-direction:column}.rent-lease-heading .actions{justify-content:flex-start}}
+@media(max-width:600px){.rent-metrics{grid-template-columns:1fr;gap:.6rem}.rent-metrics>div{padding:1rem}.rent-metrics strong{font-size:1.5rem}.rent-filters{grid-template-columns:1fr}.rent-history>li{flex-direction:column;gap:.75rem}.rent-entry-amount{align-items:flex-start;margin-left:2.8rem}.rent-accounts>li{align-items:start}.rent-accounts .rent-account-balance{min-width:90px}.rent-accounts h3{font-size:.9rem}.rent-property-jump{flex-wrap:wrap}}
+.rent-allocation-list { padding:0; margin:.45rem 0 0; list-style:none; font-size:.75rem; color:#526b5d; }

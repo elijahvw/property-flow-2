@@ -1,4 +1,5 @@
 export type OperationName =
+  | 'rent.charge' | 'rent.payment' | 'rent.void'
   | 'user.provision' | 'account.verification'
   | 'finance.create' | 'finance.void'
   | 'unit.create' | 'unit.update' | 'lease.create' | 'lease.update'

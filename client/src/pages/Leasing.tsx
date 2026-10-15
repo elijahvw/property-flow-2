@@ -6,9 +6,7 @@ import { useResource } from "../useResource";
 import { UnitFields, type UnitExtras } from "../components/PropertyFields";
 import { EditorDialog } from "../components/EditorDialog";
 import { DraftReset } from "../components/DraftReset";
-import {
-  PropertyNavigation,
-} from "../components/PropertyNavigation";
+import { PropertyNavigation } from "../components/PropertyNavigation";
 import { Form } from "./Workspace";
 type Unit = UnitExtras & {
   id: string;
@@ -396,7 +394,7 @@ function LeaseList() {
                   saved={() => {
                     reload();
                     setAdding(false);
-                    setParams({propertyId:id});
+                    setParams({ propertyId: id });
                   }}
                 />
               </div>
@@ -470,12 +468,19 @@ function LeaseList() {
                         {usd(lease.rentCents)} monthly
                       </p>
                     </div>
-                    <button
-                      className="secondary"
-                      onClick={() => setSelected(lease)}
-                    >
-                      Edit lease
-                    </button>
+                    <div className="actions">
+                      <Link
+                        to={`/company/rent?leaseId=${encodeURIComponent(lease.id)}`}
+                      >
+                        Rent ledger →
+                      </Link>
+                      <button
+                        className="secondary"
+                        onClick={() => setSelected(lease)}
+                      >
+                        Edit lease
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>

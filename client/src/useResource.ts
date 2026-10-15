@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "./api";
+import { api, ApiError } from "./api";
 import { useAuth } from "./context/AuthContext";
 import { startOperation } from "./operations";
 
@@ -65,7 +65,12 @@ export function useResource<T>(
           operation.fail(error);
           setResult((previous) => ({
             key,
-            ...(keepPreviousData && previous.key === key
+            ...(keepPreviousData &&
+            previous.key === key &&
+            !(
+              error instanceof ApiError &&
+              [401, 403, 404].includes(error.status)
+            )
               ? { data: previous.data }
               : {}),
             error:

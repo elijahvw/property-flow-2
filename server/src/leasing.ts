@@ -134,9 +134,18 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
     mutation(request, origin);
     const leaseId = assignmentId(request.params.leaseId), b = input(request, ["startsOn", "endsOn", "monthlyRent", "status", "expectedVersion"]), data = terms(b), expectedVersion = version(b.expectedVersion);
     return scoped(db, request, "lease.manage", async (tx, companyId) => {
+      // Order term edits against rent posting/allocation before reading the lease.
+      await tx.$queryRaw`UPDATE "Lease" SET "updatedAt"="updatedAt" WHERE id=${leaseId} AND "companyId"=${companyId} RETURNING id`;
       const previous = await tx.lease.findFirst({ where: { companyId, id: leaseId }, select: leaseSelect });
       if (!previous) throw new AccessError(404, "NOT_FOUND", "Lease not found.");
       if (previous.version !== expectedVersion) throw conflict();
+      const firstTermMonth = new Date(data.startsOn); firstTermMonth.setUTCDate(1);
+      const outsideTerm = await tx.rentCharge.findFirst({
+        where: { companyId, leaseId, voidedAt: null, ...(data.status === "draft" ? {} : { OR: [{ periodOn: { lt: firstTermMonth } }, ...(data.endsOn ? [{ periodOn: { gt: data.endsOn } }] : [])] }) },
+        select: { id: true },
+      });
+      const draftWithPayment = data.status === "draft" && await tx.ledgerEntry.findFirst({ where: { companyId, leaseId, voidedAt: null }, select: { id: true } });
+      if (outsideTerm || draftWithPayment) throw new AccessError(409, "LEASE_RENT_CONFLICT", "These lease changes conflict with posted rent. Correct affected charges before changing their term; a lease with active charges or payments cannot become a draft. Posted amounts are never recalculated by a lease edit.");
       // Historical ended records remain editable after resident revocation/transfer.
       if (data.status !== "ended") await eligible(tx, companyId, previous.residentId, previous.propertyId);
       const unit = await lockUnit(tx, companyId, previous.unitId);
