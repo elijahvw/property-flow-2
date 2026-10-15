@@ -33,6 +33,7 @@ export const routes: {
     permission: "platform.manage",
     section: "Platform",
   },
+  { path: "/company/overview", title: "Overview", permission: "property.read", section: "Company" },
   {
     path: "/company/properties",
     title: "Properties",

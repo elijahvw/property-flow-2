@@ -82,8 +82,8 @@ test('validated CloudFront viewers have independent login limits; spoofed/direct
 // Every server-selected landing is a terminal workspace, never /dashboard itself.
 test('role landings include unassigned and disabled states without redirect loops', () => {
   for (const [user, expected] of [
-    [principal('owner'), '/company/properties'], [principal('manager'), '/company/properties'],
-    [principal('staff'), '/company/properties'], [principal('resident'), '/resident'],
+    [principal('owner'), '/company/overview'], [principal('manager'), '/company/overview'],
+    [principal('staff'), '/company/overview'], [principal('resident'), '/resident'],
     [principal(null), '/access'], [principal('tenant'), '/access'],
     [principal('owner', {status:'disabled'}), '/access'],
     [principal(null, {platformRole:'owner'}), '/platform/companies'],

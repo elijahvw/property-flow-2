@@ -25,6 +25,7 @@ import { registerMaintenance } from "./maintenance.js";
 import { digest } from "./sessions.js";
 import { propertySelect, propertyData, propertyKeys } from "./property-fields.js";
 import { scoped, sameSubmission, submission } from "./operational.js";
+import { registerOverview } from "./overview.js";
 import { registerReports } from "./reports.js";
 import { registerPropertyDetail } from "./property-detail.js";
 
@@ -205,6 +206,7 @@ export function registerApplication(
   registerCompanyAdministration(server, db, authenticate, origin);
   registerResidentProfiles(server, db, authenticate, origin);
   registerReports(server, db, authenticate);
+  registerOverview(server, db, authenticate);
   const auth = { preValidation: authenticate };
   registerPropertyDetail(server, db, authenticate, origin);
   const serial = <T>(request: FastifyRequest, run: (tx: Tx) => Promise<T>) =>

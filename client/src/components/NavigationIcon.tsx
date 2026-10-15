@@ -6,6 +6,7 @@ export function NavigationIcon({ path }: { path: string }) {
     </>
   );
   const content =
+    path.includes("overview") ? <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></> :
     path.includes("properties") || path === "/resident" ? (
       <>
         <path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8" />

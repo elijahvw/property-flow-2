@@ -5,6 +5,10 @@ import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
 import { UnitFields, type UnitExtras } from "../components/PropertyFields";
 import { EditorDialog } from "../components/EditorDialog";
+import { DraftReset } from "../components/DraftReset";
+import {
+  PropertyNavigation,
+} from "../components/PropertyNavigation";
 import { Form } from "./Workspace";
 type Unit = UnitExtras & {
   id: string;
@@ -114,7 +118,8 @@ function UnitList({
   };
   return (
     <>
-      <nav aria-label="Breadcrumb">
+      <PropertyNavigation id={propertyId} name={property.data?.name} external />
+      <nav className="sr-only" aria-label="Breadcrumb">
         <Link to="/company/properties">Properties</Link> /{" "}
         <Link to={`/company/properties/${encodeURIComponent(propertyId)}`}>
           Property details
@@ -148,6 +153,9 @@ function UnitList({
               <Form
                 key={key}
                 operation="unit.create"
+                secondaryActions={
+                  <DraftReset reset={() => setKey(crypto.randomUUID())} />
+                }
                 label="Create unit"
                 submit={async (form) => {
                   await api(
@@ -173,16 +181,8 @@ function UnitList({
                 </label>
                 <UnitFields />
                 <p className="help">
-                  Names must be unique within this property. Keep the same
-                  details to retry a failed submission.
+                  Choose a name that identifies this space within the property.
                 </p>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => setKey(crypto.randomUUID())}
-                >
-                  Start a new unit
-                </button>
               </Form>
             </EditorDialog>
           )}
@@ -206,20 +206,22 @@ function UnitList({
                   <ul className="record-list">
                     {r.data.items.map((unit) => (
                       <li key={unit.id}>
-                        <h3>{unit.label}</h3>
-                        <p>{unit.status}</p>
-                        <p>
-                          {unit.bedrooms == null
-                            ? "Bedrooms not recorded"
-                            : `${unit.bedrooms} bed`}{" "}
-                          ·{" "}
-                          {unit.bathroomsHundredths == null
-                            ? "Bathrooms not recorded"
-                            : `${unit.bathroomsHundredths / 100} bath`}
-                          {unit.squareFeet != null
-                            ? ` · ${unit.squareFeet.toLocaleString()} sq ft`
-                            : ""}
-                        </p>
+                        <div>
+                          <h3>{unit.label}</h3>
+                          <p>{unit.status}</p>
+                          <p>
+                            {unit.bedrooms == null
+                              ? "Bedrooms not recorded"
+                              : `${unit.bedrooms} bed`}{" "}
+                            ·{" "}
+                            {unit.bathroomsHundredths == null
+                              ? "Bathrooms not recorded"
+                              : `${unit.bathroomsHundredths / 100} bath`}
+                            {unit.squareFeet != null
+                              ? ` · ${unit.squareFeet.toLocaleString()} sq ft`
+                              : ""}
+                          </p>
+                        </div>
                         {editable && (
                           <button
                             className="secondary"
@@ -306,20 +308,27 @@ function UnitList({
 }
 export function Leases() {
   const { data } = useAuth();
-  const scope = `${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}`;
+  const [routeParams] = useSearchParams();
+  const scope = `${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}:${routeParams.get("propertyId") || ""}`;
   return <LeaseList key={scope} />;
 }
 function LeaseList() {
-  const [params] = useSearchParams();
-  const [adding, setAdding] = useState(params.has("propertyId")),
+  const [params, setParams] = useSearchParams();
+  const [adding, setAdding] = useState(params.get("new") === "lease"),
     [selected, setSelected] = useState<Lease | null>(null);
+  const contextId = params.get("propertyId") || "",
+    status = params.get("status") || "",
+    attention = params.get("attention") || "";
+  const [visitedProperties, setVisitedProperties] = useState<string[]>(() =>
+    contextId ? [contextId] : [],
+  );
   const [cursor, setCursor] = useState(""),
     [propertyId, setPropertyId] = useState(params.get("propertyId") || "");
   const properties = useResource<{ id: string; name: string }[]>(
     "/api/company/properties",
   );
   const r = useResource<Records<Lease>>(
-    `/api/company/leases?${new URLSearchParams(cursor ? { cursor } : {})}`,
+    `/api/company/leases?${new URLSearchParams(Object.entries({ cursor, propertyId: contextId, status, attention }).filter(([, value]) => value))}`,
     true,
     true,
   );
@@ -329,19 +338,20 @@ function LeaseList() {
   };
   return (
     <>
+      {contextId && <PropertyNavigation id={contextId} />}
       <header className="page-heading">
-        <p className="eyebrow">Company operations</p>
+        <p className="eyebrow">Leasing</p>
         <h1>Lease records</h1>
         <p>
-          Track dates, monthly rent and a primary resident. These are internal
-          records, not signed contracts. Status is maintained manually. Lease
-          records do not grant resident access.
+          Manage lease terms, residents, and monthly rent. These records track
+          your leases; signed agreements and balances are managed separately.
         </p>
         <button onClick={() => setAdding(true)}>Record a lease</button>
       </header>
       <EditorDialog
         open={adding}
         title="Record a lease"
+        description="Choose the property, unit, and resident, then add the lease terms."
         onClose={() => setAdding(false)}
       >
         {!properties.data ? (
@@ -358,7 +368,14 @@ function LeaseList() {
               Property for new lease
               <select
                 value={propertyId}
-                onChange={(e) => setPropertyId(e.target.value)}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setPropertyId(id);
+                  if (id)
+                    setVisitedProperties((previous) =>
+                      previous.includes(id) ? previous : [...previous, id],
+                    );
+                }}
               >
                 <option value="">Choose a property</option>
                 {properties.data.map((p) => (
@@ -368,21 +385,57 @@ function LeaseList() {
                 ))}
               </select>
             </label>
-            {propertyId && (
-              <LeaseCreate
-                key={propertyId}
-                propertyId={propertyId}
-                saved={() => {
-                  reload();
-                  setAdding(false);
-                }}
-              />
-            )}
+            {visitedProperties.map((id) => (
+              <div
+                className="lease-property-draft"
+                key={id}
+                hidden={propertyId !== id}
+              >
+                <LeaseCreate
+                  propertyId={id}
+                  saved={() => {
+                    reload();
+                    setAdding(false);
+                    setParams({propertyId:id});
+                  }}
+                />
+              </div>
+            ))}
           </>
         )}
       </EditorDialog>
       <section className="panel">
-        <h2>Company lease history</h2>
+        <div className="section-heading">
+          <h2>
+            {contextId ? "Property lease history" : "Company lease history"}
+          </h2>
+          <label className="compact-filter">
+            Lease view
+            <select
+              value={attention || status}
+              onChange={(e) => {
+                const value = e.target.value;
+                setCursor("");
+                setParams({
+                  ...(contextId ? { propertyId: contextId } : {}),
+                  ...(["ending_soon", "past_end", "in_effect"].includes(value)
+                    ? { attention: value }
+                    : value
+                      ? { status: value }
+                      : {}),
+                });
+              }}
+            >
+              <option value="">All leases</option>
+              <option value="draft">Draft</option>
+              <option value="active">Active</option>
+              <option value="ended">Ended</option>
+              <option value="in_effect">In effect today</option>
+              <option value="ending_soon">Ending within 30 days</option>
+              <option value="past_end">Past end, still active</option>
+            </select>
+          </label>
+        </div>
         {r.data && r.error && (
           <Load error={r.error} retry={r.reload} label="leases" />
         )}
@@ -398,18 +451,25 @@ function LeaseList() {
               <ul className="record-list">
                 {r.data.items.map((lease) => (
                   <li key={lease.id}>
-                    <h3>
-                      {lease.property.name} · {lease.unit.label}
-                    </h3>
-                    <p>
-                      {lease.resident.name || lease.resident.email} ·{" "}
-                      {lease.status}
-                    </p>
-                    <p>
-                      {lease.startsOn.slice(0, 10)} to{" "}
-                      {lease.endsOn?.slice(0, 10) || "Open-ended"} ·{" "}
-                      {usd(lease.rentCents)} monthly
-                    </p>
+                    <div>
+                      <h3>
+                        <Link
+                          to={`/company/properties/${encodeURIComponent(lease.propertyId)}`}
+                        >
+                          {lease.property.name}
+                        </Link>{" "}
+                        · {lease.unit.label}
+                      </h3>
+                      <p>
+                        {lease.resident.name || lease.resident.email} ·{" "}
+                        {lease.status}
+                      </p>
+                      <p>
+                        {lease.startsOn.slice(0, 10)} to{" "}
+                        {lease.endsOn?.slice(0, 10) || "Open-ended"} ·{" "}
+                        {usd(lease.rentCents)} monthly
+                      </p>
+                    </div>
                     <button
                       className="secondary"
                       onClick={() => setSelected(lease)}
@@ -502,9 +562,19 @@ function LeaseCreate({
   }, [units.data]);
   return (
     <>
-      <Link to={`/company/properties/${encodeURIComponent(propertyId)}/units`}>
-        Manage units for this property
-      </Link>
+      <div className="prerequisite-links">
+        <Link
+          to={`/company/properties/${encodeURIComponent(propertyId)}/residents`}
+        >
+          Manage residents
+        </Link>{" "}
+        ·{" "}
+        <Link
+          to={`/company/properties/${encodeURIComponent(propertyId)}/units`}
+        >
+          Manage units for this property
+        </Link>
+      </div>
       {!residents.data ? (
         <Load
           error={residents.error}
@@ -516,15 +586,17 @@ function LeaseCreate({
           {!unitOptions.length || !residents.data.length ? (
             units.data && (
               <p>
-                An active unit and an accepted resident assigned to this
-                property are required. Use Properties → Manage residents for
-                assignments.
+                Choose an active unit and assign an accepted resident before
+                creating a lease.
               </p>
             )
           ) : (
             <Form
               key={key}
               operation="lease.create"
+              secondaryActions={
+                <DraftReset reset={() => setKey(crypto.randomUUID())} />
+              }
               label="Create lease record"
               submit={async (form) => {
                 await api("/api/company/leases", {
@@ -544,40 +616,34 @@ function LeaseCreate({
                 setKey(crypto.randomUUID());
               }}
             >
-              <label>
-                Unit for new lease
-                <select name="unitId" required>
-                  {unitOptions.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Primary resident
-                <select name="residentId" required>
-                  {residents.data.map((person) => (
-                    <option key={person.userId} value={person.userId}>
-                      {person.membership.user.name ||
-                        person.membership.user.email}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="form-grid">
+                <label>
+                  Unit for new lease
+                  <select name="unitId" required>
+                    {unitOptions.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Primary resident
+                  <select name="residentId" required>
+                    {residents.data.map((person) => (
+                      <option key={person.userId} value={person.userId}>
+                        {person.membership.user.name ||
+                          person.membership.user.email}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
               <LeaseTerms prefix="New lease" />
               <p className="help">
-                Only one active lease per unit. Retry with the same details
-                after a failed response. Browsing more units preserves your
-                draft; availability is checked when saving.
+                One active lease is allowed per unit. Review the details, then
+                select Create lease record to save.
               </p>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => setKey(crypto.randomUUID())}
-              >
-                Start a new lease
-              </button>
             </Form>
           )}
         </>

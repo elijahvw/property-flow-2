@@ -1,3 +1,6 @@
+import { useSearchParams } from "react-router-dom";
+import { DraftReset } from "../components/DraftReset";
+import { PropertyNavigation } from "../components/PropertyNavigation";
 import { useAuth } from "../context/AuthContext";
 import { useState } from "react";
 import { api } from "../api";
@@ -14,6 +17,7 @@ type Row = {
   property: { name: string };
 };
 const statuses = ["open", "in_progress", "resolved"];
+const filterStatuses = ["unresolved", ...statuses];
 const label = (value: string) => value.replace("_", " ");
 function Loading({ error, retry }: { error?: string; retry: () => void }) {
   return error ? (
@@ -27,18 +31,20 @@ function Loading({ error, retry }: { error?: string; retry: () => void }) {
 }
 export function Maintenance({ resident = false }: { resident?: boolean }) {
   const { data } = useAuth();
+  const [routeParams] = useSearchParams();
   return (
     <RequestWorkspace
-      key={`${resident}:${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}`}
+      key={`${resident}:${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}:${routeParams.toString()}`}
       resident={resident}
     />
   );
 }
 function RequestWorkspace({ resident }: { resident: boolean }) {
+  const [params] = useSearchParams();
   const [adding, setAdding] = useState(false),
     [selected, setSelected] = useState<Row | null>(null);
-  const [status, setStatus] = useState(""),
-    [propertyId, setPropertyId] = useState("");
+  const [status, setStatus] = useState(params.get("status") || ""),
+    [propertyId, setPropertyId] = useState(params.get("propertyId") || "");
   const [success, setSuccess] = useState("");
   const [submissionKey, setSubmissionKey] = useState(() => crypto.randomUUID());
   const base = resident
@@ -52,6 +58,9 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
   );
   return (
     <>
+      {!resident && params.get("propertyId") && (
+        <PropertyNavigation id={params.get("propertyId")!} />
+      )}
       <header className="page-heading">
         <p className="eyebrow">{resident ? "Resident" : "Company"}</p>
         <h1>{resident ? "My maintenance requests" : "Maintenance requests"}</h1>
@@ -93,6 +102,11 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
               key={submissionKey}
               label="Submit request"
               operation="maintenance.create"
+              secondaryActions={
+                <DraftReset
+                  reset={() => setSubmissionKey(crypto.randomUUID())}
+                />
+              }
               submit={async (data) => {
                 await api(base, {
                   method: "POST",
@@ -137,17 +151,6 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
                   ))}
                 </select>
               </label>
-              <p className="help">
-                Retry keeps the same submission. Keep the original details when
-                retrying; start a new request only for a separate issue.
-              </p>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => setSubmissionKey(crypto.randomUUID())}
-              >
-                Start a new request
-              </button>
             </Form>
           )}
         </EditorDialog>
@@ -164,9 +167,9 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
             Filter status
             <select value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="">All statuses</option>
-              {statuses.map((v) => (
+              {filterStatuses.map((v) => (
                 <option key={v} value={v}>
-                  {label(v)}
+                  {v === "unresolved" ? "Open & in progress" : label(v)}
                 </option>
               ))}
             </select>
