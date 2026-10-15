@@ -200,6 +200,18 @@ tbody tr:last-child td {
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 0 1.2rem;
 }
+.workflow-form .form-section {
+  min-width: 0;
+  margin: 1.25rem 0;
+  padding: 1rem 1.1rem .35rem;
+  border: 1px solid #dfe5e1;
+  border-radius: 8px;
+}
+.form-section > legend { padding: 0 .4rem; font-size: .95rem; font-weight: 650; }
+.form-section > .help { margin: 0 0 1rem; line-height: 1.55; color: #51665d; }
+@media (max-width: 700px) {
+  .editor-body .workflow-form .form-actions { margin-left: -1rem; margin-right: -1rem; padding-left: 1rem; padding-right: 1rem; }
+}
 .actions {
   display: flex;
   flex-wrap: wrap;

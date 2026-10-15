@@ -16,6 +16,10 @@ Directory layout, record hierarchy, spacing, borders, status badges, primary/sec
 
 ## Readable dates and form contract
 
+Tenant editing separates tenant contact, emergency contact and internal notes into named fieldsets with optional-field guidance. Emergency contacts are explicitly distinct from roommates and portal users. Lease forms group dates/rent separately from payment terms; end-date guidance is associated with its input for assistive technology. Existing dialog focus containment/return, visible labels, keyboard controls, retained drafts and sticky save actions remain in place.
+
+Apply the user's form standard to subsequent feature work: collect the structured operational details needed for each task, clearly identify required and optional inputs, group related fields, explain unusual choices, keep a logical keyboard order and usable mobile layout, and preserve entered values after validation or request errors. Add detailed fields with their corresponding data model and authorization rather than treating internal notes as a substitute for structured records.
+
 The shared DateField displays month-name calendar dates such as **October 15, 2026**. Focusing it reveals the native date segments for keyboard editing; the native calendar remains available. It retains the input's accessible name, required/min/max constraints, disabled state, form name and ISO submission value. Report From/Through fields reject an inverted range with native validation before requesting a report.
 
 Date fields are shared across lease setup/edit/renewal, rent posting/receipts, deposits, finances, reports and recurring-rent first-due override. Visible lease dates, due/grace/receipt dates, report periods and billing months use readable names. Date-only formatting uses UTC solely to preserve the stored calendar day in any viewer timezone. APIs, draft identities, CSV dates, recurrence keys and download filenames retain their existing machine-readable values.

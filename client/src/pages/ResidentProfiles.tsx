@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { tenantPath, tenantDirectorySearch } from "../tenant-links";
 import { tenantPortalState } from "../tenant-status";
@@ -82,6 +82,7 @@ function Directory() {
 }
 export function ResidentEditor({ id, close, mode = "contact", open = true }: { id: string; close: () => void; mode?: "contact" | "access"; open?: boolean }) {
   const { can } = useAuth();
+  const helpId = useId();
   const [accessEditing, setAccessEditing] = useState(mode === "access");
   const endpoint = `/api/company/resident-profiles/${encodeURIComponent(id)}`;
   const r = useResource<ResidentProfileDetail>(endpoint);
@@ -149,33 +150,45 @@ export function ResidentEditor({ id, close, mode = "contact", open = true }: { i
                 r.reload();
               }}
             >
-              <div className="form-grid">
-                {Object.entries(residentContactFields).map(([name, label]) => (
-                  <label key={name}>
-                    {label}
-                    <input
-                      name={name}
-                      type={name.includes("Phone") ? "tel" : "text"}
-                      maxLength={name.includes("Phone") ? 40 : 200}
-                      defaultValue={draft[name as keyof typeof residentContactFields] || ""}
-                    />
-                  </label>
-                ))}
-              </div>
-              <label>
-                Internal management notes
-                <textarea
-                  name="managementNotes"
-                  defaultValue={draft.managementNotes || ""}
-                  maxLength={2000}
-                  rows={4}
-                />
-              </label>
-              <p className="help">
-                Contact details are optional and visible to company owners and
-                managers. This form does not change the sign-in email or company
-                role.
-              </p>
+              <p className="help">All fields are optional. Add the details your team needs to contact this tenant and manage their rental.</p>
+              {([
+                { title: "Tenant contact", fields: ["contactName", "contactPhone"] as const, help: "These details do not change the tenant’s sign-in email or company role." },
+                { title: "Emergency contact", fields: ["emergencyContactName", "emergencyContactPhone"] as const, help: "A person to contact in an emergency. This does not add a roommate or grant portal access." },
+              ]).map((section, index) => (
+                <fieldset key={section.title} className="form-section" aria-describedby={`${helpId}-${index}`}>
+                  <legend>{section.title}</legend>
+                  <p className="help" id={`${helpId}-${index}`}>{section.help}</p>
+                  <div className="form-grid">
+                    {section.fields.map(name => (
+                      <label key={name}>
+                        {residentContactFields[name]}
+                        <input
+                          name={name}
+                          type={name.includes("Phone") ? "tel" : "text"}
+                          maxLength={name.includes("Phone") ? 40 : 200}
+                          defaultValue={draft[name] || ""}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ))}
+              <fieldset className="form-section">
+                <legend>Internal notes</legend>
+                <label>
+                  Internal management notes
+                  <textarea
+                    name="managementNotes"
+                    aria-describedby={`${helpId}-notes`}
+                    defaultValue={draft.managementNotes || ""}
+                    maxLength={2000}
+                    rows={4}
+                  />
+                </label>
+                <p className="help" id={`${helpId}-notes`}>
+                  Contact details and notes are visible to company owners and managers. Notes can contain up to 2,000 characters.
+                </p>
+              </fieldset>
               <button
                 type="button"
                 className="secondary"
