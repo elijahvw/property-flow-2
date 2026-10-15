@@ -1,9 +1,10 @@
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import type { PrismaClient } from "@prisma/client";
+import { unitDetailKeys, unitDetails, unitDetailSelect } from "./property-fields.js";
 import { AccessError } from "./access.js";
 import { assignmentId, opaqueUserId } from "./application.js";
 import { audit, boundedText, cents, choice, conflict, date, input, mutation, page, paging, sameSubmission, scoped, submission, version, type Tx } from "./operational.js";
-const unitSelect = { id: true, propertyId: true, label: true, status: true, version: true } as const;
+const unitSelect = { ...unitDetailSelect, id: true, propertyId: true, label: true, status: true, version: true } as const;
 const leaseSelect = { id: true, propertyId: true, unitId: true, residentId: true, startsOn: true, endsOn: true, rentCents: true, currency: true, status: true, version: true, unit: { select: { label: true } }, property: { select: { name: true } }, resident: { select: { name: true, email: true } } } as const;
 async function property(tx: Tx, companyId: string, propertyId: string) {
   if (!await tx.property.findFirst({ where: { id: propertyId, companyId }, select: { id: true } }))
@@ -46,8 +47,10 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
   });
   server.post<{ Params: { propertyId: string } }>("/api/company/properties/:propertyId/units", auth, request => {
     mutation(request, origin);
-    const propertyId = assignmentId(request.params.propertyId), b = input(request, ["label", "submissionKey"]), label = boundedText(b.label, 80, "Unit name");
-    const key = submission(b.submissionKey, [propertyId, label]);
+    const propertyId = assignmentId(request.params.propertyId), b = input(request, ["label", "submissionKey", ...unitDetailKeys]), label = boundedText(b.label, 80, "Unit name");
+    const details = unitDetails(b);
+    // Blank new fields keep the fingerprint used by already committed older clients.
+    const key = submission(b.submissionKey, Object.values(details).every(value => value === null) ? [propertyId, label] : [propertyId, label, details]);
     return scoped(db, request, "property.write", async (tx, companyId) => {
       const previous = await tx.unit.findFirst({ where: { companyId, createdById: request.principal!.id, submissionKey: key.submissionKey }, select: { ...unitSelect, submissionHash: true } });
       if (previous) {
@@ -60,24 +63,29 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
       await property(tx, companyId, propertyId);
       if (await tx.unit.findFirst({ where: { companyId, propertyId, label }, select: { id: true } }))
         throw new AccessError(409, "UNIT_NAME_EXISTS", "Another unit in this property uses that exact name.");
-      const row = await tx.unit.create({ data: { companyId, propertyId, label, createdById: request.principal!.id, ...key }, select: unitSelect });
+      const row = await tx.unit.create({ data: { companyId, propertyId, label, ...details, createdById: request.principal!.id, ...key }, select: unitSelect });
       await audit(tx, request, companyId, row.id, "unit.created", { propertyId });
       return row;
     });
   });
   server.patch<{ Params: { unitId: string } }>("/api/company/units/:unitId", auth, request => {
     mutation(request, origin);
-    const unitId = assignmentId(request.params.unitId), b = input(request, ["label", "status", "expectedVersion"]);
+    const unitId = assignmentId(request.params.unitId), b = input(request, ["label", "status", "expectedVersion", ...unitDetailKeys]);
+    const parsedDetails = unitDetails(b), detailPatch: Partial<ReturnType<typeof unitDetails>> = {};
+    for (const key of Object.keys(parsedDetails) as (keyof typeof parsedDetails)[]) {
+      const submittedKey = key === "bathroomsHundredths" ? "bathrooms" : key === "marketRentCents" ? "marketRent" : key;
+      if (Object.hasOwn(b, submittedKey)) Object.assign(detailPatch, { [key]: parsedDetails[key] });
+    }
     const label = boundedText(b.label, 80, "Unit name"), status = choice(b.status, ["active", "archived"], "unit status"), expectedVersion = version(b.expectedVersion);
     return scoped(db, request, "property.write", async (tx, companyId) => {
       const previous = await lockUnit(tx, companyId, unitId);
       await tx.$queryRaw`UPDATE "Property" SET "updatedAt"="updatedAt" WHERE id=${previous.propertyId} AND "companyId"=${companyId} RETURNING id`;
       if (previous.version !== expectedVersion) throw conflict();
       if (status === "archived" && previous.status !== status) await activeSlot(tx, companyId, unitId);
-      if (previous.label === label && previous.status === status) return previous;
+      if (previous.label === label && previous.status === status && Object.entries(detailPatch).every(([key, value]) => previous[key as keyof typeof previous] === value)) return previous;
       const duplicate = await tx.unit.findFirst({ where: { companyId, propertyId: previous.propertyId, label, id: { not: unitId } }, select: { id: true } });
       if (duplicate) throw new AccessError(409, "UNIT_NAME_EXISTS", "Another unit in this property uses that exact name.");
-      const row = await tx.unit.update({ where: { id: unitId }, data: { label, status, version: { increment: 1 } }, select: unitSelect });
+      const row = await tx.unit.update({ where: { id: unitId }, data: { label, status, ...detailPatch, version: { increment: 1 } }, select: unitSelect });
       await audit(tx, request, companyId, unitId, "unit.updated", { from: previous.status, to: status });
       return row;
     });

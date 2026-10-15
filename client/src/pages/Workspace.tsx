@@ -2,6 +2,8 @@ import {
   UserProvisioning,
   UserVerificationControls,
 } from "../components/UserProvisioning";
+import { useFeedback } from "../components/Feedback";
+import { PropertyFields } from "../components/PropertyFields";
 import { EditorDialog, useEditorBusy } from "../components/EditorDialog";
 import { UserActivity } from "../components/UserActivity";
 import React, { useEffect, useId, useState } from "react";
@@ -65,12 +67,15 @@ export function Form({
   submit,
   label = "Save changes",
   operation = "account.update",
+  successText = "Saved.",
 }: {
   children: React.ReactNode;
   submit: (data: FormData) => Promise<void>;
   label?: string;
   operation?: OperationName;
+  successText?: string;
 }) {
+  const notify = useFeedback();
   const editor = useEditorBusy(),
     formId = useId();
   const [busy, setBusy] = useState(false),
@@ -89,9 +94,34 @@ export function Form({
         setBusy(true);
         setError("");
         setSaved(false);
+        notify("");
         try {
           await monitorOperation(operation, () => submit(data));
           setSaved(true);
+          if (
+            operation !== "page.data.load" &&
+            operation !== "auth.session.restore"
+          )
+            notify(
+              (
+                {
+                  "property.create": "Property created.",
+                  "unit.create": "Unit created.",
+                  "unit.update": "Unit saved.",
+                  "lease.create": "Lease recorded.",
+                  "lease.update": "Lease saved.",
+                  "finance.create": "Transaction recorded.",
+                  "finance.void": "Correction saved; history retained.",
+                  "membership.update": "Resident or membership changes saved.",
+                  "maintenance.create": "Maintenance request submitted.",
+                  "maintenance.status": "Request status updated.",
+                  "invitation.create":
+                    "Invitation created. Copy its link to share.",
+                  "company.create": "Company created.",
+                  "company.update": "Company saved.",
+                } as Record<string, string>
+              )[operation] || "Changes saved.",
+            );
         } catch (e) {
           setError(e instanceof Error ? e.message : "Unable to save changes.");
         } finally {
@@ -103,7 +133,7 @@ export function Form({
         {children}
         <div className="actions">
           <button type="submit">{busy ? "Saving…" : label}</button>
-          {saved && <span role="status">Saved.</span>}
+          {saved && <span role="status">{successText}</span>}
         </div>
       </fieldset>
       {error && (
@@ -641,6 +671,8 @@ export function Properties() {
   );
 }
 function PropertyDirectory() {
+  const [propertyKey, setPropertyKey] = useState(() => crypto.randomUUID());
+  const [propertySuccess, setPropertySuccess] = useState("");
   const { can } = useAuth();
   const r = useResource<
     {
@@ -678,13 +710,21 @@ function PropertyDirectory() {
           description="Start with the address. Add units and residents from the property workspace after saving."
         >
           <Form
+            key={propertyKey}
             operation="property.create"
             label="Create property"
             submit={async (data) => {
               await api("/api/company/properties", {
                 method: "POST",
-                body: Object.fromEntries(data),
+                body: {
+                  ...Object.fromEntries(data),
+                  submissionKey: propertyKey,
+                },
               });
+              setPropertyKey(crypto.randomUUID());
+              setPropertySuccess(
+                "Property created. Open it to add units and assign residents.",
+              );
               setAdding(false);
               r.reload();
             }}
@@ -696,8 +736,21 @@ function PropertyDirectory() {
               <Field name="state" label="State / region" />
               <Field name="zip" label="Postal code" />
             </div>
+            <PropertyFields />
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setPropertyKey(crypto.randomUUID())}
+            >
+              Start a new property
+            </button>
           </Form>
         </EditorDialog>
+      )}
+      {propertySuccess && (
+        <p role="status" className="notice">
+          {propertySuccess}
+        </p>
       )}
       <section className="panel">
         <div className="section-heading">

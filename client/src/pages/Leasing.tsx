@@ -3,9 +3,10 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
+import { UnitFields, type UnitExtras } from "../components/PropertyFields";
 import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "./Workspace";
-type Unit = {
+type Unit = UnitExtras & {
   id: string;
   propertyId: string;
   label: string;
@@ -128,7 +129,9 @@ function UnitList({
           unit to retain its history; end its active lease first.
         </p>
         {editable && (
-          <button onClick={() => setAdding(true)}>Add a unit</button>
+          <button disabled={!property.data} onClick={() => setAdding(true)}>
+            Add a unit
+          </button>
         )}
       </header>
       {error && <p role="alert">{error}</p>}
@@ -151,7 +154,7 @@ function UnitList({
                     `/api/company/properties/${encodeURIComponent(propertyId)}/units`,
                     {
                       method: "POST",
-                      body: { label: form.get("label"), submissionKey: key },
+                      body: { ...Object.fromEntries(form), submissionKey: key },
                     },
                   );
                   reload();
@@ -168,6 +171,7 @@ function UnitList({
                     placeholder="Apartment 1 or Main house"
                   />
                 </label>
+                <UnitFields />
                 <p className="help">
                   Names must be unique within this property. Keep the same
                   details to retry a failed submission.
@@ -204,6 +208,18 @@ function UnitList({
                       <li key={unit.id}>
                         <h3>{unit.label}</h3>
                         <p>{unit.status}</p>
+                        <p>
+                          {unit.bedrooms == null
+                            ? "Bedrooms not recorded"
+                            : `${unit.bedrooms} bed`}{" "}
+                          ·{" "}
+                          {unit.bathroomsHundredths == null
+                            ? "Bathrooms not recorded"
+                            : `${unit.bathroomsHundredths / 100} bath`}
+                          {unit.squareFeet != null
+                            ? ` · ${unit.squareFeet.toLocaleString()} sq ft`
+                            : ""}
+                        </p>
                         {editable && (
                           <button
                             className="secondary"
@@ -247,6 +263,7 @@ function UnitList({
                   {
                     method: "PATCH",
                     body: {
+                      ...Object.fromEntries(form),
                       label: form.get("label"),
                       status: form.get("status"),
                       expectedVersion: selected.version,
@@ -272,6 +289,7 @@ function UnitList({
                 maxLength={80}
               />
             </label>
+            <UnitFields value={selected} />
             <label>
               Status for {selected.label}
               <select name="status" defaultValue={selected.status}>

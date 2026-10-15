@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import test from 'node:test';
@@ -47,7 +48,8 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
     const legacy = await db.user.findUnique({where:{id:'legacy-admin'}});
     assert.equal(legacy.role,'admin'); assert.equal(legacy.companyId,'legacy'); assert.equal(legacy.platformRole,null);
     assert.equal(await db.companyMembership.count({where:{userId:legacy.id}}),0);
-    assert.equal((await tenantTransaction(db,'legacy',tx=>tx.property.findMany()))[0].name,'Existing property');
+    const legacyProperty=(await tenantTransaction(db,'legacy',tx=>tx.property.findMany()))[0];
+    assert.equal(legacyProperty.name,'Existing property');assert.equal(legacyProperty.yearBuilt,null);assert.equal(legacyProperty.propertyType,null);assert.equal(legacyProperty.version,1);
   });
   await t.test('existing schema remains, runtime cannot bypass RLS or create tables', async () => {
     const role = (await runtimePool.query('SELECT rolsuper,rolbypassrls,rolcreaterole FROM pg_roles WHERE rolname=current_user')).rows[0];
@@ -55,7 +57,7 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
     await assert.rejects(runtimePool.query('CREATE TABLE unauthorized(id int)'), /permission denied/);
   });
   await t.test('manager creates only within own company; resident and outsider are denied', async () => {
-    assert.equal((await call('manager-a','POST','/api/company/properties',property)).statusCode,200);
+    assert.equal((await call('manager-a','POST','/api/company/properties',{...property,submissionKey:randomUUID()})).statusCode,200);
     assert.equal((await call('resident-a','POST','/api/company/properties',property)).statusCode,403);
     assert.equal((await call('owner-b','GET','/api/company/properties',undefined,{'x-company-id':'a'})).statusCode,403);
     assert.equal((await call('platform','GET','/api/company/properties')).statusCode,403);
@@ -76,7 +78,7 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
       assert.equal((await call('manager-a','PATCH',path,invalid)).statusCode,400);
     assert.equal((await call('manager-a','PATCH',path,property,{origin:'https://evil.test'})).statusCode,403);
     assert.equal((await call('manager-a','PATCH',path,property,{'x-csrf-token':'bad'})).statusCode,403);
-    const saved = await call('owner-a','PATCH',path,{...property,name:'  Updated property  '});
+    const saved = await call('owner-a','PATCH',path,{...property,name:'  Updated property  ',expectedVersion:1});
     assert.equal(saved.statusCode,200,saved.body); assert.equal(saved.json().name,'Updated property');
     assert.equal((await call('manager-a','GET',path)).json().name,'Updated property');
     assert.equal(await db.auditEvent.count({where:{action:'property.updated',targetId:id,companyId:'a'}}),1);
@@ -118,10 +120,11 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
     assert.deepEqual(visible,[{id:a.id,name:a.name,address:a.address}]);
     assert.deepEqual((await call('resident-a2','GET','/api/resident/properties')).json(),[{id:second.id,name:second.name,address:second.address}]);
     await tenantTransaction(db,'a',tx=>tx.residentPropertyAssignment.deleteMany({where:{userId:'resident-a2'}}));
-    await tenantTransaction(db,'a',tx=>tx.property.delete({where:{id:second.id}}));
+    // Fixture cleanup uses the disposable database administrator; runtime retains properties.
+    await admin.query('DELETE FROM "Property" WHERE id=$1',[second.id]);
     assert.equal((await call('owner-b','PUT',`/api/company/properties/${a.id}/residents/resident-a`)).statusCode,404);
     // Restore the prior suite's empty company-b directory assertion.
-    await tenantTransaction(db,'b',tx=>tx.property.delete({where:{id:b.id}}));
+    await admin.query('DELETE FROM "Property" WHERE id=$1',[b.id]);
   });
   // Coordination wraps only the application's target lock query. All mutations,
   // validation, RLS, retries and audit writes still use real Prisma/PostgreSQL.

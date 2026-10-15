@@ -2,11 +2,17 @@ import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, ApiError } from "../api";
 import { useAuth } from "../context/AuthContext";
+import {
+  PropertyFields,
+  propertyTypes,
+  type PropertyExtras,
+} from "../components/PropertyFields";
 import { EditorDialog } from "../components/EditorDialog";
 import { ManageResidents } from "./Workspace";
 import { monitorOperation } from "../operations";
 
-type Property = {
+type Property = PropertyExtras & {
+  version: number;
   id: string;
   name: string;
   address: string;
@@ -154,12 +160,14 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
                 busy={busy}
               >
                 <form
+                  key={property.version}
                   onSubmit={async (event) => {
                     event.preventDefault();
                     if (busy || deniedSave) return;
-                    const body = Object.fromEntries(
-                      new FormData(event.currentTarget),
-                    );
+                    const body = {
+                      ...Object.fromEntries(new FormData(event.currentTarget)),
+                      expectedVersion: property.version,
+                    };
                     setBusy(true);
                     setSaved(false);
                     setSaveError(undefined);
@@ -197,6 +205,7 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
                         </label>
                       ))}
                     </div>
+                    <PropertyFields value={property} />
                     <div className="actions">
                       <button type="submit">
                         {busy
@@ -218,6 +227,21 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
                       </button>
                     </div>
                   </fieldset>
+                  {saveError instanceof ApiError &&
+                    saveError.status === 409 && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => {
+                          setEditing(false);
+                          setSaveError(undefined);
+                          setProperty(undefined);
+                          setRevision((v) => v + 1);
+                        }}
+                      >
+                        Discard edits and reload latest property
+                      </button>
+                    )}
                   {saveError && (
                     <p className="notice error" role="alert">
                       {deniedSave
@@ -234,6 +258,23 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
                   <dt>{label}</dt>
                   <dd>{property[name]}</dd>
                 </React.Fragment>
+              ))}
+            </dl>
+            <dl className="details">
+              {[
+                [
+                  "Property type",
+                  propertyTypes.find(([v]) => v === property.propertyType)?.[1],
+                ],
+                ["Year built", property.yearBuilt],
+                ["Parcel / tax ID", property.parcelId],
+                ["Country", property.countryCode],
+                ["Property notes", property.notes],
+              ].map(([label, value]) => (
+                <div key={String(label)}>
+                  <dt>{label}</dt>
+                  <dd className="preserve-lines">{value ?? "Not recorded"}</dd>
+                </div>
               ))}
             </dl>
             {!editable && (

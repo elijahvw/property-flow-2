@@ -25,6 +25,8 @@ import {
   AcceptInvitation,
   Audit,
 } from "./pages/Workspace";
+import { FeedbackProvider } from "./components/Feedback";
+import { Reports } from "./pages/Reports";
 import { NavigationIcon } from "./components/NavigationIcon";
 import { ResidentProfiles } from "./pages/ResidentProfiles";
 import { Maintenance } from "./pages/Maintenance";
@@ -186,6 +188,7 @@ function Pages() {
     "/company/maintenance": <Maintenance />,
     "/company/leases": <Leases />,
     "/company/finances": <Finances />,
+    "/company/reports": <Reports />,
     "/account": <Account />,
   };
   return (
@@ -292,7 +295,7 @@ export default function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <AuthProvider>
-          <Pages />
+          <FeedbackProvider><Pages /></FeedbackProvider>
         </AuthProvider>
       </BrowserRouter>
     </ErrorBoundary>
