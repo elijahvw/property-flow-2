@@ -170,6 +170,7 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
         where: { companyId, leaseId, voidedAt: null, ...(data.status === "draft" ? {} : { OR: [{ periodOn: { lt: firstTermMonth } }, ...(data.endsOn ? [{ periodOn: { gt: data.endsOn } }] : [])] }) },
         select: { id: true },
       });
+      if(data.status === "draft" && await tx.depositReceipt.findFirst({where:{companyId,leaseId,cashEntries:{some:{voidedAt:null}}},select:{id:true}}))throw new AccessError(409,"LEASE_DEPOSIT_CONFLICT","A lease holding a recorded deposit cannot become a draft. Correct recording errors in its deposit ledger first.");
       const draftWithPayment = data.status === "draft" && await tx.ledgerEntry.findFirst({ where: { companyId, leaseId, voidedAt: null }, select: { id: true } });
       if (outsideTerm || draftWithPayment) throw new AccessError(409, "LEASE_RENT_CONFLICT", "These lease changes conflict with posted rent. Correct affected charges before changing their term; a lease with active charges or payments cannot become a draft. Posted amounts are never recalculated by a lease edit.");
       // Historical ended records remain editable after resident revocation/transfer.

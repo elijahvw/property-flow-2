@@ -1,7 +1,9 @@
+import { usePropertySearchParams } from "../usePropertySearchParams";
+import { DepositPanel } from "./Deposits";
 import { RecordIdentity } from "../components/RecordIdentity";
 import { RentSchedule } from "./RentSchedule";
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { scheduledDueDate, graceDates } from "../rent-policy";
 import { api, ApiError } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -147,7 +149,7 @@ function PaymentStanding({ summary }: { summary: Summary }) {
 }
 export function Rent({ resident = false }: { resident?: boolean }) {
   const { data } = useAuth(),
-    [params] = useSearchParams();
+    [params] = usePropertySearchParams();
   return (
     <RentWorkspace
       key={`${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}:${params.get("propertyId") || ""}:${params.get("leaseId") || ""}`}
@@ -156,7 +158,7 @@ export function Rent({ resident = false }: { resident?: boolean }) {
   );
 }
 function RentWorkspace({ resident }: { resident: boolean }) {
-  const [params, setParams] = useSearchParams(),
+  const [params, setParams, pathPropertyId] = usePropertySearchParams(),
     propertyId = params.get("propertyId") || "",
     leaseId = params.get("leaseId") || "";
   const [search, setSearch] = useState(""),
@@ -256,7 +258,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
             : "Post monthly rent, record payments received, and follow each lease balance."}
         </p>
       </header>
-      {!resident && !leaseId && (
+      {!resident && !leaseId && !pathPropertyId && (
         <div className="rent-filters">
           <PropertyScope
             value={propertyId}
@@ -580,7 +582,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
           </p>
         </>
       )}
-      {!resident && !leaseId && (
+      {!resident && !leaseId && !pathPropertyId && (
         <label className="rent-property-jump">
           Property workspace
           <Link to="/company/properties">Browse properties →</Link>
@@ -710,6 +712,7 @@ function LeaseLedger({
       {!resident && (
         <RentSchedule lease={lease} businessDate={today} changed={reload} />
       )}
+      <DepositPanel leaseId={lease.id} resident={resident} changed={reload} />
       <section className="panel">
         <div className="section-heading">
           <h2>Account history</h2>

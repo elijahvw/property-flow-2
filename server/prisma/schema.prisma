@@ -66,6 +66,9 @@ model User {
   createdLeases Lease[] @relation("LeaseCreator")
   createdUnits Unit[]
   createdLedgerEntries LedgerEntry[]
+  createdDepositAccounts DepositAccount[] @relation("DepositAccountCreator")
+  createdDepositRevisions DepositRevision[] @relation("DepositRevisionCreator")
+  createdDepositReceipts DepositReceipt[] @relation("DepositReceiptCreator")
   membership CompanyMembership?
   sessions Session[]
   companyId  String?
@@ -247,6 +250,7 @@ model Unit {
   @@index([companyId, propertyId, id])
 }
 model Lease {
+ depositAccounts DepositAccount[]
  @@unique([companyId,previousLeaseId])
  previousLeaseId String?
  previousLease Lease? @relation("LeaseRenewals",fields:[previousLeaseId,unitId,propertyId,companyId],references:[id,unitId,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
@@ -286,6 +290,8 @@ model Lease {
 }
 
 model LedgerEntry {
+ depositReceiptId String? @unique
+ depositReceipt DepositReceipt? @relation(fields:[depositReceiptId,propertyId,companyId],references:[id,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
  reference String @unique @default(dbgenerated("('TX-'::text || (nextval('ledger_entry_reference_seq'::regclass))::text)"))
  @@index([companyId, leaseId])
  leaseId String?
@@ -410,4 +416,69 @@ model RentScheduleOccurrence {
  charge RentCharge? @relation(fields: [chargeId, leaseId, propertyId, companyId], references: [id, leaseId, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
  @@unique([companyId, leaseId, periodOn])
  @@index([companyId, leaseId, id])
+}
+
+model DepositAccount {
+ id String @id @default(cuid())
+ reference String @unique @default(dbgenerated("('DA-'::text || (nextval('deposit_account_reference_seq'::regclass))::text)"))
+ companyId String
+ propertyId String
+ leaseId String
+ createdById String
+ submissionKey String
+ submissionHash String
+ requiredCents Int
+ dueOn DateTime @db.Date
+ version Int @default(1)
+ createdAt DateTime @default(now())
+ lease Lease @relation(fields:[leaseId,propertyId,companyId],references:[id,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ creator User @relation("DepositAccountCreator",fields:[createdById],references:[id],onDelete:Restrict,onUpdate:Restrict)
+ revisions DepositRevision[]
+ receipts DepositReceipt[]
+ @@unique([companyId,leaseId])
+ @@unique([companyId,createdById,submissionKey])
+ @@unique([id,companyId])
+ @@unique([id,leaseId,propertyId,companyId])
+ @@index([companyId,propertyId,id])
+}
+model DepositRevision {
+ id String @id @default(cuid())
+ companyId String
+ accountId String
+ createdById String
+ submissionKey String
+ submissionHash String
+ version Int
+ requiredCents Int
+ dueOn DateTime @db.Date
+ reason String
+ createdAt DateTime @default(now())
+ account DepositAccount @relation(fields:[accountId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+ creator User @relation("DepositRevisionCreator",fields:[createdById],references:[id],onDelete:Restrict,onUpdate:Restrict)
+ @@unique([companyId,createdById,submissionKey])
+ @@unique([accountId,version])
+ @@index([companyId,accountId,version])
+}
+model DepositReceipt {
+ id String @id @default(cuid())
+ reference String @unique @default(dbgenerated("('DR-'::text || (nextval('deposit_receipt_reference_seq'::regclass))::text)"))
+ companyId String
+ propertyId String
+ leaseId String
+ accountId String
+ createdById String
+ submissionKey String
+ submissionHash String
+ occurredOn DateTime @db.Date
+ amountCents Int
+ method String
+ paymentReference String?
+ memo String?
+ createdAt DateTime @default(now())
+ account DepositAccount @relation(fields:[accountId,leaseId,propertyId,companyId],references:[id,leaseId,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ creator User @relation("DepositReceiptCreator",fields:[createdById],references:[id],onDelete:Restrict,onUpdate:Restrict)
+ cashEntries LedgerEntry[]
+ @@unique([companyId,createdById,submissionKey])
+ @@unique([id,propertyId,companyId])
+ @@index([companyId,accountId,id])
 }

@@ -81,6 +81,8 @@ export const routes: {
     permission: "resident.self",
     section: "Resident",
   },
+  {path:"/company/deposits",title:"Deposits",permission:"finance.manage",section:"Company"},
+  {path:"/resident/deposits",title:"My deposit",permission:"resident.self",section:"Resident"},
   {
     path: "/company/reports",
     title: "Reports",

@@ -6,10 +6,15 @@ export function propertyLink(
   id?: string,
   extra: Record<string, string> = {},
 ) {
-  if (path === "/company/leases" && id) {
+  if (
+    /^\/company\/(leases|maintenance|rent|finances|reports|deposits)$/.test(
+      path,
+    ) &&
+    id
+  ) {
     const q = new URLSearchParams(extra);
     return (
-      `/company/properties/${encodeURIComponent(id)}/leases` +
+      `/company/properties/${encodeURIComponent(id)}/${path.split("/")[2]}` +
       (q.size ? "?" + q : "")
     );
   }
@@ -64,6 +69,7 @@ function PropertyTabs({ id, name }: { id: string; name?: string }) {
       "maintenance.manage",
     ],
     ["Rent & balances", propertyLink("/company/rent", id), "finance.manage"],
+    ["Deposits", propertyLink("/company/deposits", id), "finance.manage"],
     ["Finances", propertyLink("/company/finances", id), "finance.manage"],
     ["Reports", propertyLink("/company/reports", id), "finance.manage"],
   ];
@@ -73,6 +79,26 @@ function PropertyTabs({ id, name }: { id: string; name?: string }) {
         <Link to="/company/properties">All properties</Link>
         <span aria-hidden="true">/</span>
         <strong>{name || "Property workspace"}</strong>
+        {(() => {
+          const module = location.pathname.split("/").pop();
+          const title = tabs.find(([, to]) =>
+            to.split("?")[0].endsWith("/" + module),
+          )?.[0];
+          return title &&
+            module &&
+            [
+              "leases",
+              "maintenance",
+              "rent",
+              "finances",
+              "reports",
+              "deposits",
+            ].includes(module) ? (
+            <Link to={`/company/${module}`}>
+              All company {title.toLowerCase()}
+            </Link>
+          ) : null;
+        })()}
       </div>
       <nav className="context-tabs" aria-label="Property navigation">
         {tabs

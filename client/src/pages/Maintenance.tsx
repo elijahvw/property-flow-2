@@ -1,4 +1,5 @@
-import { useSearchParams } from "react-router-dom";
+import { usePropertySearchParams } from "../usePropertySearchParams";
+
 import { DraftReset } from "../components/DraftReset";
 import { PropertyNavigation } from "../components/PropertyNavigation";
 import { useAuth } from "../context/AuthContext";
@@ -31,7 +32,7 @@ function Loading({ error, retry }: { error?: string; retry: () => void }) {
 }
 export function Maintenance({ resident = false }: { resident?: boolean }) {
   const { data } = useAuth();
-  const [routeParams] = useSearchParams();
+  const [routeParams] = usePropertySearchParams();
   return (
     <RequestWorkspace
       key={`${resident}:${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}:${routeParams.toString()}`}
@@ -40,7 +41,7 @@ export function Maintenance({ resident = false }: { resident?: boolean }) {
   );
 }
 function RequestWorkspace({ resident }: { resident: boolean }) {
-  const [params] = useSearchParams();
+  const [params, setParams, pathPropertyId] = usePropertySearchParams();
   const [adding, setAdding] = useState(false),
     [selected, setSelected] = useState<Row | null>(null);
   const [status, setStatus] = useState(params.get("status") || ""),
@@ -165,7 +166,16 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
         <div className="form-grid">
           <label>
             Filter status
-            <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <select
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setParams({
+                  ...Object.fromEntries(params),
+                  status: e.target.value,
+                });
+              }}
+            >
               <option value="">All statuses</option>
               {filterStatuses.map((v) => (
                 <option key={v} value={v}>
@@ -178,14 +188,22 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
             Filter property
             <select
               value={propertyId}
-              onChange={(e) => setPropertyId(e.target.value)}
+              onChange={(e) => {
+                setPropertyId(e.target.value);
+                setParams({
+                  ...Object.fromEntries(params),
+                  propertyId: e.target.value,
+                });
+              }}
             >
-              <option value="">All properties</option>
-              {properties.data?.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
+              {!pathPropertyId && <option value="">All properties</option>}
+              {properties.data
+                ?.filter((p) => !pathPropertyId || p.id === pathPropertyId)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
             </select>
           </label>
         </div>

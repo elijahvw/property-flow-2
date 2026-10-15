@@ -1,4 +1,5 @@
 export type OperationName =
+  | 'deposit.setup' | 'deposit.update' | 'deposit.receipt' | 'deposit.void'
   | 'rent.charge' | 'rent.payment' | 'rent.void'
   | 'user.provision' | 'account.verification'
   | 'finance.create' | 'finance.void'

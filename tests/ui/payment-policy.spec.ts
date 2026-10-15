@@ -89,6 +89,7 @@ async function fixture(page: Page, role = "owner") {
       p = u.pathname,
       json = (v: unknown, status = 200) => route.fulfill({ json: v, status });
     state.requests.push(p + u.search);
+    if (/^\/api\/(company|resident)\/deposits\/[^/]+$/.test(p) && req.method() === "GET") return json({businessDate:"2026-10-15",lease:{id:p.split("/").pop(),propertyId:"home",version:1,status:"active",startsOn:"2025-01-01",property:{name:"Maple House"},unit:{label:"Apartment 1"}},account:null});
     if (p === "/api/bootstrap")
       return json({
         user: {
