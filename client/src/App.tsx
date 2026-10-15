@@ -1,4 +1,4 @@
-import React, { Component, useEffect, useRef } from "react";
+import React, { Component, useEffect, useRef, useState } from "react";
 import { addReactError } from "@datadog/browser-rum-react";
 import { Routes } from "@datadog/browser-rum-react/react-router-v6";
 import {
@@ -25,6 +25,9 @@ import {
   AcceptInvitation,
   Audit,
 } from "./pages/Workspace";
+import { Overview } from "./pages/Overview";
+import { PropertyResidents } from "./pages/PropertyResidents";
+import { PropertySearch } from "./components/PropertySearch";
 import { FeedbackProvider } from "./components/Feedback";
 import { Reports } from "./pages/Reports";
 import { NavigationIcon } from "./components/NavigationIcon";
@@ -61,6 +64,7 @@ class ErrorBoundary extends Component<
 function Shell({ children }: { children: React.ReactNode }) {
   const { data, user, signIn, signOut, error } = useAuth();
   const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
   const main = useRef<HTMLElement>(null);
   const route =
     routes.find((r) => r.path === location.pathname) ||
@@ -85,15 +89,56 @@ function Shell({ children }: { children: React.ReactNode }) {
             ? "Platform workspace"
             : data?.membership?.company.name || "Your workspace"}
         </p>
-        <nav aria-label="Main navigation">
-          {visibleRoutes(data?.permissions || [])
-            .filter((r) => user || r.path === "/")
-            .map((r) => (
-              <NavLink key={r.path} to={r.path}>
-                <NavigationIcon path={r.path} />
-                {r.title}
-              </NavLink>
-            ))}
+        <button
+          className="mobile-menu-toggle secondary"
+          aria-expanded={menuOpen}
+          aria-controls="workspace-navigation"
+          onClick={() => setMenuOpen((v) => !v)}
+        >
+          {menuOpen ? "Close menu" : "Menu"}
+        </button>
+        <nav
+          id="workspace-navigation"
+          className={`nav-sections ${menuOpen ? "expanded" : ""}`}
+          aria-label="Main navigation"
+        >
+          {[
+            "Workspace",
+            "Operations",
+            "Money",
+            "Administration",
+            "Account",
+          ].map((group) => {
+            const links = visibleRoutes(data?.permissions || []).filter((r) => {
+              const section =
+                r.path.startsWith("/platform/") ||
+                /members|settings/.test(r.path)
+                  ? "Administration"
+                  : r.path === "/account"
+                    ? "Account"
+                    : /finances|reports/.test(r.path)
+                      ? "Money"
+                      : /leases|maintenance/.test(r.path)
+                        ? "Operations"
+                        : "Workspace";
+              return section === group;
+            });
+            return links.length ? (
+              <div className="nav-group" key={group}>
+                <p>{group}</p>
+                {links.map((r) => (
+                  <NavLink
+                    key={r.path}
+                    to={r.path}
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    <NavigationIcon path={r.path} />
+                    {r.title}
+                  </NavLink>
+                ))}
+              </div>
+            ) : null;
+          })}
         </nav>
         <div className="sidebar-footer">
           {user ? (
@@ -115,7 +160,16 @@ function Shell({ children }: { children: React.ReactNode }) {
       </aside>
       <div className="workspace-main">
         <header className="topbar">
-          <span>Property Flow / {route?.section || "Workspace"}</span>
+          <div className="topbar-location">
+            {data?.permissions.includes("property.read") ? (
+              <Link to="/company/overview">Workspace</Link>
+            ) : (
+              <span>Property Flow</span>
+            )}
+            <span aria-hidden="true">/</span>
+            <span>{route?.title || route?.section || "Workspace"}</span>
+          </div>
+          {data?.permissions.includes("property.read") && <PropertySearch />}
           <span className="badge">Development</span>
         </header>
         <main ref={main} id="main" tabIndex={-1}>
@@ -179,6 +233,7 @@ function Pages() {
     "/platform/companies": <Companies />,
     "/platform/users": <People />,
     "/platform/audit": <Audit />,
+    "/company/overview": <Overview />,
     "/company/properties": <Properties />,
     "/company/members": <Team />,
     "/company/residents": <ResidentProfiles />,
@@ -207,6 +262,16 @@ function Pages() {
           }
         />
       ))}
+      <Route
+        path="/company/properties/:propertyId/residents"
+        element={
+          <Shell>
+            <ProtectedRoute permission="resident.assignment.manage">
+              <PropertyResidents />
+            </ProtectedRoute>
+          </Shell>
+        }
+      />
       <Route
         path="/company/properties/:propertyId/units"
         element={
@@ -295,7 +360,9 @@ export default function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <AuthProvider>
-          <FeedbackProvider><Pages /></FeedbackProvider>
+          <FeedbackProvider>
+            <Pages />
+          </FeedbackProvider>
         </AuthProvider>
       </BrowserRouter>
     </ErrorBoundary>

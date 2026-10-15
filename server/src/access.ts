@@ -102,7 +102,7 @@ export function defaultDestination(user: Principal) {
   return p.includes("platform.manage")
     ? "/platform/companies"
     : p.includes("property.read")
-      ? "/company/properties"
+      ? "/company/overview"
       : p.includes("resident.self")
         ? "/resident"
         : "/access";

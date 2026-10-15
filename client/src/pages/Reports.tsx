@@ -1,3 +1,5 @@
+import { useSearchParams } from "react-router-dom";
+import { PropertyNavigation } from "../components/PropertyNavigation";
 import { useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -73,9 +75,10 @@ type Leases = Base & {
 type Report = Cash | Leases;
 export function Reports() {
   const { data } = useAuth();
+  const [routeParams] = useSearchParams();
   return (
     <ReportWorkspace
-      key={`${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}`}
+      key={`${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}:${routeParams.get("propertyId") || ""}`}
     />
   );
 }
@@ -101,8 +104,12 @@ function ReportWorkspace() {
   return <Builder today={context.data.today} />;
 }
 function Builder({ today }: { today: string }) {
+  const [params] = useSearchParams();
   const properties = useResource<{ id: string; name: string }[]>(
     "/api/company/properties",
+  );
+  const [reportProperty, setReportProperty] = useState(
+    params.get("propertyId") || "",
   );
   const [kind, setKind] = useState("cash"),
     [report, setReport] = useState<Report>(),
@@ -197,6 +204,9 @@ function Builder({ today }: { today: string }) {
   };
   return (
     <>
+      {params.get("propertyId") && (
+        <PropertyNavigation id={params.get("propertyId")!} />
+      )}
       <header className="page-heading">
         <p className="eyebrow">Company insights</p>
         <h1>Reports</h1>
@@ -239,7 +249,11 @@ function Builder({ today }: { today: string }) {
             </label>
             <label>
               Report property
-              <select name="propertyId">
+              <select
+                name="propertyId"
+                value={reportProperty}
+                onChange={(e) => setReportProperty(e.target.value)}
+              >
                 <option value="">All properties</option>
                 {properties.data?.map((p) => (
                   <option key={p.id} value={p.id}>

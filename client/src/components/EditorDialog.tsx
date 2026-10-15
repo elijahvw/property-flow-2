@@ -106,7 +106,7 @@ export function EditorDialog({
           </p>
         )}
         <EditorContext.Provider value={{ busy: blocked, register }}>
-          {children}
+          <fieldset disabled={blocked} className="editor-contents">{children}</fieldset>
         </EditorContext.Provider>
       </div>
     </dialog>,

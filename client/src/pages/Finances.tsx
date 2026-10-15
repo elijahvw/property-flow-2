@@ -1,3 +1,6 @@
+import { useSearchParams } from "react-router-dom";
+import { DraftReset } from "../components/DraftReset";
+import { PropertyNavigation } from "../components/PropertyNavigation";
 import { useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -40,23 +43,26 @@ function Load({ error, retry }: { error?: string; retry: () => void }) {
 }
 export function Finances() {
   const { data } = useAuth();
+  const [routeParams] = useSearchParams();
   return (
     <LedgerWorkspace
-      key={`${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}`}
+      key={`${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}:${routeParams.get("propertyId") || ""}`}
     />
   );
 }
 function LedgerWorkspace() {
-  const [adding, setAdding] = useState(false),
+  const [params, setParams] = useSearchParams();
+  const [adding, setAdding] = useState(params.get("new") === "transaction"),
     [selected, setSelected] = useState<Entry | null>(null);
   const [key, setKey] = useState(() => crypto.randomUUID()),
     [kind, setKind] = useState("income"),
     [filters, setFilters] = useState({
-      propertyId: "",
-      dateFrom: "",
-      dateTo: "",
+      propertyId: params.get("propertyId") || "",
+      dateFrom: params.get("dateFrom") || "",
+      dateTo: params.get("dateTo") || "",
     }),
     [cursor, setCursor] = useState("");
+  const [draftProperty, setDraftProperty] = useState(filters.propertyId);
   const properties = useResource<{ id: string; name: string }[]>(
     "/api/company/properties",
   );
@@ -70,6 +76,7 @@ function LedgerWorkspace() {
   };
   return (
     <>
+      {filters.propertyId && <PropertyNavigation id={filters.propertyId} />}
       <header className="page-heading">
         <p className="eyebrow">Company operations</p>
         <h1>Manual finances</h1>
@@ -93,6 +100,14 @@ function LedgerWorkspace() {
           <Form
             key={key}
             operation="finance.create"
+            secondaryActions={
+              <DraftReset
+                reset={() => {
+                  setKind("income");
+                  setKey(crypto.randomUUID());
+                }}
+              />
+            }
             label="Record transaction"
             submit={async (form) => {
               await api("/api/company/finances", {
@@ -110,11 +125,16 @@ function LedgerWorkspace() {
               reload();
               setAdding(false);
               setKey(crypto.randomUUID());
+              setParams({ propertyId: String(form.get("propertyId")) });
             }}
           >
             <label>
               Transaction property
-              <select name="propertyId" required>
+              <select
+                name="propertyId"
+                required
+                defaultValue={filters.propertyId}
+              >
                 {properties.data.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -164,20 +184,9 @@ function LedgerWorkspace() {
               <textarea name="memo" maxLength={500} />
             </label>
             <p className="help">
-              After a failed response, keep the same details and retry. Saved
-              amounts cannot be edited; void an incorrect entry and record its
-              replacement.
+              To correct a saved amount, void the entry and record a
+              replacement. Your original history is retained.
             </p>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => {
-                setKind("income");
-                setKey(crypto.randomUUID());
-              }}
-            >
-              Start a new transaction
-            </button>
           </Form>
         )}
       </EditorDialog>
@@ -197,7 +206,11 @@ function LedgerWorkspace() {
         >
           <label>
             Filter property
-            <select name="propertyId">
+            <select
+              name="propertyId"
+              value={draftProperty}
+              onChange={(e) => setDraftProperty(e.target.value)}
+            >
               <option value="">All properties</option>
               {properties.data?.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -208,11 +221,15 @@ function LedgerWorkspace() {
           </label>
           <label>
             From date
-            <input name="dateFrom" type="date" />
+            <input
+              name="dateFrom"
+              type="date"
+              defaultValue={filters.dateFrom}
+            />
           </label>
           <label>
             Through date
-            <input name="dateTo" type="date" />
+            <input name="dateTo" type="date" defaultValue={filters.dateTo} />
           </label>
         </Form>
         {r.data && r.error && <Load error={r.error} retry={r.reload} />}

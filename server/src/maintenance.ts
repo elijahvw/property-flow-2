@@ -71,11 +71,11 @@ export function registerMaintenance(server: FastifyInstance, db: PrismaClient, a
   });
   for (const resident of [true, false]) server.get<{ Querystring: { status?: string; propertyId?: string } }>(resident ? "/api/resident/maintenance" : "/api/company/maintenance", auth, async request => {
     if (Object.keys(request.query).some(k => !["status", "propertyId"].includes(k))) throw new AccessError(400, "INVALID_INPUT", "Unknown filter.");
-    const status = request.query.status === undefined ? undefined : choice(request.query.status, statuses, "status");
+    const status = request.query.status === undefined ? undefined : choice(request.query.status, ["unresolved",...statuses], "status");
     const propertyId = request.query.propertyId === undefined ? undefined : assignmentId(request.query.propertyId);
     return scoped(request, resident, async (tx, companyId) => {
       if (propertyId && !await tx.property.findFirst({ where: { id: propertyId, companyId } })) throw new AccessError(404, "NOT_FOUND", "Property not found.");
-      return tx.maintenanceRequest.findMany({ where: { companyId, status, propertyId, ...(resident ? { requesterId: request.principal!.id, property: { assignments: { some: { companyId, userId: request.principal!.id } } } } : {}) }, select, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
+      return tx.maintenanceRequest.findMany({ where: { companyId, status:status==="unresolved"?{in:["open","in_progress"]}:status, propertyId, ...(resident ? { requesterId: request.principal!.id, property: { assignments: { some: { companyId, userId: request.principal!.id } } } } : {}) }, select, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
     });
   });
   server.patch<{ Params: { requestId: string } }>("/api/company/maintenance/:requestId", auth, async request => {

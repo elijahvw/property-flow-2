@@ -2,6 +2,7 @@ import {
   UserProvisioning,
   UserVerificationControls,
 } from "../components/UserProvisioning";
+import { DraftReset } from "../components/DraftReset";
 import { useFeedback } from "../components/Feedback";
 import { PropertyFields } from "../components/PropertyFields";
 import { EditorDialog, useEditorBusy } from "../components/EditorDialog";
@@ -68,12 +69,14 @@ export function Form({
   label = "Save changes",
   operation = "account.update",
   successText = "Saved.",
+  secondaryActions,
 }: {
   children: React.ReactNode;
   submit: (data: FormData) => Promise<void>;
   label?: string;
   operation?: OperationName;
   successText?: string;
+  secondaryActions?: React.ReactNode;
 }) {
   const notify = useFeedback();
   const editor = useEditorBusy(),
@@ -86,7 +89,7 @@ export function Form({
     return () => editor.register(formId, false);
   }, [busy, editor.register, formId]);
   return (
-    <form
+    <form className="workflow-form"
       onSubmit={async (event) => {
         event.preventDefault();
         if (busy || editor.busy) return;
@@ -131,7 +134,9 @@ export function Form({
     >
       <fieldset disabled={busy || editor.busy}>
         {children}
-        <div className="actions">
+        <div className="actions form-actions">
+          {secondaryActions}
+          <span className="action-spacer" />
           <button type="submit">{busy ? "Saving…" : label}</button>
           {saved && <span role="status">{successText}</span>}
         </div>
@@ -684,7 +689,7 @@ function PropertyDirectory() {
       zip: string;
     }[]
   >("/api/company/properties", true, true);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(new URLSearchParams(window.location.search).get("new")==="property");
   const [propertyQuery, setPropertyQuery] = useState("");
   const [managing, setManaging] = useState<{ id: string; name: string } | null>(
     null,
@@ -712,6 +717,7 @@ function PropertyDirectory() {
           <Form
             key={propertyKey}
             operation="property.create"
+            secondaryActions={<DraftReset reset={() => setPropertyKey(crypto.randomUUID())} />}
             label="Create property"
             submit={async (data) => {
               await api("/api/company/properties", {
@@ -737,13 +743,7 @@ function PropertyDirectory() {
               <Field name="zip" label="Postal code" />
             </div>
             <PropertyFields />
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setPropertyKey(crypto.randomUUID())}
-            >
-              Start a new property
-            </button>
+
           </Form>
         </EditorDialog>
       )}

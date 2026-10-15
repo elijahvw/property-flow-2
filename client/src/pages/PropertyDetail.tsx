@@ -7,6 +7,10 @@ import {
   propertyTypes,
   type PropertyExtras,
 } from "../components/PropertyFields";
+import {
+  PropertyNavigation,
+  propertyLink,
+} from "../components/PropertyNavigation";
 import { EditorDialog } from "../components/EditorDialog";
 import { ManageResidents } from "./Workspace";
 import { monitorOperation } from "../operations";
@@ -71,7 +75,8 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
     saveError instanceof ApiError && [403, 404].includes(saveError.status);
   return (
     <>
-      <nav aria-label="Breadcrumb">
+      <PropertyNavigation id={id} name={property?.name} external />
+      <nav className="sr-only" aria-label="Breadcrumb">
         <Link to="/company/properties">Properties</Link> / Property details
       </nav>
       {!property ? (
@@ -125,7 +130,7 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
               {can("lease.manage") && (
                 <Link
                   className="button secondary"
-                  to={`/company/leases?propertyId=${encodeURIComponent(id)}`}
+                  to={`/company/leases?propertyId=${encodeURIComponent(id)}&new=lease`}
                 >
                   Record a lease
                 </Link>
@@ -254,10 +259,10 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
             )}
             <dl className="details">
               {fields.map(([name, label]) => (
-                <React.Fragment key={name}>
+                <div key={name}>
                   <dt>{label}</dt>
                   <dd>{property[name]}</dd>
-                </React.Fragment>
+                </div>
               ))}
             </dl>
             <dl className="details">
@@ -297,19 +302,21 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
                 <span>Set up the spaces you rent.</span>
               </Link>
               {can("resident.assignment.manage") && (
-                <Link to="/company/residents">
+                <Link
+                  to={`/company/properties/${encodeURIComponent(id)}/residents`}
+                >
                   <strong>Residents</strong>
                   <span>Contact details and property access.</span>
                 </Link>
               )}
               {can("maintenance.manage") && (
-                <Link to="/company/maintenance">
+                <Link to={propertyLink("/company/maintenance", id)}>
                   <strong>Maintenance</strong>
                   <span>Review requests and update progress.</span>
                 </Link>
               )}
               {can("finance.manage") && (
-                <Link to="/company/finances">
+                <Link to={propertyLink("/company/finances", id)}>
                   <strong>Finances</strong>
                   <span>Record income and expenses.</span>
                 </Link>

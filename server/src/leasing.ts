@@ -1,6 +1,7 @@
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { unitDetailKeys, unitDetails, unitDetailSelect } from "./property-fields.js";
+import { companyDay } from "./reports.js";
 import { AccessError } from "./access.js";
 import { assignmentId, opaqueUserId } from "./application.js";
 import { audit, boundedText, cents, choice, conflict, date, input, mutation, page, paging, sameSubmission, scoped, submission, version, type Tx } from "./operational.js";
@@ -90,9 +91,20 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
       return row;
     });
   });
-  server.get<{ Querystring: { cursor?: string } }>("/api/company/leases", auth, request => {
-    const cursor = paging(request.query);
-    return scoped(db, request, "lease.manage", async (tx, companyId) => page(await tx.lease.findMany({ where: { companyId, ...(cursor ? { id: { lt: cursor } } : {}) }, select: leaseSelect, take: 51, orderBy: { id: "desc" } })));
+  server.get<{Querystring:{cursor?:string;propertyId?:string;status?:string;attention?:string}}>("/api/company/leases",auth,request=>{
+    const q=request.query;
+    if(Object.keys(q).some(k=>!["cursor","propertyId","status","attention"].includes(k))) throw new AccessError(400,"INVALID_INPUT","Unknown lease filter.");
+    const cursor=q.cursor===undefined?undefined:assignmentId(q.cursor),propertyId=q.propertyId===undefined?undefined:assignmentId(q.propertyId),status=q.status===undefined?undefined:choice(q.status,["draft","active","ended"],"lease status"),attention=q.attention===undefined?undefined:choice(q.attention,["ending_soon","past_end","in_effect"],"lease attention filter");
+    if(attention&&status) throw new AccessError(400,"INVALID_INPUT","Choose either status or an attention view.");
+    return scoped(db,request,"lease.manage",async(tx,companyId)=>{
+      if(propertyId) await property(tx,companyId,propertyId);
+      let dates={};
+      if(attention){
+        const company=await tx.company.findUniqueOrThrow({where:{id:companyId},select:{timezone:true}}),today=new Date(companyDay(company.timezone)+"T00:00:00Z"),through=new Date(today);through.setUTCDate(through.getUTCDate()+30);
+        dates=attention==="in_effect"?{status:"active",unit:{status:"active"},startsOn:{lte:today},OR:[{endsOn:null},{endsOn:{gte:today}}]}:{status:"active",unit:{status:"active"},endsOn:attention==="ending_soon"?{gte:today,lte:through}:{lt:today}};
+      }
+      return page(await tx.lease.findMany({where:{companyId,...(propertyId?{propertyId}:{}),...(status?{status}:{}),...dates,...(cursor?{id:{lt:cursor}}:{})},select:leaseSelect,take:51,orderBy:{id:"desc"}}));
+    });
   });
   server.post("/api/company/leases", auth, request => {
     mutation(request, origin);

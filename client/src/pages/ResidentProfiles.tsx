@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
@@ -41,13 +41,14 @@ export function ResidentProfiles() {
   );
 }
 function Directory() {
+  const [params]=useSearchParams();
   const r = useResource<Profile[]>(
     "/api/company/resident-profiles",
     true,
     true,
   );
   const [query, setQuery] = useState(""),
-    [selected, setSelected] = useState("");
+    [selected, setSelected] = useState(params.get("residentId")||"");
   const rows = r.data?.filter((p) =>
     `${p.contactName || ""} ${p.user.name || ""} ${p.user.email}`
       .toLowerCase()
