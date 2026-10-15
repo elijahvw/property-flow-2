@@ -230,7 +230,9 @@ test("billing is opt in and reviewed before activation; date preview and mobile 
   ).toBeVisible();
   await review(page);
   expect(state.posts).toHaveLength(0);
-  await expect(page.getByText(/First amount \$500.00; final amount \$1,000.00/)).toBeVisible();
+  await expect(
+    page.getByText(/First amount \$500.00; final amount \$1,000.00/),
+  ).toBeVisible();
   await expect(
     page.getByText("Post 2026-11-27 · due 2026-11-30"),
   ).toBeVisible();
@@ -331,7 +333,10 @@ test("a caught-up account retains paid-late history for manager and CSV", async 
   await expect(
     page.getByText("Paid 2026-09-10", { exact: false }),
   ).toBeVisible();
-  await page.screenshot({path:"/tmp/pf-recurring-ledger-desktop.png",fullPage:true});
+  await page.screenshot({
+    path: "/tmp/pf-recurring-ledger-desktop.png",
+    fullPage: true,
+  });
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download ledger CSV" }).click();
   const csv = readFileSync((await (await download).path())!, "utf8");
@@ -375,5 +380,54 @@ test("billing load error keeps existing ledger visible and permits recovery", as
   await page.getByRole("button", { name: "Retry billing schedule" }).click();
   await expect(
     page.getByRole("button", { name: "Set up recurring rent" }),
+  ).toBeVisible();
+});
+
+test("a one-month partial schedule reviews a single amount consistently as first and final", async ({
+  page,
+}) => {
+  await fixture(page);
+  await page.route("**/api/company/rent/lease-a/schedule-preview", (route) =>
+    route.fulfill({
+      json: {
+        businessDate: "2026-10-15",
+        config: {
+          firstPeriodOn: "2026-10-01",
+          lastPeriodOn: "2026-10-01",
+          amountCents: 100000,
+          firstAmountCents: 50000,
+          lastAmountCents: null,
+          firstDueOn: null,
+          dueDay: 31,
+          graceDays: 5,
+          leadDays: 3,
+        },
+        preview: [
+          {
+            periodOn: "2026-10-01",
+            dueOn: "2026-10-31",
+            postOn: "2026-10-28",
+            amountCents: 50000,
+            action: "post",
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto("/company/rent?leaseId=lease-a");
+  await page
+    .getByRole("button", { name: "Set up recurring rent", exact: true })
+    .click();
+  await page
+    .getByLabel("Last rent month (optional)", { exact: true })
+    .fill("2026-10");
+  await page
+    .getByLabel("First partial amount (USD, optional)", { exact: true })
+    .fill("500.00");
+  await page
+    .getByRole("button", { name: "Review schedule", exact: true })
+    .click();
+  await expect(
+    page.getByText(/First amount \$500.00; final amount \$500.00/),
   ).toBeVisible();
 });

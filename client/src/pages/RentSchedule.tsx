@@ -421,13 +421,18 @@ function ScheduleSetup({
           . First amount{" "}
           {dollars(
             String(
-              reviewed.config.firstAmountCents ?? reviewed.config.amountCents,
+              reviewed.preview[0]?.amountCents ?? reviewed.config.amountCents,
             ),
           )}
           ; final amount{" "}
           {dollars(
             String(
-              reviewed.config.lastAmountCents ?? reviewed.config.amountCents,
+              reviewed.config.lastPeriodOn?.slice(0, 10) ===
+                reviewed.config.firstPeriodOn.slice(0, 10)
+                ? (reviewed.preview[0]?.amountCents ??
+                    reviewed.config.amountCents)
+                : (reviewed.config.lastAmountCents ??
+                    reviewed.config.amountCents),
             ),
           )}
           .{" "}
