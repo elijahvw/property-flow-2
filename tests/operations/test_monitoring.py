@@ -1,5 +1,6 @@
 import base64
 import contextlib
+import fnmatch
 import importlib.util
 import io
 import json
@@ -467,6 +468,80 @@ class MonitoringTests(unittest.TestCase):
 
         with self.assertRaises(r.SafeFailure):
             r.retire({"sts": STS()}, True)
+
+    def test_cleanup_policy_covers_name_only_and_id_arns_without_neighbor_access(self):
+        policy = json.loads(
+            (ROOT / "infra/iam/propertyflow-observability-deploy.json").read_text()
+        )
+        for action, resource in [
+            (
+                "events:DeleteApiDestination",
+                "api-destination/datadog-agent-resource-update-intake-destination",
+            ),
+            (
+                "events:DeleteConnection",
+                "connection/datadog-agent-resource-update-intake-connection",
+            ),
+        ]:
+            patterns = [
+                p
+                for statement in policy["Statement"]
+                if action in statement["Action"]
+                for p in statement["Resource"]
+            ]
+            base = "arn:aws:events:us-east-1:800754316001:" + resource
+            for arn in [base, base + "/fixture-id"]:
+                self.assertTrue(any(fnmatch.fnmatchcase(arn, p) for p in patterns), arn)
+            for arn in [
+                base + "-other",
+                base + "-other/fixture-id",
+                base.replace("800754316001", "111111111111"),
+                base.replace("us-east-1", "us-west-2"),
+            ]:
+                self.assertFalse(
+                    any(fnmatch.fnmatchcase(arn, p) for p in patterns), arn
+                )
+
+    def test_partial_cleanup_skips_deleted_children_but_keeps_retained_resources(self):
+        root = (
+            "arn:aws:cloudformation:us-east-1:800754316001:stack/DatadogIntegration/id"
+        )
+        visited = []
+
+        class CF:
+            def describe_stacks(self, **kwargs):
+                return {"Stacks": [{"StackId": root}]}
+
+            def get_paginator(self, *args):
+                return self
+
+            def paginate(self, **kwargs):
+                visited.append(kwargs["StackName"])
+                return [
+                    {
+                        "StackResourceSummaries": [
+                            {
+                                "ResourceType": "AWS::CloudFormation::Stack",
+                                "PhysicalResourceId": root + "-deleted-child",
+                                "ResourceStatus": "DELETE_COMPLETE",
+                            },
+                            {
+                                "ResourceType": "AWS::S3::Bucket",
+                                "PhysicalResourceId": r.BUCKET,
+                                "ResourceStatus": "DELETE_COMPLETE",
+                            },
+                            {
+                                "ResourceType": "AWS::SecretsManager::Secret",
+                                "PhysicalResourceId": r.SECRET,
+                                "ResourceStatus": "DELETE_SKIPPED",
+                            },
+                        ]
+                    }
+                ]
+
+        remaining = r.stack_resources(CF())
+        self.assertEqual(visited, [root])
+        self.assertEqual([row["PhysicalResourceId"] for row in remaining], [r.SECRET])
 
     def test_retirement_refuses_nonempty_bucket_before_any_mutation(self):
         class CF:

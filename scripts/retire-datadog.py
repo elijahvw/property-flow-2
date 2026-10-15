@@ -65,6 +65,10 @@ def stack_resources(cf):
         seen.add(stack)
         for page in cf.get_paginator("list_stack_resources").paginate(StackName=stack):
             for row in page["StackResourceSummaries"]:
+                # A failed root delete retains summaries of already deleted
+                # children. They must not be queried or inspected on retry.
+                if row.get("ResourceStatus") == "DELETE_COMPLETE":
+                    continue
                 if row["ResourceType"] == "AWS::CloudFormation::Stack":
                     pending.append(row["PhysicalResourceId"])
                 else:
