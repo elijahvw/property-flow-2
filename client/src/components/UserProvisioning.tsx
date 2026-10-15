@@ -1,3 +1,4 @@
+import { DraftReset } from "./DraftReset";
 import { useState } from "react";
 import { api } from "../api";
 import { Form } from "../pages/Workspace";
@@ -15,6 +16,9 @@ export function UserProvisioning({ saved }: { saved: (id?: string) => void }) {
       <Form
         key={key}
         operation="user.provision"
+        secondaryActions={
+          <DraftReset reset={() => setKey(crypto.randomUUID())} />
+        }
         label="Create account"
         submit={async (form) => {
           const created = await api<{ id: string }>(
@@ -41,16 +45,9 @@ export function UserProvisioning({ saved }: { saved: (id?: string) => void }) {
           <input name="email" type="email" required maxLength={254} />
         </label>
         <p className="help">
-          Retry with the same details if the response is lost. Existing
-          email/password accounts are reused without changing their password.
+          Existing email/password accounts are reused. Company access is
+          assigned separately.
         </p>
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => setKey(crypto.randomUUID())}
-        >
-          Start another account
-        </button>
       </Form>
     </section>
   );
