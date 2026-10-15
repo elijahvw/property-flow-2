@@ -1,8 +1,8 @@
+import { recordBrowserEvent } from "./browser-telemetry";
 import React, { Component, useEffect, useRef, useState } from "react";
-import { addReactError } from "@datadog/browser-rum-react";
-import { Routes } from "@datadog/browser-rum-react/react-router-v6";
 import {
   BrowserRouter,
+  Routes,
   Route,
   Link,
   NavLink,
@@ -49,7 +49,7 @@ class ErrorBoundary extends Component<
     return { failed: true };
   }
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    addReactError(error, info);
+    recordBrowserEvent('browser.render');
   }
   render() {
     return this.state.failed ? (

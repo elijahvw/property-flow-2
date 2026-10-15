@@ -1,0 +1,354 @@
+{
+  "uid": "propertyflow-dev-operations",
+  "title": "Property Flow \u00b7 Dev operations",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "tags": ["propertyflow", "dev"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Database readiness (1 = ready)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max(propertyflow_readiness)",
+          "refId": "A",
+          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "title": "App uptime",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max(propertyflow_process_uptime_seconds)",
+          "refId": "A",
+          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "title": "API requests / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by(http_route)(rate(propertyflow_http_requests_total{http_route!~\"/api/(ready|health|telemetry)\"}[5m]))",
+          "refId": "A",
+          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "title": "API errors / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by(http_route)(rate(propertyflow_http_requests_total{http_response_status_code=~\"5..\"}[5m]))",
+          "refId": "A",
+          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "API p95 response time",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95,sum by(le,http_route)(rate(propertyflow_http_duration_seconds_bucket[5m])))",
+          "refId": "A",
+          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "title": "PostgreSQL p95 operation time",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95,sum by(le)(rate(propertyflow_database_duration_seconds_bucket[5m])))",
+          "refId": "A",
+          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "title": "App memory",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "propertyflow_process_memory_bytes",
+          "refId": "A",
+          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 8,
+      "title": "App CPU relative to task allocation",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "propertyflow_process_cpu_ratio",
+          "refId": "A",
+          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "title": "Browser operation errors",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by(operation_name)(increase(propertyflow_browser_operations_total{operation_outcome=\"error\"}[15m]))",
+          "refId": "A",
+          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 10,
+      "title": "Rent billing successful runs",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(propertyflow_worker_runs_total{job_outcome=\"success\"}[15m]))",
+          "refId": "A",
+          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 11,
+      "title": "Recent application traces",
+      "type": "table",
+      "datasource": {
+        "type": "tempo",
+        "uid": "TRACES_UID"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "traceql",
+          "query": "{resource.service.name=\"propertyflow-server\"}",
+          "limit": 20
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Correlated application logs",
+      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "LOGS_UID"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=\"propertyflow-server\"}",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Operations and cost controls",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 49,
+        "w": 24,
+        "h": 6
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**APM:** use Observability \u2192 Application to inspect services, or Explore \u2192 Tempo to expand HTTP/PostgreSQL traces. Logs preserve trace links while excluding SQL, tokens and resident details.\n\n**Usage:** [Cost Management and Billing](/a/grafana-cmab-app/) shows actual free-tier allowances and ingestion. Free retention is 14 days. App records and audit history remain in PostgreSQL.\n\n**Alerts:** eight rules are provisioned in Property Flow \u00b7 Dev. New rules start paused; review your contact point and enable them after the first successful deployment/ingestion check. Existing enabled rules remain enabled when configuration is reapplied.\n\nECS/ALB/RDS infrastructure metrics remain available in AWS CloudWatch. No AWS read credentials or additional monitoring server are introduced."
+      }
+    }
+  ]
+}

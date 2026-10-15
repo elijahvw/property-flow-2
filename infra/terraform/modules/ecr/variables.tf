@@ -19,7 +19,6 @@ variable "vars" {
     db_user                  = string
     db_password              = string
     db_endpoint              = string
-    datadog_api_key          = string
-    datadog_site             = string
+    grafana_otlp_endpoint    = string
   })
 }

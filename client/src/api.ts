@@ -1,6 +1,8 @@
+import { setTelemetrySession } from "./browser-telemetry";
 let csrfToken = "";
 export const setCsrfToken = (value: string) => {
   csrfToken = value;
+  setTelemetrySession(value);
 };
 export class ApiError extends Error {
   constructor(

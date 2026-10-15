@@ -72,8 +72,7 @@ module "ecr" {
     db_user                  = var.db_user
     db_password              = var.db_password
     db_endpoint              = module.rds.db_endpoint
-    datadog_api_key          = var.datadog_api_key
-    datadog_site             = var.datadog_site
+    grafana_otlp_endpoint    = var.grafana_otlp_endpoint
   }
 }
 

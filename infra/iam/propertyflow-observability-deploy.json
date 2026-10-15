@@ -1,0 +1,158 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "IngestionSecretMetadataAndWrite",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:GetResourcePolicy",
+        "secretsmanager:UpdateSecret",
+        "secretsmanager:DeleteSecret",
+        "secretsmanager:TagResource",
+        "secretsmanager:UntagResource",
+        "secretsmanager:PutSecretValue"
+      ],
+      "Resource": "arn:aws:secretsmanager:us-east-1:800754316001:secret:propertyflow-dev-grafana-otlp-*"
+    },
+    {
+      "Sid": "ConfigureExecutionSecretPolicy",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy"
+      ],
+      "Resource": "arn:aws:iam::800754316001:role/propertyflow-dev-ecs-task-execution"
+    },
+    {
+      "Sid": "RetireReviewedStack",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:DescribeStacks",
+        "cloudformation:ListStackResources",
+        "cloudformation:DeleteStack"
+      ],
+      "Resource": "arn:aws:cloudformation:us-east-1:800754316001:stack/DatadogIntegration*/*"
+    },
+    {
+      "Sid": "InspectSubscriptions",
+      "Effect": "Allow",
+      "Action": [
+        "logs:DescribeSubscriptionFilters"
+      ],
+      "Resource": "arn:aws:logs:us-east-1:800754316001:log-group:*"
+    },
+    {
+      "Sid": "RemoveAppForwarderSubscription",
+      "Effect": "Allow",
+      "Action": [
+        "logs:DeleteSubscriptionFilter"
+      ],
+      "Resource": [
+        "arn:aws:logs:us-east-1:800754316001:log-group:/ecs/propertyflow-dev",
+        "arn:aws:logs:us-east-1:800754316001:log-group:/ecs/propertyflow-dev:*"
+      ]
+    },
+    {
+      "Sid": "RetireOwnedForwarderLogs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:DeleteLogGroup"
+      ],
+      "Resource": "arn:aws:logs:us-east-1:800754316001:log-group:/aws/lambda/DatadogIntegration*"
+    },
+    {
+      "Sid": "RetireOwnedFunctions",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:DeleteFunction",
+        "lambda:InvokeFunction",
+        "lambda:GetFunction",
+        "lambda:GetPolicy",
+        "lambda:RemovePermission",
+        "lambda:GetFunctionConfiguration",
+        "lambda:ListTags"
+      ],
+      "Resource": "arn:aws:lambda:us-east-1:800754316001:function:DatadogIntegration-*"
+    },
+    {
+      "Sid": "RetireOwnedRules",
+      "Effect": "Allow",
+      "Action": [
+        "events:DescribeRule",
+        "events:ListTargetsByRule",
+        "events:RemoveTargets",
+        "events:DeleteRule"
+      ],
+      "Resource": "arn:aws:events:us-east-1:800754316001:rule/datadog-agent-resource-update-rule-*"
+    },
+    {
+      "Sid": "RetireOwnedDestination",
+      "Effect": "Allow",
+      "Action": [
+        "events:DescribeApiDestination",
+        "events:DeleteApiDestination"
+      ],
+      "Resource": "arn:aws:events:us-east-1:800754316001:api-destination/datadog-agent-resource-update-intake-destination/*"
+    },
+    {
+      "Sid": "RetireOwnedConnection",
+      "Effect": "Allow",
+      "Action": [
+        "events:DescribeConnection",
+        "events:DeleteConnection"
+      ],
+      "Resource": "arn:aws:events:us-east-1:800754316001:connection/datadog-agent-resource-update-intake-connection/*"
+    },
+    {
+      "Sid": "RetireOwnedIntegrationRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:ListRolePolicies",
+        "iam:GetRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:DetachRolePolicy",
+        "iam:DeleteRole",
+        "iam:ListInstanceProfilesForRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::800754316001:role/DatadogIntegration*",
+        "arn:aws:iam::800754316001:role/datadog-eventbridge-cross-region-role"
+      ]
+    },
+    {
+      "Sid": "RetireRetainedVendorSecret",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:DeleteSecret"
+      ],
+      "Resource": "arn:aws:secretsmanager:us-east-1:800754316001:secret:DdApiKeySecret-CjiCFwe7cTOq-*"
+    },
+    {
+      "Sid": "DeleteEmptyForwarderBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket",
+        "s3:ListBucketVersions",
+        "s3:GetBucketLocation",
+        "s3:DeleteBucket",
+        "s3:GetBucketPolicy",
+        "s3:DeleteBucketPolicy"
+      ],
+      "Resource": "arn:aws:s3:::datadogintegration-forwarderstack--forwarderbucket-igigulgawhqc"
+    },
+    {
+      "Sid": "RemoveUnusedAgentDefinitions",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DeleteTaskDefinitions"
+      ],
+      "Resource": "arn:aws:ecs:us-east-1:800754316001:task-definition/propertyflow-dev:*"
+    }
+  ]
+}

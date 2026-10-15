@@ -1,6 +1,11 @@
 import { registerRentBillingWorker } from "./rent-billing-worker.js";
 import fastify, { type FastifyError } from "fastify";
-import tracer from "dd-trace";
+import {
+  registerTelemetry,
+  recordRequestError,
+  shutdownTelemetry,
+} from "./tracing.js";
+import { registerBrowserTelemetry } from "./browser-telemetry.js";
 import dotenv from "dotenv";
 import { prisma } from "./lib/prisma.js";
 import { registerSessions, readAuthConfig } from "./sessions.js";
@@ -28,7 +33,9 @@ const server = fastify({
   },
 });
 server.setErrorHandler((failure, request, reply) => {
-  const error = (failure instanceof Error ? failure : new Error("REQUEST_FAILED")) as FastifyError;
+  const error = (
+    failure instanceof Error ? failure : new Error("REQUEST_FAILED")
+  ) as FastifyError;
   const code = (error as any).code;
   const status =
     error instanceof AccessError
@@ -71,21 +78,12 @@ server.setErrorHandler((failure, request, reply) => {
     },
     "Request failed",
   );
-  if (status >= 500) {
-    const safeError = new Error(safeCode);
-    safeError.name = error.name;
-    safeError.stack = `${error.name}: ${safeCode}\n${safeFrames}`;
-    tracer.scope().active()?.setTag("error", safeError);
-  }
+  if (status >= 500) recordRequestError(request, safeCode, error.name);
   reply
     .status(status)
     .send({ error: message, code: safeCode, requestId: request.id });
 });
-server.addHook("onResponse", async (request) => {
-  const span = tracer.scope().active();
-  span?.setTag("http.url", request.url.split("?")[0]);
-  span?.setTag("http.query", "");
-});
+registerTelemetry(server);
 server.get("/", async () => ({ status: "ok" }));
 server.get("/api/health", async () => ({ status: "ok" }));
 server.get("/api/ready", async () => {
@@ -94,7 +92,14 @@ server.get("/api/ready", async () => {
 });
 const config = readAuthConfig();
 const authenticate = await registerSessions(server, prisma, config);
-registerApplication(server, prisma, authenticate, config.origin, identityProvider());
+registerBrowserTelemetry(server, authenticate);
+registerApplication(
+  server,
+  prisma,
+  authenticate,
+  config.origin,
+  identityProvider(),
+);
 registerRentBillingWorker(server, prisma);
 server.setNotFoundHandler((_request, reply) =>
   reply.code(404).send({ error: "Not found", code: "NOT_FOUND" }),
@@ -107,6 +112,12 @@ async function shutdown() {
   deadline.unref();
   await server.close();
   await prisma.$disconnect();
+  await shutdownTelemetry().catch(() =>
+    server.log.warn(
+      { code: "TELEMETRY_SHUTDOWN_FAILED" },
+      "Monitoring flush failed",
+    ),
+  );
   clearTimeout(deadline);
 }
 process.once("SIGTERM", () => void shutdown());
