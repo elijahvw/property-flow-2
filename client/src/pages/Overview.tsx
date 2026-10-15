@@ -289,6 +289,11 @@ function OverviewWorkspace() {
                 <section className="panel">
                   <h2>Quick actions</h2>
                   <div className="quick-action-list">
+                    {can("finance.manage") && (
+                      <Link to={url("/company/rent")}>
+                        Manage rent & balances →
+                      </Link>
+                    )}
                     {can("property.write") && (
                       <Link to="/company/properties?new=property">
                         ＋ Add property

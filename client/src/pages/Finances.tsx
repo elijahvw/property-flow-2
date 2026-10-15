@@ -1,4 +1,4 @@
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { DraftReset } from "../components/DraftReset";
 import { PropertyNavigation } from "../components/PropertyNavigation";
 import { useState } from "react";
@@ -9,6 +9,7 @@ import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "./Workspace";
 type Entry = {
   id: string;
+  leaseId?: string | null;
   propertyId: string;
   property: { name: string };
   occurredOn: string;
@@ -82,7 +83,8 @@ function LedgerWorkspace() {
         <h1>Manual finances</h1>
         <p>
           Record income received and expenses paid, in USD. These records do not
-          collect payments or calculate balances owed. Keep deposits and
+          collect payments. Use <Link to="/company/rent">Rent & balances</Link>{" "}
+          to record lease payments and track balances owed. Keep deposits and
           transfers outside this ledger.
         </p>
         <button onClick={() => setAdding(true)}>Record a transaction</button>
@@ -274,6 +276,15 @@ function LedgerWorkspace() {
                       {entry.occurredOn.slice(0, 10)} ·{" "}
                       {entry.category.replace("_", " ")}
                     </p>
+                    {entry.leaseId && (
+                      <p>
+                        <Link
+                          to={`/company/rent?leaseId=${encodeURIComponent(entry.leaseId)}`}
+                        >
+                          Linked rent payment · View lease ledger →
+                        </Link>
+                      </p>
+                    )}
                     {entry.memo && <p>{entry.memo}</p>}
                     {entry.voidedAt ? (
                       <p>Voided: {entry.voidReason}</p>

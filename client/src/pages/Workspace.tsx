@@ -114,6 +114,9 @@ export function Form({
                   "lease.create": "Lease recorded.",
                   "lease.update": "Lease saved.",
                   "finance.create": "Transaction recorded.",
+                  "rent.charge": "Rent posted. Balance updated.",
+                  "rent.payment": "Payment recorded. Balance updated.",
+                  "rent.void": "Correction saved; history retained.",
                   "finance.void": "Correction saved; history retained.",
                   "membership.update": "Resident or membership changes saved.",
                   "maintenance.create": "Maintenance request submitted.",
@@ -1279,8 +1282,7 @@ export function Resident() {
         </section>
       )}
       <p className="help">
-        Use My requests for maintenance. Lease and financial records are managed
-        by your property manager.
+        Use My requests for maintenance and <Link to="/resident/rent">My rent</Link> for your charges, payments, and balance.
       </p>
     </>
   );

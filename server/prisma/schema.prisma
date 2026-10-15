@@ -247,6 +247,9 @@ model Unit {
   @@index([companyId, propertyId, id])
 }
 model Lease {
+  rentCharges RentCharge[]
+  rentPayments LedgerEntry[]
+  @@unique([id, propertyId, companyId])
   id String @id @default(cuid())
   companyId String
   propertyId String
@@ -274,6 +277,11 @@ model Lease {
 }
 
 model LedgerEntry {
+ @@index([companyId, leaseId])
+ leaseId String?
+ lease Lease? @relation(fields: [leaseId, propertyId, companyId], references: [id, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
+ allocations RentAllocation[]
+ @@unique([id, leaseId, propertyId, companyId])
  id String @id @default(cuid())
  companyId String
  propertyId String
@@ -305,4 +313,40 @@ model UserProvision {
  createdAt DateTime @default(now())
  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict, onUpdate: Restrict)
  @@id([actorId, submissionKey])
+}
+
+model RentCharge {
+ id String @id @default(cuid())
+ companyId String
+ propertyId String
+ leaseId String
+ createdById String
+ submissionKey String
+ submissionHash String
+ periodOn DateTime @db.Date
+ dueOn DateTime @db.Date
+ amountCents Int
+ memo String?
+ version Int @default(1)
+ voidedAt DateTime?
+ voidReason String?
+ createdAt DateTime @default(now())
+ lease Lease @relation(fields: [leaseId, propertyId, companyId], references: [id, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
+ allocations RentAllocation[]
+ @@unique([companyId, createdById, submissionKey])
+ @@unique([id, leaseId, propertyId, companyId])
+ @@index([companyId, leaseId, dueOn, id])
+}
+model RentAllocation {
+ id String @id @default(cuid())
+ companyId String
+ propertyId String
+ leaseId String
+ chargeId String
+ entryId String
+ amountCents Int
+ createdAt DateTime @default(now())
+ charge RentCharge @relation(fields: [chargeId, leaseId, propertyId, companyId], references: [id, leaseId, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
+ entry LedgerEntry @relation(fields: [entryId, leaseId, propertyId, companyId], references: [id, leaseId, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
+ @@index([companyId, leaseId])
 }

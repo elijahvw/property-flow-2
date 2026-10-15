@@ -33,6 +33,7 @@ import { Reports } from "./pages/Reports";
 import { NavigationIcon } from "./components/NavigationIcon";
 import { ResidentProfiles } from "./pages/ResidentProfiles";
 import { Maintenance } from "./pages/Maintenance";
+import { Rent } from "./pages/Rent";
 import { Finances } from "./pages/Finances";
 import { EmailVerification } from "./components/EmailVerification";
 import { Units, Leases } from "./pages/Leasing";
@@ -116,7 +117,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                   ? "Administration"
                   : r.path === "/account"
                     ? "Account"
-                    : /finances|reports/.test(r.path)
+                    : /finances|reports|rent/.test(r.path)
                       ? "Money"
                       : /leases|maintenance/.test(r.path)
                         ? "Operations"
@@ -243,6 +244,8 @@ function Pages() {
     "/company/maintenance": <Maintenance />,
     "/company/leases": <Leases />,
     "/company/finances": <Finances />,
+    "/company/rent": <Rent />,
+    "/resident/rent": <Rent resident />,
     "/company/reports": <Reports />,
     "/account": <Account />,
   };

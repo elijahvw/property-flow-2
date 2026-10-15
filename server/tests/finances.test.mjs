@@ -1,3 +1,4 @@
+import { rentCases } from './rent-cases.mjs';
 import { overviewCases } from './overview-cases.mjs';
 import { reportCases } from './report-cases.mjs';
 import { companyDay } from '../dist/reports.js';
@@ -86,4 +87,5 @@ test('manual finance isolation, replay, corrections and totals',{skip:!url},asyn
  });
  await reportCases(t,admin,call,app,db);
  await t.test('company overview and connected drilldowns',async overviewTest=>overviewCases(overviewTest,admin,call,db));
+ await t.test('rent workflow',async rentTest=>rentCases(rentTest,admin,call,app,db));
 });

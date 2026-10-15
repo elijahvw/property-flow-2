@@ -1,9 +1,10 @@
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { lockRentLease, allocateRentCredit } from "./rent.js";
 import { AccessError } from "./access.js";
 import { assignmentId } from "./application.js";
 import { audit, boundedText, cents, choice, conflict, date, input, mutation, page, sameSubmission, scoped, submission, version } from "./operational.js";
-const select = { id:true, propertyId:true, occurredOn:true, amountCents:true, currency:true, kind:true, category:true, memo:true, version:true, voidedAt:true, voidReason:true, property:{select:{name:true}} } as const;
+const select = { leaseId:true, id:true, propertyId:true, occurredOn:true, amountCents:true, currency:true, kind:true, category:true, memo:true, version:true, voidedAt:true, voidReason:true, property:{select:{name:true}} } as const;
 export function registerFinances(server: FastifyInstance, db: PrismaClient, authenticate: preValidationHookHandler, origin: string) {
  const auth = { preValidation: authenticate };
  server.post("/api/company/finances", auth, request => {
@@ -42,11 +43,14 @@ export function registerFinances(server: FastifyInstance, db: PrismaClient, auth
   return scoped(db,request,"finance.manage",async(tx,companyId)=>{
    const previous=await tx.ledgerEntry.findFirst({where:{companyId,id:entryId},select});
    if(!previous)throw new AccessError(404,"NOT_FOUND","Entry not found.");
+   if(previous.leaseId) await lockRentLease(tx,companyId,previous.leaseId);
    if(previous.voidedAt){if(previous.voidReason!==reason)throw conflict();return previous;}
    if(previous.version!==expectedVersion)throw conflict();
    const result=await tx.ledgerEntry.updateMany({where:{id:entryId,companyId,version:expectedVersion,voidedAt:null},data:{voidedAt:new Date(),voidReason:reason,version:{increment:1}}});
    if(result.count!==1)throw conflict();
-   await audit(tx,request,companyId,entryId,"finance.voided");return tx.ledgerEntry.findFirstOrThrow({where:{id:entryId,companyId},select});
+   await audit(tx,request,companyId,entryId,"finance.voided");
+   if(previous.leaseId) await allocateRentCredit(tx,request,companyId,previous.leaseId);
+   return tx.ledgerEntry.findFirstOrThrow({where:{id:entryId,companyId},select});
   });
  });
 }
