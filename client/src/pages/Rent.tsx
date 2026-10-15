@@ -871,9 +871,11 @@ function RentDraft({
   const [lease] = useState(account.lease),
     [month, setMonth] = useState(
       pending?.periodOn?.slice(0, 7) ||
-        (lease.endsOn && lease.endsOn.slice(0, 7) < today.slice(0, 7)
-          ? lease.endsOn.slice(0, 7)
-          : today.slice(0, 7)),
+        (lease.startsOn.slice(0, 7) > today.slice(0, 7)
+          ? lease.startsOn.slice(0, 7)
+          : lease.endsOn && lease.endsOn.slice(0, 7) < today.slice(0, 7)
+            ? lease.endsOn.slice(0, 7)
+            : today.slice(0, 7)),
     ),
     [amount, setAmount] = useState(
       pending?.amount ||
@@ -955,11 +957,7 @@ function RentDraft({
                 type="month"
                 required
                 min={lease.startsOn.slice(0, 7)}
-                max={
-                  lease.endsOn && lease.endsOn.slice(0, 7) < today.slice(0, 7)
-                    ? lease.endsOn.slice(0, 7)
-                    : today.slice(0, 7)
-                }
+                max={lease.endsOn?.slice(0, 7)}
                 value={month}
                 onChange={(e) => setMonth(e.target.value)}
               />
@@ -972,12 +970,6 @@ function RentDraft({
                 type="date"
                 required
                 defaultValue={pending?.dueOn || due}
-                min={due}
-                max={
-                  lease.endsOn?.slice(0, 7) === month
-                    ? lease.endsOn.slice(0, 10)
-                    : undefined
-                }
               />
             </label>
           </div>
@@ -1019,7 +1011,7 @@ function RentDraft({
       </fieldset>
       <p className="notice">
         {mode === "charge"
-          ? `Review ${month}: the default is the full monthly rent. For a partial month, enter the agreed amount yourself. One active charge per lease month; no automatic proration or future-month posting.`
+          ? `Review ${month}: the default is the full monthly rent. For a partial month, enter the agreed amount yourself. One active charge per lease month. The agreed due date can precede move-in; no automatic proration is performed.`
           : "Record money you have already received. This creates one rent income entry in cash reports, applies it to unpaid rent, and keeps any excess as credit. Do not record it again in Finances."}
       </p>
     </Form>

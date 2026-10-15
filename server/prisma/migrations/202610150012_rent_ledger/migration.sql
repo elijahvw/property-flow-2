@@ -20,7 +20,6 @@ CREATE TABLE "RentCharge" (
  "voidedAt" TIMESTAMP(3),
  "voidReason" TEXT,
  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
- CHECK (date_trunc('month',"dueOn")::date="periodOn"),
  CHECK (("voidedAt" IS NULL AND "voidReason" IS NULL) OR ("voidedAt" IS NOT NULL AND "voidReason" IS NOT NULL AND length(btrim("voidReason")) BETWEEN 1 AND 300)),
  FOREIGN KEY ("leaseId","propertyId","companyId") REFERENCES "Lease"(id,"propertyId","companyId") ON DELETE RESTRICT ON UPDATE RESTRICT,
  UNIQUE ("companyId","createdById","submissionKey"),

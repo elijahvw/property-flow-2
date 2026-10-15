@@ -139,8 +139,9 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
       const previous = await tx.lease.findFirst({ where: { companyId, id: leaseId }, select: leaseSelect });
       if (!previous) throw new AccessError(404, "NOT_FOUND", "Lease not found.");
       if (previous.version !== expectedVersion) throw conflict();
+      const firstTermMonth = new Date(data.startsOn); firstTermMonth.setUTCDate(1);
       const outsideTerm = await tx.rentCharge.findFirst({
-        where: { companyId, leaseId, voidedAt: null, ...(data.status === "draft" ? {} : { OR: [{ dueOn: { lt: data.startsOn } }, ...(data.endsOn ? [{ dueOn: { gt: data.endsOn } }] : [])] }) },
+        where: { companyId, leaseId, voidedAt: null, ...(data.status === "draft" ? {} : { OR: [{ periodOn: { lt: firstTermMonth } }, ...(data.endsOn ? [{ periodOn: { gt: data.endsOn } }] : [])] }) },
         select: { id: true },
       });
       const draftWithPayment = data.status === "draft" && await tx.ledgerEntry.findFirst({ where: { companyId, leaseId, voidedAt: null }, select: { id: true } });

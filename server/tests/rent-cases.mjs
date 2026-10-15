@@ -17,8 +17,8 @@ export async function rentCases(t, admin, call, app, db) {
   assert.equal((await post('charges',{...body,amount:'999.99'})).statusCode,409);
   assert.equal((await post('charges',charge())).statusCode,409);
   assert.equal((await post('charges',charge(feb,{expectedVersion:2}))).statusCode,409);
-  for(const patch of [{amount:'0'},{amount:'0.001'},{amount:'-1'},{amount:'1e3'},{amount:'1000000.01'},{periodOn:`${year}-02-30`},{periodOn:`${year}-02-02`},{dueOn:feb},{companyId:'b'},{memo:'x'.repeat(501)}])assert.equal((await post('charges',charge(jan,patch))).statusCode,400);
-  assert.equal((await post('charges',charge(`${year+2}-01-01`))).statusCode,409);
+  for(const patch of [{amount:'0'},{amount:'0.001'},{amount:'-1'},{amount:'1e3'},{amount:'1000000.01'},{periodOn:`${year}-02-30`},{periodOn:`${year}-02-02`},{companyId:'b'},{memo:'x'.repeat(501)}])assert.equal((await post('charges',charge(jan,patch))).statusCode,400);
+  assert.equal((await post('charges',charge(`${year-1}-01-01`))).statusCode,409);
   assert.equal((await admin.query(`SELECT count(*)::int n FROM "RentCharge" WHERE "leaseId"=$1`,[lease.id])).rows[0].n,1);
   assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='rent.charge.created' AND "targetId"=$1`,[firstCharge.id])).rows[0].n,1);
  });
@@ -83,12 +83,12 @@ export async function rentCases(t, admin, call, app, db) {
  await t.test('partial-month terms are explicit, drafts cannot post, and ended leases retain financial history',async()=>{
   const unit=ok(await call('owner','POST','/api/company/properties/home/units',{label:'Partial month rent unit',submissionKey:randomUUID()}));
   const term=ok(await call('owner','POST','/api/company/leases',{propertyId:'home',unitId:unit.id,residentId:'resident2',startsOn:`${year}-01-15`,endsOn:`${year}-02-10`,monthlyRent:'1000.00',status:'draft',submissionKey:randomUUID()}));
-  const endpoint=`${root}/${term.id}/charges`,payload=charge(jan,{dueOn:`${year}-01-15`,amount:'500.00'});
+  const endpoint=`${root}/${term.id}/charges`,payload=charge(jan,{dueOn:`${year-1}-12-20`,amount:'500.00'});
   assert.equal((await call('owner','POST',endpoint,payload)).statusCode,409);
   assert.equal((await call('owner','POST',`${root}/${term.id}/payments`,payment())).statusCode,409);
   ok(await call('owner','PATCH',`/api/company/leases/${term.id}`,{startsOn:`${year}-01-15`,endsOn:`${year}-02-10`,monthlyRent:'1000.00',status:'active',expectedVersion:1}));
-  const posted=ok(await call('owner','POST',endpoint,{...payload,expectedVersion:2}));assert.equal(posted.amountCents,50000);assert.equal(posted.dueOn.slice(0,10),`${year}-01-15`);
-  assert.equal((await call('owner','POST',endpoint,charge(feb,{dueOn:`${year}-02-11`,expectedVersion:2}))).statusCode,409);
+  const posted=ok(await call('owner','POST',endpoint,{...payload,expectedVersion:2}));assert.equal(posted.amountCents,50000);assert.equal(posted.dueOn.slice(0,10),`${year-1}-12-20`);
+  assert.equal((await call('owner','POST',endpoint,charge(mar,{expectedVersion:2}))).statusCode,409);
   ok(await call('owner','PATCH',`/api/company/leases/${term.id}`,{startsOn:`${year}-01-15`,endsOn:`${year}-02-10`,monthlyRent:'1000.00',status:'ended',expectedVersion:2}));
   ok(await call('owner','POST',endpoint,charge(feb,{amount:'300.00',expectedVersion:3})));
   const receipt=ok(await call('owner','POST',`${root}/${term.id}/payments`,payment('1000.00')));
@@ -143,9 +143,20 @@ export async function rentCases(t, admin, call, app, db) {
   let term=ok(await call('owner','POST','/api/company/leases',{propertyId:'home',unitId:unit.id,residentId:'resident2',startsOn:jan,endsOn:null,monthlyRent:'1000.00',status:'active',submissionKey:randomUUID()}));
   const changes={startsOn:feb,endsOn:null,monthlyRent:'1000.00',status:'active',expectedVersion:1};
   const results=await Promise.all([call('owner','POST',`${root}/${term.id}/charges`,charge()),call('manager','PATCH',`/api/company/leases/${term.id}`,changes)]);assert.deepEqual(results.map(r=>r.statusCode).sort(),[200,409]);
-  let account=ok(await call('owner','GET',`${root}?leaseId=${term.id}`)).accounts[0];assert.ok(account.charges.every(c=>c.dueOn>=account.lease.startsOn));
+  let account=ok(await call('owner','GET',`${root}?leaseId=${term.id}`)).accounts[0];assert.ok(account.charges.every(c=>c.periodOn.slice(0,7)>=account.lease.startsOn.slice(0,7)));
   if(account.charges.length){ok(await call('owner','POST',`${root}/charges/${account.charges[0].id}/void`,{expectedVersion:1,reason:'Corrected lease start'}));ok(await call('manager','PATCH',`/api/company/leases/${term.id}`,changes));}
   account=ok(await call('owner','GET',`${root}?leaseId=${term.id}`)).accounts[0];assert.equal(account.lease.startsOn.slice(0,10),feb);assert.ok(account.charges.every(c=>c.voidedAt));
+ });
+
+ await t.test('future rent can be billed before move-in with an independent due date and advance receipt',async()=>{
+  const today=companyDay('America/New_York'),future=`${year+2}-01-01`,startsOn=`${year+2}-01-15`,due=new Date(today+'T00:00:00Z');due.setUTCDate(due.getUTCDate()+7);
+  const unit=ok(await call('owner','POST','/api/company/properties/home/units',{label:'Advance rent unit',submissionKey:randomUUID()}));
+  const term=ok(await call('owner','POST','/api/company/leases',{propertyId:'home',unitId:unit.id,residentId:'resident2',startsOn,endsOn:null,monthlyRent:'1000.00',status:'active',submissionKey:randomUUID()}));
+  const posted=ok(await call('owner','POST',`${root}/${term.id}/charges`,charge(future,{dueOn:due.toISOString().slice(0,10)})));assert.ok(posted.dueOn<startsOn);
+  ok(await call('owner','POST',`${root}/${term.id}/payments`,payment('500.00',{occurredOn:today})));
+  const account=ok(await call('owner','GET',`${root}?leaseId=${term.id}`)).accounts[0];assert.equal(account.summary.outstandingCents,'50000');assert.equal(account.summary.overdueCents,'0');assert.equal(account.summary.paidCents,'50000');
+  // A start-day correction within the same rent month is valid despite the earlier due date.
+  ok(await call('owner','PATCH',`/api/company/leases/${term.id}`,{startsOn:`${year+2}-01-20`,endsOn:null,monthlyRent:'1000.00',status:'active',expectedVersion:1}));
  });
 
 }

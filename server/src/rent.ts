@@ -358,15 +358,11 @@ export function registerRent(
           b.memo === null || b.memo === ""
             ? null
             : boundedText(b.memo, 500, "Description");
-      if (
-        !amountCents ||
-        periodOn.getUTCDate() !== 1 ||
-        periodOn.toISOString().slice(0, 7) !== dueOn.toISOString().slice(0, 7)
-      )
+      if (!amountCents || periodOn.getUTCDate() !== 1)
         throw new AccessError(
           400,
           "INVALID_INPUT",
-          "Choose a rent month, a due date within that month, and a positive amount.",
+          "Choose a rent month, an agreed due date, and a positive amount.",
         );
       const key = submission(b.submissionKey, [
         leaseId,
@@ -397,19 +393,13 @@ export function registerRent(
         monthEnd.setUTCDate(0);
         if (
           lease.status === "draft" ||
-          periodOn >
-            new Date(
-              (await businessDay(tx, companyId)).slice(0, 7) + "-01T00:00:00Z",
-            ) ||
           monthEnd < lease.startsOn ||
-          (lease.endsOn && periodOn > lease.endsOn) ||
-          dueOn < lease.startsOn ||
-          (lease.endsOn && dueOn > lease.endsOn)
+          (lease.endsOn && periodOn > lease.endsOn)
         )
           throw new AccessError(
             409,
             "RENT_PERIOD_INVALID",
-            "Post rent for an active or ended lease, within its term and no later than the current month.",
+            "Post monthly rent for an active or ended lease and a month overlapping its term. The agreed due date may be before move-in.",
           );
         if (
           await tx.rentCharge.findFirst({
