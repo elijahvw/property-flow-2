@@ -33,7 +33,7 @@ CSV exports use the loaded snapshot across all display pages, exact decimal mone
 
 - Both builds; 46 safe Node checks (five database suites intentionally skipped in that invocation).
 - Disposable PostgreSQL/API/browser: finance/report/overview/rent33, leases13, maintenance9, identity/admin21, authorization/migrations40.
-- Full browser suite73 passed before adding refresh recovery; final focused recovery checks and exact-head CI are recorded in the PR.
+- Full browser suite73 passed before adding refresh recovery; final focused rent8 passed, including full exported CSV content and shrinking-page refresh. Exact-head CI runs all75 browser fixtures.
 - Real browser → cookie/CSRF Fastify → restricted Prisma → PostgreSQL test loses a committed charge response and a committed payment response, reloads the whole page, then retries. Each produces exactly one source record; original payload/key are recovered.
 - Other coverage: concurrent creators/month uniqueness, mismatch, partial amounts, credits, oldest-charge allocation, void/replacement, cash report reconciliation, audit rollback, schema/RLS/grants, tenant/resident boundaries, suspension, queued permission downgrade, explicit large-scope rejection, full-page CSV and responsive save controls.
 

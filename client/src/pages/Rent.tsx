@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -135,6 +135,13 @@ function RentWorkspace({ resident }: { resident: boolean }) {
           (view === "unpaid" && BigInt(a.summary.outstandingCents) > 0n) ||
           (view === "credit" && BigInt(a.summary.creditCents) > 0n)),
     ) || [];
+  useEffect(
+    () =>
+      setListPage((p) =>
+        Math.min(p, Math.max(0, Math.ceil(list.length / 25) - 1)),
+      ),
+    [list.length],
+  );
   const totals: Summary = {
     chargedCents: "0",
     paidCents: "0",
