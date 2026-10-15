@@ -337,6 +337,30 @@ export async function rentRecoveryCases(t, admin, call, db) {
           { expectedVersion: 1, reason: "Test recovery retry" },
         ),
       );
+      // Historical recovery must still use A after a new schedule B is current.
+      const old = (await get()).schedule;
+      ok(
+        await call("owner", "PATCH", `/api/company/rent-schedules/${old.id}`, {
+          status: "stopped",
+          expectedVersion: old.version,
+        }),
+      );
+      const replacement = ok(
+        await call("owner", "POST", `/api/company/rent/${lease.id}/schedules`, {
+          firstPeriodOn: old.nextPeriodOn.slice(0, 10),
+          lastPeriodOn: null,
+          firstDueOn: null,
+          firstAmount: null,
+          lastAmount: null,
+          leadDays: 0,
+          expectedVersion: lease.version,
+          submissionKey: randomUUID(),
+        }),
+      );
+      assert.notEqual(replacement.id, old.id);
+      const replaced = await get();
+      assert.equal(replaced.schedule.id, replacement.id);
+      assert.equal(replaced.history[0].scheduleId, old.id);
       const browser = await chromium.launch({ headless: true });
       try {
         const page = await browser.newPage();
@@ -393,6 +417,11 @@ export async function rentRecoveryCases(t, admin, call, db) {
           .click();
         await page.getByRole("button", { name: "Retry this repost" }).click();
         await expect(page.getByRole("dialog")).not.toBeVisible();
+        const final = await get();
+        assert.equal(final.schedule.id, replacement.id);
+        assert.equal(final.schedule.nextPeriodOn, replacement.nextPeriodOn);
+        assert.equal(final.history[0].scheduleId, old.id);
+        assert.equal(final.history[0].currentCharge.id !== reposted.id, true);
         assert.equal(keys.length, 2);
         assert.equal(keys[0], keys[1]);
         assert.equal(

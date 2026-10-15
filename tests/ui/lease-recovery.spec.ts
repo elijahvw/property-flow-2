@@ -354,6 +354,38 @@ test("October retained then voided is explained separately from next November; r
     page.getByRole("button", { name: "Review repost for 2026-10" }),
   ).not.toBeVisible();
 });
+test("voided history uses its original stopped schedule when a newer schedule is current", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  state.schedule.id = "schedule-b";
+  state.schedule.amountCents = 200000;
+  await page.goto("/company/rent?leaseId=" + state.parent.id);
+  await page
+    .getByText("Posting history · latest page", { exact: true })
+    .click();
+  const preview = page.waitForRequest(
+    (r) =>
+      new URL(r.url()).pathname ===
+      "/api/company/rent-schedules/schedule-a/repost-preview",
+  );
+  await page
+    .getByRole("button", { name: "Review repost for 2026-10", exact: true })
+    .click();
+  await preview;
+  await expect(page.getByRole("dialog")).toContainText("$1,000.00");
+  await page
+    .getByLabel("Reason for reposting")
+    .fill("Recover older schedule's month");
+  await page
+    .getByRole("button", { name: "Repost installment", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  expect(state.reposts).toHaveLength(1);
+  expect(state.schedule.id).toBe("schedule-b");
+  expect(state.history.scheduleId).toBe("schedule-a");
+});
+
 test("transaction references and audit names replace default internal IDs while details retain traceability", async ({
   page,
 }) => {
@@ -366,6 +398,9 @@ test("transaction references and audit names replace default internal IDs while 
   await page.getByText("Charge details", { exact: true }).click();
   await expect(
     page.getByText("charge-original-12345678901234567890", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Copy internal ID", exact: true }),
   ).toBeVisible();
   await page.goto("/company/finances");
   await expect(page.getByText("TX-76", { exact: true })).toBeVisible();
@@ -385,7 +420,10 @@ test("transaction references and audit names replace default internal IDs while 
   ).toBeVisible();
   await expect(page.getByText(actorId, { exact: true })).not.toBeVisible();
   await page.getByText("Actor details", { exact: true }).first().click();
-  await expect(page.getByText(actorId, { exact: true })).toBeVisible();
+  await expect(page.getByText(actorId, { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Copy internal ID", exact: true }).first(),
+  ).toBeVisible();
 });
 test("lease review retains editable details and recovers a lost save after reload without a second record", async ({
   page,

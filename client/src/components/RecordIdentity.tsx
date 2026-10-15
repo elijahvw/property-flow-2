@@ -14,9 +14,6 @@ export function RecordIdentity({
       {reference && <span className="reference-code">{reference}</span>}
       <details>
         <summary>{label} details</summary>
-        <p className="help">
-          Internal ID: <code className="identifier">{id}</code>
-        </p>
         <button
           type="button"
           className="text-button"
@@ -25,7 +22,9 @@ export function RecordIdentity({
               await navigator.clipboard.writeText(id);
               setCopy("ID copied.");
             } catch {
-              setCopy("Select the ID above to copy it.");
+              setCopy(
+                "Copy is unavailable in this browser. Use the exported internal ID for support.",
+              );
             }
           }}
         >

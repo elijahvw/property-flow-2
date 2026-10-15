@@ -328,7 +328,7 @@ export function RentSchedule({
                   )}
                 {row.currentCharge === null &&
                   (row.charge?.voidedAt || row.outcome === "suppressed") &&
-                  (!row.scheduleId || row.scheduleId === schedule?.id) && (
+                  (row.scheduleId || schedule?.id) && (
                     <Form
                       operation="page.data.load"
                       label={`Review repost for ${row.periodOn.slice(0, 7)}`}

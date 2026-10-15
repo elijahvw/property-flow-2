@@ -455,7 +455,8 @@ function PeopleWorkspace() {
             <ul>
               {directory.conflicts.map((c) => (
                 <li key={c.id}>
-                  {c.email} ({c.id}): {c.message}
+                  {c.email}: {c.message}
+                  <RecordIdentity id={c.id} label="Account" />
                 </li>
               ))}
             </ul>
