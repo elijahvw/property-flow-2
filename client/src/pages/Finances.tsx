@@ -1,8 +1,12 @@
+import { usePropertySearchParams } from "../usePropertySearchParams";
 import { RecordIdentity } from "../components/RecordIdentity";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { DraftReset } from "../components/DraftReset";
-import { PropertyNavigation } from "../components/PropertyNavigation";
-import { useState } from "react";
+import {
+  PropertyNavigation,
+  propertyLink,
+} from "../components/PropertyNavigation";
+import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
@@ -10,6 +14,8 @@ import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "./Workspace";
 type Entry = {
   reference?: string;
+  depositReceiptId?: string | null;
+  depositReceipt?: { leaseId: string; reference: string } | null;
   id: string;
   leaseId?: string | null;
   propertyId: string;
@@ -26,7 +32,13 @@ type Entry = {
 type Ledger = {
   items: Entry[];
   nextCursor: string | null;
-  summary: { incomeCents: string; expenseCents: string; netCents: string };
+  summary: {
+    incomeCents: string;
+    expenseCents: string;
+    netCents: string;
+    depositReceivedCents?: string;
+    cashMovementCents?: string;
+  };
 };
 export function dollars(value: string | number) {
   const amount = BigInt(value),
@@ -46,15 +58,15 @@ function Load({ error, retry }: { error?: string; retry: () => void }) {
 }
 export function Finances() {
   const { data } = useAuth();
-  const [routeParams] = useSearchParams();
+  const [, , routeProperty] = usePropertySearchParams();
   return (
     <LedgerWorkspace
-      key={`${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}:${routeParams.get("propertyId") || ""}`}
+      key={`${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}:${routeProperty}`}
     />
   );
 }
 function LedgerWorkspace() {
-  const [params, setParams] = useSearchParams();
+  const [params, setParams, pathPropertyId] = usePropertySearchParams();
   const [adding, setAdding] = useState(params.get("new") === "transaction"),
     [selected, setSelected] = useState<Entry | null>(null);
   const [key, setKey] = useState(() => crypto.randomUUID()),
@@ -65,6 +77,16 @@ function LedgerWorkspace() {
       dateTo: params.get("dateTo") || "",
     }),
     [cursor, setCursor] = useState("");
+  const routeFilter = JSON.stringify([
+    params.get("propertyId") || "",
+    params.get("dateFrom") || "",
+    params.get("dateTo") || "",
+  ]);
+  useEffect(() => {
+    const [propertyId, dateFrom, dateTo] = JSON.parse(routeFilter);
+    setFilters({ propertyId, dateFrom, dateTo });
+    setCursor("");
+  }, [routeFilter]);
   const [draftProperty, setDraftProperty] = useState(filters.propertyId);
   const properties = useResource<{ id: string; name: string }[]>(
     "/api/company/properties",
@@ -85,9 +107,17 @@ function LedgerWorkspace() {
         <h1>Manual finances</h1>
         <p>
           Record income received and expenses paid, in USD. These records do not
-          collect payments. Use <Link to="/company/rent">Rent & balances</Link>{" "}
-          to record lease payments and track balances owed. Keep deposits and
-          transfers outside this ledger.
+          collect payments. Use{" "}
+          <Link to={propertyLink("/company/rent", filters.propertyId)}>
+            Rent & balances
+          </Link>{" "}
+          to record lease payments and track balances owed. Record refundable
+          deposits in{" "}
+          <Link to={propertyLink("/company/deposits", filters.propertyId)}>
+            Deposits
+          </Link>
+          ; their linked cash receipts appear here separately from income.
+          Transfers are not supported.
         </p>
         <button onClick={() => setAdding(true)}>Record a transaction</button>
       </header>
@@ -129,7 +159,9 @@ function LedgerWorkspace() {
               reload();
               setAdding(false);
               setKey(crypto.randomUUID());
-              setParams({ propertyId: String(form.get("propertyId")) });
+              setParams({
+                propertyId: pathPropertyId || String(form.get("propertyId")),
+              });
             }}
           >
             <label>
@@ -139,11 +171,13 @@ function LedgerWorkspace() {
                 required
                 defaultValue={filters.propertyId}
               >
-                {properties.data.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
+                {properties.data
+                  .filter((p) => !pathPropertyId || p.id === pathPropertyId)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
               </select>
             </label>
             <label>
@@ -200,11 +234,14 @@ function LedgerWorkspace() {
           label="Apply filters"
           operation="page.data.load"
           submit={async (form) => {
-            setFilters({
-              propertyId: String(form.get("propertyId") || ""),
+            const next = {
+              propertyId:
+                pathPropertyId || String(form.get("propertyId") || ""),
               dateFrom: String(form.get("dateFrom") || ""),
               dateTo: String(form.get("dateTo") || ""),
-            });
+            };
+            setFilters(next);
+            setParams(next);
             setCursor("");
           }}
         >
@@ -215,17 +252,20 @@ function LedgerWorkspace() {
               value={draftProperty}
               onChange={(e) => setDraftProperty(e.target.value)}
             >
-              <option value="">All properties</option>
-              {properties.data?.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
+              {!pathPropertyId && <option value="">All properties</option>}
+              {properties.data
+                ?.filter((p) => !pathPropertyId || p.id === pathPropertyId)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
             </select>
           </label>
           <label>
             From date
             <input
+              key={filters.dateFrom}
               name="dateFrom"
               type="date"
               defaultValue={filters.dateFrom}
@@ -233,7 +273,12 @@ function LedgerWorkspace() {
           </label>
           <label>
             Through date
-            <input name="dateTo" type="date" defaultValue={filters.dateTo} />
+            <input
+              key={filters.dateTo}
+              name="dateTo"
+              type="date"
+              defaultValue={filters.dateTo}
+            />
           </label>
         </Form>
         {r.data && r.error && <Load error={r.error} retry={r.reload} />}
@@ -258,10 +303,16 @@ function LedgerWorkspace() {
                 <span>Net recorded</span>
                 <strong>{dollars(r.data.summary.netCents)}</strong>
               </div>
+              <div>
+                <span>Deposits received</span>
+                <strong>
+                  {dollars(r.data.summary.depositReceivedCents || "0")}
+                </strong>
+              </div>
             </div>
             <p className="help">
-              Dates are inclusive. Totals exclude voided entries and include
-              every matching page.
+              Operating net excludes refundable deposits. Dates are inclusive.
+              Totals exclude voided entries and include every matching page.
             </p>
             <p role="status">{r.data.items.length} transactions on this page</p>
             {!r.data.items.length ? (
@@ -271,13 +322,31 @@ function LedgerWorkspace() {
                 {r.data.items.map((entry) => (
                   <li key={entry.id}>
                     <h3>
-                      {entry.property.name} · {entry.kind} ·{" "}
-                      {dollars(entry.amountCents)}
+                      {entry.property.name} ·{" "}
+                      {entry.kind === "deposit"
+                        ? "deposit receipt"
+                        : entry.kind}{" "}
+                      · {dollars(entry.amountCents)}
                     </h3>
                     <p>
                       {entry.occurredOn.slice(0, 10)} ·{" "}
                       {entry.category.replace("_", " ")}
                     </p>
+                    {entry.depositReceipt && (
+                      <p>
+                        <Link
+                          to={propertyLink(
+                            "/company/deposits",
+                            entry.propertyId,
+                            { leaseId: entry.depositReceipt.leaseId },
+                          )}
+                        >
+                          Linked deposit receipt{" "}
+                          {entry.depositReceipt.reference} · View deposit ledger
+                          →
+                        </Link>
+                      </p>
+                    )}
                     {entry.leaseId && (
                       <p>
                         <Link
@@ -296,12 +365,14 @@ function LedgerWorkspace() {
                     {entry.voidedAt ? (
                       <p>Voided: {entry.voidReason}</p>
                     ) : (
-                      <button
-                        className="secondary"
-                        onClick={() => setSelected(entry)}
-                      >
-                        Void transaction
-                      </button>
+                      !entry.depositReceiptId && (
+                        <button
+                          className="secondary"
+                          onClick={() => setSelected(entry)}
+                        >
+                          Void transaction
+                        </button>
+                      )
                     )}
                   </li>
                 ))}

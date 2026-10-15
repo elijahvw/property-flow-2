@@ -13,7 +13,7 @@ export async function reportCases(t, admin, call, app, db) {
   }
   await admin.query(`UPDATE "LedgerEntry" SET "voidedAt"=NOW(),"voidReason"='Duplicate entry',version=2 WHERE id='report-void'`);
   const result=await call('manager','GET',cash);assert.equal(result.statusCode,200,result.body);const r=result.json();
-  assert.deepEqual(r.summary,{incomeCents:'6000000101',expenseCents:'115',netCents:'5999999986',includedCount:62,voidedCount:1});assert.equal(r.items.length,63);
+  assert.deepEqual(r.summary,{incomeCents:'6000000101',expenseCents:'115',netCents:'5999999986',depositReceivedCents:'0',cashMovementCents:'5999999986',includedCount:62,voidedCount:1});assert.equal(r.items.length,63);
   assert.equal(r.groups.filter(g=>g.kind==='income').reduce((a,g)=>a+BigInt(g.amountCents),0n),6000000101n);
   assert.equal(r.groups.reduce((a,g)=>a+g.count,0),r.summary.includedCount);
   assert.equal(r.items.filter(i=>!i.voidedAt&&i.kind==='income').reduce((a,i)=>a+BigInt(i.amountCents),0n),BigInt(r.summary.incomeCents));

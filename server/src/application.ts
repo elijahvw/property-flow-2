@@ -1,3 +1,4 @@
+import { registerDeposits } from "./deposits.js";
 import { registerRentRecovery } from "./rent-recovery.js";
 import { auditLabels } from "./audit-labels.js";
 import type {
@@ -206,6 +207,7 @@ export function registerApplication(
   registerMaintenance(server, db, authenticate, origin);
   registerLeasing(server, db, authenticate, origin);
   registerFinances(server, db, authenticate, origin);
+  registerDeposits(server, db, authenticate, origin);
   registerRent(server, db, authenticate, origin);
   registerRentSchedules(server, db, authenticate, origin);
   registerRentRecovery(server, db, authenticate, origin);

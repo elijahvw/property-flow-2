@@ -19,6 +19,43 @@ async function fixture(page:Page,role='manager'){
   }
   if(p==='/api/company/reports/context')return json({name:'FAP',timezone:'America/New_York',today:'2026-10-15'});
   if(p==='/api/company/finances')return json({items:[],nextCursor:null,summary:{incomeCents:'0',expenseCents:'0',netCents:'0'}});
+    if (p === "/api/company/rent")
+      return json({ businessDate: "2026-10-15", accounts: [] });
+    if (p === "/api/company/deposits")
+      return json({
+        businessDate: "2026-10-15",
+        accounts: [],
+        summary: {
+          requiredCents: "0",
+          heldCents: "0",
+          outstandingCents: "0",
+          excessHeldCents: "0",
+          pastDueCents: "0",
+        },
+      });
+    if (p === "/api/company/reports/cash")
+      return json({
+        kind: "cash",
+        company: { name: "FAP", timezone: "America/New_York" },
+        generatedAt: "2026-10-15T12:00:00Z",
+        basis: "Recorded cash",
+        filters: {
+          propertyId: u.searchParams.get("propertyId"),
+          dateFrom: u.searchParams.get("dateFrom"),
+          dateTo: u.searchParams.get("dateTo"),
+        },
+        summary: {
+          incomeCents: "0",
+          expenseCents: "0",
+          netCents: "0",
+          depositReceivedCents: "0",
+          cashMovementCents: "0",
+          includedCount: 0,
+          voidedCount: 0,
+        },
+        items: [],
+        groups: [],
+      });
   if(p==='/api/company/maintenance')return json([]);
   return json([]);
  });return state;
@@ -47,4 +84,125 @@ test('attention links select matching views; staff never gets management data, a
 test('company leases identify properties with the same unit label and property drilldowns stay scoped',async({page})=>{
  const state=await fixture(page);state.leases=state.properties.map((property,i)=>({id:'lease-'+i,propertyId:property.id,unit:{label:'101'},property:{name:property.name},resident:{name:'Resident '+i,email:'r'+i+'@test.invalid'},startsOn:'2026-01-01',endsOn:'2026-12-31',status:'active',rentCents:120000,version:1,renewals:[]}));
  await page.goto('/company/leases');await expect(page.getByRole('heading',{name:'Property Maple House · Unit 101'})).toBeVisible();await expect(page.getByRole('heading',{name:'Property Garden Apartments · Unit 101'})).toBeVisible();await page.getByRole('heading',{name:'Property Maple House · Unit 101'}).getByRole('link').click();await expect(page).toHaveURL(/\/company\/properties\/home\/leases$/);await expect(page.getByRole('heading',{name:'Property Garden Apartments · Unit 101'})).toHaveCount(0);await page.getByLabel('Lease view').selectOption('active');await expect(page).toHaveURL(/\/company\/properties\/home\/leases\?status=active$/);await page.reload();await expect(page.getByRole('heading',{name:'Maple House · Leases',exact:true})).toBeVisible();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await expect(page.getByLabel('Property for new lease').locator('option')).toHaveText(['Choose a property','Maple House']);
+});
+
+for (const [module, title, endpoint] of [
+  ["maintenance", "Maintenance", "maintenance"],
+  ["rent", "Rent & balances", "rent"],
+  ["finances", "Finances", "finances"],
+  ["reports", "Reports", "reports/context"],
+  ["deposits", "Deposits", "deposits"],
+]) {
+  test(`property ${module} tab stays nested, highlights the property and preserves context after reload`, async ({
+    page,
+  }) => {
+    const state = await fixture(page);
+    await page.goto("/company/properties/home/leases");
+    await page
+      .getByRole("navigation", { name: "Property navigation" })
+      .getByRole("link", { name: title, exact: true })
+      .click();
+    await expect(page).toHaveURL(
+      new RegExp("/company/properties/home/" + module + "$"),
+    );
+    await expect(
+      page.getByRole("region", { name: "Property workspace" }),
+    ).toContainText("Maple House");
+    await expect(
+      page
+        .getByRole("navigation", { name: "Property navigation" })
+        .getByRole("link", { name: title, exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    await expect(
+      page
+        .getByRole("navigation", { name: "Main navigation" })
+        .getByRole("link", { name: "Properties", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    if (module === "maintenance")
+      await page.getByLabel("Filter status").selectOption("resolved");
+    if (module === "finances") {
+      await page.getByLabel("From date").fill("2026-10-01");
+      await page.getByRole("button", { name: "Apply filters" }).click();
+    }
+    if (module === "reports") {
+      await page.getByLabel("From date").fill("2026-10-01");
+      await page.getByRole("button", { name: "Generate report" }).click();
+      await expect(
+        page.getByRole("button", { name: "Download CSV" }),
+      ).toBeVisible();
+    }
+    await page.reload();
+    await expect(page).toHaveURL(
+      new RegExp("/company/properties/home/" + module),
+    );
+    await expect(
+      page.getByRole("region", { name: "Property workspace" }),
+    ).toContainText("Maple House");
+    if (module === "maintenance")
+      await expect(page.getByLabel("Filter status")).toHaveValue("resolved");
+    if (module === "finances" || module === "reports")
+      await expect(page.getByLabel("From date")).toHaveValue("2026-10-01");
+    if (["maintenance", "finances", "reports"].includes(module))
+      await expect(
+        page
+          .getByLabel(
+            module === "reports" ? "Report property" : "Filter property",
+          )
+          .locator("option"),
+      ).toHaveText(["Maple House"]);
+    await expect
+      .poll(() =>
+        state.requests.some(
+          (x) =>
+            x.startsWith("/api/company/" + endpoint) &&
+            (module === "reports" || x.includes("propertyId=home")),
+        ),
+      )
+      .toBe(true);
+    const company = page.getByRole("link", {
+      name: "All company " + title.toLowerCase(),
+      exact: true,
+    });
+    await expect(company).toHaveAttribute("href", "/company/" + module);
+    await company.click();
+    await expect(page).toHaveURL(new RegExp("/company/" + module + "$"));
+    await expect(
+      page.getByRole("region", { name: "Property workspace" }),
+    ).toHaveCount(0);
+  });
+}
+test("staff cannot bypass permission gates through nested property money and maintenance routes", async ({
+  page,
+}) => {
+  const state = await fixture(page, "staff");
+  for (const module of [
+    "rent",
+    "deposits",
+    "finances",
+    "reports",
+    "maintenance",
+  ]) {
+    await page.goto("/company/properties/home/" + module);
+    await expect(
+      page.getByRole("heading", { name: "Access unavailable" }),
+    ).toBeVisible();
+  }
+  expect(
+    state.requests.some((x) =>
+      /\/api\/company\/(rent|deposits|finances|reports|maintenance)/.test(x),
+    ),
+  ).toBe(false);
+});
+
+test('property finance filter history restores dates without discarding an unsaved transaction',async({page})=>{
+ await fixture(page);await page.goto('/company/properties/home/finances');await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await page.getByLabel('Amount (USD)',{exact:true}).fill('123.45');await page.getByRole('button',{name:'Close',exact:true}).click();
+ for(const day of ['2026-10-01','2026-10-02']){await page.getByLabel('From date').fill(day);await page.getByRole('button',{name:'Apply filters'}).click();await expect(page).toHaveURL(new RegExp('dateFrom='+day));}
+ await page.goBack();await expect(page.getByLabel('From date')).toHaveValue('2026-10-01');await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await expect(page.getByLabel('Amount (USD)',{exact:true})).toHaveValue('123.45');
+});
+
+for(const module of ['reports','finances'])test(`property ${module} API scope survives an unavailable property picker`,async({page})=>{
+ const state=await fixture(page);await page.route('**/api/company/properties',route=>route.fulfill({status:503,json:{error:'Properties temporarily unavailable'}}));await page.goto('/company/properties/home/'+module);
+ await page.getByRole('button',{name:module==='reports'?'Generate report':'Apply filters'}).click();await expect.poll(()=>state.requests.filter(x=>x.startsWith('/api/company/'+(module==='reports'?'reports/cash':'finances')+'?')).length).toBeGreaterThan(0);
+ const calls=state.requests.filter(x=>x.startsWith('/api/company/'+(module==='reports'?'reports/cash':'finances')+'?'));expect(calls.every(x=>new URL('https://fixture.test'+x).searchParams.get('propertyId')==='home')).toBe(true);
+ await expect(page).toHaveURL(new RegExp('/company/properties/home/'+module));
 });

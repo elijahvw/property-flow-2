@@ -1,6 +1,7 @@
-import { useSearchParams } from "react-router-dom";
+import { usePropertySearchParams } from "../usePropertySearchParams";
+
 import { PropertyNavigation } from "../components/PropertyNavigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
@@ -26,6 +27,8 @@ type Cash = Base & {
     incomeCents: string;
     expenseCents: string;
     netCents: string;
+    depositReceivedCents?: string;
+    cashMovementCents?: string;
     includedCount: number;
     voidedCount: number;
   };
@@ -40,6 +43,8 @@ type Cash = Base & {
   }[];
   items: {
     id: string;
+    reference?: string;
+    depositReceipt?: { id: string; reference: string; leaseId: string } | null;
     property: { name: string };
     occurredOn: string;
     kind: string;
@@ -75,10 +80,10 @@ type Leases = Base & {
 type Report = Cash | Leases;
 export function Reports() {
   const { data } = useAuth();
-  const [routeParams] = useSearchParams();
+  const [, , routeProperty] = usePropertySearchParams();
   return (
     <ReportWorkspace
-      key={`${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}:${routeParams.get("propertyId") || ""}`}
+      key={`${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}:${routeProperty}`}
     />
   );
 }
@@ -104,17 +109,25 @@ function ReportWorkspace() {
   return <Builder today={context.data.today} />;
 }
 function Builder({ today }: { today: string }) {
-  const [params] = useSearchParams();
+  const [params, setParams, pathPropertyId] = usePropertySearchParams();
   const properties = useResource<{ id: string; name: string }[]>(
     "/api/company/properties",
   );
   const [reportProperty, setReportProperty] = useState(
     params.get("propertyId") || "",
   );
-  const [kind, setKind] = useState("cash"),
+  const [kind, setKind] = useState(
+      params.get("kind") === "leases" ? "leases" : "cash",
+    ),
     [report, setReport] = useState<Report>(),
     [page, setPage] = useState(0),
     [running, setRunning] = useState(false);
+  const routeProperty = params.get("propertyId") || "",
+    routeKind = params.get("kind");
+  useEffect(() => {
+    setReportProperty(routeProperty);
+    setKind(routeKind === "leases" ? "leases" : "cash");
+  }, [routeProperty, routeKind]);
   const exportData = () => {
     if (!report) return;
     const meta = [
@@ -140,10 +153,23 @@ function Builder({ today }: { today: string }) {
           ["Through date", report.filters.dateTo!],
           ["Income (USD)", moneyCell(report.summary.incomeCents)],
           ["Expenses (USD)", moneyCell(report.summary.expenseCents)],
-          ["Net (USD)", moneyCell(report.summary.netCents)],
+          ["Operating net (USD)", moneyCell(report.summary.netCents)],
+          [
+            "Deposits received (USD)",
+            moneyCell(report.summary.depositReceivedCents || "0"),
+          ],
+          [
+            "Net cash movement (USD)",
+            moneyCell(
+              report.summary.cashMovementCents || report.summary.netCents,
+            ),
+          ],
           [],
           [
-            "ID",
+            "Reference",
+            "Internal ID",
+            "Deposit receipt reference",
+            "Deposit receipt internal ID",
             "Date",
             "Property",
             "Type",
@@ -154,7 +180,10 @@ function Builder({ today }: { today: string }) {
             "Void reason",
           ],
           ...report.items.map((r) => [
+            r.reference || r.id,
             r.id,
+            r.depositReceipt?.reference || "",
+            r.depositReceipt?.id || "",
             r.occurredOn,
             r.property.name,
             r.kind,
@@ -230,9 +259,13 @@ function Builder({ today }: { today: string }) {
               for (const key of kind === "cash"
                 ? ["propertyId", "dateFrom", "dateTo"]
                 : ["propertyId", "status"]) {
-                const value = String(form.get(key) || "");
+                const value =
+                  key === "propertyId" && pathPropertyId
+                    ? pathPropertyId
+                    : String(form.get(key) || "");
                 if (value) q.set(key, value);
               }
+              setParams({ ...Object.fromEntries(q), kind });
               setReport(await api<Report>(`/api/company/reports/${kind}?${q}`));
             } finally {
               setRunning(false);
@@ -254,12 +287,14 @@ function Builder({ today }: { today: string }) {
                 value={reportProperty}
                 onChange={(e) => setReportProperty(e.target.value)}
               >
-                <option value="">All properties</option>
-                {properties.data?.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
+                {!pathPropertyId && <option value="">All properties</option>}
+                {properties.data
+                  ?.filter((p) => !pathPropertyId || p.id === pathPropertyId)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
               </select>
             </label>
             {kind === "cash" ? (
@@ -267,26 +302,34 @@ function Builder({ today }: { today: string }) {
                 <label>
                   From date
                   <input
+                    key={params.get("dateFrom")}
                     name="dateFrom"
                     type="date"
                     required
-                    defaultValue={`${today.slice(0, 4)}-01-01`}
+                    defaultValue={
+                      params.get("dateFrom") || `${today.slice(0, 4)}-01-01`
+                    }
                   />
                 </label>
                 <label>
                   Through date
                   <input
+                    key={params.get("dateTo")}
                     name="dateTo"
                     type="date"
                     required
-                    defaultValue={today}
+                    defaultValue={params.get("dateTo") || today}
                   />
                 </label>
               </>
             ) : (
               <label>
                 Lease status
-                <select name="status">
+                <select
+                  key={params.get("status")}
+                  name="status"
+                  defaultValue={params.get("status") || ""}
+                >
                   <option value="">All statuses</option>
                   {["draft", "active", "ended"].map((s) => (
                     <option key={s} value={s}>
@@ -367,7 +410,21 @@ function Builder({ today }: { today: string }) {
                   <span>Net recorded</span>
                   <strong>{dollars(report.summary.netCents)}</strong>
                 </div>
+                <div>
+                  <span>Deposits received</span>
+                  <strong>
+                    {dollars(report.summary.depositReceivedCents || "0")}
+                  </strong>
+                </div>
               </div>
+              <p className="help">
+                Operating net excludes refundable deposits. Net cash movement
+                including these receipts:{" "}
+                {dollars(
+                  report.summary.cashMovementCents || report.summary.netCents,
+                )}
+                . This is recorded cash activity, not a verified bank balance.
+              </p>
               <details>
                 <summary>Monthly property and category breakdown</summary>
                 <div className="table-wrap">

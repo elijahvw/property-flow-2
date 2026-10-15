@@ -81,6 +81,8 @@ export function registerReports(
         },
         select: {
           id: true,
+          reference: true,
+          depositReceipt:{select:{id:true,reference:true,leaseId:true}},
           propertyId: true,
           occurredOn: true,
           kind: true,
@@ -98,6 +100,7 @@ export function registerReports(
       ensureComplete(rows.length);
       let income = 0n,
         expense = 0n,
+        deposit = 0n,
         voided = 0;
       const groups = new Map<
         string,
@@ -118,7 +121,8 @@ export function registerReports(
         }
         const amount = BigInt(row.amountCents);
         if (row.kind === "income") income += amount;
-        else expense += amount;
+        else if(row.kind === "expense") expense += amount;
+        else if(row.kind === "deposit") deposit += amount;
         const month = day(row.occurredOn).slice(0, 7),
           key = JSON.stringify([month, row.propertyId, row.kind, row.category]);
         const g = groups.get(key) || {
@@ -146,11 +150,13 @@ export function registerReports(
           dateTo: day(to),
         },
         basis:
-          "Recorded income received and expenses paid; voided entries excluded from totals at generation time.",
+          "Recorded income, expenses and refundable security-deposit receipts. Operating net excludes deposits; cash movement includes them. Voided entries excluded at generation time.",
         summary: {
           incomeCents: String(income),
           expenseCents: String(expense),
           netCents: String(income - expense),
+          depositReceivedCents: String(deposit),
+          cashMovementCents: String(income - expense + deposit),
           includedCount: rows.length - voided,
           voidedCount: voided,
         },

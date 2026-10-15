@@ -33,6 +33,7 @@ import { Reports } from "./pages/Reports";
 import { NavigationIcon } from "./components/NavigationIcon";
 import { ResidentProfiles } from "./pages/ResidentProfiles";
 import { Maintenance } from "./pages/Maintenance";
+import { Deposits } from "./pages/Deposits";
 import { Rent } from "./pages/Rent";
 import { Finances } from "./pages/Finances";
 import { EmailVerification } from "./components/EmailVerification";
@@ -117,7 +118,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                   ? "Administration"
                   : r.path === "/account"
                     ? "Account"
-                    : /finances|reports|rent/.test(r.path)
+                    : /finances|reports|rent|deposits/.test(r.path)
                       ? "Money"
                       : /leases|maintenance/.test(r.path)
                         ? "Operations"
@@ -245,6 +246,8 @@ function Pages() {
     "/company/leases": <Leases />,
     "/company/finances": <Finances />,
     "/company/rent": <Rent />,
+    "/company/deposits": <Deposits />,
+    "/resident/deposits": <Deposits resident />,
     "/resident/rent": <Rent resident />,
     "/company/reports": <Reports />,
     "/account": <Account />,
@@ -285,6 +288,27 @@ function Pages() {
           </Shell>
         }
       />
+      {[
+        ["maintenance", "maintenance.manage", <Maintenance />],
+        ["rent", "finance.manage", <Rent />],
+        ["finances", "finance.manage", <Finances />],
+        ["reports", "finance.manage", <Reports />],
+        ["deposits", "finance.manage", <Deposits />],
+      ].map(([module, permission, element]) => (
+        <Route
+          key={String(module)}
+          path={`/company/properties/:propertyId/${module}`}
+          element={
+            <Shell>
+              <ProtectedRoute
+                permission={permission as import("./navigation").Capability}
+              >
+                {element}
+              </ProtectedRoute>
+            </Shell>
+          }
+        />
+      ))}
       <Route
         path="/company/properties/:propertyId/units"
         element={

@@ -4,7 +4,7 @@ import { lockRentLease, allocateRentCredit } from "./rent.js";
 import { AccessError } from "./access.js";
 import { assignmentId } from "./application.js";
 import { audit, boundedText, cents, choice, conflict, date, input, mutation, page, sameSubmission, scoped, submission, version } from "./operational.js";
-const select = { reference:true, leaseId:true, id:true, propertyId:true, occurredOn:true, amountCents:true, currency:true, kind:true, category:true, memo:true, version:true, voidedAt:true, voidReason:true, property:{select:{name:true}} } as const;
+const select = { depositReceiptId:true,depositReceipt:{select:{leaseId:true,reference:true}},reference:true, leaseId:true, id:true, propertyId:true, occurredOn:true, amountCents:true, currency:true, kind:true, category:true, memo:true, version:true, voidedAt:true, voidReason:true, property:{select:{name:true}} } as const;
 export function registerFinances(server: FastifyInstance, db: PrismaClient, authenticate: preValidationHookHandler, origin: string) {
  const auth = { preValidation: authenticate };
  server.post("/api/company/finances", auth, request => {
@@ -34,8 +34,8 @@ export function registerFinances(server: FastifyInstance, db: PrismaClient, auth
    const rows=await tx.ledgerEntry.findMany({where:{...where,...(cursor?{id:{lt:cursor}}:{})},select,take:51,orderBy:{id:"desc"}});
    // SUM returns bigint. Serialize exact decimal cents and summarize the whole filter,
    // never the current page; voided entries stay in history but leave totals.
-   const [totals]=await tx.$queryRaw<{income:bigint;expense:bigint}[]>(Prisma.sql`SELECT COALESCE(SUM("amountCents") FILTER (WHERE kind='income'),0)::bigint income, COALESCE(SUM("amountCents") FILTER (WHERE kind='expense'),0)::bigint expense FROM "LedgerEntry" WHERE "companyId"=${companyId} AND "voidedAt" IS NULL ${propertyId?Prisma.sql`AND "propertyId"=${propertyId}`:Prisma.empty} ${from?Prisma.sql`AND "occurredOn">=${from}`:Prisma.empty} ${to?Prisma.sql`AND "occurredOn"<=${to}`:Prisma.empty}`);
-   return {...page(rows),summary:{incomeCents:String(totals.income),expenseCents:String(totals.expense),netCents:String(totals.income-totals.expense)}};
+   const [totals]=await tx.$queryRaw<{income:bigint;expense:bigint;deposit:bigint}[]>(Prisma.sql`SELECT COALESCE(SUM("amountCents") FILTER (WHERE kind='income'),0)::bigint income, COALESCE(SUM("amountCents") FILTER (WHERE kind='expense'),0)::bigint expense, COALESCE(SUM("amountCents") FILTER (WHERE kind='deposit'),0)::bigint deposit FROM "LedgerEntry" WHERE "companyId"=${companyId} AND "voidedAt" IS NULL ${propertyId?Prisma.sql`AND "propertyId"=${propertyId}`:Prisma.empty} ${from?Prisma.sql`AND "occurredOn">=${from}`:Prisma.empty} ${to?Prisma.sql`AND "occurredOn"<=${to}`:Prisma.empty}`);
+   return {...page(rows),summary:{incomeCents:String(totals.income),expenseCents:String(totals.expense),netCents:String(totals.income-totals.expense),depositReceivedCents:String(totals.deposit),cashMovementCents:String(totals.income-totals.expense+totals.deposit)}};
   });
  });
  server.post<{Params:{entryId:string}}>("/api/company/finances/:entryId/void",auth,request=>{
@@ -43,6 +43,7 @@ export function registerFinances(server: FastifyInstance, db: PrismaClient, auth
   return scoped(db,request,"finance.manage",async(tx,companyId)=>{
    const previous=await tx.ledgerEntry.findFirst({where:{companyId,id:entryId},select});
    if(!previous)throw new AccessError(404,"NOT_FOUND","Entry not found.");
+   if(previous.depositReceiptId)throw new AccessError(409,"DEPOSIT_CORRECTION_REQUIRED","Use the deposit ledger to correct this linked receipt.");
    if(previous.leaseId) await lockRentLease(tx,companyId,previous.leaseId);
    if(previous.voidedAt){if(previous.voidReason!==reason)throw conflict();return previous;}
    if(previous.version!==expectedVersion)throw conflict();

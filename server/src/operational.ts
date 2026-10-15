@@ -54,7 +54,11 @@ export function mutation(request: FastifyRequest, origin: string) {
 export function scoped<T>(db: PrismaClient, request: FastifyRequest, permission: Permission, run: (tx: Tx, companyId: string) => Promise<T>) {
   const companyId = companyScope(request.principal!, permission, request.headers["x-company-id"]);
   return serializable(db, async tx => {
-    await tx.$queryRaw`UPDATE "User" SET "updatedAt"="updatedAt" WHERE id=${request.principal!.id} RETURNING id`;
+    // Reads share the authorization fence; concurrent panels must not write-conflict
+    // with one another. Access mutations still need the exclusive user fence,
+    // and either fence blocks a queued role change until this transaction ends.
+    if (request.method === "GET") await tx.$queryRaw`SELECT id FROM "User" WHERE id=${request.principal!.id} FOR SHARE`;
+    else await tx.$queryRaw`UPDATE "User" SET "updatedAt"="updatedAt" WHERE id=${request.principal!.id} RETURNING id`;
     await tx.$queryRaw`SELECT id FROM "Company" WHERE id=${companyId} FOR SHARE`;
     const current = await tx.user.findUnique({ where: { id: request.principal!.id }, include: { membership: { include: { company: true } } } });
     if (!current) throw new AccessError(403, "ACCESS_DENIED", "Access is unavailable.");
