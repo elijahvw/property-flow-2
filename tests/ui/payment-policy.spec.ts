@@ -80,6 +80,7 @@ async function fixture(page: Page, role = "owner") {
     posts: [] as any[],
     patches: [] as any[],
     lose: false,
+    capped: false,
     requests: [] as string[],
   };
   await page.route("**/api/**", async (route) => {
@@ -149,6 +150,15 @@ async function fixture(page: Page, role = "owner") {
       }
       return json({ id: "new-charge" });
     }
+    if (
+      p === "/api/company/rent" &&
+      state.capped &&
+      !u.searchParams.has("propertyId")
+    )
+      return json(
+        { error: "RECORD_LIMIT", message: "Narrow this view to a property." },
+        409,
+      );
     if (p === "/api/company/rent" || p === "/api/resident/rent")
       return json({
         businessDate: "2026-10-15",
@@ -349,4 +359,23 @@ test("resident sees shared payment terms and saved charge grace without manageme
     page.getByRole("button", { name: "Post monthly rent", exact: true }),
   ).toHaveCount(0);
   await expect(page.getByText(/through 2026-10-15/)).toBeVisible();
+});
+
+test("a capped initial rent query retains independent property scope and recovers without fabricating balances", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  state.capped = true;
+  await page.goto("/company/rent?view=after_grace");
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Rent balance summary" }),
+  ).not.toBeVisible();
+  await page.getByRole("combobox", { name: "Rent property", exact: true }).selectOption("home");
+  await expect(page).toHaveURL(/propertyId=home/);
+  await expect(page.getByRole("alert")).not.toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Rent balance summary" }),
+  ).toContainText("$1,000.00");
+  expect(state.requests).toContain("/api/company/rent?propertyId=home");
 });

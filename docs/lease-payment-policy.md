@@ -28,4 +28,8 @@ Additive migration `202610150013_lease_payment_policy`; no Terraform or Auth0 ch
 
 ## Local verification
 
-Client/server builds pass. Safe Node suite: 50 passed, five database suites skipped there and run separately. Browser suite: 80 passed, including desktop/mobile collection drilldowns, shared resident terms, lease policy forms, and lost-response retry with original reviewed policy. Disposable PostgreSQL checks: finance/reporting/rent/payment-policy 44, leasing 13, maintenance 9, users 21 and access integration 40. Checks cover grace boundaries, company timezone dates, leap/short months, aging reconciliation, partial receipts/voids, current role boundaries, audit rollback, immutable charge policy and concurrent lease-policy edits versus posting. No authenticated live-account acceptance was performed.
+Client/server builds pass. Safe Node suite: 50 passed, five database suites skipped there and run separately. Browser suite: 81 passed, including desktop/mobile collection drilldowns, shared resident terms, lease policy forms, and lost-response retry with original reviewed policy. Disposable PostgreSQL checks: finance/reporting/rent/payment-policy 44, leasing 13, maintenance 9, users 21 and access integration 40. Checks cover grace boundaries, company timezone dates, leap/short months, aging reconciliation, partial receipts/voids, current role boundaries, audit rollback, immutable charge policy and concurrent lease-policy edits versus posting. No authenticated live-account acceptance was performed.
+
+## PR review correction
+
+PR25 review identified that the rent-list safety-cap error hid the property selector. The selector now loads independently of rent data, allowing a manager to narrow the failed query without showing fabricated totals. A browser regression starts with a capped response, selects a property and verifies recovery. Original-head CI passed; final-head CI must be checked after this correction.

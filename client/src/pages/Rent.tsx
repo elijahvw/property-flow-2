@@ -220,6 +220,16 @@ function RentWorkspace({ resident }: { resident: boolean }) {
             : "Post monthly rent, record payments received, and follow each lease balance."}
         </p>
       </header>
+      {!resident && !leaseId && (
+        <div className="rent-filters">
+          <PropertyScope
+            value={propertyId}
+            change={(value) =>
+              setParams({ ...(value ? { propertyId: value } : {}), view })
+            }
+          />
+        </div>
+      )}
       {r.error && <Load error={r.error} retry={r.reload} />}
       {!r.data ? (
         !r.error && <Load retry={r.reload} />
@@ -356,17 +366,6 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                     )}
                   </div>
                   <div className="rent-filters">
-                    {!resident && (
-                      <PropertyScope
-                        value={propertyId}
-                        change={(value) =>
-                          setParams({
-                            ...(value ? { propertyId: value } : {}),
-                            view,
-                          })
-                        }
-                      />
-                    )}
                     <label>
                       Search rent accounts
                       <input
@@ -1203,8 +1202,7 @@ function RentDraft({
       {mode === "charge" && (
         <p className="policy-example">
           Grace through {grace.through} · past grace from {grace.after}. This
-          charge saves {savedGrace} grace days. No late fee is
-          generated.
+          charge saves {savedGrace} grace days. No late fee is generated.
         </p>
       )}
       <p className="notice">
