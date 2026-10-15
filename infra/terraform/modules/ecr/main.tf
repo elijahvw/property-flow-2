@@ -82,7 +82,7 @@ resource "aws_ecs_task_definition" "app" {
   cpu                      = "256"
   memory                   = "512"
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
-  task_role_arn            = aws_iam_role.ecs_task_execution.arn
+  # Execution-role privileges are not granted to application code.
 
   container_definitions = jsonencode([
     {
@@ -105,11 +105,14 @@ resource "aws_ecs_task_definition" "app" {
         { name = "AUTH0_MANAGEMENT_CLIENT_SECRET", value = var.vars.auth0_m2m_client_secret },
         { name = "RUNTIME_DATABASE_URL", value = local.runtime_database_url },
         { name = "DATABASE_URL", value = local.database_url },
-        { name = "DD_TRACE_AGENT_HOSTNAME", value = "localhost" },
-        { name = "DD_LOGS_INJECTION", value = "true" },
-        { name = "DD_ENV", value = var.vars.environment },
-        { name = "DD_SERVICE", value = "propertyflow-server" }
+        { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = var.vars.grafana_otlp_endpoint },
+        { name = "APP_ENV", value = var.vars.environment },
+        { name = "APP_CPU_CORES", value = "0.25" }
       ]
+      secrets = var.vars.grafana_otlp_endpoint == "" ? [] : [{
+        name      = "OTEL_EXPORTER_OTLP_HEADERS"
+        valueFrom = "${aws_secretsmanager_secret.grafana[0].arn}:headers::"
+      }]
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -118,34 +121,13 @@ resource "aws_ecs_task_definition" "app" {
           "awslogs-stream-prefix" = "ecs"
         }
       }
-    },
-    {
-      name  = "datadog-agent"
-      image = "public.ecr.aws/datadog/agent:latest"
-      environment = [
-        { name = "DD_API_KEY", value = var.vars.datadog_api_key },
-        { name = "DD_SITE", value = var.vars.datadog_site },
-        { name = "ECS_FARGATE", value = "true" },
-        { name = "DD_APM_ENABLED", value = "true" },
-        { name = "DD_DOGSTATSD_NON_LOCAL_TRAFFIC", value = "true" },
-        { name = "DD_ENV", value = var.vars.environment },
-        { name = "DD_SERVICE", value = "propertyflow-server" }
-      ]
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
-          "awslogs-region"        = var.vars.aws_region
-          "awslogs-stream-prefix" = "datadog"
-        }
-      }
     }
   ])
 }
 
 resource "aws_ecs_service" "app" {
   # ECS requires the target group to be attached to a listener first.
-  depends_on = [aws_lb_listener.http]
+  depends_on = [aws_lb_listener.http, aws_iam_role_policy.grafana_ingestion]
 
   name                              = "propertyflow-${var.vars.environment}"
   cluster                           = aws_ecs_cluster.main.id
@@ -177,3 +159,21 @@ output "repository_url" { value = aws_ecr_repository.app.repository_url }
 output "ecs_cluster_name" { value = aws_ecs_cluster.main.name }
 output "ecs_service_name" { value = aws_ecs_service.app.name }
 
+
+# Only metadata is managed here. Deploy Dev stores the value from a GitHub
+# Actions secret before its checked rollout; credentials never enter TF state.
+resource "aws_secretsmanager_secret" "grafana" {
+  count                   = var.vars.grafana_otlp_endpoint == "" ? 0 : 1
+  name                    = "propertyflow-${var.vars.environment}-grafana-otlp"
+  description             = "Grafana Cloud write-only OTLP authorization headers"
+  recovery_window_in_days = 7
+}
+resource "aws_iam_role_policy" "grafana_ingestion" {
+  count = var.vars.grafana_otlp_endpoint == "" ? 0 : 1
+  name  = "grafana-ingestion-secret"
+  role  = aws_iam_role.ecs_task_execution.id
+  policy = jsonencode({ Version = "2012-10-17", Statement = [{
+    Effect = "Allow", Action = "secretsmanager:GetSecretValue", Resource = aws_secretsmanager_secret.grafana[0].arn
+  }] })
+}
+output "grafana_secret_arn" { value = var.vars.grafana_otlp_endpoint == "" ? "" : aws_secretsmanager_secret.grafana[0].arn }

@@ -25,3 +25,5 @@ output "alb_dns_name" {
 output "frontend_bucket_name" {
   value = module.s3_frontend.bucket_name
 }
+
+output "grafana_secret_arn" { value = module.ecr.grafana_secret_arn }

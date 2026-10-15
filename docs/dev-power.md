@@ -6,7 +6,7 @@ Start brings `propertyflow-dev-db` online, waits for database availability, then
 
 The deployment role additionally needs `rds:StartDBInstance` and `rds:StopDBInstance` on `arn:aws:rds:us-east-1:800754316001:db:propertyflow-dev-db`. Its existing policy supplies discovery and ECS update permissions.
 
-Stopping retains database data and avoids backend/container and database compute charges while stopped. Storage, the load balancer, its public addresses, and other retained resources still incur charges. This is a cost reduction, not a billing cap. Datadog trial/subscription costs are separate.
+Stopping retains database data and avoids backend/container and database compute charges while stopped. Storage, the load balancer, its public addresses, and other retained resources still incur charges. This is a cost reduction, not a billing cap. Grafana Cloud is configured on its Free plan; review actual monitoring usage and retained AWS resources.
 
 AWS automatically starts RDS after seven consecutive stopped days. With manual-only controls, run stop again if you leave development off for longer; do not assume it remains off indefinitely. See [AWS RDS stopping documentation](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_StopInstance.html).
 

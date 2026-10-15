@@ -1,3 +1,4 @@
+import { recordBillingRun } from "./tracing.js";
 import type { FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { serializable } from "./application.js";
@@ -106,20 +107,26 @@ export function registerRentBillingWorker(
     closed = false;
   const tick = () => {
     if (running || closed) return;
+    const started = performance.now();
+    let failed = false;
     running = billingSweep(db, cursor, {
-      onError: (code) =>
-        server.log.warn({ code }, "Rent billing attempt needs retry"),
+      onError: (code) => {
+        failed = true;
+        server.log.warn({ code }, "Rent billing attempt needs retry");
+      },
     })
       .then((next) => {
         cursor = next;
       })
       .catch(() => {
+        failed = true;
         server.log.warn(
           { code: "BILLING_SWEEP_UNAVAILABLE" },
           "Rent billing will retry",
         );
       })
       .finally(() => {
+        recordBillingRun(started, failed);
         running = undefined;
       });
   };

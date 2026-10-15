@@ -10,7 +10,7 @@ RUN DATABASE_URL="postgresql://dummy@localhost:5432/dummy" npm run build
 
 FROM node:22-slim
 ARG APP_VERSION=unknown
-ENV DD_VERSION=$APP_VERSION
+ENV APP_VERSION=$APP_VERSION
 RUN apt-get update -y && apt-get install -y openssl ca-certificates
 WORKDIR /app
 COPY --from=builder /app/package*.json ./

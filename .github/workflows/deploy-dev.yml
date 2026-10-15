@@ -15,6 +15,11 @@ on:
         required: true
         default: false
         type: boolean
+      retire_datadog:
+        description: Retire the reviewed legacy AWS monitoring integration after the checked release
+        required: true
+        default: true
+        type: boolean
       run_terraform:
         description: 'Control Terraform apply for this deploy'
         required: false
@@ -68,14 +73,27 @@ jobs:
       ecs_service_name: ${{ steps.outputs.outputs.ecs_service_name }}
       alb_dns_name: ${{ steps.outputs.outputs.alb_dns_name }}
       frontend_bucket_name: ${{ steps.outputs.outputs.frontend_bucket_name }}
+      grafana_secret_arn: ${{ steps.outputs.outputs.grafana_secret_arn }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ vars.AWS_REGION }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check monitoring configuration before any deployment
+        if: github.event_name == 'workflow_dispatch' && !inputs.plan_only && needs.terraform-changes.outputs.backend == 'true'
+        env:
+          GRAFANA_OTLP_ENDPOINT: ${{ vars.GRAFANA_OTLP_ENDPOINT }}
+          GRAFANA_OTLP_HEADERS: ${{ secrets.GRAFANA_OTLP_HEADERS }}
+          GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.GRAFANA_SERVICE_ACCOUNT_TOKEN }}
+        run: python3 scripts/grafana-monitoring.py preflight
       - name: Init
         run: |
           cd infra/terraform/envs/dev
@@ -87,6 +105,31 @@ jobs:
         run: |
           account_id=$(aws sts get-caller-identity --query Account --output text)
           test "$account_id" = "800754316001" || { echo "Unexpected AWS account: $account_id"; exit 1; }
+      - name: Install pinned AWS SDK for ingestion setup
+        if: github.event_name == 'workflow_dispatch' && !inputs.plan_only && needs.terraform-changes.outputs.backend == 'true'
+        run: python3 -m pip install boto3==1.43.114
+      - name: Stage and populate ingestion secret before any ECS update
+        if: github.event_name == 'workflow_dispatch' && !inputs.plan_only && needs.terraform-changes.outputs.backend == 'true' && needs.terraform-changes.outputs.should_apply == 'true'
+        env:
+          TF_VAR_auth0_web_client_id: ${{ vars.AUTH0_WEB_CLIENT_ID }}
+          TF_VAR_auth0_web_client_secret: ${{ secrets.AUTH0_WEB_CLIENT_SECRET }}
+          TF_VAR_auth0_domain: ${{ vars.VITE_AUTH0_DOMAIN }}
+          TF_VAR_auth0_audience: ${{ vars.VITE_AUTH0_AUDIENCE }}
+          TF_VAR_auth0_m2m_client_id: ${{ vars.AUTH0_MANAGEMENT_CLIENT_ID }}
+          TF_VAR_auth0_m2m_client_secret: ${{ secrets.AUTH0_MANAGEMENT_CLIENT_SECRET }}
+          TF_VAR_db_password: ${{ secrets.DATABASE_PASSWORD }}
+          TF_VAR_grafana_otlp_endpoint: ${{ vars.GRAFANA_OTLP_ENDPOINT }}
+          GRAFANA_OTLP_ENDPOINT: ${{ vars.GRAFANA_OTLP_ENDPOINT }}
+          GRAFANA_OTLP_HEADERS: ${{ secrets.GRAFANA_OTLP_HEADERS }}
+        run: python3 scripts/grafana-monitoring.py bootstrap-ingestion
+      - name: Update existing ingestion secret when infrastructure is unchanged
+        if: github.event_name == 'workflow_dispatch' && !inputs.plan_only && needs.terraform-changes.outputs.backend == 'true' && needs.terraform-changes.outputs.should_apply != 'true'
+        env:
+          GRAFANA_OTLP_ENDPOINT: ${{ vars.GRAFANA_OTLP_ENDPOINT }}
+          GRAFANA_OTLP_HEADERS: ${{ secrets.GRAFANA_OTLP_HEADERS }}
+        run: |
+          export GRAFANA_SECRET_ARN=$(terraform -chdir=infra/terraform/envs/dev output -raw grafana_secret_arn)
+          python3 scripts/grafana-monitoring.py store-ingestion
       - name: Plan
         if: github.event_name != 'workflow_dispatch' || inputs.plan_only || needs.terraform-changes.outputs.should_apply == 'true'
         env:
@@ -97,8 +140,7 @@ jobs:
           TF_VAR_auth0_m2m_client_id: ${{ vars.AUTH0_MANAGEMENT_CLIENT_ID }}
           TF_VAR_auth0_m2m_client_secret: ${{ secrets.AUTH0_MANAGEMENT_CLIENT_SECRET }}
           TF_VAR_db_password: ${{ secrets.DATABASE_PASSWORD }}
-          TF_VAR_datadog_api_key: ${{ secrets.DATADOG_API_KEY }}
-          TF_VAR_datadog_site: datadoghq.com
+          TF_VAR_grafana_otlp_endpoint: ${{ vars.GRAFANA_OTLP_ENDPOINT }}
         run: |
           cd infra/terraform/envs/dev
           # The saved plan contains secrets; keep it on this ephemeral runner.
@@ -130,6 +172,7 @@ jobs:
           echo "ecs_service_name=$(terraform output -raw ecs_service_name)" >> $GITHUB_OUTPUT
           echo "alb_dns_name=$(terraform output -raw alb_dns_name)" >> $GITHUB_OUTPUT
           echo "frontend_bucket_name=$(terraform output -raw frontend_bucket_name)" >> $GITHUB_OUTPUT
+          echo "grafana_secret_arn=$(terraform output -raw grafana_secret_arn)" >> $GITHUB_OUTPUT
 
   deploy-backend:
     if: github.event_name == 'workflow_dispatch' && !inputs.plan_only && needs.terraform-changes.outputs.backend == 'true'
@@ -160,78 +203,20 @@ jobs:
           cache-to: type=gha,mode=max,scope=propertyflow-server
       - name: Ensure database is available before starting backend
         run: bash scripts/dev-power.sh start-database
-      - name: Update ECS service
-        run: |
-          set -euo pipefail
-
-          CLUSTER="${{ needs.terraform.outputs.ecs_cluster_name }}"
-          SERVICE="${{ needs.terraform.outputs.ecs_service_name }}"
-
-          print_diagnostics() {
-            echo "Collecting ECS diagnostics for $SERVICE"
-            aws ecs describe-services \
-              --cluster "$CLUSTER" \
-              --services "$SERVICE" \
-              --query 'services[0].deployments[*].[id,status,rolloutState,desiredCount,pendingCount,runningCount,failedTasks,taskDefinition]' \
-              --output table || true
-
-            aws ecs describe-services \
-              --cluster "$CLUSTER" \
-              --services "$SERVICE" \
-              --query 'services[0].events[0:20].[createdAt,message]' \
-              --output table || true
-
-            TARGET_GROUP_ARN=$(aws ecs describe-services \
-              --cluster "$CLUSTER" \
-              --services "$SERVICE" \
-              --query 'services[0].loadBalancers[0].targetGroupArn' \
-              --output text)
-
-            if [ "$TARGET_GROUP_ARN" != "None" ]; then
-              aws elbv2 describe-target-health \
-                --target-group-arn "$TARGET_GROUP_ARN" \
-                --query 'TargetHealthDescriptions[*].[Target.Id,TargetHealth.State,TargetHealth.Reason,TargetHealth.Description]' \
-                --output table || true
-            fi
-
-            STOPPED_TASKS=$(aws ecs list-tasks \
-              --cluster "$CLUSTER" \
-              --service-name "$SERVICE" \
-              --desired-status STOPPED \
-              --max-items 5 \
-              --query 'taskArns' \
-              --output text)
-
-            if [ "$STOPPED_TASKS" != "None" ] && [ -n "$STOPPED_TASKS" ]; then
-              aws ecs describe-tasks \
-                --cluster "$CLUSTER" \
-                --tasks $STOPPED_TASKS \
-                --query 'tasks[*].[taskArn,lastStatus,stoppedReason,containers[0].reason]' \
-                --output table || true
-            fi
-          }
-
-          DESIRED_COUNT=$(aws ecs describe-services \
-            --cluster "$CLUSTER" \
-            --services "$SERVICE" \
-            --query 'services[0].desiredCount' \
-            --output text)
-
-          if [ "$DESIRED_COUNT" = "None" ] || [ -z "$DESIRED_COUNT" ] || [ "$DESIRED_COUNT" -lt 1 ]; then
-            DESIRED_COUNT=1
-          fi
-
-          echo "Deploying service $SERVICE in cluster $CLUSTER"
-          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --desired-count "$DESIRED_COUNT" --force-new-deployment > /dev/null
-
-          if aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"; then
-            echo "ECS service stabilized on first attempt."
-            exit 0
-          fi
-
-          echo "ECS did not stabilize in time. Keeping the existing service running."
-          print_diagnostics
-          exit 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned AWS SDK
+        run: python3 -m pip install boto3==1.43.114
+      - name: Provision Grafana dashboard and alert rules
+        env:
+          GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.GRAFANA_SERVICE_ACCOUNT_TOKEN }}
+        run: python3 scripts/grafana-monitoring.py provision
+      - name: Roll out and verify immutable ECS release
+        env:
+          REPOSITORY_URL: ${{ needs.terraform.outputs.repository_url }}
+          GRAFANA_OTLP_ENDPOINT: ${{ vars.GRAFANA_OTLP_ENDPOINT }}
+        run: python3 scripts/deploy-backend.py
       - name: Verify backend readiness
         env:
           ALB_DNS_NAME: ${{ needs.terraform.outputs.alb_dns_name }}
@@ -302,6 +287,10 @@ jobs:
           echo "Backend readiness check failed after retries."
           print_diagnostics
           exit 1
+      - name: Verify hosted metrics, logs and traces
+        env:
+          GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.GRAFANA_SERVICE_ACCOUNT_TOKEN }}
+        run: python3 scripts/grafana-monitoring.py verify --attempts 12
 
   deploy-frontend:
     if: always() && github.event_name == 'workflow_dispatch' && !inputs.plan_only && needs.terraform-changes.outputs.frontend == 'true' && needs.terraform.result == 'success' && (needs.deploy-backend.result == 'success' || needs.deploy-backend.result == 'skipped')
@@ -315,7 +304,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
@@ -327,27 +316,12 @@ jobs:
           VITE_AUTH0_DOMAIN: ${{ vars.VITE_AUTH0_DOMAIN }}
           VITE_AUTH0_CLIENT_ID: ${{ vars.VITE_AUTH0_CLIENT_ID }}
           VITE_AUTH0_AUDIENCE: ${{ vars.VITE_AUTH0_AUDIENCE }}
-          VITE_DATADOG_SITE: datadoghq.com
-          VITE_DATADOG_APPLICATION_ID: ${{ vars.VITE_DATADOG_APPLICATION_ID }}
-          VITE_DATADOG_CLIENT_TOKEN: ${{ vars.VITE_DATADOG_CLIENT_TOKEN }}
-          VITE_DATADOG_SERVICE: property-flow-client
-          VITE_DATADOG_ENV: dev
-          VITE_DATADOG_TRACE_SAMPLE_RATE: ${{ vars.VITE_DATADOG_TRACE_SAMPLE_RATE || '100' }}
-          VITE_DATADOG_SESSION_SAMPLE_RATE: ${{ vars.VITE_DATADOG_SESSION_SAMPLE_RATE || '100' }}
-          VITE_DATADOG_SESSION_REPLAY_SAMPLE_RATE: ${{ vars.VITE_DATADOG_SESSION_REPLAY_SAMPLE_RATE || '20' }}
           VITE_APP_VERSION: ${{ github.sha }}
-          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
-          DATADOG_SITE: datadoghq.com
-          DATADOG_API_HOST: api.datadoghq.com
           FRONTEND_BUCKET: ${{ needs.terraform.outputs.frontend_bucket_name }}
         run: |
-          npm install
+          npm ci --no-audit --no-fund
           cd client && npm run build
           cd ..
-          npx @datadog/datadog-ci@latest sourcemaps upload ./client/dist/assets \
-            --service "$VITE_DATADOG_SERVICE" \
-            --release-version "$VITE_APP_VERSION" \
-            --minified-path-prefix "https://${{ needs.terraform.outputs.cloudfront_url }}/assets"
           aws s3 sync client/dist/ "s3://$FRONTEND_BUCKET" --delete
       - name: Invalidate CloudFront
         run: |
@@ -359,6 +333,33 @@ jobs:
           bash scripts/verify-dev-public.sh "$PUBLIC_URL"
           echo "Deployed commit: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Application: $PUBLIC_URL" >> "$GITHUB_STEP_SUMMARY"
+
+  retire-datadog:
+    name: Retire legacy monitoring after verified cutover
+    if: always() && github.event_name == 'workflow_dispatch' && !inputs.plan_only && inputs.retire_datadog && needs.deploy-backend.result == 'success' && (needs.deploy-frontend.result == 'success' || needs.deploy-frontend.result == 'skipped')
+    needs: [deploy-backend, deploy-frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: us-east-1
+      - name: Install pinned AWS SDK
+        run: python3 -m pip install boto3==1.43.114
+      - name: Recheck new-release telemetry before retiring the integration
+        env:
+          GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.GRAFANA_SERVICE_ACCOUNT_TOKEN }}
+        run: python3 scripts/grafana-monitoring.py verify --attempts 3
+      - name: Inspect exact legacy resources and retirement guards
+        run: python3 scripts/retire-datadog.py
+      - name: Retire reviewed integration and unused agent task definitions
+        run: python3 scripts/retire-datadog.py --execute
 
   record-release-state:
     name: Remember successful component releases

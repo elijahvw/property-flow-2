@@ -26,7 +26,8 @@ variable "auth0_m2m_client_id" {
 }
 
 variable "auth0_m2m_client_secret" {
-  type = string
+  type      = string
+  sensitive = true
 }
 
 variable "db_name" {
@@ -42,16 +43,6 @@ variable "db_user" {
 variable "db_password" {
   type      = string
   sensitive = true
-}
-
-variable "datadog_api_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "datadog_site" {
-  type    = string
-  default = "datadoghq.com"
 }
 
 variable "app_origin" {
@@ -71,5 +62,15 @@ variable "auth0_web_client_secret" {
   validation {
     condition     = length(var.auth0_web_client_secret) > 0
     error_message = "Set the AUTH0_WEB_CLIENT_SECRET GitHub Actions secret before deployment."
+  }
+}
+
+variable "grafana_otlp_endpoint" {
+  type        = string
+  default     = ""
+  description = "Grafana Cloud OTLP gateway base URL ending /otlp; empty keeps exports disabled. Credentials are injected by ECS from Secrets Manager."
+  validation {
+    condition     = var.grafana_otlp_endpoint == "" || can(regex("^https://otlp-gateway-[a-z0-9-]+[.]grafana[.]net/otlp$", var.grafana_otlp_endpoint))
+    error_message = "Use the HTTPS Grafana Cloud OTLP gateway URL from Send data > OpenTelemetry (no credentials, query or fragment)."
   }
 }

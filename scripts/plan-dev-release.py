@@ -22,7 +22,7 @@ def relevant(component, path):
     if path in ("package.json", "package-lock.json", ".github/workflows/deploy-dev.yml", "scripts/plan-dev-release.py"):
         return True
     if component == "backend":
-        return path.startswith("server/") or path == "scripts/dev-power.sh"
+        return path.startswith(("server/", "monitoring/")) or path in ("scripts/dev-power.sh", "scripts/grafana-monitoring.py", "scripts/deploy-backend.py")
     return path.startswith("client/") or path == "scripts/verify-dev-public.sh"
 
 def changed_files(base, head):
