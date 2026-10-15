@@ -1,3 +1,4 @@
+import {renewalCases} from "./renewal-cases.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID,createHash} from 'node:crypto';
@@ -171,9 +172,10 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
    const browserUnit=(await admin.query(`SELECT id,bedrooms,"bathroomsHundredths","marketRentCents" FROM "Unit" WHERE label='Browser unit'`)).rows;assert.equal(browserUnit.length,1);assert.equal(browserUnit[0].bedrooms,0);assert.equal(browserUnit[0].bathroomsHundredths,225);assert.equal(browserUnit[0].marketRentCents,125001);await expect(page.locator('.feedback-region')).toContainText('Unit created.');
    await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Leases',exact:true}).click();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await page.getByLabel('Unit for new lease').selectOption(browserUnit[0].id);
    await page.getByLabel('New lease start date').fill('2026-11-01');await page.getByLabel('New lease end date',{exact:true}).fill('2027-10-31');await page.getByLabel('New lease monthly rent (USD)').fill('1250.50');
-   await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();assert.equal(keys.lease[0],keys.lease[1]);
+   await page.getByRole('button',{name:'Review lease',exact:true}).click();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();assert.equal(keys.lease[0],keys.lease[1]);
    assert.equal((await admin.query(`SELECT count(*)::int n FROM "Lease" WHERE "unitId"=$1`,[browserUnit[0].id])).rows[0].n,1);
    assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='lease.created' AND "targetId" IN (SELECT id FROM "Lease" WHERE "unitId"=$1)`,[browserUnit[0].id])).rows[0].n,1);
   }finally{await browser.close();}
  });
+ await t.test('linked lease renewals',async renewalTest=>renewalCases(renewalTest,admin,call,db));
 });

@@ -205,6 +205,7 @@ test("lease create and edit use complete payment terms, preserve clear instructi
   await expect(
     page.getByText(/Example: November rent due 2026-11-30/),
   ).toContainText("past grace from 2026-12-06");
+  await page.getByRole("button",{name:"Review lease",exact:true}).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
     page.getByRole("button", { name: "Create lease record", exact: true }),

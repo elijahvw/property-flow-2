@@ -4,7 +4,7 @@ import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
-import { Form } from "./Workspace";
+import { Form, InvitationForm, Invitations } from "./Workspace";
 
 type Profile = {
   userId: string;
@@ -41,33 +41,33 @@ export function ResidentProfiles() {
   );
 }
 function Directory() {
-  const [params]=useSearchParams();
+  const [params] = useSearchParams();
   const r = useResource<Profile[]>(
     "/api/company/resident-profiles",
     true,
     true,
   );
   const [query, setQuery] = useState(""),
-    [selected, setSelected] = useState(params.get("residentId")||"");
+    [selected, setSelected] = useState(params.get("residentId") || ""),
+    [inviting, setInviting] = useState(false),
+    [invitationRevision, setInvitationRevision] = useState(0);
   const rows = r.data?.filter((p) =>
     `${p.contactName || ""} ${p.user.name || ""} ${p.user.email}`
       .toLowerCase()
       .includes(query.trim().toLowerCase()),
   );
-  const { can } = useAuth();
+  const { can, data } = useAuth();
   return (
     <>
       <header className="page-heading">
         <p className="eyebrow">People</p>
-        <h1>Residents</h1>
+        <h1>Tenants</h1>
         <p>
           Contact information, property access and activity for residents in
           your company.
         </p>
         {can("members.manage") && (
-          <Link className="button" to="/company/members?invite=1">
-            Invite resident
-          </Link>
+          <button onClick={() => setInviting(true)}>Invite tenant</button>
         )}
       </header>
       <section className="panel">
@@ -99,12 +99,12 @@ function Directory() {
             <p>
               {query
                 ? "Try another name or email."
-                : "Invite a resident from Team. They appear here after accepting."}
+                : "Invite a tenant here. They appear in this directory after accepting."}
             </p>
           </div>
         ) : (
           <div className="table-wrap">
-            <table>
+            <table className="tenant-directory">
               <thead>
                 <tr>
                   <th>Resident</th>
@@ -124,8 +124,8 @@ function Directory() {
                       </strong>
                       <span className="cell-detail">{p.user.email}</span>
                     </td>
-                    <td>{p.contactPhone || "No phone recorded"}</td>
-                    <td>
+                    <td data-label="Contact">{p.contactPhone || "No phone recorded"}</td>
+                    <td data-label="Access">
                       <span className="badge">
                         {p.status === "active" && p.user.status === "active"
                           ? p.user.emailVerified
@@ -149,6 +149,22 @@ function Directory() {
           </div>
         )}
       </section>
+      {can("members.manage") && (
+        <>
+          <EditorDialog
+            open={inviting}
+            title="Invite tenant"
+            onClose={() => setInviting(false)}
+          >
+            <InvitationForm
+              companyId={data?.membership?.companyId}
+              audience="tenants"
+              reload={() => setInvitationRevision((v) => v + 1)}
+            />
+          </EditorDialog>
+          <Invitations key={invitationRevision} audience="tenants" />
+        </>
+      )}
       {selected && (
         <ResidentEditor
           id={selected}
@@ -162,6 +178,8 @@ function Directory() {
   );
 }
 function ResidentEditor({ id, close }: { id: string; close: () => void }) {
+  const { can } = useAuth();
+  const [accessEditing, setAccessEditing] = useState(false);
   const endpoint = `/api/company/resident-profiles/${encodeURIComponent(id)}`;
   const r = useResource<Detail>(endpoint);
   const [draft, setDraft] = useState<Profile>();
@@ -286,6 +304,67 @@ function ResidentEditor({ id, close }: { id: string; close: () => void }) {
               </div>
             </dl>
           )}
+          {can("members.manage") && (
+            <section className="editor-section">
+              <h3>Company access</h3>
+              {accessEditing ? (
+                <Form
+                  key={person.version}
+                  label="Save tenant access"
+                  operation="membership.update"
+                  submit={async (form) => {
+                    await api(
+                      `/api/company/members/${encodeURIComponent(id)}`,
+                      {
+                        method: "PATCH",
+                        body: {
+                          role: "resident",
+                          status: String(form.get("status")),
+                          expectedVersion: person.version,
+                        },
+                      },
+                    );
+                    setAccessEditing(false);
+                    r.reload();
+                  }}
+                >
+                  <label>
+                    Tenant access
+                    <select name="status" defaultValue={person.status}>
+                      <option value="active">Active</option>
+                      <option value="disabled">Disabled</option>
+                    </select>
+                  </label>
+                  <p className="help">
+                    Disabling access removes property assignments. Reactivation
+                    requires assigning properties again. The sign-in account
+                    remains managed by the platform administrator.
+                  </p>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => setAccessEditing(false)}
+                  >
+                    Cancel access changes
+                  </button>
+                </Form>
+              ) : (
+                <>
+                  <p>
+                    {person.status === "active"
+                      ? "Active company membership"
+                      : "Disabled company membership"}
+                  </p>
+                  <button
+                    className="secondary"
+                    onClick={() => setAccessEditing(true)}
+                  >
+                    Edit tenant access
+                  </button>
+                </>
+              )}
+            </section>
+          )}
           <section className="editor-section">
             <h3>Property access</h3>
             {person.assignments.length ? (
@@ -294,7 +373,7 @@ function ResidentEditor({ id, close }: { id: string; close: () => void }) {
                   <li key={property.id}>
                     <div>
                       <Link
-                        to={`/company/properties/${encodeURIComponent(property.id)}`}
+                        to={`/company/properties/${encodeURIComponent(property.id)}/residents`}
                       >
                         {property.name}
                       </Link>

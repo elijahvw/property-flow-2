@@ -1,3 +1,4 @@
+import { RecordIdentity } from "../components/RecordIdentity";
 import { Link, useSearchParams } from "react-router-dom";
 import { DraftReset } from "../components/DraftReset";
 import { PropertyNavigation } from "../components/PropertyNavigation";
@@ -8,6 +9,7 @@ import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "./Workspace";
 type Entry = {
+  reference?: string;
   id: string;
   leaseId?: string | null;
   propertyId: string;
@@ -286,6 +288,11 @@ function LedgerWorkspace() {
                       </p>
                     )}
                     {entry.memo && <p>{entry.memo}</p>}
+                    <RecordIdentity
+                      id={entry.id}
+                      reference={entry.reference}
+                      label="Transaction"
+                    />
                     {entry.voidedAt ? (
                       <p>Voided: {entry.voidReason}</p>
                     ) : (
@@ -326,7 +333,7 @@ function LedgerWorkspace() {
           <Form
             key={`${selected.id}:${selected.version}`}
             operation="finance.void"
-            label={`Void transaction ${selected.id}`}
+            label="Void transaction"
             submit={async (form) => {
               await api(
                 `/api/company/finances/${encodeURIComponent(selected.id)}/void`,

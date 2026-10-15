@@ -247,6 +247,11 @@ model Unit {
   @@index([companyId, propertyId, id])
 }
 model Lease {
+ @@unique([companyId,previousLeaseId])
+ previousLeaseId String?
+ previousLease Lease? @relation("LeaseRenewals",fields:[previousLeaseId,unitId,propertyId,companyId],references:[id,unitId,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ renewals Lease[] @relation("LeaseRenewals")
+ @@unique([id,unitId,propertyId,companyId],map:"Lease_renewal_identity")
   rentSchedules RentSchedule[]
   rentDueDay Int @default(1)
   graceDays Int @default(0)
@@ -281,6 +286,7 @@ model Lease {
 }
 
 model LedgerEntry {
+ reference String @unique @default(dbgenerated("('TX-'::text || (nextval('ledger_entry_reference_seq'::regclass))::text)"))
  @@index([companyId, leaseId])
  leaseId String?
  lease Lease? @relation(fields: [leaseId, propertyId, companyId], references: [id, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
@@ -320,6 +326,7 @@ model UserProvision {
 }
 
 model RentCharge {
+ reference String @unique @default(dbgenerated("('RC-'::text || (nextval('rent_charge_reference_seq'::regclass))::text)"))
  scheduleId String?
  schedule RentSchedule? @relation(fields: [scheduleId, leaseId, propertyId, companyId], references: [id, leaseId, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
  occurrences RentScheduleOccurrence[]

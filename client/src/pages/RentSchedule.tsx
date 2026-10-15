@@ -1,3 +1,9 @@
+import {
+  RentRepost,
+  pendingRepost,
+  repostStorage,
+  type RepostReview,
+} from "./RentRepost";
 import { useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -47,7 +53,15 @@ type Data = {
     periodOn: string;
     outcome: string;
     createdAt: string;
+    currentCharge?: {
+      id: string;
+      reference?: string;
+      amountCents: number;
+      dueOn: string;
+    } | null;
+    scheduleId?: string;
     charge?: {
+      reference?: string;
       id: string;
       amountCents: number;
       dueOn: string;
@@ -112,6 +126,18 @@ export function RentSchedule({
     true,
   );
   const schedule = r.data?.schedule;
+  const repostKey = repostStorage(
+    auth!.user.id,
+    auth!.membership!.companyId,
+    lease.id,
+  );
+  const [repost, setRepost] = useState<{
+      review: RepostReview;
+      restored?: ReturnType<typeof pendingRepost>;
+    } | null>(null),
+    [repostOpen, setRepostOpen] = useState(false),
+    [repostError, setRepostError] = useState("");
+  const retainedRepost = pendingRepost(repostKey);
   let recoverable = false;
   try {
     recoverable = !!sessionStorage.getItem(key);
@@ -208,13 +234,25 @@ export function RentSchedule({
                     label="Check next installment"
                     successText="Billing check complete."
                     submit={async () => {
-                      const result = await api<{ outcome: string }>(
+                      const result = await api<{
+                        outcome: string;
+                        periodOn?: string;
+                        postOn?: string;
+                        dueOn?: string;
+                        businessDate?: string;
+                        previousInstallment?: {
+                          periodOn: string;
+                          voided: boolean;
+                        } | null;
+                      }>(
                         `/api/company/rent-schedules/${encodeURIComponent(schedule.id)}/run`,
                         { method: "POST", body: {} },
                       );
                       setNote(
                         result.outcome === "not_due"
-                          ? "The next installment is not due for posting yet."
+                          ? result.periodOn && result.postOn
+                            ? `Next installment ${result.periodOn.slice(0, 7)} posts ${result.postOn.slice(0, 10)} (due ${result.dueOn?.slice(0, 10)}; company date ${result.businessDate}).${result.previousInstallment?.voided ? ` ${result.previousInstallment.periodOn.slice(0, 7)} was already processed and its charge is now voided. Review a repost below to bill that month again.` : ""}`
+                            : "The next installment is not due for posting yet."
                           : "Billing check complete. Review the posting history.",
                       );
                       refreshed();
@@ -244,6 +282,21 @@ export function RentSchedule({
           {note}
         </p>
       )}
+      {repostError && <p role="alert">{repostError}</p>}
+      {retainedRepost && (
+        <button
+          className="secondary"
+          onClick={() => {
+            setRepost({
+              review: retainedRepost.review,
+              restored: retainedRepost,
+            });
+            setRepostOpen(true);
+          }}
+        >
+          Recover pending repost
+        </button>
+      )}
       {!!r.data?.history?.length && (
         <details>
           <summary>Posting history · latest page</summary>
@@ -265,6 +318,36 @@ export function RentSchedule({
                     {new Date(row.createdAt).toLocaleString()}
                   </p>
                 </div>
+                {row.currentCharge &&
+                  row.currentCharge.id !== row.charge?.id && (
+                    <p className="help">
+                      Current replacement:{" "}
+                      {row.currentCharge.reference || "Rent charge"} ·{" "}
+                      {dollars(row.currentCharge.amountCents)}
+                    </p>
+                  )}
+                {row.currentCharge === null &&
+                  (row.charge?.voidedAt || row.outcome === "suppressed") &&
+                  (!row.scheduleId || row.scheduleId === schedule?.id) && (
+                    <Form
+                      operation="page.data.load"
+                      label={`Review repost for ${row.periodOn.slice(0, 7)}`}
+                      submit={async () => {
+                        setRepostError("");
+                        const review = await api<RepostReview>(
+                          `/api/company/rent-schedules/${encodeURIComponent(row.scheduleId || schedule!.id)}/repost-preview`,
+                          { method: "POST", body: { occurrenceId: row.id } },
+                        );
+                        setRepost({ review });
+                        setRepostOpen(true);
+                      }}
+                    >
+                      <span className="help">
+                        This month is voided. Automatic checks will not recreate
+                        it.
+                      </span>
+                    </Form>
+                  )}
               </li>
             ))}
           </ul>
@@ -283,6 +366,24 @@ export function RentSchedule({
           Older posting history
         </button>
       )}
+      <EditorDialog
+        open={repostOpen}
+        title="Review installment repost"
+        onClose={() => setRepostOpen(false)}
+      >
+        {repost && (
+          <RentRepost
+            key={repost.review.occurrenceId}
+            review={repost.review}
+            restored={repost.restored}
+            saved={() => {
+              setRepostOpen(false);
+              setRepost(null);
+              refreshed();
+            }}
+          />
+        )}
+      </EditorDialog>
       <EditorDialog
         open={open}
         title="Set up recurring rent"

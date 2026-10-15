@@ -47,7 +47,7 @@ export const routes: {
   },
   {
     path: "/company/residents",
-    title: "Residents",
+    title: "Tenants",
     permission: "resident.assignment.manage",
     section: "Company",
   },

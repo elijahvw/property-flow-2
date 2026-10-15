@@ -1,3 +1,5 @@
+import { registerRentRecovery } from "./rent-recovery.js";
+import { auditLabels } from "./audit-labels.js";
 import type {
   FastifyInstance,
   FastifyRequest,
@@ -206,6 +208,7 @@ export function registerApplication(
   registerFinances(server, db, authenticate, origin);
   registerRent(server, db, authenticate, origin);
   registerRentSchedules(server, db, authenticate, origin);
+  registerRentRecovery(server, db, authenticate, origin);
   registerUserAdministration(server, db, authenticate, origin, identityProvider);
   registerCompanyAdministration(server, db, authenticate, origin);
   registerResidentProfiles(server, db, authenticate, origin);
@@ -410,11 +413,11 @@ export function registerApplication(
     const query = request.query as Record<string, unknown>;
     if (Object.keys(query).some(key => key !== "targetId")) throw new AccessError(400, "INVALID_INPUT", "Unknown activity filter.");
     const targetId = query.targetId === undefined ? undefined : opaqueUserId(query.targetId);
-    return db.auditEvent.findMany({
+    return auditLabels(db, await db.auditEvent.findMany({
       where: targetId ? { OR: [{targetId}, {actorId:targetId}] } : undefined,
       orderBy: [{ createdAt: "desc" }, {id:"desc"}],
       take: 100,
-    });
+    }));
   });
 
   server.get("/api/company", auth, async (request) => {
@@ -470,6 +473,8 @@ export function registerApplication(
         });
         if (!member || member.companyId !== companyId)
           throw new AccessError(404, "NOT_FOUND", "Member not found.");
+        if (Object.hasOwn(body, "expectedVersion") && body.expectedVersion !== member.version)
+          throw new AccessError(409, "STALE_MEMBERSHIP", "This person's access changed. Close and reopen their record before saving.");
         if (member.role === "owner")
           throw new AccessError(
             403,
@@ -684,9 +689,12 @@ export function registerApplication(
     const isPlatform = permissions(request.principal!).includes(
       "platform.manage",
     );
-    const companyId = isPlatform ? undefined : scope(request, "members.manage");
+    const audience = (request.query as Record<string, unknown>).audience;
+    if (audience !== undefined && audience !== "team" && audience !== "tenants")
+      throw new AccessError(400, "INVALID_AUDIENCE", "Choose team or tenant invitations.");
+    const companyId = audience || !isPlatform ? scope(request, "members.manage") : undefined;
     return db.invitation.findMany({
-      where: { companyId },
+      where: { companyId, ...(audience === "team" ? { role: { not: "resident" as const } } : audience === "tenants" ? { role: "resident" as const } : {}) },
       select: {
         id: true,
         companyId: true,

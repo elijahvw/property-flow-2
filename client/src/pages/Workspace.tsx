@@ -1,3 +1,4 @@
+import { RecordIdentity } from "../components/RecordIdentity";
 import {
   UserProvisioning,
   UserVerificationControls,
@@ -89,7 +90,8 @@ export function Form({
     return () => editor.register(formId, false);
   }, [busy, editor.register, formId]);
   return (
-    <form className="workflow-form"
+    <form
+      className="workflow-form"
       onSubmit={async (event) => {
         event.preventDefault();
         if (busy || editor.busy) return;
@@ -182,16 +184,25 @@ function Field({
 function RoleSelect({
   value = "resident",
   owner = false,
+  audience,
 }: {
   value?: string;
   owner?: boolean;
+  audience?: "team" | "tenants";
 }) {
   return (
     <label>
       Company role
       <select name="role" defaultValue={value}>
         {roles
-          .filter((role) => owner || role !== "owner")
+          .filter(
+            (role) =>
+              (owner || role !== "owner") &&
+              (!audience ||
+                (audience === "team"
+                  ? role !== "resident"
+                  : role === "resident")),
+          )
           .map((role) => (
             <option key={role} value={role}>
               {role.charAt(0).toUpperCase() + role.slice(1)}
@@ -266,14 +277,16 @@ function Badge({ children }: { children: React.ReactNode }) {
 }
 
 export { Companies, CompanyDetail } from "./CompanyAdministration";
-function InvitationForm({
+export function InvitationForm({
   companyId,
   owner = false,
   reload,
+  audience,
 }: {
   companyId?: string;
   owner?: boolean;
   reload?: () => void;
+  audience?: "team" | "tenants";
 }) {
   const [url, setUrl] = useState("");
   return (
@@ -299,7 +312,11 @@ function InvitationForm({
         }}
       >
         <Field name="email" label="Email address" type="email" />
-        <RoleSelect owner={owner} />
+        <RoleSelect
+          owner={owner}
+          audience={audience}
+          value={audience === "team" ? "manager" : "resident"}
+        />
         <p className="help">
           Expires after 72 hours. Only the person with this verified email can
           accept. Share the link with them directly.
@@ -692,7 +709,9 @@ function PropertyDirectory() {
       zip: string;
     }[]
   >("/api/company/properties", true, true);
-  const [adding, setAdding] = useState(new URLSearchParams(window.location.search).get("new")==="property");
+  const [adding, setAdding] = useState(
+    new URLSearchParams(window.location.search).get("new") === "property",
+  );
   const [propertyQuery, setPropertyQuery] = useState("");
   const [managing, setManaging] = useState<{ id: string; name: string } | null>(
     null,
@@ -720,7 +739,9 @@ function PropertyDirectory() {
           <Form
             key={propertyKey}
             operation="property.create"
-            secondaryActions={<DraftReset reset={() => setPropertyKey(crypto.randomUUID())} />}
+            secondaryActions={
+              <DraftReset reset={() => setPropertyKey(crypto.randomUUID())} />
+            }
             label="Create property"
             submit={async (data) => {
               await api("/api/company/properties", {
@@ -746,7 +767,6 @@ function PropertyDirectory() {
               <Field name="zip" label="Postal code" />
             </div>
             <PropertyFields />
-
           </Form>
         </EditorDialog>
       )}
@@ -846,19 +866,23 @@ function TeamDirectory() {
     [transferring, setTransferring] = useState(false);
   const [selected, setSelected] = useState("");
   const [invitationRevision, setInvitationRevision] = useState(0);
-  const member = r.data?.find((m) => m.userId === selected);
+  const team = r.data?.filter((m) => m.role !== "resident");
+  const member = team?.find((m) => m.userId === selected);
   return (
     <>
       <header className="page-heading">
         <p className="eyebrow">Company</p>
         <h1>Team</h1>
-        <p>Invite people and control their access to your company.</p>
+        <p>
+          Manage owners, managers and staff. Tenant profiles and property access
+          live in Tenants.
+        </p>
         <div className="actions">
-          <button onClick={() => setInviting(true)}>Invite a person</button>
+          <button onClick={() => setInviting(true)}>Invite team member</button>
           <button className="secondary" onClick={() => setTransferring(true)}>
             Transfer ownership
           </button>
-          <Link to="/company/residents">Manage resident profiles</Link>
+          <Link to="/company/residents">Manage tenants</Link>
         </div>
       </header>
       <section className="panel">
@@ -866,7 +890,7 @@ function TeamDirectory() {
           <LoadState error={r.error} retry={r.reload} />
         ) : (
           <ul className="record-list">
-            {r.data.map((m) => (
+            {team?.map((m) => (
               <li key={m.userId}>
                 <div>
                   <strong>{m.user.name || m.user.email}</strong>
@@ -903,6 +927,7 @@ function TeamDirectory() {
                   body: {
                     role: text(data, "role"),
                     status: text(data, "status"),
+                    expectedVersion: member.version,
                   },
                 },
               );
@@ -910,18 +935,19 @@ function TeamDirectory() {
               r.reload();
             }}
           >
-            <RoleSelect value={member.role} />
+            <RoleSelect value={member.role} audience="team" />
             <StatusSelect value={member.status} />
           </Form>
         </EditorDialog>
       )}
       <EditorDialog
         open={inviting}
-        title="Invite a person"
+        title="Invite team member"
         onClose={() => setInviting(false)}
       >
         <InvitationForm
           companyId={data?.membership?.companyId}
+          audience="team"
           reload={() => setInvitationRevision((v) => v + 1)}
         />
       </EditorDialog>
@@ -951,6 +977,7 @@ function TeamDirectory() {
               {r.data
                 ?.filter(
                   (m) =>
+                    m.role !== "resident" &&
                     m.userId !== user?.id &&
                     m.status === "active" &&
                     m.user.status === "active",
@@ -964,11 +991,17 @@ function TeamDirectory() {
           </label>
         </Form>
       </EditorDialog>
-      <Invitations key={invitationRevision} />
+      <Invitations key={invitationRevision} audience="team" />
     </>
   );
 }
-function Invitations({ platform = false }: { platform?: boolean }) {
+export function Invitations({
+  platform = false,
+  audience,
+}: {
+  platform?: boolean;
+  audience?: "team" | "tenants";
+}) {
   const r = useResource<
     {
       id: string;
@@ -978,17 +1011,30 @@ function Invitations({ platform = false }: { platform?: boolean }) {
       acceptedAt: string | null;
       revokedAt: string | null;
     }[]
-  >("/api/invitations");
+  >(audience ? `/api/invitations?audience=${audience}` : "/api/invitations");
   const [error, setError] = useState("");
+  const rows = r.data?.filter(
+    (i) =>
+      !audience ||
+      (audience === "team" ? i.role !== "resident" : i.role === "resident"),
+  );
   return (
     <section className="panel">
-      <h2>{platform ? "Platform invitations" : "Invitations"}</h2>
+      <h2>
+        {platform
+          ? "Platform invitations"
+          : audience === "team"
+            ? "Team invitations"
+            : audience === "tenants"
+              ? "Tenant invitations"
+              : "Invitations"}
+      </h2>
       {error && <p role="alert">{error}</p>}
       {!r.data ? (
         <LoadState error={r.error} retry={r.reload} />
-      ) : r.data.length ? (
+      ) : rows?.length ? (
         <ul className="record-list">
-          {r.data.map((i) => {
+          {rows.map((i) => {
             const pending =
               !i.acceptedAt &&
               !i.revokedAt &&
@@ -1282,7 +1328,9 @@ export function Resident() {
         </section>
       )}
       <p className="help">
-        Use My requests for maintenance and <Link to="/resident/rent">My rent</Link> for your charges, payments, and balance.
+        Use My requests for maintenance and{" "}
+        <Link to="/resident/rent">My rent</Link> for your charges, payments, and
+        balance.
       </p>
     </>
   );
@@ -1323,6 +1371,10 @@ export function Audit() {
       id: string;
       action: string;
       actorId: string;
+      actorLabel?: string;
+      actor?: { name: string | null; email: string } | null;
+      companyName?: string | null;
+      targetUser?: { name: string | null; email: string } | null;
       companyId: string | null;
       targetId: string | null;
       createdAt: string;
@@ -1353,8 +1405,22 @@ export function Audit() {
                 {r.data.map((e) => (
                   <tr key={e.id}>
                     <td>{e.action}</td>
-                    <td className="identifier">{e.actorId}</td>
-                    <td className="identifier">{e.companyId || "Platform"}</td>
+                    <td>
+                      {e.actorLabel ||
+                        e.actor?.name ||
+                        e.actor?.email ||
+                        "Account"}
+                      {e.actor?.email && e.actorLabel !== e.actor.email && (
+                        <span className="cell-detail">{e.actor.email}</span>
+                      )}
+                      <RecordIdentity id={e.actorId} label="Actor" />
+                    </td>
+                    <td>
+                      {e.companyName || (e.companyId ? "Company" : "Platform")}
+                      {e.companyId && (
+                        <RecordIdentity id={e.companyId} label="Company" />
+                      )}
+                    </td>
                     <td>{new Date(e.createdAt).toLocaleString()}</td>
                   </tr>
                 ))}

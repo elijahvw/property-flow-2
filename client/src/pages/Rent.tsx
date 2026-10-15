@@ -1,3 +1,4 @@
+import { RecordIdentity } from "../components/RecordIdentity";
 import { RentSchedule } from "./RentSchedule";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -33,6 +34,7 @@ type Summary = {
   netCents: string;
 };
 type Entry = {
+  reference?: string;
   id: string;
   amountCents: number;
   appliedCents: string;
@@ -756,7 +758,7 @@ function LeaseLedger({
                 ],
                 ...(account.charges || []).map((c) => [
                   "Charge",
-                  c.id,
+                  c.reference || c.id,
                   c.periodOn!.slice(0, 7),
                   c.dueOn!.slice(0, 10),
                   moneyCell(String(c.amountCents)),
@@ -780,7 +782,7 @@ function LeaseLedger({
                 ]),
                 ...(account.payments || []).map((p) => [
                   "Payment",
-                  p.id,
+                  p.reference || p.id,
                   "",
                   p.occurredOn!.slice(0, 10),
                   moneyCell(String(p.amountCents)),
@@ -901,7 +903,11 @@ function LeaseLedger({
                         </p>
                       </>
                     )}
-                    <small>Reference: {row.id}</small>
+                    <RecordIdentity
+                      id={row.id}
+                      reference={row.reference}
+                      label={tab === "charges" ? "Charge" : "Payment"}
+                    />
                     {tab === "payments" && !row.voidedAt && (
                       <ul
                         className="rent-allocation-list"

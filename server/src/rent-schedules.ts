@@ -288,7 +288,43 @@ export async function generateRentOccurrence(
       where: { id: schedule.id },
       data: { ...checked, lastErrorCode: null },
     });
-    return { outcome: "not_due" };
+    const previousInstallment = await tx.rentScheduleOccurrence.findFirst({
+      where: { companyId, leaseId: lease.id, periodOn: { lt: period } },
+      orderBy: { periodOn: "desc" },
+      select: {
+        periodOn: true,
+        outcome: true,
+        charge: { select: { voidedAt: true } },
+      },
+    });
+    const previousActiveCharge = previousInstallment
+      ? await tx.rentCharge.findFirst({
+          where: {
+            companyId,
+            leaseId: lease.id,
+            periodOn: previousInstallment.periodOn,
+            voidedAt: null,
+          },
+          select: { id: true },
+        })
+      : null;
+    return {
+      outcome: "not_due",
+      periodOn: period,
+      postOn: item.postOn,
+      dueOn: item.dueOn,
+      businessDate: companyDay(company.timezone, now),
+      previousInstallment: previousInstallment
+        ? {
+            periodOn: previousInstallment.periodOn,
+            outcome: previousInstallment.outcome,
+            voided:
+              !previousActiveCharge &&
+              (previousInstallment.outcome === "suppressed" ||
+                !!previousInstallment.charge?.voidedAt),
+          }
+        : null,
+    };
   }
   let occurrence = await tx.rentScheduleOccurrence.findUnique({
     where: {
@@ -417,6 +453,21 @@ export function registerRentSchedules(
               },
             },
           });
+        const currentCharges = await tx.rentCharge.findMany({
+          where: {
+            companyId,
+            leaseId,
+            voidedAt: null,
+            periodOn: { in: rows.slice(0, 25).map((row) => row.periodOn) },
+          },
+          select: {
+            id: true,
+            reference: true,
+            periodOn: true,
+            amountCents: true,
+            dueOn: true,
+          },
+        });
         return {
           schedule: schedule ? publicSchedule(schedule) : null,
           preview:
@@ -429,7 +480,11 @@ export function registerRentSchedules(
                   schedule.nextPeriodOn,
                 )
               : [],
-          history: rows.slice(0, 25),
+          history: rows.slice(0, 25).map((row) => ({
+            ...row,
+            currentCharge:
+              currentCharges.find((c) => +c.periodOn === +row.periodOn) ?? null,
+          })),
           nextCursor: rows.length > 25 ? rows[24].id : null,
         };
       });

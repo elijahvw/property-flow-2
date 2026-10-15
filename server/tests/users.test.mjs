@@ -1220,6 +1220,29 @@ test(
       assert.ok(activity.json().some(e=>e.action==="user.profile.updated"));assert.equal(activity.json().some(e=>e.action==="unrelated"),false);
       assert.equal((await call("profile-manager","GET","/api/platform/audit?targetId=profile-resident")).statusCode,403);
     });
+    await t.test("separate company invitation directories and versioned access edits preserve company and role boundaries", async () => {
+      const directory = (await call("profile-foreign", "GET", "/api/company/members")).json();
+      const member = directory.find(m => m.userId === "profile-resident");
+      const path = "/api/company/members/profile-resident";
+      const before = await db.auditEvent.count({where:{targetId:"profile-resident",action:"membership.updated"}});
+      const body = {role:"resident",status:"disabled",expectedVersion:member.version};
+      assert.equal((await call("profile-owner","PATCH",path,body)).statusCode,404);
+      assert.equal((await call("profile-foreign","PATCH",path,body,{"x-csrf-token":"wrong"})).statusCode,403);
+      assert.equal((await call("profile-foreign","PATCH",path,body)).statusCode,200);
+      assert.equal((await call("profile-foreign","PATCH",path,{...body,status:"active"})).statusCode,409);
+      assert.equal((await db.companyMembership.findUnique({where:{userId:"profile-resident"}})).status,"disabled");
+      assert.equal(await db.auditEvent.count({where:{targetId:"profile-resident",action:"membership.updated"}}),before+1);
+      for (const [email,role] of [["staff-directory@test.invalid","staff"],["tenant-directory@test.invalid","resident"]]) {
+        const res = await call("profile-foreign","POST","/api/invitations",{email,role});assert.equal(res.statusCode,200,res.body);
+      }
+      for (const [audience,role] of [["team","staff"],["tenants","resident"]]) {
+        const res = await call("profile-foreign","GET","/api/invitations?audience="+audience);
+        assert.equal(res.statusCode,200,res.body);assert.ok(res.json().length);assert.ok(res.json().every(i=>i.companyId==="profile-b" && (audience==="team"?i.role!=="resident":i.role==="resident")));
+        assert.ok(res.json().some(i=>i.role===role));
+      }
+      assert.equal((await call("profile-foreign","GET","/api/invitations?audience=invalid")).statusCode,400);
+      assert.equal((await call("platform","GET","/api/invitations?audience=tenants")).statusCode,403);
+    });
     await t.test(
       "real browser automatically discovers an Auth0 account with no import action or target sign-in",
       { skip: !process.env.TEST_USERS_BROWSER_URL },

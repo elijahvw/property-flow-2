@@ -125,7 +125,7 @@ test("active manager on saved access URL lands in workspace; protected navigatio
     page.getByRole("heading", { name: "Account access pending" }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("link", { name: "Residents", exact: true }),
+    page.getByRole("link", { name: "Tenants", exact: true }),
   ).toBeVisible();
   for (const name of ["Users", "Companies", "Team"])
     await expect(page.getByRole("link", { name, exact: true })).toHaveCount(0);
