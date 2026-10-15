@@ -19,6 +19,7 @@ import { input, mutation, boundedText } from "./operational.js";
 import { registerCompanyAdministration } from "./company-administration.js";
 import { registerUserAdministration } from "./user-administration.js";
 import type { IdentityProvider } from "./identity-provider.js";
+import { registerRentSchedules } from "./rent-schedules.js";
 import { registerRent } from "./rent.js";
 import { registerFinances } from "./finances.js";
 import { registerLeasing } from "./leasing.js";
@@ -204,6 +205,7 @@ export function registerApplication(
   registerLeasing(server, db, authenticate, origin);
   registerFinances(server, db, authenticate, origin);
   registerRent(server, db, authenticate, origin);
+  registerRentSchedules(server, db, authenticate, origin);
   registerUserAdministration(server, db, authenticate, origin, identityProvider);
   registerCompanyAdministration(server, db, authenticate, origin);
   registerResidentProfiles(server, db, authenticate, origin);

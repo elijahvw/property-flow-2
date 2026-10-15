@@ -247,6 +247,7 @@ model Unit {
   @@index([companyId, propertyId, id])
 }
 model Lease {
+  rentSchedules RentSchedule[]
   rentDueDay Int @default(1)
   graceDays Int @default(0)
   paymentInstructions String?
@@ -319,6 +320,9 @@ model UserProvision {
 }
 
 model RentCharge {
+ scheduleId String?
+ schedule RentSchedule? @relation(fields: [scheduleId, leaseId, propertyId, companyId], references: [id, leaseId, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
+ occurrences RentScheduleOccurrence[]
  graceDays Int @default(0)
  id String @id @default(cuid())
  companyId String
@@ -353,4 +357,50 @@ model RentAllocation {
  charge RentCharge @relation(fields: [chargeId, leaseId, propertyId, companyId], references: [id, leaseId, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
  entry LedgerEntry @relation(fields: [entryId, leaseId, propertyId, companyId], references: [id, leaseId, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
  @@index([companyId, leaseId])
+}
+
+model RentSchedule {
+ id String @id @default(cuid())
+ companyId String
+ propertyId String
+ leaseId String
+ createdById String
+ submissionKey String
+ submissionHash String
+ firstPeriodOn DateTime @db.Date
+ lastPeriodOn DateTime? @db.Date
+ nextPeriodOn DateTime @db.Date
+ amountCents Int
+ firstAmountCents Int?
+ lastAmountCents Int?
+ firstDueOn DateTime? @db.Date
+ dueDay Int
+ graceDays Int
+ leadDays Int
+ status String @default("active")
+ version Int @default(1)
+ lastCheckedAt DateTime?
+ lastErrorCode String?
+ createdAt DateTime @default(now())
+ lease Lease @relation(fields: [leaseId, propertyId, companyId], references: [id, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
+ charges RentCharge[]
+ occurrences RentScheduleOccurrence[]
+ @@unique([companyId, createdById, submissionKey])
+ @@unique([id, leaseId, propertyId, companyId])
+ @@index([companyId, id])
+}
+model RentScheduleOccurrence {
+ id String @id @default(cuid())
+ companyId String
+ propertyId String
+ leaseId String
+ scheduleId String
+ periodOn DateTime @db.Date
+ chargeId String?
+ outcome String
+ createdAt DateTime @default(now())
+ schedule RentSchedule @relation(fields: [scheduleId, leaseId, propertyId, companyId], references: [id, leaseId, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
+ charge RentCharge? @relation(fields: [chargeId, leaseId, propertyId, companyId], references: [id, leaseId, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
+ @@unique([companyId, leaseId, periodOn])
+ @@index([companyId, leaseId, id])
 }

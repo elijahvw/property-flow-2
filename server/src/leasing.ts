@@ -143,6 +143,9 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
       const previous = await tx.lease.findFirst({ where: { companyId, id: leaseId }, select: leaseSelect });
       if (!previous) throw new AccessError(404, "NOT_FOUND", "Lease not found.");
       if (previous.version !== expectedVersion) throw conflict();
+      const changesBilling = +data.startsOn!==+previous.startsOn || +(data.endsOn??0)!==+(previous.endsOn??0) || data.rentCents!==previous.rentCents || data.status!==previous.status || (policy.rentDueDay!==undefined&&policy.rentDueDay!==previous.rentDueDay) || (policy.graceDays!==undefined&&policy.graceDays!==previous.graceDays);
+      if(changesBilling && await tx.rentSchedule.findFirst({where:{companyId,leaseId,status:{in:["active","paused"]}},select:{id:true}}))
+        throw new AccessError(409,"LEASE_SCHEDULE_CONFLICT","Stop the recurring rent schedule before changing lease dates, rent, status or payment terms. Posted charges remain unchanged.");
       const firstTermMonth = new Date(data.startsOn); firstTermMonth.setUTCDate(1);
       const outsideTerm = await tx.rentCharge.findFirst({
         where: { companyId, leaseId, voidedAt: null, ...(data.status === "draft" ? {} : { OR: [{ periodOn: { lt: firstTermMonth } }, ...(data.endsOn ? [{ periodOn: { gt: data.endsOn } }] : [])] }) },

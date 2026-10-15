@@ -21,6 +21,7 @@ import {
   submission,
   version,
   type Tx,
+  type AuditRequest,
 } from "./operational.js";
 const leaseSelect = {
   rentDueDay: true,
@@ -39,6 +40,7 @@ const leaseSelect = {
   resident: { select: { name: true, email: true } },
 } as const;
 const chargeSelect = {
+  scheduleId: true,
   graceDays: true,
   id: true,
   leaseId: true,
@@ -132,10 +134,38 @@ export function rentBalances(
   const activeCharges = new Set(
     data.charges.filter((c) => !c.voidedAt).map((c) => c.id),
   );
+  const paymentById = new Map(
+    data.payments.filter((p) => !p.voidedAt).map((p) => [p.id, p]),
+  );
+  const chargeById = new Map(
+    data.charges.filter((c) => !c.voidedAt).map((c) => [c.id, c]),
+  );
+  const receiptHistory = new Map<
+    string,
+    { paidAfterGraceCents: bigint; latestReceivedOn: string | null }
+  >();
   const chargeApplied = new Map<string, bigint>(),
     paymentApplied = new Map<string, bigint>();
   for (const a of data.allocations)
     if (activePayments.has(a.entryId) && activeCharges.has(a.chargeId)) {
+      const charge = chargeById.get(a.chargeId)!,
+        payment = paymentById.get(a.entryId)!;
+      const graceThrough = chargeTiming(
+        charge.dueOn,
+        charge.graceDays,
+        today,
+        1n,
+      ).graceThrough;
+      const received = payment.occurredOn.toISOString().slice(0, 10),
+        history = receiptHistory.get(a.chargeId) ?? {
+          paidAfterGraceCents: 0n,
+          latestReceivedOn: null,
+        };
+      if (received > graceThrough)
+        history.paidAfterGraceCents += BigInt(a.amountCents);
+      if (!history.latestReceivedOn || received > history.latestReceivedOn)
+        history.latestReceivedOn = received;
+      receiptHistory.set(a.chargeId, history);
       chargeApplied.set(
         a.chargeId,
         (chargeApplied.get(a.chargeId) || 0n) + BigInt(a.amountCents),
@@ -145,6 +175,12 @@ export function rentBalances(
         (paymentApplied.get(a.entryId) || 0n) + BigInt(a.amountCents),
       );
     }
+  const chargePaymentHistory = new Map<
+    string,
+    { paidAfterGraceCents: string; paidLate: boolean; settledOn: string | null }
+  >();
+  let paidAfterGrace = 0n,
+    paidLateCharges = 0n;
   let charged = 0n,
     paid = 0n,
     outstanding = 0n,
@@ -166,6 +202,16 @@ export function rentBalances(
       const remaining = BigInt(c.amountCents) - (chargeApplied.get(c.id) || 0n);
       if (remaining < 0n) throw new Error("Rent charge overallocated");
       outstanding += remaining;
+      const history = receiptHistory.get(c.id),
+        late = history?.paidAfterGraceCents ?? 0n;
+      paidAfterGrace += late;
+      if (remaining === 0n && late > 0n) paidLateCharges++;
+      chargePaymentHistory.set(c.id, {
+        paidAfterGraceCents: String(late),
+        paidLate: remaining === 0n && late > 0n,
+        settledOn:
+          remaining === 0n ? (history?.latestReceivedOn ?? null) : null,
+      });
       const timing = chargeTiming(c.dueOn, c.graceDays, today, remaining);
       if (timing.daysPastDue > 0) {
         overdue += remaining;
@@ -193,6 +239,8 @@ export function rentBalances(
       credit += remaining;
     }
   return {
+    paidAfterGraceCents: String(paidAfterGrace),
+    paidLateChargeCount: String(paidLateCharges),
     chargedCents: String(charged),
     paidCents: String(paid),
     outstandingCents: String(outstanding),
@@ -208,11 +256,12 @@ export function rentBalances(
     netCents: String(charged - paid),
     chargeApplied,
     paymentApplied,
+    chargePaymentHistory,
   };
 }
 export async function allocateRentCredit(
   tx: Tx,
-  request: FastifyRequest,
+  request: AuditRequest,
   companyId: string,
   leaseId: string,
 ) {
@@ -342,8 +391,12 @@ export function registerRent(
                   (a) => a.leaseId === lease.id,
                 ),
               };
-              const { chargeApplied, paymentApplied, ...summary } =
-                rentBalances(scopedData, today);
+              const {
+                chargeApplied,
+                paymentApplied,
+                chargePaymentHistory,
+                ...summary
+              } = rentBalances(scopedData, today);
               return {
                 lease: resident ? { ...lease, resident: undefined } : lease,
                 summary,
@@ -351,6 +404,11 @@ export function registerRent(
                   ? {
                       charges: scopedData.charges.map((c) => ({
                         ...c,
+                        ...(chargePaymentHistory.get(c.id) ?? {
+                          paidAfterGraceCents: "0",
+                          paidLate: false,
+                          settledOn: null,
+                        }),
                         ...chargeTiming(
                           c.dueOn,
                           c.graceDays,

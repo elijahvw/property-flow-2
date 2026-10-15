@@ -1,3 +1,4 @@
+import { registerRentBillingWorker } from "./rent-billing-worker.js";
 import fastify, { type FastifyError } from "fastify";
 import tracer from "dd-trace";
 import dotenv from "dotenv";
@@ -94,6 +95,7 @@ server.get("/api/ready", async () => {
 const config = readAuthConfig();
 const authenticate = await registerSessions(server, prisma, config);
 registerApplication(server, prisma, authenticate, config.origin, identityProvider());
+registerRentBillingWorker(server, prisma);
 server.setNotFoundHandler((_request, reply) =>
   reply.code(404).send({ error: "Not found", code: "NOT_FOUND" }),
 );
