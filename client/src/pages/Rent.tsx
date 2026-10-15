@@ -1,3 +1,4 @@
+import { RecordIdentity } from "../components/RecordIdentity";
 import { RentSchedule } from "./RentSchedule";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -33,6 +34,7 @@ type Summary = {
   netCents: string;
 };
 type Entry = {
+  reference?: string;
   id: string;
   amountCents: number;
   appliedCents: string;
@@ -632,6 +634,12 @@ function LeaseLedger({
   stale: boolean;
 }) {
   const { lease, summary } = account;
+  const chargeReferences = new Map(
+    (account.charges || []).map((c) => [c.id, c.reference || c.id]),
+  );
+  const paymentReferences = new Map(
+    (account.payments || []).map((p) => [p.id, p.reference || p.id]),
+  );
   const [chargeOpen, setChargeOpen] = useState(false),
     [paymentOpen, setPaymentOpen] = useState(false),
     [correction, setCorrection] = useState<{
@@ -719,7 +727,7 @@ function LeaseLedger({
                   "Within grace USD",
                   moneyCell(summary.withinGraceCents),
                 ],
-                ["Lease reference", lease.id, "Business date", today],
+                ["Lease internal ID", lease.id, "Business date", today],
                 [
                   "Basis",
                   "Current posted rent ledger in USD; voided entries excluded from totals",
@@ -739,6 +747,7 @@ function LeaseLedger({
                 [
                   "Type",
                   "Reference",
+                  "Internal ID",
                   "Period",
                   "Due / received date",
                   "Amount USD",
@@ -756,6 +765,7 @@ function LeaseLedger({
                 ],
                 ...(account.charges || []).map((c) => [
                   "Charge",
+                  c.reference || c.id,
                   c.id,
                   c.periodOn!.slice(0, 7),
                   c.dueOn!.slice(0, 10),
@@ -780,6 +790,7 @@ function LeaseLedger({
                 ]),
                 ...(account.payments || []).map((p) => [
                   "Payment",
+                  p.reference || p.id,
                   p.id,
                   "",
                   p.occurredOn!.slice(0, 10),
@@ -794,14 +805,18 @@ function LeaseLedger({
                   "",
                 ]),
                 [
-                  "Allocation reference",
+                  "Allocation internal ID",
                   "Payment reference",
+                  "Payment internal ID",
                   "Charge reference",
+                  "Charge internal ID",
                   "Amount USD",
                 ],
                 ...(account.allocations || []).map((a) => [
                   a.id,
+                  paymentReferences.get(a.entryId) || a.entryId,
                   a.entryId,
+                  chargeReferences.get(a.chargeId) || a.chargeId,
                   a.chargeId,
                   moneyCell(String(a.amountCents)),
                 ]),
@@ -901,7 +916,11 @@ function LeaseLedger({
                         </p>
                       </>
                     )}
-                    <small>Reference: {row.id}</small>
+                    <RecordIdentity
+                      id={row.id}
+                      reference={row.reference}
+                      label={tab === "charges" ? "Charge" : "Payment"}
+                    />
                     {tab === "payments" && !row.voidedAt && (
                       <ul
                         className="rent-allocation-list"

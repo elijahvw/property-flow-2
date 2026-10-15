@@ -40,6 +40,7 @@ const leaseSelect = {
   resident: { select: { name: true, email: true } },
 } as const;
 const chargeSelect = {
+  reference:true,
   scheduleId: true,
   graceDays: true,
   id: true,
@@ -54,6 +55,7 @@ const chargeSelect = {
   createdAt: true,
 } as const;
 const paymentSelect = {
+  reference:true,
   id: true,
   leaseId: true,
   occurredOn: true,

@@ -1,3 +1,8 @@
+import {
+  LeaseReview,
+  leasePending,
+  type LeaseReviewData,
+} from "../components/LeaseReview";
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
@@ -16,6 +21,9 @@ type Unit = UnitExtras & {
   version: number;
 };
 type Lease = {
+  previousLeaseId?: string | null;
+  previousLease?: { id: string; endsOn: string | null; status: string } | null;
+  renewals?: { id: string; status: string; startsOn: string }[];
   rentDueDay?: number;
   graceDays?: number;
   paymentInstructions?: string | null;
@@ -310,21 +318,25 @@ function UnitList({
 export function Leases() {
   const { data } = useAuth();
   const [routeParams] = useSearchParams();
-  const scope = `${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}:${routeParams.get("propertyId") || ""}`;
+  const pathParams = useParams();
+  const scope = `${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}:${pathParams.propertyId || routeParams.get("propertyId") || ""}`;
   return <LeaseList key={scope} />;
 }
 function LeaseList() {
+  const auth = useAuth().data;
+  const { propertyId: pathPropertyId } = useParams();
   const [params, setParams] = useSearchParams();
   const [adding, setAdding] = useState(params.get("new") === "lease"),
-    [selected, setSelected] = useState<Lease | null>(null);
-  const contextId = params.get("propertyId") || "",
+    [selected, setSelected] = useState<Lease | null>(null),
+    [renewing, setRenewing] = useState<Lease | null>(null);
+  const contextId = pathPropertyId || params.get("propertyId") || "",
     status = params.get("status") || "",
     attention = params.get("attention") || "";
   const [visitedProperties, setVisitedProperties] = useState<string[]>(() =>
     contextId ? [contextId] : [],
   );
   const [cursor, setCursor] = useState(""),
-    [propertyId, setPropertyId] = useState(params.get("propertyId") || "");
+    [propertyId, setPropertyId] = useState(contextId);
   const properties = useResource<{ id: string; name: string }[]>(
     "/api/company/properties",
   );
@@ -333,6 +345,7 @@ function LeaseList() {
     true,
     true,
   );
+  const propertyName = properties.data?.find((p) => p.id === contextId)?.name;
   const reload = () => {
     setCursor("");
     r.reload();
@@ -342,12 +355,44 @@ function LeaseList() {
       {contextId && <PropertyNavigation id={contextId} />}
       <header className="page-heading">
         <p className="eyebrow">Leasing</p>
-        <h1>Lease records</h1>
+        <h1>
+          {contextId
+            ? `${propertyName || "Property"} · Leases`
+            : "Lease records"}
+        </h1>
         <p>
           Manage lease terms, residents, and monthly rent. These records track
           your leases; signed agreements and balances are managed separately.
         </p>
+        {contextId && (
+          <p>
+            <Link to="/company/leases">View all company leases</Link>
+          </p>
+        )}
         <button onClick={() => setAdding(true)}>Record a lease</button>
+        {properties.data
+          ?.filter(
+            (p) =>
+              (!pathPropertyId || p.id === pathPropertyId) &&
+              leasePending(
+                `pf:lease-setup:${auth?.user.id}:${auth?.membership?.companyId}:${p.id}`,
+              ),
+          )
+          .map((p) => (
+            <button
+              className="secondary"
+              key={p.id}
+              onClick={() => {
+                setPropertyId(p.id);
+                setVisitedProperties((ids) =>
+                  ids.includes(p.id) ? ids : [...ids, p.id],
+                );
+                setAdding(true);
+              }}
+            >
+              Resume lease review · {p.name}
+            </button>
+          ))}
       </header>
       <EditorDialog
         open={adding}
@@ -379,11 +424,13 @@ function LeaseList() {
                 }}
               >
                 <option value="">Choose a property</option>
-                {properties.data.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
+                {properties.data
+                  .filter((p) => !pathPropertyId || p.id === pathPropertyId)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
               </select>
             </label>
             {visitedProperties.map((id) => (
@@ -394,10 +441,14 @@ function LeaseList() {
               >
                 <LeaseCreate
                   propertyId={id}
+                  propertyName={
+                    properties.data!.find((p) => p.id === id)?.name ||
+                    "Property"
+                  }
                   saved={() => {
                     reload();
                     setAdding(false);
-                    setParams({ propertyId: id });
+                    setParams(pathPropertyId ? {} : { propertyId: id });
                   }}
                 />
               </div>
@@ -418,7 +469,9 @@ function LeaseList() {
                 const value = e.target.value;
                 setCursor("");
                 setParams({
-                  ...(contextId ? { propertyId: contextId } : {}),
+                  ...(!pathPropertyId && contextId
+                    ? { propertyId: contextId }
+                    : {}),
                   ...(["ending_soon", "past_end", "in_effect"].includes(value)
                     ? { attention: value }
                     : value
@@ -454,12 +507,13 @@ function LeaseList() {
                   <li key={lease.id}>
                     <div>
                       <h3>
+                        <span className="eyebrow">Property</span>{" "}
                         <Link
-                          to={`/company/properties/${encodeURIComponent(lease.propertyId)}`}
+                          to={`/company/properties/${encodeURIComponent(lease.propertyId)}/leases`}
                         >
                           {lease.property.name}
                         </Link>{" "}
-                        · {lease.unit.label}
+                        · Unit {lease.unit.label}
                       </h3>
                       <p>
                         {lease.resident.name || lease.resident.email} ·{" "}
@@ -470,6 +524,13 @@ function LeaseList() {
                         {lease.endsOn?.slice(0, 10) || "Open-ended"} ·{" "}
                         {usd(lease.rentCents)} monthly
                       </p>
+                      {lease.previousLeaseId && (
+                        <p className="help">
+                          Renewal · previous term ended{" "}
+                          {lease.previousLease?.endsOn?.slice(0, 10) ||
+                            "on record"}
+                        </p>
+                      )}
                     </div>
                     <div className="actions">
                       <Link
@@ -477,6 +538,32 @@ function LeaseList() {
                       >
                         Rent ledger →
                       </Link>
+                      {leasePending(
+                        `pf:lease-renewal:${auth?.user.id}:${auth?.membership?.companyId}:${lease.id}`,
+                      ) && (
+                        <button
+                          className="secondary"
+                          onClick={() => setRenewing(lease)}
+                        >
+                          Resume renewal review
+                        </button>
+                      )}
+                      {lease.status !== "draft" &&
+                        lease.endsOn &&
+                        !lease.renewals?.length && (
+                          <button
+                            className="secondary"
+                            onClick={() => setRenewing(lease)}
+                          >
+                            Prepare renewal
+                          </button>
+                        )}
+                      {lease.renewals?.length ? (
+                        <span className="help">
+                          {lease.renewals[0].status} renewal starts{" "}
+                          {lease.renewals[0].startsOn.slice(0, 10)}
+                        </span>
+                      ) : null}
                       <button
                         className="secondary"
                         onClick={() => setSelected(lease)}
@@ -496,6 +583,29 @@ function LeaseList() {
           </>
         )}
       </section>
+      <EditorDialog
+        open={!!renewing}
+        title="Prepare lease renewal"
+        onClose={() => {
+          setRenewing(null);
+          reload();
+        }}
+      >
+        {renewing && (
+          <LeaseRenewal
+            key={renewing.id}
+            previous={renewing}
+            saved={() => {
+              setRenewing(null);
+              reload();
+              setParams({
+                ...(!pathPropertyId ? { propertyId: renewing.propertyId } : {}),
+                status: "draft",
+              });
+            }}
+          />
+        )}
+      </EditorDialog>
       {selected && (
         <EditorDialog
           open
@@ -544,11 +654,18 @@ function LeaseList() {
 }
 function LeaseCreate({
   propertyId,
+  propertyName,
   saved,
 }: {
   propertyId: string;
+  propertyName: string;
   saved: () => void;
 }) {
+  const auth = useAuth().data,
+    storageKey = `pf:lease-setup:${auth?.user.id}:${auth?.membership?.companyId}:${propertyId}`;
+  const [review, setReview] = useState<LeaseReviewData | null>(() =>
+    leasePending(storageKey),
+  );
   const [key, setKey] = useState(() => crypto.randomUUID()),
     [unitCursor, setUnitCursor] = useState("");
   const [unitOptions, setUnitOptions] = useState<Unit[]>([]);
@@ -603,64 +720,85 @@ function LeaseCreate({
               </p>
             )
           ) : (
-            <Form
-              key={key}
-              operation="lease.create"
-              secondaryActions={
-                <DraftReset reset={() => setKey(crypto.randomUUID())} />
-              }
-              label="Create lease record"
-              submit={async (form) => {
-                await api("/api/company/leases", {
-                  method: "POST",
-                  body: {
-                    propertyId,
-                    unitId: form.get("unitId"),
-                    residentId: form.get("residentId"),
-                    startsOn: form.get("startsOn"),
-                    endsOn: form.get("endsOn") || null,
-                    monthlyRent: form.get("monthlyRent"),
-                    status: form.get("status"),
-                    submissionKey: key,
-                    rentDueDay: Number(form.get("rentDueDay")),
-                    graceDays: Number(form.get("graceDays")),
-                    paymentInstructions:
-                      form.get("paymentInstructions") || null,
-                  },
-                });
-                saved();
-                setKey(crypto.randomUUID());
-              }}
-            >
-              <div className="form-grid">
-                <label>
-                  Unit for new lease
-                  <select name="unitId" required>
-                    {unitOptions.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Primary resident
-                  <select name="residentId" required>
-                    {residents.data.map((person) => (
-                      <option key={person.userId} value={person.userId}>
-                        {person.membership.user.name ||
-                          person.membership.user.email}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+            <>
+              {review && (
+                <LeaseReview
+                  review={review}
+                  storageKey={storageKey}
+                  back={() => setReview(null)}
+                  saved={() => {
+                    setReview(null);
+                    saved();
+                    setKey(crypto.randomUUID());
+                  }}
+                />
+              )}
+              <div hidden={!!review}>
+                <Form
+                  key={key}
+                  operation="page.data.load"
+                  secondaryActions={
+                    <DraftReset reset={() => setKey(crypto.randomUUID())} />
+                  }
+                  label="Review lease"
+                  submit={async (form) => {
+                    setReview({
+                      property: propertyName,
+                      unit:
+                        unitOptions.find((u) => u.id === form.get("unitId"))
+                          ?.label || "Unit",
+                      resident:
+                        residents.data!.find(
+                          (p) => p.userId === form.get("residentId"),
+                        )?.membership.user.email || "Resident",
+                      payload: {
+                        propertyId,
+                        unitId: form.get("unitId"),
+                        residentId: form.get("residentId"),
+                        startsOn: form.get("startsOn"),
+                        endsOn: form.get("endsOn") || null,
+                        monthlyRent: form.get("monthlyRent"),
+                        status: form.get("status"),
+                        submissionKey: key,
+                        rentDueDay: Number(form.get("rentDueDay")),
+                        graceDays: Number(form.get("graceDays")),
+                        paymentInstructions:
+                          form.get("paymentInstructions") || null,
+                      },
+                    });
+                  }}
+                >
+                  <div className="form-grid">
+                    <label>
+                      Unit for new lease
+                      <select name="unitId" required>
+                        {unitOptions.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Primary resident
+                      <select name="residentId" required>
+                        {residents.data.map((person) => (
+                          <option key={person.userId} value={person.userId}>
+                            {person.membership.user.name ||
+                              person.membership.user.email}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <LeaseTerms prefix="New lease" />
+                  <p className="help">
+                    One active lease is allowed per unit. Review the details,
+                    then select Review lease before saving.
+                  </p>
+                </Form>
               </div>
-              <LeaseTerms prefix="New lease" />
-              <p className="help">
-                One active lease is allowed per unit. Review the details, then
-                select Create lease record to save.
-              </p>
-            </Form>
+            </>
           )}
         </>
       )}
@@ -676,7 +814,15 @@ function LeaseCreate({
     </>
   );
 }
-function LeaseTerms({ prefix, value }: { prefix: string; value?: Lease }) {
+function LeaseTerms({
+  prefix,
+  value,
+  draftOnly = false,
+}: {
+  prefix: string;
+  value?: Lease;
+  draftOnly?: boolean;
+}) {
   return (
     <>
       <div className="form-grid">
@@ -718,10 +864,14 @@ function LeaseTerms({ prefix, value }: { prefix: string; value?: Lease }) {
         </label>
         <label>
           {prefix} status
-          <select name="status" defaultValue={value?.status || "draft"}>
+          <select
+            name="status"
+            defaultValue={draftOnly ? "draft" : value?.status || "draft"}
+            disabled={draftOnly}
+          >
             <option value="draft">Draft</option>
-            <option value="active">Active</option>
-            <option value="ended">Ended</option>
+            {!draftOnly && <option value="active">Active</option>}
+            {!draftOnly && <option value="ended">Ended</option>}
           </select>
         </label>
       </div>
@@ -801,5 +951,79 @@ function PaymentTerms({ prefix, value }: { prefix: string; value?: Lease }) {
         saved grace period. No automatic late fees are charged.
       </p>
     </fieldset>
+  );
+}
+
+function LeaseRenewal({
+  previous,
+  saved,
+}: {
+  previous: Lease;
+  saved: () => void;
+}) {
+  const auth = useAuth().data,
+    storageKey = `pf:lease-renewal:${auth?.user.id}:${auth?.membership?.companyId}:${previous.id}`;
+  const [review, setReview] = useState<LeaseReviewData | null>(() =>
+    leasePending(storageKey),
+  );
+  const [key] = useState(() => crypto.randomUUID());
+  const start = new Date(previous.endsOn!);
+  start.setUTCDate(start.getUTCDate() + 1);
+  const proposed = {
+    ...previous,
+    startsOn: start.toISOString(),
+    endsOn: null,
+    status: "draft",
+  };
+  return (
+    <>
+      {review && (
+        <LeaseReview
+          review={review}
+          storageKey={storageKey}
+          back={() => setReview(null)}
+          saved={saved}
+        />
+      )}
+      <div hidden={!!review}>
+        <Form
+          operation="page.data.load"
+          label="Review renewal"
+          submit={async (f) =>
+            setReview({
+              property: previous.property.name,
+              unit: previous.unit.label,
+              resident: previous.resident.email,
+              payload: {
+                propertyId: previous.propertyId,
+                unitId: previous.unitId,
+                residentId: previous.residentId,
+                previousLeaseId: previous.id,
+                expectedPreviousVersion: previous.version,
+                startsOn: f.get("startsOn"),
+                endsOn: f.get("endsOn") || null,
+                monthlyRent: f.get("monthlyRent"),
+                rentDueDay: Number(f.get("rentDueDay")),
+                graceDays: Number(f.get("graceDays")),
+                paymentInstructions: f.get("paymentInstructions") || null,
+                status: "draft",
+                submissionKey: key,
+              },
+            })
+          }
+        >
+          <p>
+            {previous.property.name} · {previous.unit.label} ·{" "}
+            {previous.resident.name || previous.resident.email}
+          </p>
+          <p className="notice">
+            Previous term ends {previous.endsOn!.slice(0, 10)}. Review a new
+            term starting afterward. This does not end the previous lease or
+            stop its rent schedule.
+          </p>
+          <LeaseTerms prefix="Renewal" value={proposed} draftOnly />
+        </Form>
+      </div>
+    </>
   );
 }

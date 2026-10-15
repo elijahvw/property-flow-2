@@ -276,6 +276,16 @@ function Pages() {
         }
       />
       <Route
+        path="/company/properties/:propertyId/leases"
+        element={
+          <Shell>
+            <ProtectedRoute permission="lease.manage">
+              <Leases />
+            </ProtectedRoute>
+          </Shell>
+        }
+      />
+      <Route
         path="/company/properties/:propertyId/units"
         element={
           <Shell>

@@ -3,7 +3,7 @@ import { test, expect, Page } from '@playwright/test';
 // Isolated browser UI contracts: mocked same-origin JSON, no real authentication,
 // database, Auth0, or deployment. Server authorization is covered separately.
 const grants = {
-  owner: ['property.read', 'property.write', 'company.manage', 'members.manage'],
+  owner: ['property.read', 'property.write', 'company.manage', 'members.manage', 'resident.assignment.manage'],
   manager: ['property.read', 'property.write'], staff: ['property.read'], resident: ['resident.self'],
 };
 function bootstrap(role: string | null = 'owner', status = 'active', platform = false) {
@@ -53,8 +53,8 @@ test('owner landing creates a property and invitation, refreshes Team, and retur
   for (const [label, value] of [['Property name','First home'], ['Street address','1 Main'], ['City','Test'], ['State / region','CA'], ['Postal code','12345']]) await page.getByLabel(label, {exact:true}).fill(value);
   await page.getByRole('button', {name:'Create property', exact:true}).click();
   await expect(page.getByText('Property added', {exact:true})).toBeVisible();
-  await page.getByRole('link', {name:'Invite a resident in Team'}).click();
-  await page.getByRole('button',{name:'Invite a person',exact:true}).click();await page.getByLabel('Email address', {exact:true}).fill('resident@example.test');
+  await page.getByRole('link', {name:'Invite a tenant'}).click();
+  await page.getByRole('button',{name:'Invite tenant',exact:true}).click();await page.getByLabel('Email address', {exact:true}).fill('resident@example.test');
   await page.getByRole('button', {name:'Create invitation', exact:true}).click();
   await expect(page.getByText('resident@example.test', {exact:true})).toBeVisible();
   await expect(page.getByText('Pending', {exact:true})).toBeVisible();
@@ -147,7 +147,7 @@ test('owner progress follows current company on session refresh and discards old
   await expect(page.getByText('No properties yet', {exact:true})).toBeVisible();
   await expect(page.getByText('No resident invitation in the available records', {exact:true})).toBeVisible();
   await page.setViewportSize({width:390, height:844});
-  await expect(page.getByRole('link', {name:'Invite a resident in Team'})).toBeVisible();
+  await expect(page.getByRole('link', {name:'Invite a tenant'})).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   const checklist = await page.getByRole('region', {name:'Get started with your company'}).boundingBox();
   expect(checklist).not.toBeNull();
@@ -160,8 +160,8 @@ test('owner progress follows current company on session refresh and discards old
 test('company owner with platform authority supplies its membership company when inviting', async ({page}) => {
   const records = await fixture(page, bootstrap('owner', 'active', true));
   await page.goto('/company/properties');
-  await page.getByRole('link', {name:'Invite a resident in Team'}).click();
-  await page.getByRole('button',{name:'Invite a person',exact:true}).click();await page.getByLabel('Email address', {exact:true}).fill('dual-role-resident@example.test');
+  await page.getByRole('link', {name:'Invite a tenant'}).click();
+  await page.getByRole('button',{name:'Invite tenant',exact:true}).click();await page.getByLabel('Email address', {exact:true}).fill('dual-role-resident@example.test');
   await page.getByRole('button', {name:'Create invitation', exact:true}).click();
   await expect(page.getByLabel('Invitation acceptance link')).toBeVisible();
   expect(records.invitationPosts).toEqual([{email:'dual-role-resident@example.test', role:'resident', companyId:'company-a'}]);

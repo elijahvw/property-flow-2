@@ -4,7 +4,7 @@ import { lockRentLease, allocateRentCredit } from "./rent.js";
 import { AccessError } from "./access.js";
 import { assignmentId } from "./application.js";
 import { audit, boundedText, cents, choice, conflict, date, input, mutation, page, sameSubmission, scoped, submission, version } from "./operational.js";
-const select = { leaseId:true, id:true, propertyId:true, occurredOn:true, amountCents:true, currency:true, kind:true, category:true, memo:true, version:true, voidedAt:true, voidReason:true, property:{select:{name:true}} } as const;
+const select = { reference:true, leaseId:true, id:true, propertyId:true, occurredOn:true, amountCents:true, currency:true, kind:true, category:true, memo:true, version:true, voidedAt:true, voidReason:true, property:{select:{name:true}} } as const;
 export function registerFinances(server: FastifyInstance, db: PrismaClient, authenticate: preValidationHookHandler, origin: string) {
  const auth = { preValidation: authenticate };
  server.post("/api/company/finances", auth, request => {

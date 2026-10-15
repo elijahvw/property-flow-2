@@ -130,7 +130,7 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
               {can("lease.manage") && (
                 <Link
                   className="button secondary"
-                  to={`/company/leases?propertyId=${encodeURIComponent(id)}&new=lease`}
+                  to={`/company/properties/${encodeURIComponent(id)}/leases?new=lease`}
                 >
                   Record a lease
                 </Link>

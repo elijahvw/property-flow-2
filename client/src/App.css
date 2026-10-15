@@ -629,3 +629,20 @@ button.text-button:hover { background:#f4f7f4; color:#1a4c37; }
 .payment-standing { padding: .8rem 1rem; border-left: 3px solid #126e60; background: #f5f8f3; }
 
 .collection-badge.paid_late { background: #fff3da; color: #785000; }
+.record-identity { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem .8rem; margin-top: .5rem; font-size: .8rem; color: #516760; }
+.record-identity details { max-width: 100%; }
+.record-identity summary { cursor: pointer; }
+.reference-code { font-weight: 700; letter-spacing: .04em; }
+.record-identity code { overflow-wrap: anywhere; }
+.lease-review-summary { display:grid; gap:.8rem; }
+.lease-review-summary div { padding-bottom:.7rem; border-bottom:1px solid #dce5e0; }
+.lease-review-summary dt { color:#516760; font-size:.85rem; }
+.lease-review-summary dd { margin:.2rem 0 0; font-weight:600; overflow-wrap:anywhere; }
+
+@media (max-width: 600px) {
+  .tenant-directory, .tenant-directory tbody, .tenant-directory tr, .tenant-directory td { display: block; width: 100%; min-width: 0; }
+  .tenant-directory thead { display: none; }
+  .tenant-directory tr { padding: .8rem 0; border-bottom: 1px solid #dce5e0; }
+  .tenant-directory td { border: 0; padding: .35rem 0; overflow-wrap: anywhere; }
+  .tenant-directory td[data-label]::before { content: attr(data-label); display: block; color: #516760; font-size: .8rem; margin-bottom: .2rem; }
+}

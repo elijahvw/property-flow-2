@@ -6,6 +6,13 @@ export function propertyLink(
   id?: string,
   extra: Record<string, string> = {},
 ) {
+  if (path === "/company/leases" && id) {
+    const q = new URLSearchParams(extra);
+    return (
+      `/company/properties/${encodeURIComponent(id)}/leases` +
+      (q.size ? "?" + q : "")
+    );
+  }
   const q = new URLSearchParams({
     ...extra,
     ...(id ? { propertyId: id } : {}),
