@@ -23,6 +23,9 @@ import { registerFinances } from "./finances.js";
 import { registerLeasing } from "./leasing.js";
 import { registerMaintenance } from "./maintenance.js";
 import { digest } from "./sessions.js";
+import { propertySelect, propertyData, propertyKeys } from "./property-fields.js";
+import { scoped, sameSubmission, submission } from "./operational.js";
+import { registerReports } from "./reports.js";
 import { registerPropertyDetail } from "./property-detail.js";
 
 type UserWithAccess = Prisma.UserGetPayload<{
@@ -201,8 +204,9 @@ export function registerApplication(
   registerUserAdministration(server, db, authenticate, origin, identityProvider);
   registerCompanyAdministration(server, db, authenticate, origin);
   registerResidentProfiles(server, db, authenticate, origin);
+  registerReports(server, db, authenticate);
   const auth = { preValidation: authenticate };
-  registerPropertyDetail(server, db, authenticate);
+  registerPropertyDetail(server, db, authenticate, origin);
   const serial = <T>(request: FastifyRequest, run: (tx: Tx) => Promise<T>) =>
     serializable(db,
       async (tx) => {
@@ -592,32 +596,33 @@ export function registerApplication(
       (tx) =>
         tx.property.findMany({
           where: { companyId },
-          orderBy: { name: "asc" },
+          orderBy: [{ name: "asc" }, { id: "asc" }],
+          select: propertySelect,
         }),
       { id: request.principal!.id, permission: "property.read" },
     );
   });
-  server.post("/api/company/properties", auth, async (request) => {
-    const companyId = scope(request, "property.write"),
-      body = bodyOf(request);
-    const data = {
-      companyId,
-      name: requiredString(body.name, "Property name"),
-      address: requiredString(body.address, "Street address"),
-      city: requiredString(body.city, "City"),
-      state: requiredString(body.state, "State", 100),
-      zip: requiredString(body.zip, "Postal code", 30),
-    };
-    return tenantTransaction(
-      db,
-      companyId,
-      async (tx) => {
-        const property = await tx.property.create({ data });
-        await audit(tx, request, "property.created", companyId, property.id);
-        return property;
-      },
-      { id: request.principal!.id, permission: "property.write" },
-    );
+  server.post("/api/company/properties", auth, request => {
+    scope(request, "property.write");
+    mutation(request, origin);
+    const body = input(request, [...propertyKeys, "submissionKey"]),
+      data = propertyData(body), key = submission(body.submissionKey, data);
+    return scoped(db, request, "property.write", async (tx, companyId) => {
+      const previous = await tx.property.findFirst({
+        where: { companyId, createdById: request.principal!.id, submissionKey: key.submissionKey },
+        select: { ...propertySelect, submissionHash: true },
+      });
+      if (previous) {
+        sameSubmission(previous.submissionHash!, key.submissionHash);
+        const { submissionHash, ...safe } = previous;
+        return safe;
+      }
+      const result = await tx.property.create({
+        data: { ...data, ...key, companyId, createdById: request.principal!.id }, select: propertySelect,
+      });
+      await audit(tx, request, "property.created", companyId, result.id);
+      return result;
+    });
   });
 
   // Invitations are acceptance links, never fabricated users or shared passwords.

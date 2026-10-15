@@ -1,3 +1,5 @@
+import { reportCases } from './report-cases.mjs';
+import { companyDay } from '../dist/reports.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -11,6 +13,11 @@ import {registerApplication} from '../dist/application.js';
 import {registerSessions,digest} from '../dist/sessions.js';
 import {cents,date} from '../dist/operational.js';
 const url=process.env.TEST_FINANCES_DATABASE_URL;
+test('company business date respects timezone boundaries',()=>{
+ const instant=new Date('2026-01-01T00:30:00Z');
+ assert.equal(companyDay('America/Los_Angeles',instant),'2025-12-31');
+ assert.equal(companyDay('Asia/Tokyo',instant),'2026-01-01');
+});
 test('manual finance isolation, replay, corrections and totals',{skip:!url},async t=>{
  const target=new URL(url);assert.equal(target.hostname,'127.0.0.1');assert.equal(target.pathname,'/propertyflow_finances_test');assert.equal(process.env.FINANCES_DISPOSABLE,'tmpfs-verified');
  const admin=new pg.Pool({connectionString:url});t.after(()=>admin.end());
@@ -76,4 +83,5 @@ test('manual finance isolation, replay, corrections and totals',{skip:!url},asyn
    await page.goto(process.env.TEST_FINANCES_BROWSER_URL+'/company/finances');await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await page.getByLabel('Date received or paid').fill('2026-10-14');await page.getByLabel('Amount (USD)').fill('99.99');await page.getByLabel('Memo (optional)').fill('Browser receipt');await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await expect(page.getByLabel('Amount (USD)')).toHaveValue('99.99');await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();assert.equal(keys[0],keys[1]);const rows=(await admin.query(`SELECT id,"amountCents" FROM "LedgerEntry" WHERE memo='Browser receipt'`)).rows;assert.equal(rows.length,1);assert.equal(rows[0].amountCents,9999);assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE "targetId"=$1`,[rows[0].id])).rows[0].n,1);
   }finally{await browser.close();}
  });
+ await reportCases(t,admin,call,app,db);
 });

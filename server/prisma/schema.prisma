@@ -157,6 +157,16 @@ model AuditEvent {
 }
 
 model Property {
+  propertyType String?
+  yearBuilt Int?
+  parcelId String?
+  countryCode String?
+  notes String?
+  version Int @default(1)
+  createdById String?
+  submissionKey String?
+  submissionHash String?
+  @@unique([companyId, createdById, submissionKey])
   units Unit[]
   leases Lease[]
   ledgerEntries LedgerEntry[]
@@ -210,6 +220,12 @@ model MaintenanceRequest {
 }
 
 model Unit {
+  bedrooms Int?
+  bathroomsHundredths Int?
+  squareFeet Int?
+  marketRentCents Int?
+  floor String?
+  notes String?
   createdById String
   submissionKey String
   submissionHash String

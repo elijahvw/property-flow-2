@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
 import {readFileSync,readdirSync} from 'node:fs';
 import pg from 'pg';
 import Fastify from 'fastify';
@@ -143,6 +143,19 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
   assert.equal((await call('owner','GET',units+'?companyId=b')).statusCode,400);
   await admin.query(`DELETE FROM "Unit" WHERE id LIKE 'paging-unit-%'`);
  });
+ await t.test('unit details persist exact amounts, clear unknowns, validate bounds and preserve old-client replay',async()=>{
+  const payload={label:'Studio details',bedrooms:'0',bathrooms:'2.25',squareFeet:'750',marketRent:'1250.01',floor:'Ground',notes:'Accessible entry',submissionKey:randomUUID()};
+  const response=await call('owner','POST',units,payload);assert.equal(response.statusCode,200,response.body);const row=response.json();assert.equal(row.bedrooms,0);assert.equal(row.bathroomsHundredths,225);assert.equal(row.marketRentCents,125001);assert.equal(row.squareFeet,750);
+  assert.equal((await call('owner','POST',units,payload)).json().id,row.id);
+  const oldEdit=await call('owner','PATCH',`/api/company/units/${row.id}`,{label:row.label,status:'active',expectedVersion:1});assert.equal(oldEdit.statusCode,200,oldEdit.body);assert.equal(oldEdit.json().marketRentCents,125001);
+  const partial=await call('owner','PATCH',`/api/company/units/${row.id}`,{label:row.label,status:'active',expectedVersion:oldEdit.json().version,bedrooms:'1'});assert.equal(partial.statusCode,200,partial.body);assert.equal(partial.json().bedrooms,1);assert.equal(partial.json().marketRentCents,125001);assert.equal(partial.json().bathroomsHundredths,225);
+  const blank=Object.fromEntries(['bedrooms','bathrooms','squareFeet','marketRent','floor','notes'].map(k=>[k,'']));
+  const cleared=await call('owner','PATCH',`/api/company/units/${row.id}`,{...blank,label:row.label,status:'active',expectedVersion:partial.json().version});assert.equal(cleared.statusCode,200,cleared.body);for(const key of ['bedrooms','bathroomsHundredths','squareFeet','marketRentCents','floor','notes'])assert.equal(cleared.json()[key],null);
+  for(const patch of [{bedrooms:'-1'},{bedrooms:'1.5'},{bathrooms:'1.1'},{bathrooms:'101'},{squareFeet:'0'},{marketRent:'1.001'},{floor:'x'.repeat(41)}])assert.equal((await call('owner','POST',units,{...payload,...patch,submissionKey:randomUUID()})).statusCode,400);
+  const key=randomUUID(),hash=createHash('sha256').update(JSON.stringify(['home','Legacy unit'])).digest('hex');
+  await admin.query(`INSERT INTO "Unit"(id,"companyId","propertyId",label,"createdById","submissionKey","submissionHash","updatedAt") VALUES('legacy-retry','a','home','Legacy unit','owner',$1,$2,NOW())`,[key,hash]);
+  const replay=await call('owner','POST',units,{label:'Legacy unit',submissionKey:key,...blank});assert.equal(replay.statusCode,200,replay.body);assert.equal(replay.json().id,'legacy-retry');
+ });
  await t.test('real browser units and lease commit-response-loss replay',{skip:!process.env.TEST_LEASING_BROWSER_URL},async()=>{
   const browser=await chromium.launch({headless:true});try{
    const page=await browser.newPage();let loseUnit=true,loseLease=true;const keys={unit:[],lease:[]};
@@ -153,9 +166,9 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
     }
     await route.fulfill({status:response.statusCode,contentType:'application/json',body:response.body});
    });
-   await page.goto(process.env.TEST_LEASING_BROWSER_URL+'/company/properties/home/units');await page.getByRole('button',{name:'Add a unit',exact:true}).click();await page.getByLabel('Unit name',{exact:true}).fill('Browser unit');
+   await page.goto(process.env.TEST_LEASING_BROWSER_URL+'/company/properties/home/units');await page.getByRole('button',{name:'Add a unit',exact:true}).click();await page.getByLabel('Unit name',{exact:true}).fill('Browser unit');await page.getByRole('spinbutton',{name:/^Bedrooms/}).fill('0');await page.getByRole('spinbutton',{name:'Bathrooms',exact:true}).fill('2.25');await page.getByRole('spinbutton',{name:/^Market rent/}).fill('1250.01');
    await page.getByRole('button',{name:'Create unit',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create unit',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();assert.equal(keys.unit[0],keys.unit[1]);
-   const browserUnit=(await admin.query(`SELECT id FROM "Unit" WHERE label='Browser unit'`)).rows;assert.equal(browserUnit.length,1);
+   const browserUnit=(await admin.query(`SELECT id,bedrooms,"bathroomsHundredths","marketRentCents" FROM "Unit" WHERE label='Browser unit'`)).rows;assert.equal(browserUnit.length,1);assert.equal(browserUnit[0].bedrooms,0);assert.equal(browserUnit[0].bathroomsHundredths,225);assert.equal(browserUnit[0].marketRentCents,125001);await expect(page.locator('.feedback-region')).toContainText('Unit created.');
    await page.getByRole('link',{name:'Leases',exact:true}).click();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await page.getByLabel('Unit for new lease').selectOption(browserUnit[0].id);
    await page.getByLabel('New lease start date').fill('2026-11-01');await page.getByLabel('New lease end date',{exact:true}).fill('2027-10-31');await page.getByLabel('New lease monthly rent (USD)').fill('1250.50');
    await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();assert.equal(keys.lease[0],keys.lease[1]);

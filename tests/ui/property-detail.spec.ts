@@ -1,6 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 async function fixture(page: Page, role = 'manager') {
-  const state = { property: {id:'property-a',name:'Garden House',address:'1 Main St',city:'Springfield',state:'CA',zip:'12345'}, loadStatus:200, saveStatus:200, writes:0 };
+  const state = { property: {id:'property-a',name:'Garden House',address:'1 Main St',city:'Springfield',state:'CA',zip:'12345',version:1}, loadStatus:200, saveStatus:200, writes:0 };
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname;
     const json = (value: unknown, status = 200) => route.fulfill({status,json:value});
@@ -11,7 +11,8 @@ async function fixture(page: Page, role = 'manager') {
         state.writes++;
         expect(route.request().headers()['x-csrf-token']).toBe('fixture-csrf');
         if (state.saveStatus !== 200) return json({error:'Save unavailable'},state.saveStatus);
-        state.property = {...state.property,...route.request().postDataJSON()};
+        expect(route.request().postDataJSON().expectedVersion).toBe(state.property.version);
+        state.property = {...state.property,...route.request().postDataJSON(),version:state.property.version+1};
         return json(state.property);
       }
       return state.loadStatus === 200 ? json(state.property) : json({error:'Load unavailable'},state.loadStatus);
@@ -91,4 +92,12 @@ test('loading and save busy states; revoked edit cannot retry',async ({page}) =>
   await expect(page.getByRole('button',{name:'Saving…'})).toBeDisabled(); save();
   await expect(page.getByRole('alert')).toContainText('no longer available for editing');
   await expect(page.getByRole('button',{name:'Try saving again'})).toBeDisabled();
+});
+
+test('building details are editable, and stale edits have an explicit reload path',async({page})=>{
+ const state=await fixture(page);await page.goto('/company/properties/property-a');await page.getByRole('button',{name:'Edit property'}).click();
+ await page.getByRole('combobox',{name:'Property type',exact:true}).selectOption('multi_family');await page.getByLabel('Year built',{exact:true}).fill('1985');await page.getByLabel('Parcel / tax ID',{exact:true}).fill('LOT-44');await page.getByLabel('Country code',{exact:true}).fill('US');await page.getByLabel('Property notes',{exact:true}).fill('North entrance');
+ state.saveStatus=409;await page.getByRole('button',{name:'Save changes',exact:true}).click();await expect(page.getByRole('alert')).toHaveText('Save unavailable');await expect(page.getByLabel('Year built',{exact:true})).toHaveValue('1985');
+ state.property={...state.property,name:'Latest house',version:2};state.saveStatus=200;await page.getByRole('button',{name:'Discard edits and reload latest property'}).click();await expect(page.getByRole('heading',{name:'Latest house',exact:true})).toBeVisible();await page.getByRole('button',{name:'Edit property'}).click();await expect(page.getByLabel('Year built',{exact:true})).toHaveValue('');
+ await page.getByLabel('Year built',{exact:true}).fill('1985');await page.getByRole('button',{name:'Save changes',exact:true}).click();await expect(page.getByRole('status')).toHaveText('Property saved.');await expect(page.locator('dd').filter({hasText:'1985'})).toBeVisible();
 });

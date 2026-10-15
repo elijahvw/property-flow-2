@@ -471,6 +471,14 @@ tbody tr:hover { background: #f8faf8; }
 .empty-state { text-align: center; padding: 3rem 1rem; }
 .empty-state p { max-width: 400px; margin: auto; }
 .preserve-lines { white-space: pre-wrap; overflow-wrap: anywhere; }
+.feedback-region { position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 1000; max-width: min(460px,calc(100vw - 2rem)); }
+.success-toast { display:flex; gap:.75rem; align-items:center; padding:1rem; background:#143e32; color:#fff; border:1px solid #9fbc91; border-radius:12px; box-shadow:0 8px 32px #183b2c30; }
+.success-toast > span { color:#d9ef8c; font-size:1.3rem; }
+.success-toast strong { font-size:.88rem; }
+.success-toast button.secondary { color:#fff; background:transparent; border-color:#ffffff50; min-height:36px; padding:.3rem .6rem; font-size:.75rem; }
+caption { text-align:left; color:#5d7166; font-size:.85rem; padding:.8rem 0; }
+.editor-body fieldset.editor-section { margin-bottom:1rem; }
+.editor-body label .help { font-weight:400; color:#62736b; font-size:.75rem; }
 @media(max-width:1050px) { .onboarding-list { grid-template-columns: 1fr; gap: .75rem; } .workspace-main main { padding: 1.5rem; } }
 @media(max-width:700px) {
   .sidebar { padding: 1rem; }
