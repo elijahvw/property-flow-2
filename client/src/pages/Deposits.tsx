@@ -387,6 +387,7 @@ function DepositAccountPanel({
       snapshot: Detail;
       receipt?: Receipt;
       restored?: Review;
+      revision?: string;
     } | null>(null),
     [open, setOpen] = useState(false);
   const start = (kind: Kind, receipt?: Receipt) => {
@@ -622,12 +623,31 @@ function DepositAccountPanel({
               onClose={() => setOpen(false)}
             >
               <DepositEditor
-                key={`${editor.kind}:${editor.receipt?.id || ""}:${editor.restored?.payload.submissionKey || ""}`}
+                key={`${editor.kind}:${editor.receipt?.id || ""}:${editor.restored?.payload.submissionKey || ""}:${editor.revision || ""}`}
                 detail={editor.snapshot}
                 kind={editor.kind}
                 receipt={editor.receipt}
                 restored={editor.restored}
                 storageKey={key}
+                reload={async () => {
+                  const snapshot = await api<Detail>(root);
+                  setEditor({
+                    ...editor,
+                    snapshot,
+                    restored: undefined,
+                    revision: crypto.randomUUID(),
+                    kind:
+                      editor.kind === "setup" && snapshot.account
+                        ? "terms"
+                        : editor.kind,
+                    receipt: editor.receipt
+                      ? snapshot.account?.receipts.find(
+                          (x) => x.id === editor.receipt!.id,
+                        )
+                      : undefined,
+                  });
+                  r.reload();
+                }}
                 saved={() => {
                   setOpen(false);
                   setEditor(null);
@@ -649,6 +669,7 @@ function DepositEditor({
   restored,
   storageKey,
   saved,
+  reload,
 }: {
   detail: Detail;
   kind: Kind;
@@ -656,9 +677,11 @@ function DepositEditor({
   restored?: Review;
   storageKey: string;
   saved: () => void;
+  reload: () => Promise<void>;
 }) {
   const [review, setReview] = useState<Review | null>(restored || null),
-    [uncertain, setUncertain] = useState(!!restored);
+    [uncertain, setUncertain] = useState(!!restored),
+    [stale, setStale] = useState(false);
   const base = `/api/company/deposits/${encodeURIComponent(detail.lease.id)}`,
     current = detail.account;
   return (
@@ -705,6 +728,7 @@ function DepositEditor({
               ) {
                 sessionStorage.removeItem(storageKey);
                 setUncertain(false);
+                setStale(error.status === 409);
               }
               throw error;
             }
@@ -740,6 +764,20 @@ function DepositEditor({
               Back to deposit details
             </button>
           )}
+        </Form>
+      )}
+      {stale && (
+        <Form
+          label="Load current details and reset draft"
+          operation="page.data.load"
+          successText=""
+          submit={reload}
+        >
+          <p className="notice">
+            This save conflicts with the current record. Load the latest details
+            and review a fresh draft before saving again. Your existing review
+            remains here until you choose to reset it.
+          </p>
         </Form>
       )}
       <div hidden={!!review}>

@@ -243,3 +243,67 @@ test("deposit directory clamps shrinking pages and initial failures do not fabri
     page.getByRole("region", { name: "Security deposit balances" }),
   ).toHaveCount(0);
 });
+
+test("a conflicting deposit edit preserves the review and offers an explicit current-version reset", async ({
+  page,
+}) => {
+  const { account, lease } = await fixture(page);
+  let posted: any;
+  await page.route("**/api/company/deposits/" + lease.id, async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    posted = route.request().postDataJSON();
+    return route.fulfill({
+      status: 409,
+      json: { error: "This record changed", code: "STALE_VERSION" },
+    });
+  });
+  await page.goto("/company/deposits?leaseId=" + lease.id);
+  const dialog = page.getByRole("dialog", {
+    name: "Security deposit account",
+    exact: true,
+  });
+  await dialog
+    .getByRole("button", { name: "Change deposit requirement", exact: true })
+    .click();
+  let editor = page.getByRole("dialog", {
+    name: "Security deposit requirement",
+    exact: true,
+  });
+  await editor
+    .getByLabel("Refundable deposit required (USD)", { exact: true })
+    .fill("1600.00");
+  await editor
+    .getByLabel("Reason for deposit change")
+    .fill("Agreed updated requirement");
+  await editor
+    .getByRole("button", { name: "Review deposit requirement", exact: true })
+    .click();
+  await editor
+    .getByRole("button", { name: "Save deposit requirement", exact: true })
+    .click();
+  await expect(editor.getByRole("alert")).toContainText("This record changed");
+  expect(posted.expectedVersion).toBe(1);
+  account.version = 2;
+  account.requiredCents = 170000;
+  account.summary.requiredCents = "170000";
+  await expect(editor).toContainText("$1,600.00");
+  await editor
+    .getByRole("button", {
+      name: "Load current details and reset draft",
+      exact: true,
+    })
+    .click();
+  editor = page.getByRole("dialog", {
+    name: "Security deposit requirement",
+    exact: true,
+  });
+  await expect(
+    editor.getByLabel("Refundable deposit required (USD)", { exact: true }),
+  ).toHaveValue("1700.00");
+  await expect(
+    editor.getByRole("button", {
+      name: "Review deposit requirement",
+      exact: true,
+    }),
+  ).toBeVisible();
+});
