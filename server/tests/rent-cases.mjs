@@ -131,4 +131,21 @@ export async function rentCases(t, admin, call, app, db) {
    assert.equal((await admin.query(`SELECT count(*)::int n FROM "LedgerEntry" WHERE memo='Browser rent receipt'`)).rows[0].n,1);assert.equal((await admin.query(`SELECT count(*)::int n FROM "RentCharge" WHERE "leaseId"=$1 AND "periodOn"=$2`,[lease.id,`${year}-05-01`])).rows[0].n,1);
   }finally{await browser.close();}
  });
+ await t.test('lease term edits preserve active charge validity and prohibit draft demotion with active rent',async()=>{
+  const patch=extra=>({startsOn:jan,endsOn:null,monthlyRent:'1000.00',status:'active',expectedVersion:lease.version,...extra});
+  for(const change of [{startsOn:feb},{endsOn:`${year}-01-15`},{status:'draft'}]){
+   const response=await call('owner','PATCH',`/api/company/leases/${lease.id}`,patch(change));assert.equal(response.statusCode,409,response.body);assert.equal(response.json().code,'LEASE_RENT_CONFLICT');
+  }
+  const before=(await get()).summary;const valid=ok(await call('owner','PATCH',`/api/company/leases/${lease.id}`,patch({endsOn:`${year}-12-31`})));lease=valid;assert.equal(valid.endsOn.slice(0,10),`${year}-12-31`);assert.deepEqual((await get()).summary,before);
+ });
+ await t.test('concurrent lease-date edit and charge posting cannot leave a charge outside its term; voided charges permit correction',async()=>{
+  const unit=ok(await call('owner','POST','/api/company/properties/home/units',{label:'Rent term race unit',submissionKey:randomUUID()}));
+  let term=ok(await call('owner','POST','/api/company/leases',{propertyId:'home',unitId:unit.id,residentId:'resident2',startsOn:jan,endsOn:null,monthlyRent:'1000.00',status:'active',submissionKey:randomUUID()}));
+  const changes={startsOn:feb,endsOn:null,monthlyRent:'1000.00',status:'active',expectedVersion:1};
+  const results=await Promise.all([call('owner','POST',`${root}/${term.id}/charges`,charge()),call('manager','PATCH',`/api/company/leases/${term.id}`,changes)]);assert.deepEqual(results.map(r=>r.statusCode).sort(),[200,409]);
+  let account=ok(await call('owner','GET',`${root}?leaseId=${term.id}`)).accounts[0];assert.ok(account.charges.every(c=>c.dueOn>=account.lease.startsOn));
+  if(account.charges.length){ok(await call('owner','POST',`${root}/charges/${account.charges[0].id}/void`,{expectedVersion:1,reason:'Corrected lease start'}));ok(await call('manager','PATCH',`/api/company/leases/${term.id}`,changes));}
+  account=ok(await call('owner','GET',`${root}?leaseId=${term.id}`)).accounts[0];assert.equal(account.lease.startsOn.slice(0,10),feb);assert.ok(account.charges.every(c=>c.voidedAt));
+ });
+
 }
