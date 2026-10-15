@@ -159,7 +159,9 @@ function LedgerWorkspace() {
               reload();
               setAdding(false);
               setKey(crypto.randomUUID());
-              setParams({ propertyId: String(form.get("propertyId")) });
+              setParams({
+                propertyId: pathPropertyId || String(form.get("propertyId")),
+              });
             }}
           >
             <label>
@@ -233,7 +235,8 @@ function LedgerWorkspace() {
           operation="page.data.load"
           submit={async (form) => {
             const next = {
-              propertyId: String(form.get("propertyId") || ""),
+              propertyId:
+                pathPropertyId || String(form.get("propertyId") || ""),
               dateFrom: String(form.get("dateFrom") || ""),
               dateTo: String(form.get("dateTo") || ""),
             };

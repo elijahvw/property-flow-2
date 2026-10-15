@@ -609,6 +609,25 @@ export async function depositCases(t, admin, call, db) {
     },
   );
   await t.test(
+    "deposit details reject mismatched property context instead of mixing property workspaces",
+    async () => {
+      assert.equal(
+        (await call("owner", "GET", endpoint() + "?propertyId=home"))
+          .statusCode,
+        404,
+      );
+      assert.equal(
+        (await call("owner", "GET", endpoint() + "?propertyId=deposit-home"))
+          .statusCode,
+        200,
+      );
+      assert.equal(
+        (await call("owner", "GET", endpoint() + "?companyId=b")).statusCode,
+        400,
+      );
+    },
+  );
+  await t.test(
     "real browser reviews setup and receipt, recovers both committed responses after reload, and corrects without deleting history",
     { skip: !process.env.TEST_FINANCES_BROWSER_URL },
     async () => {

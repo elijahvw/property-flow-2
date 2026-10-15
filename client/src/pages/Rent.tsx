@@ -712,7 +712,12 @@ function LeaseLedger({
       {!resident && (
         <RentSchedule lease={lease} businessDate={today} changed={reload} />
       )}
-      <DepositPanel leaseId={lease.id} resident={resident} changed={reload} />
+      <DepositPanel
+        leaseId={lease.id}
+        propertyId={lease.propertyId}
+        resident={resident}
+        changed={reload}
+      />
       <section className="panel">
         <div className="section-heading">
           <h2>Account history</h2>

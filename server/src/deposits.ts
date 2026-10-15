@@ -180,9 +180,16 @@ async function detail(
   companyId: string,
   leaseId: string,
   residentId?: string,
+  propertyId?: string,
 ) {
-  const lease = await visibleLease(tx, companyId, leaseId, residentId),
-    businessDate = await today(tx, companyId);
+  const lease = await visibleLease(tx, companyId, leaseId, residentId);
+  if (propertyId && lease.propertyId !== propertyId)
+    throw new AccessError(
+      404,
+      "NOT_FOUND",
+      "Lease not found in this property workspace.",
+    );
+  const businessDate = await today(tx, companyId);
   const current = await tx.depositAccount.findFirst({
     where: { companyId, leaseId },
     select: accountSelect,
@@ -238,21 +245,27 @@ export function registerDeposits(
       permission = resident
         ? ("resident.self" as const)
         : ("finance.manage" as const);
-    server.get<{ Params: { leaseId: string } }>(
-      root + "/:leaseId",
-      auth,
-      (request) => {
-        const leaseId = assignmentId(request.params.leaseId);
-        return scoped(db, request, permission, (tx, companyId) =>
-          detail(
-            tx,
-            companyId,
-            leaseId,
-            resident ? request.principal!.id : undefined,
-          ),
-        );
-      },
-    );
+    server.get<{
+      Params: { leaseId: string };
+      Querystring: { propertyId?: string };
+    }>(root + "/:leaseId", auth, (request) => {
+      if (Object.keys(request.query).some((k) => k !== "propertyId"))
+        throw new AccessError(400, "INVALID_INPUT", "Unknown deposit filter.");
+      const leaseId = assignmentId(request.params.leaseId),
+        propertyId =
+          request.query.propertyId === undefined
+            ? undefined
+            : assignmentId(request.query.propertyId);
+      return scoped(db, request, permission, (tx, companyId) =>
+        detail(
+          tx,
+          companyId,
+          leaseId,
+          resident ? request.principal!.id : undefined,
+          propertyId,
+        ),
+      );
+    });
     server.get<{ Querystring: { propertyId?: string } }>(
       root,
       auth,

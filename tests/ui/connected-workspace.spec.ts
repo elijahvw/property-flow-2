@@ -199,3 +199,10 @@ test('property finance filter history restores dates without discarding an unsav
  for(const day of ['2026-10-01','2026-10-02']){await page.getByLabel('From date').fill(day);await page.getByRole('button',{name:'Apply filters'}).click();await expect(page).toHaveURL(new RegExp('dateFrom='+day));}
  await page.goBack();await expect(page.getByLabel('From date')).toHaveValue('2026-10-01');await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await expect(page.getByLabel('Amount (USD)',{exact:true})).toHaveValue('123.45');
 });
+
+for(const module of ['reports','finances'])test(`property ${module} API scope survives an unavailable property picker`,async({page})=>{
+ const state=await fixture(page);await page.route('**/api/company/properties',route=>route.fulfill({status:503,json:{error:'Properties temporarily unavailable'}}));await page.goto('/company/properties/home/'+module);
+ await page.getByRole('button',{name:module==='reports'?'Generate report':'Apply filters'}).click();await expect.poll(()=>state.requests.filter(x=>x.startsWith('/api/company/'+(module==='reports'?'reports/cash':'finances')+'?')).length).toBeGreaterThan(0);
+ const calls=state.requests.filter(x=>x.startsWith('/api/company/'+(module==='reports'?'reports/cash':'finances')+'?'));expect(calls.every(x=>new URL('https://fixture.test'+x).searchParams.get('propertyId')==='home')).toBe(true);
+ await expect(page).toHaveURL(new RegExp('/company/properties/home/'+module));
+});

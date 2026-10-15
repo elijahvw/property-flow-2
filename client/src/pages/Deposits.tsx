@@ -332,7 +332,12 @@ function DepositDirectory({ resident }: { resident: boolean }) {
           title="Security deposit account"
           onClose={() => setParams(propertyId ? { propertyId } : {})}
         >
-          <DepositPanel leaseId={leaseId} resident={resident} />
+          <DepositPanel
+            leaseId={leaseId}
+            resident={resident}
+            changed={r.reload}
+            propertyId={propertyId}
+          />
           <p>
             <Link
               to={propertyLink(
@@ -351,17 +356,20 @@ function DepositDirectory({ resident }: { resident: boolean }) {
 }
 export function DepositPanel({
   leaseId,
+  propertyId,
   resident = false,
   changed,
 }: {
   leaseId: string;
+  propertyId?: string;
   resident?: boolean;
   changed?: () => void;
 }) {
   const { data } = useAuth();
   return (
     <DepositAccountPanel
-      key={`${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}:${leaseId}`}
+      key={`${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}:${leaseId}:${propertyId || ""}`}
+      propertyId={propertyId}
       leaseId={leaseId}
       resident={resident}
       changed={changed}
@@ -369,16 +377,18 @@ export function DepositPanel({
   );
 }
 function DepositAccountPanel({
+  propertyId,
   leaseId,
   resident,
   changed,
 }: {
   leaseId: string;
+  propertyId?: string;
   resident: boolean;
   changed?: () => void;
 }) {
   const auth = useAuth().data,
-    root = `${resident ? "/api/resident" : "/api/company"}/deposits/${encodeURIComponent(leaseId)}`,
+    root = `${resident ? "/api/resident" : "/api/company"}/deposits/${encodeURIComponent(leaseId)}${propertyId ? "?" + new URLSearchParams({ propertyId }) : ""}`,
     r = useResource<Detail>(root, true, true),
     key = `pf:deposit:${auth?.user.id}:${auth?.membership?.companyId}:${leaseId}`,
     retained = pending(key);

@@ -307,3 +307,55 @@ test("a conflicting deposit edit preserves the review and offers an explicit cur
     }),
   ).toBeVisible();
 });
+
+test("saving from the deposit directory refreshes its balances immediately", async ({
+  page,
+}) => {
+  const { state, account, lease } = await fixture(page);
+  await page.route(
+    "**/api/company/deposits/" + lease.id + "/receipts",
+    async (route) => {
+      account.summary.heldCents = "150000";
+      account.summary.outstandingCents = "0";
+      return route.fulfill({ json: { id: "saved" } });
+    },
+  );
+  await page.goto("/company/properties/home/deposits");
+  await page
+    .getByRole("link", { name: "Open deposit account", exact: true })
+    .click();
+  const outer = page.getByRole("dialog", {
+    name: "Security deposit account",
+    exact: true,
+  });
+  await outer
+    .getByRole("button", { name: "Record deposit received", exact: true })
+    .click();
+  const form = page.getByRole("dialog", {
+    name: "Record security deposit received",
+    exact: true,
+  });
+  await form.getByLabel("Deposit payment method").selectOption("cash");
+  await form
+    .getByRole("button", { name: "Review deposit receipt", exact: true })
+    .click();
+  await form
+    .getByRole("button", { name: "Confirm deposit received", exact: true })
+    .click();
+  await expect(form).not.toBeVisible();
+  await expect
+    .poll(
+      () =>
+        state.requests.filter(
+          (x) => x === "/api/company/deposits?propertyId=home",
+        ).length,
+    )
+    .toBeGreaterThan(1);
+  await outer.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "Security deposit balances" }),
+  ).toContainText("$1,500.00");
+  await expect(
+    page.getByText("$1,500.00 held · $0.00 still to collect", { exact: true }),
+  ).toBeVisible();
+});

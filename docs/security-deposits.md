@@ -10,7 +10,7 @@ Record deposit received opens a focused form for amount, actual received date, m
 
 Changing the requirement needs a reason and current versions. Every revision is immutable. Correct deposit receipt explicitly voids a recording error while keeping the original receipt/cash source/audit. This is not a refund. Reduced requirements and excess receipts do not silently move money or become rent credit.
 
-Property tabs now stay under `/company/properties/:propertyId/{leases,maintenance,rent,deposits,finances,reports}`. The property header and tabs remain visible, the Properties sidebar stays selected, forms and API filters retain that property, and an explicit All company link leaves the workspace. Maintenance status and finance/report filters survive refresh. Existing company-wide routes and legacy property query links remain supported. Rent/deposit/cash drilldowns retain their property context.
+Property tabs now stay under `/company/properties/:propertyId/{leases,maintenance,rent,deposits,finances,reports}`. The property header and tabs remain visible, the Properties sidebar stays selected, forms and API filters retain that property, and an explicit All company link leaves the workspace. Maintenance status and finance/report filters survive refresh. Existing company-wide routes and legacy property query links remain supported. Rent/deposit/cash drilldowns retain their property context. Report/finance queries take their property from the route even if the property picker is still loading or fails, deposit details reject a mismatched property, and dialog saves immediately refresh directory balances.
 
 ## Data and accounting contract
 

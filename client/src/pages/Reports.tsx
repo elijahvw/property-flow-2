@@ -259,7 +259,10 @@ function Builder({ today }: { today: string }) {
               for (const key of kind === "cash"
                 ? ["propertyId", "dateFrom", "dateTo"]
                 : ["propertyId", "status"]) {
-                const value = String(form.get(key) || "");
+                const value =
+                  key === "propertyId" && pathPropertyId
+                    ? pathPropertyId
+                    : String(form.get(key) || "");
                 if (value) q.set(key, value);
               }
               setParams({ ...Object.fromEntries(q), kind });
