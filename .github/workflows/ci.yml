@@ -4,6 +4,10 @@ on:
   pull_request:
     branches: [ main, "codex/**" ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
@@ -35,14 +39,13 @@ jobs:
           python3 -m xmlrunner discover -s tests/operations -p 'test_*.py' -o test-results/python
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci --no-audit --no-fund
         
       - name: Build and test server tracing
         env:
           DATABASE_URL: postgresql://dummy@localhost:5432/dummy
           TEST_DATABASE_URL: postgresql://postgres:isolated-test-password@localhost:5432/propertyflow_access_test
         run: |
-          npm ci --prefix server
           npm run build --prefix server
           mkdir -p test-results
           node --test --test-reporter=spec --test-reporter=junit --test-reporter-destination=stdout --test-reporter-destination=test-results/server.xml server/tests/*.test.mjs
@@ -59,7 +62,7 @@ jobs:
         env:
           PLAYWRIGHT_JUNIT_OUTPUT_FILE: test-results/onboarding.xml
         run: |
-          npx playwright install --with-deps chromium
+          npx playwright install --with-deps --only-shell chromium
           npx playwright test -c playwright.onboarding.config.ts --reporter=line,junit
 
       - name: Test maintenance response loss and durable replay on disposable PostgreSQL
