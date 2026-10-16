@@ -8,6 +8,10 @@ async function fixture(page:Page,role='owner'){
   if(path==='/api/company/properties')return json([property]);
   if(path==='/api/company/properties/home')return state.propertyStatus===200?json(property):json({error:'Property unavailable'},state.propertyStatus);
   if(path.endsWith('/residents'))return json(state.residents);
+  if(req.method()==='GET'&&/^\/api\/company\/leases\/[^/]+(?:\/participants)?$/.test(path)){
+   const row=state.leases.find(r=>r.id===path.split('/')[4]);
+   return path.endsWith('/participants')?json({lease:row,items:[],candidates:[]}):json(row);
+  }
   if(req.method()!=='GET'){
    expect(req.headers()['x-csrf-token']).toBe('fixture');state.writes++;
    const data=req.postDataJSON();
@@ -42,7 +46,7 @@ test('lease creation retries same key and records exact monthly rent',async({pag
  const state=await fixture(page,'manager');state.units.push({id:'u1',label:'Unit 1',propertyId:'home',status:'active',version:1});state.loseLease=true;
  await page.goto('/company/leases');await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await page.getByLabel('New lease start date').fill('2026-11-01');await page.getByLabel('New lease monthly rent (USD)').fill('1234.56');
  await page.getByRole('button',{name:'Review lease',exact:true}).click();await page.getByRole('button',{name:'Create lease record'}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create lease record'}).click();await expect(page.getByRole('dialog')).not.toBeVisible();expect(state.leases.length).toBe(1);expect(state.leases[0].rentCents).toBe(123456);expect(state.keys[0]).toBe(state.keys[1]);
- await expect(page.getByText(/1234\.56|1,234\.56/)).toBeVisible();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await expect(page.getByLabel('New lease monthly rent (USD)')).toHaveValue('');
+ await expect(page).toHaveURL(/\/company\/leases\/l1\?onboarding=household/);await expect(page.getByRole('heading',{name:'Leaseholders and occupants',exact:true})).toBeVisible();await page.getByRole('link',{name:'← All leases',exact:true}).click();await expect(page.getByText(/1234\.56|1,234\.56/)).toBeVisible();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await expect(page.getByLabel('New lease monthly rent (USD)')).toHaveValue('');
 });
 test('stale unit edit requires list reload before retry with refreshed version',async({page})=>{
  const state=await fixture(page);state.units.push({id:'u1',label:'Unit 1',propertyId:'home',status:'active',version:1});await page.goto('/company/properties/home/units');await page.getByRole('button',{name:'Edit unit'}).click();await page.getByLabel('Name for Unit 1').fill('New name');state.units[0].version=2;

@@ -1,4 +1,5 @@
 import { formatDate } from "../dates";
+import { leasePath } from "../lease-links";
 import { DateField } from "../components/DateField";
 import {
   LeaseReview,
@@ -6,7 +7,7 @@ import {
   type LeaseReviewData,
 } from "../components/LeaseReview";
 import { useEffect, useId, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
@@ -22,7 +23,7 @@ type Unit = UnitExtras & {
   status: string;
   version: number;
 };
-type Lease = {
+export type Lease = {
   previousLeaseId?: string | null;
   previousLease?: { id: string; endsOn: string | null; status: string } | null;
   renewals?: { id: string; status: string; startsOn: string }[];
@@ -325,7 +326,8 @@ export function Leases() {
   return <LeaseList key={scope} />;
 }
 function LeaseList() {
-  const auth = useAuth().data;
+  const navigate=useNavigate();
+  const {data:auth,can} = useAuth();
   const { propertyId: pathPropertyId } = useParams();
   const [params, setParams] = useSearchParams();
   const [adding, setAdding] = useState(params.get("new") === "lease"),
@@ -333,7 +335,8 @@ function LeaseList() {
     [renewing, setRenewing] = useState<Lease | null>(null);
   const contextId = pathPropertyId || params.get("propertyId") || "",
     status = params.get("status") || "",
-    attention = params.get("attention") || "";
+    attention = params.get("attention") || "",
+    approvals = params.get("approvals") || "";
   const [visitedProperties, setVisitedProperties] = useState<string[]>(() =>
     contextId ? [contextId] : [],
   );
@@ -343,11 +346,12 @@ function LeaseList() {
     "/api/company/properties",
   );
   const r = useResource<Records<Lease>>(
-    `/api/company/leases?${new URLSearchParams(Object.entries({ cursor, propertyId: contextId, status, attention }).filter(([, value]) => value))}`,
+    `/api/company/leases?${new URLSearchParams(Object.entries({ cursor, propertyId: contextId, status, attention, approvals }).filter(([, value]) => value))}`,
     true,
     true,
   );
   const propertyName = properties.data?.find((p) => p.id === contextId)?.name;
+  const detailPath=(id:string)=>leasePath(id,Object.fromEntries(Object.entries({leaseListProperty:contextId,leaseListStatus:status,leaseListAttention:attention,leaseListNested:pathPropertyId?"true":"",leaseListApprovals:approvals,...(approvals?{section:"invitations"}:{})}).filter(([,value])=>value)));
   const reload = () => {
     setCursor("");
     r.reload();
@@ -447,10 +451,10 @@ function LeaseList() {
                     properties.data!.find((p) => p.id === id)?.name ||
                     "Property"
                   }
-                  saved={() => {
+                  saved={(row) => {
                     reload();
                     setAdding(false);
-                    setParams(pathPropertyId ? {} : { propertyId: id });
+                    navigate(`/company/leases/${encodeURIComponent(row.id)}?onboarding=household`);
                   }}
                 />
               </div>
@@ -466,7 +470,8 @@ function LeaseList() {
           <label className="compact-filter">
             Lease view
             <select
-              value={attention || status}
+              aria-label="Lease view"
+              value={approvals?"resident_approvals":attention || status}
               onChange={(e) => {
                 const value = e.target.value;
                 setCursor("");
@@ -474,7 +479,7 @@ function LeaseList() {
                   ...(!pathPropertyId && contextId
                     ? { propertyId: contextId }
                     : {}),
-                  ...(["ending_soon", "past_end", "in_effect"].includes(value)
+                  ...(value==="resident_approvals"?{approvals:"pending"}:["ending_soon", "past_end", "in_effect"].includes(value)
                     ? { attention: value }
                     : value
                       ? { status: value }
@@ -483,6 +488,7 @@ function LeaseList() {
               }}
             >
               <option value="">All leases</option>
+              {can("members.manage")&&<option value="resident_approvals">Resident approvals needed</option>}
               <option value="draft">Draft</option>
               <option value="active">Active</option>
               <option value="ended">Ended</option>
@@ -518,7 +524,7 @@ function LeaseList() {
                         · Unit {lease.unit.label}
                       </h3>
                       <p>
-                        {lease.resident.name || lease.resident.email} ·{" "}
+                        <Link to={detailPath(lease.id)}>{lease.resident.name || lease.resident.email}</Link> ·{" "}
                         {lease.status}
                       </p>
                       <p>
@@ -534,6 +540,7 @@ function LeaseList() {
                       )}
                     </div>
                     <div className="actions">
+                      <Link className="button secondary" to={detailPath(lease.id)}>Open lease workspace</Link>
                       <Link
                         to={`/company/rent?leaseId=${encodeURIComponent(lease.id)}`}
                       >
@@ -653,14 +660,14 @@ function LeaseList() {
     </>
   );
 }
-function LeaseCreate({
+export function LeaseCreate({
   propertyId,
   propertyName,
   saved,
 }: {
   propertyId: string;
   propertyName: string;
-  saved: () => void;
+  saved: (row: { id:string }) => void;
 }) {
   const auth = useAuth().data,
     storageKey = `pf:lease-setup:${auth?.user.id}:${auth?.membership?.companyId}:${propertyId}`;
@@ -705,6 +712,11 @@ function LeaseCreate({
           Manage units for this property
         </Link>
       </div>
+      <ol className="lease-setup-progress" aria-label="Lease setup progress">
+        <li aria-current={!review?"step":undefined}>1. Rental and terms</li>
+        <li aria-current={review?"step":undefined}>2. Review and record</li>
+        <li>3. Household, invitations and billing</li>
+      </ol>
       {!residents.data ? (
         <Load
           error={residents.error}
@@ -727,9 +739,9 @@ function LeaseCreate({
                   review={review}
                   storageKey={storageKey}
                   back={() => setReview(null)}
-                  saved={() => {
+                  saved={(row) => {
                     setReview(null);
-                    saved();
+                    saved(row);
                     setKey(crypto.randomUUID());
                   }}
                 />
@@ -815,7 +827,7 @@ function LeaseCreate({
     </>
   );
 }
-function LeaseTerms({
+export function LeaseTerms({
   prefix,
   value,
   draftOnly = false,
@@ -959,12 +971,12 @@ function PaymentTerms({ prefix, value }: { prefix: string; value?: Lease }) {
   );
 }
 
-function LeaseRenewal({
+export function LeaseRenewal({
   previous,
   saved,
 }: {
   previous: Lease;
-  saved: () => void;
+  saved: (row: { id:string }) => void;
 }) {
   const auth = useAuth().data,
     storageKey = `pf:lease-renewal:${auth?.user.id}:${auth?.membership?.companyId}:${previous.id}`;
@@ -982,6 +994,11 @@ function LeaseRenewal({
   };
   return (
     <>
+      <ol className="lease-setup-progress" aria-label="Lease renewal progress">
+        <li aria-current={!review?"step":undefined}>1. Next-term details</li>
+        <li aria-current={review?"step":undefined}>2. Review renewal draft</li>
+        <li>3. Review household and transition</li>
+      </ol>
       {review && (
         <LeaseReview
           review={review}

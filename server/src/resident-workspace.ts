@@ -47,7 +47,7 @@ export function registerResidentWorkspace(
         // Include draft/future/ended history for management, independent of portal
         // assignment. This endpoint is never used as a tenant self-service API.
         const leases = complete(await tx.lease.findMany({
-          where: { companyId, residentId: userId },
+          where: { companyId, OR: [{ residentId: userId }, { participants: { some: { companyId, userId } } }] },
           select: {
             id: true, propertyId: true, startsOn: true, endsOn: true,
             status: true, rentCents: true, rentDueDay: true, graceDays: true,

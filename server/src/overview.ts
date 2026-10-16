@@ -72,6 +72,7 @@ export function registerOverview(
           }),
         };
         const management: Record<string, unknown> = {};
+        if(grants.includes("members.manage"))management.residentApprovals={pendingCount:await tx.invitation.count({where:{companyId,...(propertyId?{propertyId}:{}),leaseId:{not:null},approvedAt:null,acceptedAt:null,revokedAt:null,expiresAt:{gt:new Date()},lease:{status:{in:["draft","active"]},OR:[{endsOn:null},{endsOn:{gte:date}}]}}})};
         if (grants.includes("lease.manage")) {
           const active = {
               ...where,

@@ -209,6 +209,19 @@ tbody tr:last-child td {
 }
 .form-section > legend { padding: 0 .4rem; font-size: .95rem; font-weight: 650; }
 .form-section > .help { margin: 0 0 1rem; line-height: 1.55; color: #51665d; }
+.checkbox-label input[type="checkbox"] { width:1.1rem; min-height:1.1rem; height:1.1rem; margin-right:.6rem; vertical-align:middle; }
+.checkbox-label .help { font-weight:400; line-height:1.5; }
+.lease-section-nav { display:flex; flex-wrap:wrap; gap:.5rem; margin:0 0 1.5rem; }
+.lease-setup-progress { list-style:none; display:flex; flex-wrap:wrap; gap:.5rem; padding:0; margin:1rem 0 1.5rem; font-size:.8rem; color:#51665d; }
+.lease-setup-progress li { padding:.55rem .7rem; border-bottom:2px solid #dfe5e1; }
+.lease-setup-progress li[aria-current] { color:#164e3e; border-color:#126b5c; font-weight:650; }
+.lease-next-steps { padding-left:1.5rem; }
+.lease-next-steps > li { padding:1.25rem .5rem; border-bottom:1px solid #dfe5e1; }
+.lease-next-steps h3 { margin-top:0; margin-bottom:.5rem; }
+.lease-next-steps p { max-width:720px; }
+.lease-next-steps > li:last-child { border-bottom:0; }
+.household-list h3 { overflow-wrap:anywhere; }
+@media (max-width:700px) { .lease-section-nav { display:grid; grid-template-columns:1fr 1fr; }.lease-section-nav button { white-space:normal; text-align:left; } }
 @media (max-width: 700px) {
   .editor-body .workflow-form .form-actions { margin-left: -1rem; margin-right: -1rem; padding-left: 1rem; padding-right: 1rem; }
 }

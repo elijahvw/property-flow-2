@@ -32,7 +32,7 @@ Implemented does not mean user-accepted. Real owner/manager/resident acceptance 
 
 Deliver **PF-01 → PF-02**, then **PF-03**: true tenant/lease detail destinations, shared property/unit/tenant context, and offline contacts with optional verified portal access. A landlord should be able to record an existing tenant/lease before inviting them to log in.
 
-Include PF-23 navigation/accessibility work. Preserve existing financial source IDs, authorization and audit history during contact migration. Keep the single-resident model until PF-11 defines households; emergency contacts are not roommates. Do not repeat the property workspace already implemented or spend this phase on a new visual theme.
+Include PF-23 navigation/accessibility work. Preserve existing financial source IDs, authorization and audit history during contact migration. The user subsequently requested multiple residents per lease, resident-initiated invitations, owner approval for every addition, and connected onboarding/renewal workflows. Bring the initial shared-household portion of PF-11 into PF-02 under that explicit direction; emergency contacts remain separate. See [lease workflow scope](lease-workflow.md). Do not repeat the property workspace already implemented or spend this phase on a new visual theme.
 
 ### 2. Financial understanding and completion
 
@@ -44,7 +44,7 @@ Keep due, within-grace, past-grace, unpaid and paid-late distinct. Separate rent
 
 Deliver **PF-08 → PF-09 → PF-10**: future-effective terms, reviewed proration and explicit end/renewal/billing transitions. PF-08 can begin after the connected lease page without waiting for the entire financial phase. Preserve charge snapshots and posted money. Renewal drafts never silently start billing; lease ending never erases debt.
 
-Deliver **PF-11** households after PF-03/PF-05 contracts settle. Begin with one shared obligation and explicit participant access. Separately allocated liability is an additional increment; rent never multiplies by the number of participants.
+Complete **PF-11** after PF-03/PF-05 contracts settle. Its initial shared-household/approval workflow accompanies PF-02 at the user's request. Begin with one shared obligation and explicit participant access. Separately allocated liability is an additional increment; rent never multiplies by the number of participants.
 
 ### 4. Maintenance operations and delegated work
 

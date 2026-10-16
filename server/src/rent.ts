@@ -23,6 +23,7 @@ import {
   type Tx,
   type AuditRequest,
 } from "./operational.js";
+import { sharedLeaseAccess } from "./lease-participants.js";
 const leaseSelect = {
   rentDueDay: true,
   graceDays: true,
@@ -346,18 +347,14 @@ export function registerRent(
           request,
           resident ? "resident.self" : "finance.manage",
           async (tx, companyId) => {
+            const today = await businessDay(tx, companyId);
             const where: Prisma.LeaseWhereInput = {
               companyId,
               ...(propertyId ? { propertyId } : {}),
               ...(leaseId ? { id: leaseId } : {}),
               ...(resident
                 ? {
-                    residentId: request.principal!.id,
-                    property: {
-                      assignments: {
-                        some: { userId: request.principal!.id, companyId },
-                      },
-                    },
+                    ...sharedLeaseAccess(companyId, request.principal!.id, new Date(today + "T00:00:00Z")),
                   }
                 : {}),
             };
@@ -381,8 +378,7 @@ export function registerRent(
             );
             if (leaseId && !leases.length)
               throw new AccessError(404, "NOT_FOUND", "Lease not found.");
-            const today = await businessDay(tx, companyId),
-              data = await sources(
+            const data = await sources(
                 tx,
                 companyId,
                 leases.map((l) => l.id),
