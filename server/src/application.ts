@@ -541,6 +541,7 @@ export function registerApplication(
           "Choose an active member of this company.",
         );
       await clearAssignments(tx, userId, companyId);
+      if (target.role === "resident") await linkedResidentContact(tx, companyId, userId);
       await tx.companyMembership.update({
         where: { userId },
         data: { role: "owner", version: { increment: 1 } },

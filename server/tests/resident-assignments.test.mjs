@@ -35,7 +35,7 @@ async function fixture(t, actor = person('owner','owner')) {
   const app=Fastify({routerOptions:{maxParamLength:MAX_USER_ID_BYTES}}); t.after(()=>app.close());
   registerApplication(app,db,async request=>{request.principal=actor;},'https://example.test');
   const call=(method,url,payload,headers={})=>{if(payload&&url.endsWith('/membership'))payload={...payload,expectedVersion:null};return app.inject({method,url,headers,...(payload?{payload}:{})});};
-  return {call,users,rows,locks,audits,actor};
+  return {call,users,rows,locks,audits,actor,contacts};
 }
 test('assignment permission belongs only to active company owners/managers',()=>{
  for(const role of ['owner','manager','staff','resident',null]) assert.equal(permissions(person('u',role)).includes('resident.assignment.manage'),['owner','manager'].includes(role));
@@ -85,6 +85,7 @@ test('serialization failures retry boundedly and expose actionable 409 after exh
 test('ownership transfer removes former resident associations under the shared lock',async t=>{
  const f=await fixture(t);f.rows.push({companyId:'a',propertyId:'home',userId:'resident'});
  assert.equal((await f.call('POST','/api/company/transfer-ownership',{userId:'resident'})).statusCode,200);assert.equal(f.rows.length,0);assert.deepEqual(f.locks,['resident']);
+ assert.equal(f.contacts.length,1);assert.equal(f.contacts[0].userId,'resident');assert.equal(f.contacts[0].companyId,'a');
 });
 
 const opaqueSubjects = ['auth0|abc+def', 'auth0|' + 'x'.repeat(240), 'samlp|directory|!@£$%^&*()+}{:;|P9/opaque?#%', 'oidc|provider|CaseSensitive'];
