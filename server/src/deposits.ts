@@ -175,7 +175,7 @@ function publicReceipt(
     cashEntry: { ...cash, voidReason: resident ? undefined : cash.voidReason },
   };
 }
-async function detail(
+export async function readDepositDetail(
   tx: Tx,
   companyId: string,
   leaseId: string,
@@ -257,7 +257,7 @@ export function registerDeposits(
             ? undefined
             : assignmentId(request.query.propertyId);
       return scoped(db, request, permission, (tx, companyId) =>
-        detail(
+        readDepositDetail(
           tx,
           companyId,
           leaseId,

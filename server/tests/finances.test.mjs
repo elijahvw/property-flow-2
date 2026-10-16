@@ -1,4 +1,5 @@
 import {offlineTenantCases} from "./offline-tenant-cases.mjs";
+import {statementCases} from "./statement-cases.mjs";
 import { seedContactMigration, verifyContactMigration, residentContactCases } from "./resident-contact-cases.mjs";
 import { residentWorkspaceCases } from "./resident-workspace-cases.mjs";
 import { householdCases } from "./household-cases.mjs";
@@ -132,4 +133,6 @@ test('manual finance isolation, replay, corrections and totals',{skip:!url},asyn
  await t.test("shared lease household and approvals", async householdTest => householdCases(householdTest,admin,call,app));
  await t.test("resident contact compatibility", async contactTest => residentContactCases(contactTest,admin,call,db));
  await t.test("offline tenant and connected invitation workflow",async offlineTest=>offlineTenantCases(offlineTest,admin,call,providerCalls));
+ await t.test("tenant statements and shared financial sources",async statementTest=>statementCases(statementTest,admin,call));
+
 });

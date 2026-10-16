@@ -27,6 +27,7 @@ import { registerUserAdministration } from "./user-administration.js";
 import type { IdentityProvider } from "./identity-provider.js";
 import { registerRentSchedules } from "./rent-schedules.js";
 import { registerRent } from "./rent.js";
+import { registerStatements } from "./statements.js";
 import { registerFinances } from "./finances.js";
 import { registerLeasing } from "./leasing.js";
 import { registerLeaseParticipants } from "./lease-participants.js";
@@ -216,6 +217,7 @@ export function registerApplication(
   registerFinances(server, db, authenticate, origin);
   registerDeposits(server, db, authenticate, origin);
   registerRent(server, db, authenticate, origin);
+  registerStatements(server, db, authenticate);
   registerRentSchedules(server, db, authenticate, origin);
   registerRentRecovery(server, db, authenticate, origin);
   registerUserAdministration(server, db, authenticate, origin, identityProvider);

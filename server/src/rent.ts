@@ -69,6 +69,7 @@ const paymentSelect = {
   createdAt: true,
 } as const;
 const allocationSelect = {
+  createdAt: true,
   id: true,
   leaseId: true,
   chargeId: true,

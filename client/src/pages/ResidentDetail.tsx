@@ -9,6 +9,7 @@ import { dollars } from "./Finances";
 import { formatDate } from "../dates";
 import { tenantPortalState } from "../tenant-status";
 import { leasePath } from "../lease-links";
+import { statementPath } from "../statement";
 
 type RentSummary = { outstandingCents: string; creditCents: string; afterGraceCents: string; upcomingCents: string; withinGraceCents: string; dueTodayCents: string };
 type DepositSummary = { requiredCents: string; heldCents: string; outstandingCents: string; excessHeldCents: string; pastDueCents: string };
@@ -100,7 +101,7 @@ export function TenantFinancials({ id, contact=false }: { id: string; contact?:b
           <div className="tenant-lease-top"><div><Link className="tenant-property-name" to={`/company/properties/${encodeURIComponent(lease.propertyId)}`}>{lease.property.name}</Link><h3><Link to={leasePath(lease.id,context)}>{lease.unit.label}</Link></h3></div><span className={`tenant-status ${status !== "In effect" ? "neutral" : ""}`}>{status}</span></div>
           <p className="tenant-lease-term">{formatDate(lease.startsOn)} <span aria-hidden="true">—</span> {lease.endsOn ? formatDate(lease.endsOn) : "Open ended"}</p>
           <dl className="tenant-lease-money"><div><dt>Monthly rent</dt><dd>{dollars(lease.rentCents)}</dd></div><div><dt>Rent outstanding</dt><dd>{dollars(lease.rent.outstandingCents)}</dd></div><div><dt>Deposit held</dt><dd>{lease.deposit ? dollars(lease.deposit.heldCents) : "Not set up"}</dd></div></dl>
-          <div className="tenant-lease-footer"><span className="section-caption">Due day {lease.rentDueDay} · {lease.graceDays} {lease.graceDays === 1 ? "day" : "days"} grace</span><div className="tenant-lease-actions"><Link to={propertyLink("/company/rent", lease.propertyId, { leaseId: lease.id, ...context })} aria-label={`Open rent ledger for ${lease.unit.label}`}>Rent ledger <span aria-hidden="true">→</span></Link><Link to={propertyLink("/company/deposits", lease.propertyId, { leaseId: lease.id, ...context })} aria-label={`Open deposit details for ${lease.unit.label}`}>Deposit details <span aria-hidden="true">→</span></Link></div></div>
+          <div className="tenant-lease-footer"><span className="section-caption">Due day {lease.rentDueDay} · {lease.graceDays} {lease.graceDays === 1 ? "day" : "days"} grace</span><div className="tenant-lease-actions"><Link to={statementPath(lease.id,false,{...context,propertyId:lease.propertyId})} aria-label={`View statement for ${lease.unit.label}`}>Statement <span aria-hidden="true">→</span></Link><Link to={propertyLink("/company/rent", lease.propertyId, { leaseId: lease.id, ...context })} aria-label={`Open rent ledger for ${lease.unit.label}`}>Rent ledger <span aria-hidden="true">→</span></Link><Link to={propertyLink("/company/deposits", lease.propertyId, { leaseId: lease.id, ...context })} aria-label={`Open deposit details for ${lease.unit.label}`}>Deposit details <span aria-hidden="true">→</span></Link></div></div>
         </li>;
       })}</ul>}
     </section>
