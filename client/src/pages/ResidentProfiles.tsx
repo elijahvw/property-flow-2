@@ -1,12 +1,13 @@
+import { TenantForm } from "../components/TenantForm";
 import { useEffect, useId, useState } from "react";
-import { Link, Navigate, useSearchParams } from "react-router-dom";
-import { tenantPath, tenantDirectorySearch } from "../tenant-links";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { tenantPath, contactPath, tenantDirectorySearch } from "../tenant-links";
 import { tenantPortalState } from "../tenant-status";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
-import { Form, InvitationForm, Invitations } from "./Workspace";
+import { Form, Invitations } from "./Workspace";
 
 export type Profile = {
   userId: string;
@@ -44,16 +45,18 @@ export function ResidentProfiles() {
     />
   );
 }
+type DirectoryProfile = Omit<Profile,"userId"|"user"> & {userId:string|null;user:Profile["user"]|null;contactId?:string;recordStatus?:string;portalState?:string;name?:string;email?:string|null;phone?:string|null};
 function Directory() {
+  const navigate=useNavigate();
+  const [adding,setAdding]=useState(false),[inviteInitially,setInviteInitially]=useState(false),[formRevision,setFormRevision]=useState(0);
   const [params, setParams] = useSearchParams();
-  const r = useResource<Profile[]>("/api/company/resident-profiles", true, true);
-  const query = params.get("q") || "", access = ["active", "verification", "disabled"].includes(params.get("access") || "") ? params.get("access")! : "all";
-  const [inviting, setInviting] = useState(false),
-    [invitationRevision, setInvitationRevision] = useState(0);
-  const { can, data } = useAuth();
+  const r = useResource<DirectoryProfile[]>("/api/company/resident-profiles", true, true);
+  const query = params.get("q") || "", access = ["active", "verification", "disabled", "offline", "pending"].includes(params.get("access") || "") ? params.get("access")! : "all";
+
+  const { can } = useAuth();
   const rows = r.data?.filter(p =>
-    `${p.contactName || ""} ${p.user.name || ""} ${p.user.email}`.toLowerCase().includes(query.trim().toLowerCase()) &&
-    (access === "all" || tenantPortalState(p) === access));
+    `${p.contactName || p.name || ""} ${p.user?.name || ""} ${p.email || p.user?.email || ""} ${p.phone || p.contactPhone || ""}`.toLowerCase().includes(query.trim().toLowerCase()) &&
+    (access === "all" || tenantPortalState(p) === access) && ((p.recordStatus||"active") === (params.get("records")==="archived"?"archived":"active")));
   const filter = (key: string, value: string) => {
     const next = new URLSearchParams(tenantDirectorySearch(params));
     if (value && value !== "all") next.set(key, value); else next.delete(key);
@@ -62,22 +65,23 @@ function Directory() {
   return <div className="tenant-directory-page">
     <header className="page-heading page-heading-row">
       <div><p className="record-kicker">People / Tenants</p><h1>Tenants</h1><p>People, rental history and portal access in one place.</p></div>
-      {can("members.manage") && <button onClick={() => setInviting(true)}>Invite tenant</button>}
+      <div className="actions"><button onClick={()=>{setInviteInitially(false);setAdding(true);}}>Add tenant</button>{can("members.manage")&&<button className="secondary" onClick={()=>{setInviteInitially(true);setAdding(true);}}>Invite tenant</button>}</div>
     </header>
+    <EditorDialog open={adding} title="Add tenant" description="Record the person first. Portal access is optional." onClose={()=>{setAdding(false);setFormRevision(v=>v+1);r.reload();}}><TenantForm key={`${inviteInitially}:${formRevision}`} inviteInitially={inviteInitially} saved={row=>{setAdding(false);r.reload();navigate(contactPath(row.id));}} cancel={()=>setAdding(false)}/></EditorDialog>
     <section className="panel tenant-directory-panel" aria-label="Tenant directory">
       <div className="tenant-directory-toolbar">
         <label className="tenant-search">Find resident<input type="search" placeholder="Search name or email" value={query} maxLength={200} onChange={e => filter("q", e.target.value)} /></label>
-        <label>Portal access<select aria-label="Portal access" value={access} onChange={e => filter("access", e.target.value)}><option value="all">All access</option><option value="active">Active</option><option value="verification">Verification needed</option><option value="disabled">Disabled</option></select></label>
+        <label>Portal access<select aria-label="Portal access" value={access} onChange={e => filter("access", e.target.value)}><option value="all">All access</option><option value="offline">Not invited</option><option value="pending">Invitation pending</option><option value="active">Active</option><option value="verification">Verification needed</option><option value="disabled">Disabled</option></select></label>
+        <label>Tenant records<select aria-label="Tenant records" value={params.get("records")==="archived"?"archived":"active"} onChange={e=>filter("records",e.target.value==="archived"?"archived":"all")}><option value="active">Current records</option><option value="archived">Archived records</option></select></label>
         <span className="directory-count" role="status">{rows ? `${rows.length} ${rows.length === 1 ? "tenant" : "tenants"}` : "Loading tenants…"}</span>
       </div>
       {r.error && <p role="alert" className="notice error">{r.error} <button className="secondary" onClick={r.reload}>Try again</button></p>}
-      {!r.data ? (!r.error && <p role="status">Loading residents…</p>) : !rows?.length ? <div className="empty-state"><h2>{query || access !== "all" ? "No matching tenants" : "Your tenant directory starts here"}</h2><p>{query || access !== "all" ? "Try a different name or access filter." : "Invite a tenant to your company. They appear here after accepting."}</p>{(query || access !== "all") && <button className="secondary" onClick={() => setParams({})}>Clear filters</button>}</div> : <div className="table-wrap"><table className="tenant-directory"><thead><tr><th>Tenant</th><th>Phone</th><th>Portal access</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{rows.map(p => <tr key={p.userId}>
-        <td><div className="tenant-person"><span className="tenant-avatar small" aria-hidden="true">{(p.contactName || p.user.name || p.user.email).slice(0,1).toUpperCase()}</span><div><Link className="tenant-name" to={tenantPath(p.userId, params)}>{p.contactName || p.user.name || p.user.email}</Link><span className="cell-detail">{p.user.email}</span></div></div></td>
-        <td data-label="Phone">{p.contactPhone || "—"}</td><td data-label="Portal access"><span className={`tenant-status ${tenantPortalState(p) === "active" ? "" : "neutral"}`}>{tenantPortalState(p) === "active" ? "Active" : tenantPortalState(p) === "verification" ? "Verification needed" : "Disabled"}</span></td>
-        <td><Link className="tenant-row-action" to={tenantPath(p.userId, params)} aria-label={`View tenant ${p.contactName || p.user.name || p.user.email}`}>View tenant <span aria-hidden="true">→</span></Link></td>
-      </tr>)}</tbody></table></div>}
+      {!r.data ? (!r.error && <p role="status">Loading residents…</p>) : !rows?.length ? <div className="empty-state"><h2>{query || access !== "all" ? "No matching tenants" : "Your tenant directory starts here"}</h2><p>{query || access !== "all" ? "Try a different name or access filter." : "Add a tenant without a login, then record their lease. Portal access can be arranged separately."}</p>{(query || access !== "all") && <button className="secondary" onClick={() => setParams({})}>Clear filters</button>}</div> : <div className="table-wrap"><table className="tenant-directory"><thead><tr><th>Tenant</th><th>Phone</th><th>Portal access</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{rows.map(p => {
+        const name=p.name||p.contactName||p.user?.name||p.email||p.user?.email||"Tenant",path=p.contactId?contactPath(p.contactId,params):tenantPath(p.userId!,params),portal=tenantPortalState(p);
+        return <tr key={p.contactId||p.userId}><td><div className="tenant-person"><span className="tenant-avatar small" aria-hidden="true">{name.slice(0,1).toUpperCase()}</span><div><Link className="tenant-name" to={path}>{name}</Link><span className="cell-detail">{p.email||p.user?.email||"Email not supplied"}</span></div></div></td><td data-label="Phone">{p.phone||p.contactPhone||"—"}</td><td data-label="Portal access"><span className={`tenant-status ${portal==="active"?"":"neutral"}`}>{portal==="active"?"Active":portal==="verification"?"Verification needed":portal==="offline"?"Not invited":portal==="pending"?"Invitation pending":"Disabled"}</span></td><td><Link className="tenant-row-action" to={path} aria-label={`View tenant ${name}`}>View tenant <span aria-hidden="true">→</span></Link></td></tr>;
+      })}</tbody></table></div>}
     </section>
-    {can("members.manage") && <><EditorDialog open={inviting} title="Invite tenant" onClose={() => setInviting(false)}><InvitationForm companyId={data?.membership?.companyId} audience="tenants" reload={() => setInvitationRevision(v => v + 1)} /></EditorDialog><Invitations key={invitationRevision} audience="tenants" /></>}
+    {can("members.manage")&&<Invitations audience="tenants" />}
   </div>;
 }
 export function ResidentEditor({ id, close, mode = "contact", open = true }: { id: string; close: () => void; mode?: "contact" | "access"; open?: boolean }) {

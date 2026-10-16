@@ -97,7 +97,7 @@ export async function residentContactCases(t, admin, call, db) {
     await assert.rejects(db.$transaction(async tx => {
       await tx.$queryRaw`SELECT set_config('app.company_id','migration-company',true)`;
       return tx.residentContact.update({ where: { companyId_userId: { companyId: 'migration-company', userId: 'migration-current' } }, data: { userId: null } });
-    }), /permission denied/i);
+    }), /identity mapping is retained|permission denied/i);
   });
   await t.test('concurrent exact-identity bridging creates one contact and never overwrites curated details', async () => {
     const resolve = () => serializable(db, async tx => {

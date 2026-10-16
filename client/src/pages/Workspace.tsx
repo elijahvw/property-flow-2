@@ -1,3 +1,5 @@
+import { ContactInvitationReview } from "../components/ContactInvitation";
+import { PropertyAddressFields } from "../components/Address";
 import { RecordIdentity } from "../components/RecordIdentity";
 import { ResidentLeaseInvitations } from "../components/LeaseInvitations";
 import { LeaseInvitationReview } from "../components/LeaseInvitationReview";
@@ -39,6 +41,7 @@ type Member = {
   role: string;
   status: string;
   version?: number;
+  createdAt?:string;
   user: { name: string | null; email: string; status: string };
 };
 type Person = {
@@ -224,9 +227,11 @@ function RoleSelect({
 function AssignmentCompanySelect({
   companies,
   initialValue,
+  changed,
 }: {
   companies: Company[];
   initialValue: string;
+  changed?:(value:string)=>void;
 }) {
   const [value, setValue] = useState(initialValue);
   const unavailable =
@@ -237,14 +242,13 @@ function AssignmentCompanySelect({
         Company
         <select
           id="person-company"
-          required
           name="companyId"
           aria-describedby={unavailable ? "company-availability" : undefined}
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => {setValue(event.target.value);changed?.(event.target.value);}}
         >
-          <option value="" disabled>
-            Select company
+          <option value="">
+            No company access
           </option>
           {value && !companies.some((c) => c.id === value) && (
             <option value={value} disabled>
@@ -286,6 +290,11 @@ function Badge({ children }: { children: React.ReactNode }) {
 }
 
 export { Companies, CompanyDetail } from "./CompanyAdministration";
+function MembershipFields({companies,person,initial}:{companies:Company[];person:Person;initial:string}) {
+  const [company,setCompany]=useState(initial);
+  return <div className="membership-fields"><AssignmentCompanySelect companies={companies} initialValue={initial} changed={setCompany}/><fieldset disabled={!company} className="form-grid editor-contents"><legend className="sr-only">Company permissions</legend><RoleSelect value={person.membership?.role||"resident"} owner/><StatusSelect value={person.membership?.status}/></fieldset>{!company&&<p className="help">This person can sign in but will have no company workspace access. Their existing business history is retained.</p>}</div>;
+}
+
 export function InvitationForm({
   companyId,
   owner = false,
@@ -356,7 +365,7 @@ export function People() {
 function PeopleWorkspace() {
   const r = useResource<Person[]>("/api/platform/users", true),
     companies = useResource<Company[]>("/api/platform/companies", true, true);
-  const [params] = useSearchParams();
+  const [params,setParams] = useSearchParams();
   const [selected, setSelected] = useState(params.get("userId") || "");
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
@@ -606,6 +615,11 @@ function PeopleWorkspace() {
                 operation="company.user.assign"
                 submit={async (data) => {
                   try {
+                    if(!text(data,"companyId")){
+                      await api(`/api/platform/users/${encodeURIComponent(person.id)}/membership`,{method:"DELETE",body:{expectedVersion:person.membership?.version??null,expectedCompanyId:person.membership?.companyId??null,expectedCreatedAt:person.membership?.createdAt??null}});
+                      if(params.has("companyId")){const next=new URLSearchParams(params);next.delete("companyId");setParams(next,{replace:true});}
+                      setDraft({...person,membership:null,companyId:null,role:"unassigned"});r.reload();return;
+                    }
                     const changed = await api<Member>(
                       `/api/platform/users/${encodeURIComponent(person.id)}/membership`,
                       {
@@ -640,21 +654,7 @@ function PeopleWorkspace() {
                   }
                 }}
               >
-                <div className="form-grid">
-                  <AssignmentCompanySelect
-                    companies={companies.data}
-                    initialValue={
-                      person.membership?.companyId ||
-                      params.get("companyId") ||
-                      ""
-                    }
-                  />
-                  <RoleSelect
-                    value={person.membership?.role || "resident"}
-                    owner
-                  />
-                  <StatusSelect value={person.membership?.status} />
-                </div>
+                <MembershipFields companies={companies.data} person={person} initial={person.membership?.companyId||params.get("companyId")||""}/>
                 <p className="help">
                   Changing the company removes access to the previous company.
                   An active company must retain an owner.
@@ -769,13 +769,7 @@ function PropertyDirectory() {
               r.reload();
             }}
           >
-            <div className="form-grid">
-              <Field name="name" label="Property name" />
-              <Field name="address" label="Street address" />
-              <Field name="city" label="City" />
-              <Field name="state" label="State / region" />
-              <Field name="zip" label="Postal code" />
-            </div>
+            <PropertyAddressFields />
             <PropertyFields />
           </Form>
         </EditorDialog>
@@ -1354,7 +1348,7 @@ export function AcceptInvitation() {
     <section className="panel">
       <h1>Accept your invitation</h1>
       <p>Use the account whose verified email matches the invitation.</p>
-      {token&&sessionStorage.getItem("pf-lease-invitation")==="true"?<LeaseInvitationReview token={token} accepted={async()=>{sessionStorage.removeItem("pf-invitation");sessionStorage.removeItem("pf-lease-invitation");await refreshUser();navigate("/resident");}}/>:token ? (
+      {token&&sessionStorage.getItem("pf-contact-invitation")==="true"&&sessionStorage.getItem("pf-lease-invitation")!=="true"?<ContactInvitationReview token={token} accepted={async()=>{sessionStorage.removeItem("pf-invitation");sessionStorage.removeItem("pf-contact-invitation");await refreshUser();navigate("/resident");}}/>:token&&sessionStorage.getItem("pf-lease-invitation")==="true"?<LeaseInvitationReview token={token} accepted={async()=>{sessionStorage.removeItem("pf-invitation");sessionStorage.removeItem("pf-lease-invitation");await refreshUser();navigate("/resident");}}/>:token ? (
         <Form
           label="Accept invitation"
           operation="invitation.accept"

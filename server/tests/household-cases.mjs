@@ -90,6 +90,9 @@ export async function householdCases(t,admin,call,app){
    const approval=`/api/company/leases/${lease.id}/invitations/${invited.id}/approve`;
    assert.equal((await call('hh-manager','POST',approval,{})).statusCode,403);
    const approved=ok(await call('hh-owner','POST',approval,{})),token=new URL(approved.acceptanceUrl).hash.slice(1);
+   const profileBefore=(await admin.query(`SELECT c.id,c."userId" FROM "ResidentContact" c JOIN "Invitation" i ON i."contactId"=c.id WHERE i.id=$1`,[invited.id])).rows[0];assert.ok(profileBefore.id);assert.equal(profileBefore.userId,null,'owner approval saves the profile before login');
+   assert.equal((await call(null,'POST','/api/invitations/setup-account',{token})).statusCode,200);
+
    const preview=ok(await call(id,'POST','/api/invitations/preview',{token}));assert.equal(preview.role,role);assert.equal(preview.property,'Oak House');assert.equal(preview.unit,'Shared apartment');assert.equal(JSON.stringify(preview).includes(token),false);
    assert.equal((await call('resident2','POST','/api/invitations/preview',{token})).statusCode,403);
    assert.equal((await call('resident2','POST','/api/invitations/accept',{token})).statusCode,403);
@@ -107,6 +110,9 @@ export async function householdCases(t,admin,call,app){
     }finally{await browser.close();}
    }
    ok(await call(id,'POST','/api/invitations/accept',{token}));
+   assert.equal((await admin.query(`SELECT "userId" FROM "ResidentContact" WHERE id=$1`,[profileBefore.id])).rows[0].userId,id);
+   assert.equal((await admin.query(`SELECT count(*)::int n FROM "ResidentContact" WHERE "companyId"='hh-company' AND email=$1`,[id+'@test.invalid'])).rows[0].n,1);
+
    ok(await call(id,'POST','/api/invitations/accept',{token}));
    assert.equal((await admin.query(`SELECT role FROM "LeaseParticipant" WHERE "leaseId"=$1 AND "userId"=$2`,[lease.id,id])).rows[0].role,role);
    assert.equal((await call(id,'GET',`/api/resident/rent?leaseId=${lease.id}`)).statusCode,role==='leaseholder'?200:404);
@@ -117,7 +123,8 @@ export async function householdCases(t,admin,call,app){
  await t.test('household tenant boundaries and retention are enforced independently by PostgreSQL',async()=>{
   const flags=(await admin.query(`SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE relname='LeaseParticipant'`)).rows[0];assert.deepEqual(flags,{relrowsecurity:true,relforcerowsecurity:true});
   assert.equal((await admin.query(`SELECT has_table_privilege('propertyflow_runtime','"LeaseParticipant"','DELETE') allowed`)).rows[0].allowed,false);
-  assert.equal((await admin.query(`SELECT has_column_privilege('propertyflow_runtime','"LeaseParticipant"','userId','UPDATE') allowed`)).rows[0].allowed,false);
+  assert.equal((await admin.query(`SELECT has_column_privilege('propertyflow_runtime','"LeaseParticipant"','userId','UPDATE') allowed`)).rows[0].allowed,true);
+  assert.equal((await admin.query(`SELECT count(*)::int n FROM pg_trigger WHERE tgname='lease_participant_identity_guard' AND NOT tgisinternal`)).rows[0].n,1);
  });
  await t.test('only owners control approved invitations and the approval queue; others cancel only their own unapproved requests',async()=>{
   const companyRoot=`/api/company/leases/${lease.id}/invitations`,residentRoot=`/api/resident/leases/${lease.id}/invitations`;

@@ -1,3 +1,4 @@
+import { Address } from "../components/Address";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -76,7 +77,7 @@ function Load({ error, retry }: { error?: string; retry: () => void }) {
 }
 function ProfileFields({ value }: { value?: CompanyProfile }) {
   const field = (name: keyof typeof fields) => (
-    <label key={name}>
+    <label key={name} className={name.startsWith("addressLine")?"address-street":name==="city"?"address-city":name==="region"?"address-region":name==="postalCode"?"address-postal":name==="country"?"address-country":undefined}>
       {fields[name]}
       <input
         name={name}
@@ -138,7 +139,7 @@ function ProfileFields({ value }: { value?: CompanyProfile }) {
       </fieldset>
       <fieldset>
         <legend>Mailing address</legend>
-        <div className="form-grid">
+        <div className="address-fields">
           {(
             [
               "addressLine1",
@@ -422,16 +423,7 @@ function CompanyRecord() {
             <dd>{c.website || "Not supplied"}</dd>
             <dt>Mailing address</dt>
             <dd>
-              {[
-                c.addressLine1,
-                c.addressLine2,
-                c.city,
-                c.region,
-                c.postalCode,
-                c.country,
-              ]
-                .filter(Boolean)
-                .join(", ") || "Not supplied"}
+              <Address street={c.addressLine1} line2={c.addressLine2} city={c.city} region={c.region} postalCode={c.postalCode} country={c.country}/>
             </dd>
             <dt>Timezone</dt>
             <dd>{c.timezone}</dd>

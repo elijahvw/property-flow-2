@@ -1,3 +1,4 @@
+import {offlineTenantCases} from "./offline-tenant-cases.mjs";
 import { seedContactMigration, verifyContactMigration, residentContactCases } from "./resident-contact-cases.mjs";
 import { residentWorkspaceCases } from "./resident-workspace-cases.mjs";
 import { householdCases } from "./household-cases.mjs";
@@ -66,7 +67,7 @@ test('manual finance isolation, replay, corrections and totals',{skip:!url},asyn
  }
  for(const [id,company] of [['home','a'],['other-home','a'],['foreign-home','b']])await admin.query(`INSERT INTO "Property"(id,name,address,city,state,zip,"companyId","updatedAt") VALUES($1,$1,'street','city','state','zip',$2,NOW())`,[id,company]);
  await admin.query(`INSERT INTO "ResidentPropertyAssignment"("companyId","propertyId","userId") VALUES('a','home','resident'),('a','home','resident2'),('b','foreign-home','foreign-resident')`);
- const app=Fastify();t.after(()=>app.close());const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(app,db,auth,'https://app.test');
+ const app=Fastify();t.after(()=>app.close());const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});const providerCalls=[];registerApplication(app,db,auth,'https://app.test',{create:async(email,name)=>{providerCalls.push(['create',email,name]);return {user_id:'auth0|offline-mock',email,email_verified:false};},setup:async email=>{providerCalls.push(['setup',email]);},verify:async id=>{providerCalls.push(['verify',id]);}});
  const call=(user,method,path,payload,extra={})=>app.inject({method,url:path,headers:{...(user?{cookie:`__Host-pf-session=token-${user}`} : {}),origin:'https://app.test','x-csrf-token':'csrf',...extra},...(payload?{payload}:{})});
  await t.test('contact migration preserves populated history through rollback and reapplication',async()=>verifyContactMigration(admin,contactMigrationSnapshot));
  const path='/api/company/finances';let entry;const body=(extra={})=>({propertyId:'home',occurredOn:'2026-10-14',amount:'1234.56',kind:'income',category:'rent',memo:null,submissionKey:randomUUID(),...extra});
@@ -130,4 +131,5 @@ test('manual finance isolation, replay, corrections and totals',{skip:!url},asyn
  await t.test("connected tenant workspace", async workspaceTest => residentWorkspaceCases(workspaceTest,admin,call,app));
  await t.test("shared lease household and approvals", async householdTest => householdCases(householdTest,admin,call,app));
  await t.test("resident contact compatibility", async contactTest => residentContactCases(contactTest,admin,call,db));
+ await t.test("offline tenant and connected invitation workflow",async offlineTest=>offlineTenantCases(offlineTest,admin,call,providerCalls));
 });

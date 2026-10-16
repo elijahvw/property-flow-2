@@ -17,6 +17,7 @@ function bootstrap(role: string | null = 'owner', status = 'active', platform = 
 }
 async function fixture(page: Page, auth: ReturnType<typeof bootstrap> | null = bootstrap()) {
   const records = { properties: [] as any[], invitations: [] as any[], propertyFail: false, invitationFail: false, invitationRequests: 0, invitationPosts: [] as any[] };
+  let tenant:any;
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname;
     const json = (value: unknown, status = 200) => route.fulfill({status, json: value});
@@ -25,6 +26,9 @@ async function fixture(page: Page, auth: ReturnType<typeof bootstrap> | null = b
       if (route.request().method() === 'POST') { records.properties.push({id:'property-a', ...route.request().postDataJSON()}); return json(records.properties[0]); }
       return records.propertyFail ? json({error:'Property fixture unavailable'}, 503) : json(records.properties);
     }
+    if(path==='/api/company/resident-contacts'&&route.request().method()==='POST'){tenant={id:'contact-a',...route.request().postDataJSON(),version:1,userId:null,status:'active',leases:[]};return json(tenant);}
+    if(path==='/api/company/resident-contacts/contact-a')return json(tenant);
+    if(path==='/api/company/resident-contacts/contact-a/invitations'){records.invitationPosts.push(route.request().postDataJSON());records.invitations.push({id:'contact-invite',companyId:'company-a',email:tenant.email,role:'resident',expiresAt:'2099-01-01',acceptedAt:null,revokedAt:null});return json({acceptanceUrl:'https://example.test/invite?contact=1#fixture',expiresAt:'2099-01-01'});}
     if (path === '/api/invitations') {
       records.invitationRequests++;
       if (route.request().method() === 'POST') {
@@ -54,10 +58,9 @@ test('owner landing creates a property and invitation, refreshes Team, and retur
   await page.getByRole('button', {name:'Create property', exact:true}).click();
   await expect(page.getByText('Property added', {exact:true})).toBeVisible();
   await page.getByRole('link', {name:'Invite a tenant'}).click();
-  await page.getByRole('button',{name:'Invite tenant',exact:true}).click();await page.getByLabel('Email address', {exact:true}).fill('resident@example.test');
-  await page.getByRole('button', {name:'Create invitation', exact:true}).click();
-  await expect(page.getByText('resident@example.test', {exact:true})).toBeVisible();
-  await expect(page.getByText('Pending', {exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Invite tenant',exact:true}).click();await page.getByLabel('Full name *', {exact:true}).fill('New Resident');await page.getByLabel('Contact email', {exact:true}).fill('resident@example.test');
+  await page.getByRole('button',{name:'Review tenant',exact:true}).click();await page.getByRole('button',{name:'Save tenant',exact:true}).click();await page.getByRole('checkbox',{name:/I approve this person/}).check();await page.getByRole('button',{name:'Create invitation link',exact:true}).click();
+  await expect(page.getByLabel('Private invitation link')).toBeVisible();
   await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('link', {name:'Properties', exact:true}).click();
   await expect(page.getByText('Resident invitation issued', {exact:true})).toBeVisible();
   await expect(page.getByText(/assign accepted residents using Manage residents/)).toBeVisible();
@@ -161,11 +164,11 @@ test('company owner with platform authority supplies its membership company when
   const records = await fixture(page, bootstrap('owner', 'active', true));
   await page.goto('/company/properties');
   await page.getByRole('link', {name:'Invite a tenant'}).click();
-  await page.getByRole('button',{name:'Invite tenant',exact:true}).click();await page.getByLabel('Email address', {exact:true}).fill('dual-role-resident@example.test');
-  await page.getByRole('button', {name:'Create invitation', exact:true}).click();
-  await expect(page.getByLabel('Invitation acceptance link')).toBeVisible();
-  expect(records.invitationPosts).toEqual([{email:'dual-role-resident@example.test', role:'resident', companyId:'company-a'}]);
-  await expect(page.getByText('dual-role-resident@example.test', {exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Invite tenant',exact:true}).click();await page.getByLabel('Full name *', {exact:true}).fill('New Resident');await page.getByLabel('Contact email', {exact:true}).fill('dual-role-resident@example.test');
+  await page.getByRole('button',{name:'Review tenant',exact:true}).click();await page.getByRole('button',{name:'Save tenant',exact:true}).click();await page.getByRole('checkbox',{name:/I approve this person/}).check();await page.getByRole('button',{name:'Create invitation link',exact:true}).click();
+  await expect(page.getByLabel('Private invitation link')).toBeVisible();
+  expect(records.invitationPosts).toEqual([{expectedVersion:1,approvals:[]}]);
+
   await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('link', {name:'Properties', exact:true}).click();
   await expect(page.getByText('Resident invitation issued', {exact:true})).toBeVisible();
 });

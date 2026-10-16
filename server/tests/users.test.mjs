@@ -1258,6 +1258,21 @@ test(
       assert.equal((await call("profile-foreign","GET","/api/invitations?audience=invalid")).statusCode,400);
       assert.equal((await call("platform","GET","/api/invitations?audience=tenants")).statusCode,403);
     });
+    await t.test("no-company access detaches membership while retaining the profile, contact history and owner safety",async()=>{
+      await admin.query(`INSERT INTO "User"(id,email,"emailVerified","updatedAt") VALUES('detach-user','detach@test.invalid',true,NOW())`);
+      let response=await call('platform','PUT','/api/platform/users/detach-user/membership',{companyId:'a',role:'resident',status:'active'});assert.equal(response.statusCode,200,response.body);
+      const member=await db.companyMembership.findUniqueOrThrow({where:{userId:'detach-user'}}),body={expectedVersion:member.version,expectedCompanyId:member.companyId,expectedCreatedAt:member.createdAt.toISOString()};
+      await admin.query(`INSERT INTO "ResidentPropertyAssignment"("companyId","propertyId","userId") VALUES('a','home','detach-user')`);
+      assert.equal((await call('owner','DELETE','/api/platform/users/detach-user/membership',body)).statusCode,403);
+      assert.equal((await call('platform','DELETE','/api/platform/users/detach-user/membership',{...body,expectedVersion:member.version+1})).statusCode,409);
+      response=await call('platform','DELETE','/api/platform/users/detach-user/membership',body);assert.equal(response.statusCode,200,response.body);
+      assert.equal(await db.companyMembership.findUnique({where:{userId:'detach-user'}}),null);assert.ok(await db.user.findUnique({where:{id:'detach-user'}}));
+      assert.equal(await db.residentPropertyAssignment.count({where:{userId:'detach-user'}}),0);
+      assert.equal((await admin.query(`SELECT count(*)::int n FROM "ResidentContact" WHERE "companyId"='a' AND "userId"='detach-user'`)).rows[0].n,1);
+      assert.equal((await call('platform','DELETE','/api/platform/users/detach-user/membership',body)).statusCode,200);
+      const owner=await db.companyMembership.findUniqueOrThrow({where:{userId:'owner'}});
+      assert.equal((await call('platform','DELETE','/api/platform/users/owner/membership',{expectedVersion:owner.version,expectedCompanyId:owner.companyId,expectedCreatedAt:owner.createdAt.toISOString()})).statusCode,409);
+    });
     await t.test(
       "real browser automatically discovers an Auth0 account with no import action or target sign-in",
       { skip: !process.env.TEST_USERS_BROWSER_URL },

@@ -1,3 +1,4 @@
+import { leasePerson, leasePersonSelect } from "./lease-person.js";
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { AccessError } from "./access.js";
@@ -215,7 +216,7 @@ export function registerReports(
             currency: true,
             property: { select: { name: true } },
             unit: { select: { label: true, status: true } },
-            resident: { select: { name: true, email: true } },
+            ...leasePersonSelect,
           },
           orderBy: [
             { propertyId: "asc" },
@@ -245,7 +246,7 @@ export function registerReports(
           if (row.status === "active" && startsOn > today) future++;
           if (row.status === "active" && endsOn && endsOn < today) expired++;
           return {
-            ...row,
+            ...row, resident:leasePerson(row),
             startsOn,
             endsOn,
             rentCents: String(row.rentCents),

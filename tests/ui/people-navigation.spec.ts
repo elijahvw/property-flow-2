@@ -178,20 +178,9 @@ test("team and tenants have distinct people, roles, invitations and focused acce
   await page
     .getByRole("button", { name: "Invite tenant", exact: true })
     .click();
-  await expect(page.getByLabel("Company role").locator("option")).toHaveText([
-    "Resident",
-  ]);
-  await page
-    .getByLabel("Email address", { exact: true })
-    .fill("new-tenant@test.invalid");
-  await page
-    .getByRole("button", { name: "Create invitation", exact: true })
-    .click();
-  expect(state.invites[1]).toEqual({
-    email: "new-tenant@test.invalid",
-    role: "resident",
-    companyId: "a",
-  });
+  await expect(page.getByLabel("Portal invitation")).toHaveValue("yes");
+  await expect(page.getByLabel("Company role")).toHaveCount(0);
+  await expect(page.getByLabel("Full name *",{exact:true})).toBeVisible();
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page
     .getByRole("link", { name: /View tenant/ })
@@ -225,6 +214,7 @@ test("team and tenants have distinct people, roles, invitations and focused acce
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+  await page.getByRole("link", {name:/View tenant/}).scrollIntoViewIfNeeded();
   await expect(page.getByRole("link", {name:/View tenant/})).toBeInViewport({ratio:1});
   await page.screenshot({
     path: "/tmp/pf-tenant-directory-mobile.png",

@@ -1,3 +1,5 @@
+import { registerContactInvitations, acceptContactInvitation, previewContactInvitation, replayContactAcceptance } from "./contact-invitations.js";
+import { registerContactRecords } from "./contact-records.js";
 import { linkedResidentContact, preserveResidentContactProfile } from "./resident-contacts.js";
 import { registerDeposits } from "./deposits.js";
 import { registerRentRecovery } from "./rent-recovery.js";
@@ -219,6 +221,8 @@ export function registerApplication(
   registerUserAdministration(server, db, authenticate, origin, identityProvider);
   registerCompanyAdministration(server, db, authenticate, origin);
   registerResidentProfiles(server, db, authenticate, origin);
+  registerContactRecords(server, db, authenticate, origin);
+  registerContactInvitations(server, db, authenticate, origin,identityProvider);
   registerReports(server, db, authenticate);
   registerOverview(server, db, authenticate);
   const auth = { preValidation: authenticate };
@@ -372,6 +376,23 @@ export function registerApplication(
       });
     },
   );
+  server.delete<{Params:{userId:string}}>("/api/platform/users/:userId/membership",auth,async request=>{
+    platform(request);mutation(request,origin);
+    const userId=opaqueUserId(request.params.userId),b=input(request,["expectedVersion","expectedCompanyId","expectedCreatedAt"]);
+    return serial(request,async tx=>{
+      await lockTarget(tx,userId);
+      const old=await tx.companyMembership.findUnique({where:{userId}});
+      if(!old)return {success:true};
+      if(b.expectedVersion!==old.version||b.expectedCompanyId!==old.companyId||b.expectedCreatedAt!==old.createdAt.toISOString())throw new AccessError(409,"RECORD_CHANGED","This assignment changed. Close and reopen access before editing again.");
+      await preserveOwner(tx,userId,null);
+      await preserveResidentContactProfile(tx,old.companyId,userId);
+      await clearAssignments(tx,userId,old.companyId);
+      await tx.companyMembership.delete({where:{userId}});
+      await tx.user.update({where:{id:userId},data:{companyId:null,role:"unassigned"}});
+      await audit(tx,request,"membership.removed",old.companyId,userId);
+      return {success:true};
+    });
+  });
   server.patch<{ Params: { userId: string } }>(
     "/api/platform/users/:userId/status",
     auth,
@@ -572,10 +593,17 @@ export function registerApplication(
     if (!await tx.property.findFirst({ where: { id: propertyId, companyId } }))
       throw new AccessError(404, "NOT_FOUND", "Property not found.");
   };
-  server.get<{ Params: { propertyId: string } }>("/api/company/properties/:propertyId/residents", auth, async request => {
+  server.get<{ Params: { propertyId: string };Querystring:{includeContacts?:string} }>("/api/company/properties/:propertyId/residents", auth, async request => {
     const companyId = scope(request, "resident.assignment.manage"), propertyId = assignmentId(request.params.propertyId);
     return assignmentTx(request, companyId, async tx => {
       await propertyInScope(tx, companyId, propertyId);
+      if(Object.keys(request.query).some(k=>k!=="includeContacts")||request.query.includeContacts!==undefined&&request.query.includeContacts!=="true")throw new AccessError(400,"INVALID_INPUT","Unknown resident selection filter.");
+      if(request.query.includeContacts==="true"){
+        const contacts=await tx.residentContact.findMany({where:{companyId,status:"active",OR:[{userId:null},{user:{status:"active",membership:{companyId,role:"resident",status:"active"}}}]},select:{id:true,userId:true,name:true,email:true},orderBy:[{name:"asc"},{id:"asc"}],take:2001});
+        const legacy=await tx.residentPropertyAssignment.findMany({where:{companyId,propertyId,membership:{role:"resident",status:"active",user:{status:"active",residentContacts:{none:{companyId}}}}},select:{userId:true,membership:{select:{user:{select:{name:true,email:true}}}}},take:2001});
+        if(contacts.length+legacy.length>2000)throw new AccessError(422,"TENANT_SELECTION_TOO_LARGE","More than 2,000 tenants are eligible. No incomplete selection is shown.");
+        return [...contacts.map(c=>({...c,contactId:c.id})),...legacy];
+      }
       return tx.residentPropertyAssignment.findMany({ where: { companyId, propertyId }, select: { userId: true, createdAt: true, membership: { select: { user: { select: { name: true, email: true } } } } } });
     });
   });
@@ -763,8 +791,9 @@ export function registerApplication(
     if(user.status!=="active"||!user.emailVerified)throw new AccessError(403,"VERIFIED_EMAIL_REQUIRED","Verify your sign-in email before reviewing this invitation.");
     return serial(request,async tx=>{
       const invitation=await tx.invitation.findUnique({where:{tokenHash:digest(token)}});
-      if(!invitation||!invitation.leaseId||invitation.revokedAt||(!invitation.acceptedAt&&invitation.expiresAt.getTime()<=Date.now())||invitation.email!==user.email.toLowerCase())throw new AccessError(403,"INVITATION_INVALID","This invitation is unavailable for your account.");
+      if(!invitation||(!invitation.leaseId&&!invitation.contactId)||invitation.revokedAt||(!invitation.acceptedAt&&invitation.expiresAt.getTime()<=Date.now())||(invitation.email!==user.email.toLowerCase()&&!(invitation.contactId&&!invitation.leaseId&&invitation.acceptedAt)))throw new AccessError(403,"INVITATION_INVALID","This invitation is unavailable for your account.");
       await activeCompany(tx,invitation.companyId);
+      if(invitation.contactId&&!invitation.leaseId){if(invitation.acceptedAt){const {company,contact}=await replayContactAcceptance(tx,request,invitation);return {company:company.name,name:contact.name,contact:true,accepted:true,leaseApprovals:[],leases:[]};}return previewContactInvitation(tx,invitation);}
       if(invitation.acceptedAt)await replayLeaseAcceptance(tx,request,invitation);
       return previewLeaseInvitation(tx,invitation);
     });
@@ -782,6 +811,10 @@ export function registerApplication(
       const invitation = await tx.invitation.findUnique({
         where: { tokenHash: digest(token) },
       });
+      if(invitation?.contactId&&!invitation.leaseId&&invitation.acceptedAt&&!invitation.revokedAt){
+        await replayContactAcceptance(tx,request,invitation);
+        return {success:true};
+      }
       if(invitation?.leaseId&&invitation.acceptedAt&&!invitation.revokedAt&&invitation.email===user.email.toLowerCase()){
         await activeCompany(tx,invitation.companyId);
         return replayLeaseAcceptance(tx,request,invitation);
@@ -801,7 +834,8 @@ export function registerApplication(
       await activeCompany(tx, invitation.companyId);
       // An invitation can only create a membership. It cannot reactivate,
       // promote or transfer an existing member (including a disabled member).
-      if (invitation.leaseId) await acceptLeaseInvitation(tx,request,invitation);
+      if(invitation.contactId&&!invitation.leaseId)await acceptContactInvitation(tx,request,invitation);
+      else if (invitation.leaseId) await acceptLeaseInvitation(tx,request,invitation);
       else {
       if (await tx.companyMembership.findUnique({ where: { userId: user.id } }))
         throw new AccessError(
