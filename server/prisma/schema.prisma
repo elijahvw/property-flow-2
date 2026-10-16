@@ -35,6 +35,7 @@ model Company {
   submissionHash String?
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+  residentContacts ResidentContact[]
   users     User[]
   properties Property[]
   status     String @default("active")
@@ -63,6 +64,7 @@ model User {
   identities Identity[]
   maintenanceRequests MaintenanceRequest[]
   leases Lease[] @relation("LeaseResident")
+  residentContacts ResidentContact[]
   leaseParticipants LeaseParticipant[]
   createdLeaseParticipants LeaseParticipant[] @relation("LeaseParticipantCreator")
   approvedLeaseInvitations Invitation[] @relation("LeaseInvitationApprover")
@@ -262,7 +264,32 @@ model Unit {
   @@unique([companyId, propertyId, label])
   @@index([companyId, propertyId, id])
 }
+model ResidentContact {
+  id String @id @default(cuid())
+  companyId String
+  userId String?
+  name String
+  email String?
+  phone String?
+  emergencyContactName String?
+  emergencyContactPhone String?
+  managementNotes String?
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user User? @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  primaryLeases Lease[]
+  participants LeaseParticipant[]
+  @@unique([id, companyId])
+  @@unique([companyId, userId])
+  @@index([companyId, name, id])
+}
+
 model Lease {
+  residentContactId String?
+  residentContact ResidentContact? @relation(fields: [residentContactId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Restrict)
+  @@index([companyId, residentContactId])
   participants LeaseParticipant[]
   residentInvitations Invitation[]
  depositAccounts DepositAccount[]
@@ -305,6 +332,9 @@ model Lease {
 }
 
 model LeaseParticipant {
+  contactId String?
+  contact ResidentContact? @relation(fields: [contactId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Restrict)
+  @@index([companyId, contactId])
   removedAt DateTime?
   portalApproved Boolean @default(true)
   id String @id @default(cuid())

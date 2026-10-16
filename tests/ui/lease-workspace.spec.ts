@@ -73,7 +73,7 @@ test('lease term drafts retain their reviewed version across dismissal and backg
 
 test('owner approval is explicit for an occupant invitation and phone layout remains navigable',async({page})=>{
  const state=await fixture(page);await page.setViewportSize({width:390,height:844});await page.goto('/company/leases/shared?section=invitations');
- await expect(page.getByText('Awaiting owner approval',{exact:false})).toBeVisible();
+ await expect(page.locator('.record-list').getByText('Awaiting owner approval',{exact:false})).toBeVisible();
  await page.getByRole('button',{name:'Approve resident Alex Rivera',exact:true}).click();
  await expect(page.getByLabel('Resident invitation acceptance link',{exact:true})).toHaveValue('https://app.test/invite#isolated-test-only');
  expect(state.writes[0].action).toBe('approve');
@@ -88,7 +88,7 @@ test('leaseholders can request occupants without approving them or receiving an 
  await page.goto('/resident');await page.getByRole('button',{name:'Invite a resident · Apartment 2',exact:true}).click();
  await page.getByLabel('Invited resident name',{exact:true}).fill('Taylor Resident');await page.getByLabel('Invited resident email',{exact:true}).fill('taylor@test.invalid');
  await page.getByRole('button',{name:'Request owner approval',exact:true}).click();
- await expect(page.getByText('Awaiting owner approval',{exact:false})).toBeVisible();
+ await expect(page.locator('.record-list').getByText('Awaiting owner approval',{exact:false})).toBeVisible();
  await expect(page.getByLabel('Resident invitation acceptance link',{exact:true})).toHaveCount(0);
  expect(state.requests.some(p=>p.endsWith('/approve'))).toBe(false);
  await expect(page.getByRole('button',{name:/Approve resident/})).toHaveCount(0);

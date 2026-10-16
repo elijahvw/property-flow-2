@@ -1,3 +1,4 @@
+import { linkedResidentContact } from "./resident-contacts.js";
 import { randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyRequest, preValidationHookHandler } from "fastify";
 import type { Invitation, PrismaClient } from "@prisma/client";
@@ -109,7 +110,8 @@ export async function acceptLeaseInvitation(tx:Tx,request:FastifyRequest,invitat
   if(membership&&(membership.companyId!==invitation.companyId||membership.role!=="resident"||membership.status!=="active"))throw new AccessError(409,"ALREADY_ASSIGNED","Your existing company assignment cannot be changed by an invitation.");
   if(!membership)await tx.companyMembership.create({data:{userId:user.id,companyId:invitation.companyId,role:"resident"}});
   await tx.residentPropertyAssignment.upsert({where:{propertyId_userId:{userId:user.id,propertyId:invitation.propertyId}},create:{userId:user.id,propertyId:invitation.propertyId,companyId:invitation.companyId},update:{}});
-  const participant=await tx.leaseParticipant.create({data:{companyId:invitation.companyId,propertyId:invitation.propertyId,leaseId:record.id,userId:user.id,name:invitation.participantName,email:invitation.email,role:invitation.participantRole,startsOn:invitation.participantStartsOn,createdById:invitation.createdBy,submissionKey:invitation.id,submissionHash:digest(invitation.id)}});
+  const contact=await linkedResidentContact(tx,invitation.companyId,user.id);
+  const participant=await tx.leaseParticipant.create({data:{companyId:invitation.companyId,propertyId:invitation.propertyId,leaseId:record.id,userId:user.id,contactId:contact.id,name:invitation.participantName,email:invitation.email,role:invitation.participantRole,startsOn:invitation.participantStartsOn,createdById:invitation.createdBy,submissionKey:invitation.id,submissionHash:digest(invitation.id)}});
   await tx.lease.update({where:{id:record.id},data:{version:{increment:1}}});
   await audit(tx,request,invitation.companyId,record.id,"lease.invitation.accepted",{invitationId:invitation.id,participantId:participant.id,role:participant.role});
 }

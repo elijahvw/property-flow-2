@@ -6,13 +6,18 @@ import { permissions } from '../dist/access.js';
 const person = (id, role = 'resident', companyId = 'a') => ({ id, email: `${id}@test.invalid`, name: id, status: 'active', emailVerified: true, platformRole: null, membership: {userId:id, companyId, role, status:'active', company:{id:companyId,status:'active'}} });
 async function fixture(t, actor = person('owner','owner')) {
   const users = new Map([actor,person('resident'),person('other'),person('foreign','resident','b'),person('staff','staff')].map(u=>[u.id,u]));
-  const rows = [], locks = [], audits = []; let company;
+  const rows = [], locks = [], audits = [], contacts = []; let company;
   const properties = [{id:'home',companyId:'a',name:'Home',address:'1 Main',city:'private'}, {id:'foreign-home',companyId:'b',name:'Foreign',address:'2 Main'}];
   const tx = {
     $queryRaw: async (strings,...values) => { if(strings.join('').includes('UPDATE')) locks.push(values[0]); else company=values[0]; return []; },
     user: {findUnique:async({where})=>users.get(where.id), update:async({where,data})=>Object.assign(users.get(where.id),data)},
     company: {findUnique:async({where})=>({id:where.id,status:'active'})},
+    residentContact: {
+      findUnique:async({where})=>contacts.find(c=>c.companyId===where.companyId_userId.companyId&&c.userId===where.companyId_userId.userId),
+      create:async({data})=>{assert.equal(company,data.companyId);const row={id:'contact-'+contacts.length,...data};contacts.push(row);return row;},
+    },
     companyMembership: {
+      findFirst:async({where})=>{const u=users.get(where.userId);return u?.membership?.companyId===where.companyId&&u.membership.role===where.role?{...u.membership,user:u}:null;},
       findUnique:async({where})=>{const u=users.get(where.userId); return u?.membership ? {...u.membership,user:u}:null;},
       findMany:async({where})=>[...users.values()].filter(u=>u.membership?.companyId===where.companyId && u.membership.role==='resident' && u.membership.status==='active' && u.status==='active').map(u=>({userId:u.id,user:{name:u.name,email:u.email}})),
       update:async({where,data})=>Object.assign(users.get(where.userId).membership,{role:data.role,status:data.status}),

@@ -1174,6 +1174,8 @@ test(
       for(const extra of [{origin:"https://evil.test"},{"x-csrf-token":"wrong"}]) assert.equal((await call("profile-manager","PATCH",path,valid,extra)).statusCode,403);
       const saved=await call("profile-manager","PATCH",path,valid);assert.equal(saved.statusCode,200,saved.body);assert.equal(saved.json().version,2);
       assert.equal((await call("profile-owner","GET",path)).json().contactPhone,"555-0100");
+      const contactBefore=(await admin.query(`SELECT * FROM "ResidentContact" WHERE "companyId"='profile-a' AND "userId"='profile-resident'`)).rows[0];
+      assert.equal(contactBefore.name,"Resident Contact");assert.equal(contactBefore.managementNotes,"Company A private note");
       assert.equal((await call("profile-manager","PATCH",path,{...valid,contactName:"Stale overwrite"})).statusCode,409);
       const bootstrap=(await call("profile-resident","GET","/api/bootstrap")).json();
       for(const key of ["contactName","contactPhone","managementNotes","emergencyContactName","emergencyContactPhone"]) assert.equal(Object.hasOwn(bootstrap.membership,key),false);
@@ -1182,6 +1184,7 @@ test(
       finally { await admin.query(`DROP TRIGGER reject_profile_audit ON "AuditEvent"; DROP FUNCTION reject_profile_audit()`); }
       assert.equal((await call("profile-owner","GET",path)).json().contactName,"Resident Contact");
       assert.equal((await call("profile-owner","GET",path)).json().version,2);
+      assert.deepEqual((await admin.query(`SELECT * FROM "ResidentContact" WHERE id=$1`,[contactBefore.id])).rows[0],contactBefore,"audit rollback retains both profile copies");
       const privateKeys=["contactName","contactPhone","emergencyContactName","emergencyContactPhone","managementNotes"];
       const directory=(await call("platform","GET","/api/platform/users")).json();
       const company=(await call("platform","GET","/api/platform/companies/profile-a")).json();
@@ -1197,6 +1200,11 @@ test(
       const transfer=await call("platform","PUT","/api/platform/users/profile-resident/membership",{companyId:"profile-b",role:"resident",status:"active",expectedVersion:3});assert.equal(transfer.statusCode,200,transfer.body);
       assert.equal((await call("profile-owner","GET",path)).statusCode,404);
       const moved=(await call("profile-foreign","GET",path)).json();assert.equal(moved.contactName,null);assert.equal(moved.managementNotes,null);assert.equal(moved.activity.some(e=>e.action==="resident.profile.updated"),false);
+      const contacts=(await admin.query(`SELECT * FROM "ResidentContact" WHERE "userId"='profile-resident' ORDER BY "companyId"`)).rows;
+      assert.equal(contacts.length,2);assert.deepEqual(contacts[0],contactBefore);
+      assert.notEqual(contacts[1].id,contactBefore.id);assert.equal(contacts[1].managementNotes,null);assert.equal(contacts[1].phone,null);
+      const bootstrapAfter=(await call("profile-resident","GET","/api/bootstrap")).json();
+      assert.equal(JSON.stringify(bootstrapAfter).includes("private note"),false);
     });
     await t.test("platform profile writes cannot pass a queued administrator revocation", async () => {
       const lock = await admin.connect();let pending;

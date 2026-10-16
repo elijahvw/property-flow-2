@@ -1,3 +1,4 @@
+import { linkedResidentContact, participantContact } from "./resident-contacts.js";
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import type { PrismaClient, Prisma } from "@prisma/client";
 import { AccessError } from "./access.js";
@@ -5,7 +6,7 @@ import { assignmentId, opaqueUserId } from "./application.js";
 import { audit, boundedText, choice, conflict, date, input, mutation, sameSubmission, scoped, submission, version, type Tx } from "./operational.js";
 import { companyDay } from "./reports.js";
 
-const select = { id:true, userId:true, name:true, email:true, phone:true, role:true, startsOn:true, endsOn:true, removedAt:true, portalApproved:true, version:true } as const;
+const select = { contactId:true, id:true, userId:true, name:true, email:true, phone:true, role:true, startsOn:true, endsOn:true, removedAt:true, portalApproved:true, version:true } as const;
 const fields = ["name","email","phone","role","startsOn","endsOn","portalApproved"];
 const optional = (v:unknown,max:number,label:string) => v===null||v===undefined||v==="" ? null : boundedText(v,max,label);
 function details(b:Record<string,unknown>) {
@@ -61,7 +62,8 @@ export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient
       if(userId===record.residentId)throw new AccessError(409,"HOUSEHOLD_DUPLICATE","This resident is already the lease's primary contact.");
       if(userId){await linked(tx,companyId,record.propertyId,userId,true);if(await tx.leaseParticipant.findFirst({where:{companyId,leaseId:id,userId},select:{id:true}}))throw new AccessError(409,"HOUSEHOLD_DUPLICATE","This resident is already recorded. Edit their existing household record.");}
       if(await tx.leaseParticipant.count({where:{companyId,leaseId:id}})>=200)throw new AccessError(422,"HOUSEHOLD_SCOPE_TOO_LARGE","This lease already has 200 household records. No record was added.");
-      const row=await tx.leaseParticipant.create({data:{companyId,propertyId:record.propertyId,leaseId:id,userId,...data,createdById:request.principal!.id,...key},select});
+      const contact=await participantContact(tx,companyId,{userId,...data});
+      const row=await tx.leaseParticipant.create({data:{companyId,propertyId:record.propertyId,leaseId:id,userId,contactId:contact.id,...data,createdById:request.principal!.id,...key},select});
       await tx.lease.update({where:{id},data:{version:{increment:1}}});
       await audit(tx,request,companyId,id,"lease.participant.added",{participantId:row.id,role:row.role,userId,portalApproved:row.portalApproved,startsOn:row.startsOn.toISOString(),endsOn:row.endsOn?.toISOString()??null});
       return row;
@@ -79,7 +81,9 @@ export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient
       // Lock the linked user even when removing access, ordering portal reads and
       // assignment/membership changes against the roster mutation.
       if(old.userId)await linked(tx,companyId,record.propertyId,old.userId,false);
-      const row=await tx.leaseParticipant.update({where:{id:participantId},data:{...data,version:{increment:1}},select});
+      const contactId=old.contactId??(await participantContact(tx,companyId,{...old,...data})).id;
+      if(!old.userId)await tx.residentContact.update({where:{id:contactId},data:{name:data.name,email:data.email,phone:data.phone,version:{increment:1}}});
+      const row=await tx.leaseParticipant.update({where:{id:participantId},data:{...data,contactId,version:{increment:1}},select});
       await tx.lease.update({where:{id},data:{version:{increment:1}}});
       await audit(tx,request,companyId,id,"lease.participant.updated",{participantId,from:{role:old.role,portalApproved:old.portalApproved,startsOn:old.startsOn.toISOString(),endsOn:old.endsOn?.toISOString()??null},to:{role:row.role,portalApproved:row.portalApproved,startsOn:row.startsOn.toISOString(),endsOn:row.endsOn?.toISOString()??null}});
       return row;
@@ -109,7 +113,8 @@ export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient
       if(!target?.userId)throw new AccessError(409,"PRIMARY_CONTACT_REQUIRED","Choose a current linked leaseholder as the primary contact.");
       await linked(tx,companyId,record.propertyId,target.userId,true);
       if(record.residentId===target.userId)return {success:true};
-      await tx.lease.update({where:{id},data:{residentId:target.userId,version:{increment:1}}});
+      const contact=await linkedResidentContact(tx,companyId,target.userId);
+      await tx.lease.update({where:{id},data:{residentId:target.userId,residentContactId:contact.id,version:{increment:1}}});
       await audit(tx,request,companyId,id,"lease.primary.changed",{from:record.residentId,to:target.userId,participantId});return {success:true};
     });
   });
