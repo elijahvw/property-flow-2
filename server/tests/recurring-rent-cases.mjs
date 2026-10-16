@@ -609,6 +609,13 @@ export async function recurringRentCases(t, admin, call, db) {
       );
       assert.equal(run.outcome, "existing");
       assert.equal(run.occurrence.chargeId, corrected.id);
+      const statement = ok(await call("owner", "GET", `/api/company/statements/${record.id}`));
+      assert.equal(statement.items.filter(item=>item.type==="charge").length,2);
+      assert.equal(statement.period.chargedCents,"85000");
+      assert.equal(statement.period.voidedCount,1);
+      assert.equal(statement.current.outstandingCents,"85000");
+      assert.equal(statement.items.find(item=>item.id===original.id).effectCents,"0");
+      assert.equal(statement.items.find(item=>item.id===corrected.id).amountCents,"85000");
       assert.equal(
         (
           await admin.query(

@@ -1,4 +1,5 @@
 import { formatDate, formatMonth } from "../dates";
+import { statementPath, statementContext } from "../statement";
 import { leasePath,leaseContext } from "../lease-links";
 import { DateField } from "../components/DateField";
 import { LeaseReturnLink } from "../components/LeaseReturnLink";
@@ -566,6 +567,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                               >
                                 Open ledger →
                               </Link>
+                              <Link to={statementPath(a.lease.id, resident, { ...statementContext(params), statementFrom: "rent", ...(propertyId ? { propertyId } : {}) })}>View statement →</Link>
                             </div>
                           </li>
                         ))}
@@ -686,6 +688,8 @@ function LeaseLedger({
             <p className="payment-instructions">{lease.paymentInstructions}</p>
           )}
         </div>
+        <div className="actions">
+        <Link className="button secondary" to={statementPath(lease.id, resident, { ...statementContext(linkParams), statementFrom: "rent" })}>View statement</Link>
         {!resident && (
           <div className="actions">
             <button
@@ -707,6 +711,7 @@ function LeaseLedger({
             </Link>
           </div>
         )}
+        </div>
       </section>
       {!active && (
         <p className="notice">

@@ -31,6 +31,7 @@ import { PropertyResidents } from "./pages/PropertyResidents";
 import { PropertySearch } from "./components/PropertySearch";
 import { FeedbackProvider } from "./components/Feedback";
 import { Reports } from "./pages/Reports";
+import { Statement } from "./pages/Statement";
 import { NavigationIcon } from "./components/NavigationIcon";
 import { ResidentProfiles } from "./pages/ResidentProfiles";
 import { ResidentDetail } from "./pages/ResidentDetail";
@@ -280,6 +281,8 @@ function Pages() {
         path="/company/leases/:leaseId"
         element={<Shell><ProtectedRoute permission="lease.manage"><LeaseDetail /></ProtectedRoute></Shell>}
       />
+      <Route path="/company/leases/:leaseId/statement" element={<Shell><ProtectedRoute permission="finance.manage"><Statement /></ProtectedRoute></Shell>} />
+      <Route path="/resident/leases/:leaseId/statement" element={<Shell><ProtectedRoute permission="resident.self"><Statement resident /></ProtectedRoute></Shell>} />
       <Route path="/company/tenants/:contactId" element={<Shell><ProtectedRoute permission="resident.assignment.manage"><ContactDetail /></ProtectedRoute></Shell>} />
       <Route
         path="/company/residents/:userId"

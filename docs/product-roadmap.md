@@ -1,6 +1,6 @@
 # Property Flow product roadmap
 
-Updated 2026-10-16. Repository baseline: main `0e492f8` (merged PR #34). This replaces the build order in historical handoffs. The [implementation backlog](product-backlog.md) contains dependencies and acceptance criteria; [workflow research](tenantcloud-workflows.md) records sources and limits.
+Updated 2026-10-16. Repository baseline: main `9945e69` (merged/deployed PR #36, confirmed by the user). This replaces the build order in historical handoffs. The [implementation backlog](product-backlog.md) contains dependencies and acceptance criteria; [workflow research](tenantcloud-workflows.md) records sources and limits.
 
 ## Product direction
 
@@ -74,8 +74,8 @@ Deliver **PF-25** imports/reconciliation/integration contracts, then **PF-26** s
 
 1. **PF-01, merged in #33:** tenant detail route, linked leases/balances and return navigation, using existing data. Includes the requested shared form/date/UI improvements; see [scope](tenant-workspace.md).
 2. **PF-02, merged in #34:** exact lease workspace and working links to rent/deposits/terms/renewal, using existing data.
-3. **PF-03a, merged/deployed:** contact identity/backfill with compatibility. **PF-03b, current review:** offline contact/directory/lease forms, connected optional invitations and verified linking, plus the requested form/address UI audit; see [contract and rollout](resident-contacts.md). The user explicitly brought invitation linking into this slice. Existing identity and financial source IDs remain intact.
-4. **PF-04:** statement and traceable CSV from existing charges/receipts/allocations with separate credit/deposit summaries.
+3. **PF-03a, merged/deployed:** contact identity/backfill with compatibility. **PF-03b, merged/deployed in #36:** offline contact/directory/lease forms, connected optional invitations and verified linking, plus the requested form/address UI audit; see [contract and rollout](resident-contacts.md). The user explicitly brought invitation linking into this slice. Existing identity and financial source IDs remain intact.
+4. **PF-04, current implementation:** connected lease statements and traceable CSV from existing charges/receipts/allocations with separate credit/deposit summaries. Includes readable date filters, grouped postal addresses, mobile activity rows and complete print/export; see [statement contract](tenant-statements.md).
 5. **PF-05a:** reviewed one-time non-rent charges/noncash credits; then PF-06 money movements after their accounting contract is settled.
 
 If the contact migration needs longer review, PF-12/PF-13 provide the next independent feature slice. Keep one active implementation increment unless the user requests parallel work. Group UI improvements and optimizations requested during a feature increment with that feature, as the user authorized. Keep the resulting PR coherent and its validation proportional to the combined changes.

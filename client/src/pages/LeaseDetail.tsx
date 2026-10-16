@@ -12,12 +12,14 @@ import { Form } from "./Workspace";
 import { dollars } from "./Finances";
 import { leaseContext,leaseDirectoryPath } from "../lease-links";
 import { TenantReturnLink } from "../components/TenantReturnLink";
+import { statementPath } from "../statement";
 
 export function LeaseDetail(){
   const {leaseId=""}=useParams(),{data}=useAuth();
   return <LeaseWorkspace key={`${leaseId}:${data?.user.id}:${data?.membership?.companyId}:${data?.permissions.join(",")}`} id={leaseId}/>;
 }
 function LeaseWorkspace({id}:{id:string}){
+  const {can}=useAuth();
   const r=useResource<Lease>(`/api/company/leases/${encodeURIComponent(id)}`,true,true),navigate=useNavigate();
   const [params,setParams]=useSearchParams(),[editing,setEditing]=useState(false),[renewing,setRenewing]=useState(false);
   const [draftLease,setDraftLease]=useState<Lease|null>(null),[renewalDraft,setRenewalDraft]=useState<Lease|null>(null),[visited,setVisited]=useState<string[]>([]);
@@ -40,6 +42,7 @@ function LeaseWorkspace({id}:{id:string}){
       <li><div><h3>Approve and invite residents</h3><p>Review requested roles and share approved, verified-email invitation links.</p></div><button className="secondary" onClick={()=>tab("invitations")}>Review invitations</button></li>
       <li><div><h3>Review the lease terms</h3><p>{dollars(lease.rentCents)} per month · Due day {lease.rentDueDay??1} · {lease.graceDays??0} days grace. {lease.status==="draft"?"Activate only when the record is ready.":"Changes preserve posted financial history."}</p></div><button className="secondary" disabled={!!r.error} onClick={editTerms}>Review lease terms</button></li>
       <li><div><h3>Set up the deposit and rent</h3><p>Review the deposit requirement, posted rent and recurring billing. Each source keeps its own recorded history.</p></div><div className="actions"><Link to={source("deposits")}>Open deposit</Link><Link to={source("rent")}>Open rent & billing</Link></div></li>
+    <li><div><h3>Review the tenant statement</h3><p>See rent activity, shared balances and the separate security deposit together. Download a traceable statement for your records.</p></div>{can("finance.manage")&&<Link to={statementPath(id,false,{...context,statementFrom:"lease"})}>View statement →</Link>}</li>
     </ol><p className="help">These are guided next steps, not a claim that documents are signed, invitations accepted or money received.</p></section>}
     {(section==="household"||visited.includes("household"))&&<section className="panel" hidden={section!=="household"}><LeaseHousehold leaseId={id} onChange={r.reload}/><button className="secondary" onClick={()=>tab("invitations")}>Continue to invitations →</button></section>}
     {(section==="invitations"||visited.includes("invitations"))&&<section className="panel" hidden={section!=="invitations"}><LeaseInvitations leaseId={id} startsOn={lease.startsOn}/><button className="secondary" onClick={()=>tab("overview")}>Return to next steps</button></section>}
