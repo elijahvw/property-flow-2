@@ -687,6 +687,7 @@ export function LeaseCreate({
   );
   type Candidate={userId:string|null;contactId?:string;name?:string;email?:string|null;membership?:{user:{name:string|null;email:string}}};
   const residents=useResource<Candidate[]>(`/api/company/properties/${encodeURIComponent(propertyId)}/residents?includeContacts=true`);
+  const [tenantFormRevision,setTenantFormRevision]=useState(0);
   const [addingTenant,setAddingTenant]=useState(false),[newTenant,setNewTenant]=useState<TenantContact|null>(null);
   const [selectedTenant,setSelectedTenant]=useState<string|null>(initialContactId||null);
   const choices:Candidate[]=[...(residents.data||[]),...(newTenant&&!residents.data?.some(p=>p.contactId===newTenant.id)?[{userId:newTenant.userId,contactId:newTenant.id,name:newTenant.name,email:newTenant.email}]:[])];
@@ -706,7 +707,7 @@ export function LeaseCreate({
   }, [units.data]);
   return (
     <>
-      <EditorDialog open={addingTenant} title="Add tenant for this lease" onClose={()=>setAddingTenant(false)}><TenantForm saved={row=>{setNewTenant(row);setSelectedTenant(row.id);setAddingTenant(false);residents.reload();}} cancel={()=>setAddingTenant(false)}/></EditorDialog>
+      <EditorDialog open={addingTenant} title="Add tenant for this lease" onClose={()=>{setAddingTenant(false);setTenantFormRevision(v=>v+1);residents.reload();}}><TenantForm key={tenantFormRevision} saved={row=>{setNewTenant(row);setSelectedTenant(row.id);setAddingTenant(false);residents.reload();}} cancel={()=>setAddingTenant(false)}/></EditorDialog>
       <div className="prerequisite-links">
         <Link
           to={`/company/properties/${encodeURIComponent(propertyId)}/residents`}

@@ -239,6 +239,14 @@ test("invitation follows durable profile creation and requires an explicit owner
     "https://app.test/invite?contact=1#private-token",
   );
   expect(state.invites).toEqual([{ expectedVersion: 1, approvals: [] }]);
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "View tenant Jordan Rivera", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Invite tenant", exact: true })
+    .click();
+  await expect(page.getByLabel("Full name *", { exact: true })).toHaveValue("");
 });
 test("property address is one familiar block and edit fields follow postal reading order on desktop and mobile", async ({
   page,

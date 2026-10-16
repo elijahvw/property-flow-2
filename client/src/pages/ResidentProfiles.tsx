@@ -48,7 +48,7 @@ export function ResidentProfiles() {
 type DirectoryProfile = Omit<Profile,"userId"|"user"> & {userId:string|null;user:Profile["user"]|null;contactId?:string;recordStatus?:string;portalState?:string;name?:string;email?:string|null;phone?:string|null};
 function Directory() {
   const navigate=useNavigate();
-  const [adding,setAdding]=useState(false),[inviteInitially,setInviteInitially]=useState(false);
+  const [adding,setAdding]=useState(false),[inviteInitially,setInviteInitially]=useState(false),[formRevision,setFormRevision]=useState(0);
   const [params, setParams] = useSearchParams();
   const r = useResource<DirectoryProfile[]>("/api/company/resident-profiles", true, true);
   const query = params.get("q") || "", access = ["active", "verification", "disabled", "offline", "pending"].includes(params.get("access") || "") ? params.get("access")! : "all";
@@ -67,7 +67,7 @@ function Directory() {
       <div><p className="record-kicker">People / Tenants</p><h1>Tenants</h1><p>People, rental history and portal access in one place.</p></div>
       <div className="actions"><button onClick={()=>{setInviteInitially(false);setAdding(true);}}>Add tenant</button>{can("members.manage")&&<button className="secondary" onClick={()=>{setInviteInitially(true);setAdding(true);}}>Invite tenant</button>}</div>
     </header>
-    <EditorDialog open={adding} title="Add tenant" description="Record the person first. Portal access is optional." onClose={()=>setAdding(false)}><TenantForm key={String(inviteInitially)} inviteInitially={inviteInitially} saved={row=>{setAdding(false);r.reload();navigate(contactPath(row.id));}} cancel={()=>setAdding(false)}/></EditorDialog>
+    <EditorDialog open={adding} title="Add tenant" description="Record the person first. Portal access is optional." onClose={()=>{setAdding(false);setFormRevision(v=>v+1);r.reload();}}><TenantForm key={`${inviteInitially}:${formRevision}`} inviteInitially={inviteInitially} saved={row=>{setAdding(false);r.reload();navigate(contactPath(row.id));}} cancel={()=>setAdding(false)}/></EditorDialog>
     <section className="panel tenant-directory-panel" aria-label="Tenant directory">
       <div className="tenant-directory-toolbar">
         <label className="tenant-search">Find resident<input type="search" placeholder="Search name or email" value={query} maxLength={200} onChange={e => filter("q", e.target.value)} /></label>
