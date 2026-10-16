@@ -1,4 +1,4 @@
-import { registerContactInvitations, acceptContactInvitation, validContactInvitation, previewContactInvitation } from "./contact-invitations.js";
+import { registerContactInvitations, acceptContactInvitation, previewContactInvitation, replayContactAcceptance } from "./contact-invitations.js";
 import { registerContactRecords } from "./contact-records.js";
 import { linkedResidentContact, preserveResidentContactProfile } from "./resident-contacts.js";
 import { registerDeposits } from "./deposits.js";
@@ -791,9 +791,9 @@ export function registerApplication(
     if(user.status!=="active"||!user.emailVerified)throw new AccessError(403,"VERIFIED_EMAIL_REQUIRED","Verify your sign-in email before reviewing this invitation.");
     return serial(request,async tx=>{
       const invitation=await tx.invitation.findUnique({where:{tokenHash:digest(token)}});
-      if(!invitation||(!invitation.leaseId&&!invitation.contactId)||invitation.revokedAt||(!invitation.acceptedAt&&invitation.expiresAt.getTime()<=Date.now())||invitation.email!==user.email.toLowerCase())throw new AccessError(403,"INVITATION_INVALID","This invitation is unavailable for your account.");
+      if(!invitation||(!invitation.leaseId&&!invitation.contactId)||invitation.revokedAt||(!invitation.acceptedAt&&invitation.expiresAt.getTime()<=Date.now())||(invitation.email!==user.email.toLowerCase()&&!(invitation.contactId&&!invitation.leaseId&&invitation.acceptedAt)))throw new AccessError(403,"INVITATION_INVALID","This invitation is unavailable for your account.");
       await activeCompany(tx,invitation.companyId);
-      if(invitation.contactId&&!invitation.leaseId)return previewContactInvitation(tx,invitation);
+      if(invitation.contactId&&!invitation.leaseId){if(invitation.acceptedAt){const {company,contact}=await replayContactAcceptance(tx,request,invitation);return {company:company.name,name:contact.name,contact:true,accepted:true,leaseApprovals:[],leases:[]};}return previewContactInvitation(tx,invitation);}
       if(invitation.acceptedAt)await replayLeaseAcceptance(tx,request,invitation);
       return previewLeaseInvitation(tx,invitation);
     });
@@ -811,10 +811,8 @@ export function registerApplication(
       const invitation = await tx.invitation.findUnique({
         where: { tokenHash: digest(token) },
       });
-      if(invitation?.contactId&&!invitation.leaseId&&invitation.acceptedAt&&!invitation.revokedAt&&invitation.email===user.email.toLowerCase()){
-        const {contact}=await validContactInvitation(tx,invitation);
-        const membership=await tx.companyMembership.findUnique({where:{userId:user.id}});
-        if(contact.userId!==user.id||membership?.companyId!==invitation.companyId||membership.status!=="active"||membership.role!=="resident")throw new AccessError(403,"INVITATION_INVALID","This invitation is no longer available.");
+      if(invitation?.contactId&&!invitation.leaseId&&invitation.acceptedAt&&!invitation.revokedAt){
+        await replayContactAcceptance(tx,request,invitation);
         return {success:true};
       }
       if(invitation?.leaseId&&invitation.acceptedAt&&!invitation.revokedAt&&invitation.email===user.email.toLowerCase()){

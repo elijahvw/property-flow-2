@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { companyDay } from "../dist/reports.js";
 import { digest } from "../dist/sessions.js";
 export async function offlineTenantCases(t, admin, call, providerCalls) {
   const ok = (r) => {
@@ -7,7 +8,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
     return r.json();
   };
   const contactPath = (id) => `/api/company/resident-contacts/${id}`;
-  let tenant, lease, unit;
+  let tenant, lease, unit, acceptedToken;
   const contactBody = {
     name: "Jordan Offline",
     email: "offline-portal@test.invalid",
@@ -264,6 +265,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
       const old = await invite(tenant.id),
         current = await invite(tenant.id),
         secret = token(current);
+      acceptedToken = secret;
       assert.equal(
         (
           await call(null, "POST", "/api/invitations/setup-account", {
@@ -578,6 +580,229 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
       assert.equal(preserved.name, "Curated business name");
       assert.equal(preserved.managementNotes, "Curated private note");
       assert.equal(preserved.portal.state, "disabled");
+    },
+  );
+  await t.test(
+    "departed occupants can be archived while their active parent lease and history remain",
+    async () => {
+      const c = ok(
+        await call("offline-owner", "POST", "/api/company/resident-contacts", {
+          name: "Departed occupant",
+          submissionKey: randomUUID(),
+        }),
+      );
+      const p = ok(
+        await call(
+          "offline-owner",
+          "POST",
+          `/api/company/leases/${lease.id}/participants`,
+          {
+            contactId: c.id,
+            name: c.name,
+            email: null,
+            phone: null,
+            role: "occupant",
+            startsOn: "2026-01-01",
+            endsOn: "2026-01-02",
+            submissionKey: randomUUID(),
+          },
+        ),
+      );
+      assert.equal(
+        ok(await call("offline-owner", "GET", contactPath(c.id))).leases.length,
+        0,
+      );
+      const archived = ok(
+        await call("offline-owner", "PATCH", contactPath(c.id), {
+          name: c.name,
+          expectedVersion: c.version,
+          status: "archived",
+        }),
+      );
+      assert.equal(archived.status, "archived");
+      assert.equal(
+        (
+          await admin.query(
+            `SELECT "contactId" FROM "LeaseParticipant" WHERE id=$1`,
+            [p.id],
+          )
+        ).rows[0].contactId,
+        c.id,
+      );
+      assert.equal(
+        (
+          await admin.query(`SELECT status FROM "Lease" WHERE id=$1`, [
+            lease.id,
+          ])
+        ).rows[0].status,
+        "active",
+      );
+    },
+  );
+  await t.test(
+    "date-only expiry blocks preview and account setup before any provider side effect",
+    async () => {
+      const today = companyDay("America/New_York"),
+        yesterday = new Date(today + "T00:00:00Z");
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      const c = ok(
+        await call("offline-owner", "POST", "/api/company/resident-contacts", {
+          name: "Expiring resident",
+          email: "offline-expiring@test.invalid",
+          submissionKey: randomUUID(),
+        }),
+      );
+      const p = ok(
+        await call(
+          "offline-owner",
+          "POST",
+          `/api/company/leases/${lease.id}/participants`,
+          {
+            contactId: c.id,
+            name: c.name,
+            email: c.email,
+            phone: null,
+            role: "occupant",
+            startsOn: "2026-01-01",
+            endsOn: today,
+            submissionKey: randomUUID(),
+          },
+        ),
+      );
+      let pending = await invite(c.id);
+      await addUser("offline-expiring", c.email);
+      const before = providerCalls.length;
+      // Keep versions unchanged to model the passage of a business date.
+      await admin.query(
+        `UPDATE "LeaseParticipant" SET "endsOn"=$1 WHERE id=$2`,
+        [yesterday, p.id],
+      );
+      assert.equal(
+        (
+          await call("offline-expiring", "POST", "/api/invitations/preview", {
+            token: token(pending),
+          })
+        ).statusCode,
+        409,
+      );
+      assert.equal(
+        (
+          await call(null, "POST", "/api/invitations/setup-account", {
+            token: token(pending),
+          })
+        ).statusCode,
+        409,
+      );
+      assert.equal(providerCalls.length, before);
+      await admin.query(
+        `UPDATE "LeaseParticipant" SET "endsOn"=NULL WHERE id=$1`,
+        [p.id],
+      );
+      pending = await invite(c.id);
+      await admin.query(`UPDATE "Lease" SET "endsOn"=$1 WHERE id=$2`, [
+        yesterday,
+        lease.id,
+      ]);
+      try {
+        assert.equal(
+          (
+            await call("offline-expiring", "POST", "/api/invitations/preview", {
+              token: token(pending),
+            })
+          ).statusCode,
+          409,
+        );
+      } finally {
+        await admin.query(`UPDATE "Lease" SET "endsOn"=NULL WHERE id=$1`, [
+          lease.id,
+        ]);
+      }
+    },
+  );
+  await t.test(
+    "accepted contact replay acknowledges linkage after contact edits or approving-owner revocation without restoring access",
+    async () => {
+      const c = ok(await call("offline-owner", "GET", contactPath(tenant.id)));
+      ok(
+        await call("offline-owner", "PATCH", contactPath(tenant.id), {
+          ...contactBody,
+          email: "updated-correspondence@test.invalid",
+          expectedVersion: c.version,
+        }),
+      );
+      await admin.query(
+        `UPDATE "User" SET status='disabled' WHERE id='offline-owner'`,
+      );
+      try {
+        assert.equal(
+          ok(
+            await call("offline-login", "POST", "/api/invitations/preview", {
+              token: acceptedToken,
+            }),
+          ).accepted,
+          true,
+        );
+        ok(
+          await call("offline-login", "POST", "/api/invitations/accept", {
+            token: acceptedToken,
+          }),
+        );
+      } finally {
+        await admin.query(
+          `UPDATE "User" SET status='active' WHERE id='offline-owner'`,
+        );
+      }
+      assert.equal(
+        (
+          await admin.query(
+            `SELECT count(*)::int n FROM "ResidentPropertyAssignment" WHERE "userId"='offline-login'`,
+          )
+        ).rows[0].n,
+        0,
+      );
+      assert.equal(
+        (
+          await call(
+            "offline-login",
+            "GET",
+            `/api/resident/rent?leaseId=${lease.id}`,
+          )
+        ).statusCode,
+        404,
+      );
+      await admin.query(
+        `UPDATE "User" SET email='new-verified-signin@test.invalid' WHERE id='offline-login'`,
+      );
+      assert.equal(
+        ok(
+          await call("offline-login", "POST", "/api/invitations/preview", {
+            token: acceptedToken,
+          }),
+        ).accepted,
+        true,
+      );
+      ok(
+        await call("offline-login", "POST", "/api/invitations/accept", {
+          token: acceptedToken,
+        }),
+      );
+      await admin.query(
+        `UPDATE "CompanyMembership" SET status='disabled' WHERE "userId"='offline-login'`,
+      );
+      try {
+        assert.equal(
+          (
+            await call("offline-login", "POST", "/api/invitations/accept", {
+              token: acceptedToken,
+            })
+          ).statusCode,
+          403,
+        );
+      } finally {
+        await admin.query(
+          `UPDATE "CompanyMembership" SET status='active' WHERE "userId"='offline-login'`,
+        );
+      }
     },
   );
 }

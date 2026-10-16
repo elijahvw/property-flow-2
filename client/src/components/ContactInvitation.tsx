@@ -102,6 +102,7 @@ export function ContactInvitationReview({
   const [preview, setPreview] = useState<{
       company: string;
       name: string;
+      accepted?: boolean;
       leaseApprovals: { role: string }[];
       leases?: {
         property: string;
@@ -140,6 +141,26 @@ export function ContactInvitationReview({
       </>
     );
   if (!preview) return <p role="status">Loading your invitation…</p>;
+  if (preview.accepted)
+    return (
+      <Form
+        label="Continue to resident portal"
+        operation="invitation.accept"
+        submit={async () => {
+          await api("/api/invitations/accept", {
+            method: "POST",
+            body: { token },
+          });
+          await accepted();
+        }}
+      >
+        <h2>Your profile is connected</h2>
+        <p>
+          This account is already linked to {preview.name} at {preview.company}.
+          Continue to view your current access.
+        </p>
+      </Form>
+    );
   return (
     <Form
       label="Accept tenant invitation"

@@ -446,17 +446,28 @@ export function registerContactRecords(
             select: contactSelect,
           });
           if (old.version !== expectedVersion) throw conflict();
+          const company = await tx.company.findUniqueOrThrow({
+              where: { id: companyId },
+              select: { timezone: true },
+            }),
+            today = new Date(companyDay(company.timezone) + "T00:00:00Z");
           if (
             status === "archived" &&
             (await tx.lease.findFirst({
               where: {
                 companyId,
                 status: { in: ["active", "draft"] },
+                AND: [{ OR: [{ endsOn: null }, { endsOn: { gte: today } }] }],
                 OR: [
                   { residentContactId: id },
                   {
                     participants: {
-                      some: { companyId, contactId: id, removedAt: null },
+                      some: {
+                        companyId,
+                        contactId: id,
+                        removedAt: null,
+                        OR: [{ endsOn: null }, { endsOn: { gte: today } }],
+                      },
                     },
                   },
                 ],
@@ -467,7 +478,7 @@ export function registerContactRecords(
             throw new AccessError(
               409,
               "TENANT_HAS_CURRENT_LEASE",
-              "End or review this tenant's active/draft leases before archiving. Rental and financial history is retained.",
+              "End or review this tenant's current/upcoming lease relationships before archiving. Rental and financial history is retained.",
             );
           let compatibilityProfile;
           if (old.userId) {

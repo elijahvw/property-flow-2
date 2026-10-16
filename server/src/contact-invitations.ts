@@ -37,7 +37,7 @@ export async function validContactInvitation(tx: Tx, invitation: Invitation) {
   await tx.$queryRaw`SELECT id FROM "User" WHERE id=${approvingOwner} FOR SHARE`;
   const company = await tx.company.findUnique({
     where: { id: invitation.companyId },
-    select: { name: true, status: true },
+    select: { name: true, status: true, timezone: true },
   });
   const owner = await tx.user.findUnique({
     where: { id: approvingOwner },
@@ -73,8 +73,49 @@ export async function validContactInvitation(tx: Tx, invitation: Invitation) {
     );
   return { contact, company };
 }
+// Accepted tokens only acknowledge an existing binding. Later contact edits,
+// archive or approving-owner changes cannot turn a lost response into a new grant.
+export async function replayContactAcceptance(
+  tx: Tx,
+  request: FastifyRequest,
+  invitation: Invitation,
+) {
+  await tx.$queryRaw`SELECT set_config('app.company_id',${invitation.companyId},true)`;
+  await tx.$queryRaw`SELECT id FROM "Company" WHERE id=${invitation.companyId} FOR SHARE`;
+  const company = await tx.company.findFirst({
+    where: { id: invitation.companyId, status: "active" },
+    select: { name: true },
+  });
+  const contact = await tx.residentContact.findFirst({
+    where: {
+      id: invitation.contactId!,
+      companyId: invitation.companyId,
+      userId: request.principal!.id,
+    },
+    select: { id: true, name: true },
+  });
+  const membership = await tx.companyMembership.findUnique({
+    where: { userId: request.principal!.id },
+  });
+  if (
+    !invitation.acceptedAt ||
+    invitation.revokedAt ||
+    !company ||
+    !contact ||
+    membership?.companyId !== invitation.companyId ||
+    membership.status !== "active" ||
+    membership.role !== "resident"
+  )
+    throw new AccessError(
+      403,
+      "INVITATION_INVALID",
+      "This invitation is no longer available for your account.",
+    );
+  return { company, contact };
+}
 export async function previewContactInvitation(tx: Tx, invitation: Invitation) {
   const { contact, company } = await validContactInvitation(tx, invitation);
+  const today = new Date(companyDay(company.timezone) + "T00:00:00Z");
   const approvals = (invitation.contactLeaseApprovals ?? []) as {
     id: string;
     role: string;
@@ -117,7 +158,9 @@ export async function previewContactInvitation(tx: Tx, invitation: Invitation) {
           p.version !== a.version ||
           p.role !== a.role ||
           p.lease.version !== a.leaseVersion ||
-          p.lease.status === "ended"
+          p.lease.status === "ended" ||
+          (p.endsOn && p.endsOn < today) ||
+          (p.lease.endsOn && p.lease.endsOn < today)
         );
       }))
   )

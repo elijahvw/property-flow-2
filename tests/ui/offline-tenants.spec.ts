@@ -323,3 +323,64 @@ test("an invited tenant can start account setup before sign-in and the private t
     fullPage: true,
   });
 });
+
+test("a lost accepted invitation recovers after reload without asking the owner for a new grant", async ({
+  page,
+}) => {
+  await fixture(page);
+  await page.route("**/api/bootstrap", (route) =>
+    route.fulfill({
+      json: {
+        user: {
+          id: "resident",
+          name: "Jordan Rivera",
+          email: "new-verified-signin@test.invalid",
+          status: "active",
+          emailVerified: true,
+        },
+        membership: {
+          companyId: "a",
+          role: "resident",
+          status: "active",
+          version: 1,
+          company: { name: "FAP", status: "active" },
+        },
+        permissions: ["resident.self"],
+        csrfToken: "fixture",
+        destination: "/resident",
+      },
+    }),
+  );
+  await page.route("**/api/invitations/preview", (route) =>
+    route.fulfill({
+      json: {
+        company: "FAP",
+        name: "Jordan Rivera",
+        contact: true,
+        accepted: true,
+        leaseApprovals: [],
+        leases: [],
+      },
+    }),
+  );
+  let acknowledgements = 0;
+  await page.route("**/api/invitations/accept", (route) => {
+    acknowledgements++;
+    return route.fulfill({ json: { success: true } });
+  });
+  await page.goto("/invite?contact=1#accepted-token");
+  await expect(
+    page.getByRole("heading", { name: "Your profile is connected" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Accept tenant invitation" }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Continue to resident portal" })
+    .click();
+  await expect(page).toHaveURL(/\/resident$/);
+  expect(acknowledgements).toBe(1);
+  expect(
+    await page.evaluate(() => sessionStorage.getItem("pf-invitation")),
+  ).toBeNull();
+});
