@@ -5,15 +5,16 @@ import { assignmentId, opaqueUserId } from "./application.js";
 import { audit, boundedText, choice, conflict, date, input, mutation, sameSubmission, scoped, submission, version, type Tx } from "./operational.js";
 import { companyDay } from "./reports.js";
 
-const select = { id:true, userId:true, name:true, email:true, phone:true, role:true, startsOn:true, endsOn:true, removedAt:true, version:true } as const;
-const fields = ["name","email","phone","role","startsOn","endsOn"];
+const select = { id:true, userId:true, name:true, email:true, phone:true, role:true, startsOn:true, endsOn:true, removedAt:true, portalApproved:true, version:true } as const;
+const fields = ["name","email","phone","role","startsOn","endsOn","portalApproved"];
 const optional = (v:unknown,max:number,label:string) => v===null||v===undefined||v==="" ? null : boundedText(v,max,label);
 function details(b:Record<string,unknown>) {
   const name=boundedText(b.name,200,"Resident name"), email=optional(b.email,254,"Contact email"),phone=optional(b.phone,40,"Contact phone");
   if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new AccessError(400,"INVALID_INPUT","Enter a complete contact email.");
   const role=choice(b.role,["leaseholder","occupant"],"resident role"),startsOn=date(b.startsOn,"resident start date"),endsOn=b.endsOn===null?null:date(b.endsOn,"resident end date");
   if(endsOn&&endsOn<startsOn)throw new AccessError(400,"INVALID_INPUT","Resident end date cannot precede their start date.");
-  return {name,email,phone,role,startsOn,endsOn};
+  if(b.portalApproved!==undefined&&typeof b.portalApproved!=="boolean")throw new AccessError(400,"INVALID_INPUT","Portal approval must be true or false.");
+  return {name,email,phone,role,startsOn,endsOn,...(b.portalApproved!==undefined?{portalApproved:b.portalApproved as boolean}:{})};
 }
 export async function householdLease(tx:Tx,companyId:string,id:string,lock=false){
   if(lock)await tx.$queryRaw`UPDATE "Lease" SET "updatedAt"="updatedAt" WHERE id=${id} AND "companyId"=${companyId} RETURNING id`;
@@ -32,7 +33,7 @@ async function linked(tx:Tx,companyId:string,propertyId:string,userId:string,req
 // leaseholders need approved portal access before move-in to review deposits.
 // scoped() independently fences current company, membership and verification.
 export function sharedLeaseAccess(companyId:string,userId:string,today:Date,includeDraft=false):Prisma.LeaseWhereInput {
-  return { OR:[{residentId:userId,participants:{none:{userId,OR:[{removedAt:{not:null}},{endsOn:{lt:today}},{role:{not:"leaseholder"}}]}}},{...(!includeDraft?{status:{not:"draft"}}:{}),participants:{some:{companyId,userId,role:"leaseholder",removedAt:null,OR:[{endsOn:null},{endsOn:{gte:today}}]}}}],
+  return { OR:[{residentId:userId,participants:{none:{userId,OR:[{removedAt:{not:null}},{endsOn:{lt:today}},{role:{not:"leaseholder"}},{portalApproved:false}]}}},{...(!includeDraft?{status:{not:"draft"}}:{}),participants:{some:{companyId,userId,role:"leaseholder",removedAt:null,portalApproved:true,OR:[{endsOn:null},{endsOn:{gte:today}}]}}}],
     property:{assignments:{some:{companyId,userId}}} };
 }
 export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient,authenticate:preValidationHookHandler,origin:string){
@@ -62,7 +63,7 @@ export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient
       if(await tx.leaseParticipant.count({where:{companyId,leaseId:id}})>=200)throw new AccessError(422,"HOUSEHOLD_SCOPE_TOO_LARGE","This lease already has 200 household records. No record was added.");
       const row=await tx.leaseParticipant.create({data:{companyId,propertyId:record.propertyId,leaseId:id,userId,...data,createdById:request.principal!.id,...key},select});
       await tx.lease.update({where:{id},data:{version:{increment:1}}});
-      await audit(tx,request,companyId,id,"lease.participant.added",{participantId:row.id,role:row.role,userId,startsOn:row.startsOn.toISOString(),endsOn:row.endsOn?.toISOString()??null});
+      await audit(tx,request,companyId,id,"lease.participant.added",{participantId:row.id,role:row.role,userId,portalApproved:row.portalApproved,startsOn:row.startsOn.toISOString(),endsOn:row.endsOn?.toISOString()??null});
       return row;
     });
   });
@@ -80,7 +81,7 @@ export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient
       if(old.userId)await linked(tx,companyId,record.propertyId,old.userId,false);
       const row=await tx.leaseParticipant.update({where:{id:participantId},data:{...data,version:{increment:1}},select});
       await tx.lease.update({where:{id},data:{version:{increment:1}}});
-      await audit(tx,request,companyId,id,"lease.participant.updated",{participantId,from:{role:old.role,startsOn:old.startsOn.toISOString(),endsOn:old.endsOn?.toISOString()??null},to:{role:row.role,startsOn:row.startsOn.toISOString(),endsOn:row.endsOn?.toISOString()??null}});
+      await audit(tx,request,companyId,id,"lease.participant.updated",{participantId,from:{role:old.role,portalApproved:old.portalApproved,startsOn:old.startsOn.toISOString(),endsOn:old.endsOn?.toISOString()??null},to:{role:row.role,portalApproved:row.portalApproved,startsOn:row.startsOn.toISOString(),endsOn:row.endsOn?.toISOString()??null}});
       return row;
     });
   });
@@ -104,7 +105,7 @@ export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient
       const record=await householdLease(tx,companyId,id,true);
       if(record.version!==expectedVersion)throw conflict();
       const company=await tx.company.findUniqueOrThrow({where:{id:companyId},select:{timezone:true}}),today=new Date(companyDay(company.timezone)+"T00:00:00Z");
-      const target=await tx.leaseParticipant.findFirst({where:{id:participantId,companyId,leaseId:id,userId:{not:null},role:"leaseholder",removedAt:null,OR:[{endsOn:null},{endsOn:{gte:today}}]},select});
+      const target=await tx.leaseParticipant.findFirst({where:{id:participantId,companyId,leaseId:id,userId:{not:null},role:"leaseholder",removedAt:null,portalApproved:true,OR:[{endsOn:null},{endsOn:{gte:today}}]},select});
       if(!target?.userId)throw new AccessError(409,"PRIMARY_CONTACT_REQUIRED","Choose a current linked leaseholder as the primary contact.");
       await linked(tx,companyId,record.propertyId,target.userId,true);
       if(record.residentId===target.userId)return {success:true};

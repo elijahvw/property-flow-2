@@ -85,11 +85,27 @@ export async function householdCases(t,admin,call,app){
    const invited=ok(await call('hh-primary','POST',`/api/resident/leases/${lease.id}/invitations`,{name:id,email:id+'@test.invalid',role,startsOn:today}));
    assert.equal(invited.approvedAt,null);assert.equal(invited.acceptanceUrl,null);
    await admin.query(`UPDATE "Invitation" SET "tokenHash"=$1 WHERE id=$2`,[digest('pending-'+id),invited.id]);
+   assert.equal((await call(id,'POST','/api/invitations/preview',{token:'pending-'+id})).statusCode,403);
    assert.equal((await call(id,'POST','/api/invitations/accept',{token:'pending-'+id})).statusCode,403);
    const approval=`/api/company/leases/${lease.id}/invitations/${invited.id}/approve`;
    assert.equal((await call('hh-manager','POST',approval,{})).statusCode,403);
    const approved=ok(await call('hh-owner','POST',approval,{})),token=new URL(approved.acceptanceUrl).hash.slice(1);
+   const preview=ok(await call(id,'POST','/api/invitations/preview',{token}));assert.equal(preview.role,role);assert.equal(preview.property,'Oak House');assert.equal(preview.unit,'Shared apartment');assert.equal(JSON.stringify(preview).includes(token),false);
+   assert.equal((await call('resident2','POST','/api/invitations/preview',{token})).statusCode,403);
    assert.equal((await call('resident2','POST','/api/invitations/accept',{token})).statusCode,403);
+   if(role==='occupant'&&process.env.TEST_FINANCES_BROWSER_URL){
+    const browser=await chromium.launch({headless:true});try{
+     const page=await browser.newPage({viewport:{width:1280,height:1000}});
+     await page.route('**/api/**',async route=>{const req=route.request(),url=new URL(req.url()),response=await app.inject({method:req.method(),url:url.pathname+url.search,headers:{...req.headers(),origin:'https://app.test',cookie:`__Host-pf-session=token-${id}`},...(req.postData()?{payload:req.postData()}:{})});await route.fulfill({status:response.statusCode,contentType:'application/json',body:response.body});});
+     await page.goto(process.env.TEST_FINANCES_BROWSER_URL+`/invite?lease=1#${token}`);
+     await expect(page).toHaveURL(/\/invite$/);await expect(page.locator('.lease-review-summary')).toContainText('Oak House · Shared apartment');
+     await expect(page.getByText(/does not give you access to the lease’s financial information/)).toBeVisible();
+     assert.equal((await admin.query(`SELECT count(*)::int n FROM "CompanyMembership" WHERE "userId"=$1`,[id])).rows[0].n,0,'preview alone cannot create membership');
+     await page.screenshot({path:'/tmp/propertyflow-resident-invitation-preview.png',fullPage:true});
+     await page.getByRole('button',{name:'Accept household invitation',exact:true}).click();await expect(page).toHaveURL(/\/resident$/);
+     assert.equal(await page.evaluate(()=>sessionStorage.getItem('pf-invitation')),null);
+    }finally{await browser.close();}
+   }
    ok(await call(id,'POST','/api/invitations/accept',{token}));
    ok(await call(id,'POST','/api/invitations/accept',{token}));
    assert.equal((await admin.query(`SELECT role FROM "LeaseParticipant" WHERE "leaseId"=$1 AND "userId"=$2`,[lease.id,id])).rows[0].role,role);
@@ -102,6 +118,26 @@ export async function householdCases(t,admin,call,app){
   const flags=(await admin.query(`SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE relname='LeaseParticipant'`)).rows[0];assert.deepEqual(flags,{relrowsecurity:true,relforcerowsecurity:true});
   assert.equal((await admin.query(`SELECT has_table_privilege('propertyflow_runtime','"LeaseParticipant"','DELETE') allowed`)).rows[0].allowed,false);
   assert.equal((await admin.query(`SELECT has_column_privilege('propertyflow_runtime','"LeaseParticipant"','userId','UPDATE') allowed`)).rows[0].allowed,false);
+ });
+ await t.test('only owners control approved invitations and the approval queue; others cancel only their own unapproved requests',async()=>{
+  const companyRoot=`/api/company/leases/${lease.id}/invitations`,residentRoot=`/api/resident/leases/${lease.id}/invitations`;
+  const body=email=>({name:'Approval Resident',email,role:'occupant',startsOn:today});
+  const ownerInvite=ok(await call('hh-owner','POST',companyRoot,body('owner-link@test.invalid')));
+  assert.equal((await call('hh-manager','POST',`${companyRoot}/${ownerInvite.id}/revoke`,{})).statusCode,404);
+  assert.equal(ok(await call('hh-manager','GET',companyRoot)).some(i=>i.id===ownerInvite.id),false);
+  const ownRequest=ok(await call('hh-manager','POST',companyRoot,body('manager-request@test.invalid')));assert.equal(ownRequest.approvedAt,null);
+  ok(await call('hh-manager','POST',`${companyRoot}/${ownRequest.id}/revoke`,{}));
+  const residentRequest=ok(await call('hh-primary','POST',residentRoot,body('resident-approved@test.invalid')));
+  ok(await call('hh-owner','POST',`${companyRoot}/${residentRequest.id}/approve`,{}));
+  assert.equal((await call('hh-primary','POST',`${residentRoot}/${residentRequest.id}/revoke`,{})).statusCode,404);
+  assert.equal((await call('hh-manager','POST',`${companyRoot}/${residentRequest.id}/revoke`,{})).statusCode,404);
+  ok(await call('hh-owner','POST',`${companyRoot}/${residentRequest.id}/revoke`,{}));
+  const pending=ok(await call('hh-manager','POST',companyRoot,body('queue-request@test.invalid')));
+  const overview=ok(await call('hh-owner','GET','/api/company/overview'));assert.equal(overview.residentApprovals.pendingCount,1);
+  assert.equal(ok(await call('hh-manager','GET','/api/company/overview')).residentApprovals,undefined);
+  const queue=ok(await call('hh-owner','GET','/api/company/leases?approvals=pending'));assert.deepEqual(queue.items.map(l=>l.id),[lease.id]);
+  assert.equal((await call('hh-manager','GET','/api/company/leases?approvals=pending')).statusCode,403);
+  assert.equal((await call('foreign','POST',`${companyRoot}/${pending.id}/approve`,{})).statusCode,404);
  });
  await t.test('owner revocation fences an already-approved invitation before it can grant access',async()=>{
   const id='hh-revoked-invite';
@@ -160,6 +196,16 @@ export async function householdCases(t,admin,call,app){
   assert.equal((await admin.query(`SELECT count(*)::int n FROM "RentCharge" WHERE "leaseId"=$1`,[renewal.id])).rows[0].n,0);
   assert.equal((await admin.query(`SELECT count(*)::int n FROM "DepositAccount" WHERE "leaseId"=$1`,[renewal.id])).rows[0].n,0);
   assert.equal((await call('hh-new-holder','GET',`/api/resident/rent?leaseId=${renewal.id}`)).statusCode,404);
+  const copied=members.find(p=>p.userId==='hh-new-holder');assert.equal(copied.portalApproved,false);
+  assert.equal(ok(await call('hh-new-holder','GET','/api/resident/leases')).some(l=>l.id===renewal.id),false);
+  const request={name:'New term occupant',email:'new-term-occupant@test.invalid',role:'occupant',startsOn:'2027-01-01'};
+  assert.equal((await call('hh-new-holder','POST',`/api/resident/leases/${renewal.id}/invitations`,request)).statusCode,404);
+  const approvalBody={...details({name:copied.name,role:'leaseholder',startsOn:copied.startsOn.slice(0,10)}),portalApproved:true,expectedVersion:copied.version};
+  assert.equal((await call('hh-manager','PATCH',`/api/company/leases/${renewal.id}/participants/${copied.id}`,approvalBody)).statusCode,403);
+  ok(await call('hh-owner','PATCH',`/api/company/leases/${renewal.id}/participants/${copied.id}`,approvalBody));
+  assert.equal(ok(await call('hh-new-holder','GET','/api/resident/leases')).some(l=>l.id===renewal.id),true);
+  assert.equal(ok(await call('hh-new-holder','POST',`/api/resident/leases/${renewal.id}/invitations`,request)).acceptanceUrl,null);
+  assert.equal((await call('hh-new-holder','GET',`/api/resident/rent?leaseId=${renewal.id}`)).statusCode,404,'owner review does not activate draft finances');
  });
  await t.test('real browser follows the lease workspace, household and invitation workflow', {skip:!process.env.TEST_FINANCES_BROWSER_URL},async()=>{
   const browser=await chromium.launch({headless:true});try{

@@ -306,6 +306,7 @@ model Lease {
 
 model LeaseParticipant {
   removedAt DateTime?
+  portalApproved Boolean @default(true)
   id String @id @default(cuid())
   companyId String
   propertyId String

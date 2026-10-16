@@ -327,7 +327,7 @@ export function Leases() {
 }
 function LeaseList() {
   const navigate=useNavigate();
-  const auth = useAuth().data;
+  const {data:auth,can} = useAuth();
   const { propertyId: pathPropertyId } = useParams();
   const [params, setParams] = useSearchParams();
   const [adding, setAdding] = useState(params.get("new") === "lease"),
@@ -335,7 +335,8 @@ function LeaseList() {
     [renewing, setRenewing] = useState<Lease | null>(null);
   const contextId = pathPropertyId || params.get("propertyId") || "",
     status = params.get("status") || "",
-    attention = params.get("attention") || "";
+    attention = params.get("attention") || "",
+    approvals = params.get("approvals") || "";
   const [visitedProperties, setVisitedProperties] = useState<string[]>(() =>
     contextId ? [contextId] : [],
   );
@@ -345,12 +346,12 @@ function LeaseList() {
     "/api/company/properties",
   );
   const r = useResource<Records<Lease>>(
-    `/api/company/leases?${new URLSearchParams(Object.entries({ cursor, propertyId: contextId, status, attention }).filter(([, value]) => value))}`,
+    `/api/company/leases?${new URLSearchParams(Object.entries({ cursor, propertyId: contextId, status, attention, approvals }).filter(([, value]) => value))}`,
     true,
     true,
   );
   const propertyName = properties.data?.find((p) => p.id === contextId)?.name;
-  const detailPath=(id:string)=>leasePath(id,Object.fromEntries(Object.entries({leaseListProperty:contextId,leaseListStatus:status,leaseListAttention:attention,leaseListNested:pathPropertyId?"true":""}).filter(([,value])=>value)));
+  const detailPath=(id:string)=>leasePath(id,Object.fromEntries(Object.entries({leaseListProperty:contextId,leaseListStatus:status,leaseListAttention:attention,leaseListNested:pathPropertyId?"true":"",leaseListApprovals:approvals,...(approvals?{section:"invitations"}:{})}).filter(([,value])=>value)));
   const reload = () => {
     setCursor("");
     r.reload();
@@ -469,7 +470,8 @@ function LeaseList() {
           <label className="compact-filter">
             Lease view
             <select
-              value={attention || status}
+              aria-label="Lease view"
+              value={approvals?"resident_approvals":attention || status}
               onChange={(e) => {
                 const value = e.target.value;
                 setCursor("");
@@ -477,7 +479,7 @@ function LeaseList() {
                   ...(!pathPropertyId && contextId
                     ? { propertyId: contextId }
                     : {}),
-                  ...(["ending_soon", "past_end", "in_effect"].includes(value)
+                  ...(value==="resident_approvals"?{approvals:"pending"}:["ending_soon", "past_end", "in_effect"].includes(value)
                     ? { attention: value }
                     : value
                       ? { status: value }
@@ -486,6 +488,7 @@ function LeaseList() {
               }}
             >
               <option value="">All leases</option>
+              {can("members.manage")&&<option value="resident_approvals">Resident approvals needed</option>}
               <option value="draft">Draft</option>
               <option value="active">Active</option>
               <option value="ended">Ended</option>

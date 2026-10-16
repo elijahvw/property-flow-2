@@ -38,7 +38,8 @@ export function registerLeaseInvitations(server:FastifyInstance,db:PrismaClient,
       if(Object.keys(request.query as object).length)throw new AccessError(400,"INVALID_INPUT","Unknown invitation filter.");
       return scoped(db,request,resident?"resident.self":"lease.manage",async(tx,companyId)=>{
         if(resident)await residentLease(tx,companyId,request.principal!.id,id);else await householdLease(tx,companyId,id);
-        const items=await tx.invitation.findMany({where:{companyId,leaseId:id,...(resident?{createdBy:request.principal!.id}:{})},select:invitationSelect,orderBy:{createdAt:"desc"},take:201});
+        const actor=await tx.companyMembership.findFirstOrThrow({where:{companyId,userId:request.principal!.id}});
+        const items=await tx.invitation.findMany({where:{companyId,leaseId:id,...(actor.role!=="owner"?{createdBy:request.principal!.id}:{})},select:invitationSelect,orderBy:{createdAt:"desc"},take:201});
         if(items.length>200)throw new AccessError(422,"INVITATION_SCOPE_TOO_LARGE","Too many invitations to show a complete history.");
         return items;
       });
@@ -58,7 +59,7 @@ export function registerLeaseInvitations(server:FastifyInstance,db:PrismaClient,
         const approved=actor.role==="owner";
         const row=await tx.invitation.create({data:{companyId,leaseId:id,propertyId:record.propertyId,email,role:"resident",participantName:name,participantRole:role,participantStartsOn:startsOn,tokenHash:digest(token),createdBy:request.principal!.id,expiresAt:new Date(Date.now()+72*3600000),approvedAt:approved?new Date():null,approvedBy:approved?request.principal!.id:null},select:invitationSelect});
         await audit(tx,request,companyId,id,"lease.invitation.created",{invitationId:row.id,role,approvalRequired:!approved});
-        return {...row,acceptanceUrl:approved?`${origin}/invite#${token}`:null};
+        return {...row,acceptanceUrl:approved?`${origin}/invite?lease=1#${token}`:null};
       });
     });
     server.post<{Params:{leaseId:string;invitationId:string}}>(root+"/:invitationId/revoke",auth,request=>{
@@ -66,7 +67,8 @@ export function registerLeaseInvitations(server:FastifyInstance,db:PrismaClient,
       const id=assignmentId(request.params.leaseId),invitationId=assignmentId(request.params.invitationId);
       return scoped(db,request,resident?"resident.self":"lease.manage",async(tx,companyId)=>{
         if(resident)await residentLease(tx,companyId,request.principal!.id,id);else await householdLease(tx,companyId,id,true);
-        const row=await tx.invitation.findFirst({where:{id:invitationId,companyId,leaseId:id,acceptedAt:null,revokedAt:null,...(resident?{createdBy:request.principal!.id}:{})},select:{id:true}});
+        const actor=await tx.companyMembership.findFirstOrThrow({where:{companyId,userId:request.principal!.id}});
+        const row=await tx.invitation.findFirst({where:{id:invitationId,companyId,leaseId:id,acceptedAt:null,revokedAt:null,...(actor.role!=="owner"?{createdBy:request.principal!.id,approvedAt:null}:{})},select:{id:true}});
         if(!row)throw new AccessError(404,"NOT_FOUND","Pending invitation not found.");
         await tx.invitation.update({where:{id:row.id},data:{revokedAt:new Date()}});
         await audit(tx,request,companyId,id,"lease.invitation.revoked",{invitationId});return {success:true};
@@ -81,7 +83,7 @@ export function registerLeaseInvitations(server:FastifyInstance,db:PrismaClient,
       const row=await tx.invitation.findFirst({where:{id:invitationId,companyId,leaseId:id,acceptedAt:null,revokedAt:null,approvedAt:null,participantRole:{in:["leaseholder","occupant"]},expiresAt:{gt:new Date()}},select:{id:true}});
       if(!row)throw new AccessError(404,"NOT_FOUND","Resident approval request not found. Refresh the invitation status; revoke and recreate it if its one-time link was lost.");
       await tx.invitation.update({where:{id:row.id},data:{approvedAt:new Date(),approvedBy:request.principal!.id,tokenHash:digest(token),expiresAt:new Date(Date.now()+72*3600000)}});
-      await audit(tx,request,companyId,id,"lease.invitation.approved",{invitationId});return {acceptanceUrl:`${origin}/invite#${token}`};
+      await audit(tx,request,companyId,id,"lease.invitation.approved",{invitationId});return {acceptanceUrl:`${origin}/invite?lease=1#${token}`};
     });
   });
 }
@@ -121,4 +123,15 @@ export async function replayLeaseAcceptance(tx:Tx,request:FastifyRequest,invitat
   // Acknowledgement only: never recreate membership, assignments or a removed
   // roster entry after an accepted response was lost.
   return {success:true};
+}
+
+export async function previewLeaseInvitation(tx:Tx,invitation:Invitation){
+  if(!invitation.leaseId||!invitation.approvedAt||!invitation.approvedBy)throw new AccessError(403,"INVITATION_INVALID","This resident invitation is not approved.");
+  await tx.$queryRaw`SELECT set_config('app.company_id', ${invitation.companyId}, true)`;
+  const record=await householdLease(tx,invitation.companyId,invitation.leaseId);
+  await invitationTerm(tx,invitation.companyId,record,invitation.participantStartsOn!);
+  const owner=await tx.user.findUnique({where:{id:invitation.approvedBy},include:{membership:true}});
+  if(!owner||owner.status!=="active"||!owner.emailVerified||owner.membership?.companyId!==invitation.companyId||owner.membership.status!=="active"||owner.membership.role!=="owner")throw new AccessError(403,"INVITATION_INVALID","The approving owner no longer has access.");
+  const company=await tx.company.findUniqueOrThrow({where:{id:invitation.companyId},select:{name:true}});
+  return {company:company.name,property:record.property.name,unit:record.unit.label,name:invitation.participantName,role:invitation.participantRole,startsOn:invitation.participantStartsOn,leaseStartsOn:record.startsOn,leaseEndsOn:record.endsOn,leaseStatus:record.status};
 }

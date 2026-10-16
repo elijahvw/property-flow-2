@@ -13,6 +13,7 @@ CREATE TABLE "LeaseParticipant" (
  "startsOn" DATE NOT NULL,
  "endsOn" DATE CHECK("endsOn" IS NULL OR "endsOn">="startsOn"),
  "removedAt" TIMESTAMP(3),
+ "portalApproved" BOOLEAN NOT NULL DEFAULT true,
  "version" INTEGER NOT NULL DEFAULT 1 CHECK("version">0),
  "createdById" TEXT NOT NULL REFERENCES "User"(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
  "submissionKey" TEXT NOT NULL,
@@ -31,7 +32,7 @@ CREATE POLICY lease_participant_company_boundary ON "LeaseParticipant" FOR ALL T
  USING("companyId"=NULLIF(current_setting('app.company_id',true),''))
  WITH CHECK("companyId"=NULLIF(current_setting('app.company_id',true),''));
 GRANT SELECT,INSERT ON "LeaseParticipant" TO propertyflow_runtime;
-GRANT UPDATE("name","email","phone","role","startsOn","endsOn","removedAt","version","updatedAt") ON "LeaseParticipant" TO propertyflow_runtime;
+GRANT UPDATE("name","email","phone","role","startsOn","endsOn","removedAt","portalApproved","version","updatedAt") ON "LeaseParticipant" TO propertyflow_runtime;
 -- Retain the exact existing lease/User identities and financial rows. A roster
 -- entry records each original primary resident; it never creates another lease.
 INSERT INTO "LeaseParticipant"(id,"companyId","propertyId","leaseId","userId",name,email,role,"startsOn","createdById","submissionKey","submissionHash","updatedAt")

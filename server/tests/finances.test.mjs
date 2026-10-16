@@ -56,7 +56,7 @@ test('manual finance isolation, replay, corrections and totals',{skip:!url},asyn
  const path='/api/company/finances';let entry;const body=(extra={})=>({propertyId:'home',occurredOn:'2026-10-14',amount:'1234.56',kind:'income',category:'rent',memo:null,submissionKey:randomUUID(),...extra});
  await t.test('household migration backfills existing primary residents without replacing lease identities or terms',async()=>{
   assert.deepEqual((await admin.query(`SELECT id,"residentId","rentCents",version,"submissionHash" FROM "Lease" WHERE id='migration-lease'`)).rows[0],{id:'migration-lease',residentId:'migration-resident',rentCents:123456,version:1,submissionHash:'original'});
-  const row=(await admin.query(`SELECT "userId",role,name,"removedAt" FROM "LeaseParticipant" WHERE "leaseId"='migration-lease'`)).rows;assert.equal(row.length,1);assert.deepEqual(row[0],{userId:'migration-resident',role:'leaseholder',name:'Existing resident',removedAt:null});
+  const row=(await admin.query(`SELECT "userId",role,name,"removedAt","portalApproved" FROM "LeaseParticipant" WHERE "leaseId"='migration-lease'`)).rows;assert.equal(row.length,1);assert.deepEqual(row[0],{userId:'migration-resident',role:'leaseholder',name:'Existing resident',removedAt:null,portalApproved:true});
  });
  await t.test('durable concurrent replay, mismatches, validation and authority',async()=>{
   const payload=body();const results=await Promise.all([call('owner','POST',path,payload),call('owner','POST',path,payload)]);for(const r of results)assert.equal(r.statusCode,200,r.body);entry=results[0].json();assert.equal(entry.amountCents,123456);assert.equal(results[1].json().id,entry.id);

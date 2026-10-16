@@ -1,5 +1,6 @@
 import { RecordIdentity } from "../components/RecordIdentity";
 import { ResidentLeaseInvitations } from "../components/LeaseInvitations";
+import { LeaseInvitationReview } from "../components/LeaseInvitationReview";
 import {
   UserProvisioning,
   UserVerificationControls,
@@ -71,6 +72,7 @@ export function Form({
   label = "Save changes",
   operation = "account.update",
   successText = "Saved.",
+  feedbackText,
   secondaryActions,
 }: {
   children: React.ReactNode;
@@ -78,6 +80,7 @@ export function Form({
   label?: string;
   operation?: OperationName;
   successText?: string;
+  feedbackText?: string;
   secondaryActions?: React.ReactNode;
 }) {
   const notify = useFeedback();
@@ -109,6 +112,7 @@ export function Form({
             operation !== "auth.session.restore"
           )
             notify(
+              feedbackText ||
               (
                 {
                   "property.create": "Property created.",
@@ -1350,7 +1354,7 @@ export function AcceptInvitation() {
     <section className="panel">
       <h1>Accept your invitation</h1>
       <p>Use the account whose verified email matches the invitation.</p>
-      {token ? (
+      {token&&sessionStorage.getItem("pf-lease-invitation")==="true"?<LeaseInvitationReview token={token} accepted={async()=>{sessionStorage.removeItem("pf-invitation");sessionStorage.removeItem("pf-lease-invitation");await refreshUser();navigate("/resident");}}/>:token ? (
         <Form
           label="Accept invitation"
           operation="invitation.accept"

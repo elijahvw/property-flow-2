@@ -5,6 +5,7 @@ import { useResource } from "../useResource";
 import { dollars } from "./Finances";
 import { propertyLink } from "../components/PropertyNavigation";
 type OverviewData = {
+  residentApprovals?: {pendingCount:number};
   company: { name: string; timezone: string };
   property: { id: string; name: string } | null;
   today: string;
@@ -184,6 +185,7 @@ function OverviewWorkspace() {
                     <span className="badge">Saved records</span>
                   </div>
                   <div className="attention-list">
+                    {d.residentApprovals&&d.residentApprovals.pendingCount>0&&<Link to={url("/company/leases",{approvals:"pending"})}><span className="attention-icon">↗</span><div><strong>Approve resident requests</strong><span>{d.residentApprovals.pendingCount} awaiting owner review</span></div><span aria-hidden="true">→</span></Link>}
                     {d.rentCollections && (
                       <Link to={url("/company/rent", { view: "after_grace" })}>
                         <span className="attention-icon">↗</span>

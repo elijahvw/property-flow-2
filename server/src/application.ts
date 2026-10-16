@@ -27,7 +27,7 @@ import { registerRent } from "./rent.js";
 import { registerFinances } from "./finances.js";
 import { registerLeasing } from "./leasing.js";
 import { registerLeaseParticipants } from "./lease-participants.js";
-import { registerLeaseInvitations, acceptLeaseInvitation, replayLeaseAcceptance } from "./lease-invitations.js";
+import { registerLeaseInvitations, acceptLeaseInvitation, replayLeaseAcceptance, previewLeaseInvitation } from "./lease-invitations.js";
 import { registerMaintenance } from "./maintenance.js";
 import { digest } from "./sessions.js";
 import { propertySelect, propertyData, propertyKeys } from "./property-fields.js";
@@ -750,6 +750,17 @@ export function registerApplication(
       });
     },
   );
+  server.post("/api/invitations/preview", auth, async (request) => {
+    const token=requiredString(input(request,["token"]).token,"Invitation token"),user=request.principal!;
+    if(user.status!=="active"||!user.emailVerified)throw new AccessError(403,"VERIFIED_EMAIL_REQUIRED","Verify your sign-in email before reviewing this invitation.");
+    return serial(request,async tx=>{
+      const invitation=await tx.invitation.findUnique({where:{tokenHash:digest(token)}});
+      if(!invitation||!invitation.leaseId||invitation.revokedAt||(!invitation.acceptedAt&&invitation.expiresAt.getTime()<=Date.now())||invitation.email!==user.email.toLowerCase())throw new AccessError(403,"INVITATION_INVALID","This invitation is unavailable for your account.");
+      await activeCompany(tx,invitation.companyId);
+      if(invitation.acceptedAt)await replayLeaseAcceptance(tx,request,invitation);
+      return previewLeaseInvitation(tx,invitation);
+    });
+  });
   server.post("/api/invitations/accept", auth, async (request) => {
     const token = requiredString(bodyOf(request).token, "Invitation token"),
       user = request.principal!;
