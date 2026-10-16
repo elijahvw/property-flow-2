@@ -1,3 +1,4 @@
+import { residentWorkspaceCases } from "./resident-workspace-cases.mjs";
 import {depositCases} from "./deposit-cases.mjs";
 import {rentRecoveryCases} from "./rent-recovery-cases.mjs";
 import { recurringRentCases } from "./recurring-rent-cases.mjs";
@@ -96,4 +97,5 @@ test('manual finance isolation, replay, corrections and totals',{skip:!url},asyn
  await t.test('recurring rent and payment history',async rentTest=>recurringRentCases(rentTest,admin,call,db));
  await t.test('explicit rent recovery and readable identities',async recoveryTest=>rentRecoveryCases(recoveryTest,admin,call,db));
  await t.test('refundable deposits and linked cash sources',async depositTest=>depositCases(depositTest,admin,call,db));
+ await t.test("connected tenant workspace", async workspaceTest => residentWorkspaceCases(workspaceTest,admin,call,app));
 });

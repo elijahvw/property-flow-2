@@ -1,4 +1,7 @@
+import { formatDate } from "../dates";
+import { DateField } from "../components/DateField";
 import { usePropertySearchParams } from "../usePropertySearchParams";
+import { TenantReturnLink } from "../components/TenantReturnLink";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../api";
@@ -188,6 +191,7 @@ function DepositDirectory({ resident }: { resident: boolean }) {
     <>
       {propertyId && !resident && <PropertyNavigation id={propertyId} />}
       <header className="page-heading">
+        {!resident && <TenantReturnLink />}
         <p className="eyebrow">{resident ? "Your rental" : "Money"}</p>
         <h1>Security deposits</h1>
         <p>
@@ -212,7 +216,7 @@ function DepositDirectory({ resident }: { resident: boolean }) {
           <section className="panel">
             <div className="section-heading">
               <h2>Deposit accounts</h2>
-              <span className="badge">As of {r.data.businessDate}</span>
+              <span className="badge">As of {formatDate(r.data.businessDate)}</span>
             </div>
             <div className="form-grid">
               <label>
@@ -279,7 +283,7 @@ function DepositDirectory({ resident }: { resident: boolean }) {
                           {a.lease.resident?.name ||
                             a.lease.resident?.email ||
                             "Your lease"}{" "}
-                          · Due {a.dueOn.slice(0, 10)}
+                          · Due {formatDate(a.dueOn)}
                         </p>
                         <p>
                           {dollars(a.summary.heldCents)} held ·{" "}
@@ -456,8 +460,8 @@ function DepositAccountPanel({
             <>
               <DepositMetrics summary={current.summary} />
               <p className="help">
-                Due {current.dueOn.slice(0, 10)} · company date{" "}
-                {r.data.businessDate}. Held balance reflects nonvoided receipts
+                Due {formatDate(current.dueOn)} · company date{" "}
+                {formatDate(r.data.businessDate)}. Held balance reflects nonvoided receipts
                 recorded here, not a verified bank balance.
               </p>
               <RecordIdentity
@@ -564,7 +568,7 @@ function DepositAccountPanel({
                           {receipt.cashEntry.voidedAt ? "Voided" : "Received"}
                         </strong>
                         <p>
-                          {receipt.occurredOn.slice(0, 10)} ·{" "}
+                          {formatDate(receipt.occurredOn)} ·{" "}
                           {receipt.method.replace(/_/g, " ")}
                         </p>
                         {!resident && receipt.paymentReference && (
@@ -608,7 +612,7 @@ function DepositAccountPanel({
                       <li key={revision.id}>
                         <strong>
                           {dollars(revision.requiredCents)} required · due{" "}
-                          {revision.dueOn.slice(0, 10)}
+                          {formatDate(revision.dueOn)}
                         </strong>
                         <p>
                           {revision.reason} · version {revision.version}
@@ -749,7 +753,7 @@ function DepositEditor({
             {review.lines.map(([label, value]) => (
               <div key={label}>
                 <dt>{label}</dt>
-                <dd>{value}</dd>
+                <dd>{/^\d{4}-\d{2}-\d{2}$/.test(value) ? formatDate(value) : value}</dd>
               </div>
             ))}
           </dl>
@@ -936,9 +940,8 @@ function DepositEditor({
             <>
               <label>
                 Deposit due date
-                <input
-                  name="dueOn"
-                  type="date"
+                <DateField
+                  name="dueOn" aria-label="Deposit due date"
                   required
                   defaultValue={
                     current?.dueOn.slice(0, 10) ||
@@ -957,9 +960,8 @@ function DepositEditor({
             <>
               <label>
                 Deposit received date
-                <input
-                  name="occurredOn"
-                  type="date"
+                <DateField
+                  name="occurredOn" aria-label="Deposit received date"
                   required
                   max={detail.businessDate}
                   defaultValue={detail.businessDate}

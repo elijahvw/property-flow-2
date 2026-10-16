@@ -1,12 +1,14 @@
-import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useEffect, useId, useState } from "react";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
+import { tenantPath, tenantDirectorySearch } from "../tenant-links";
+import { tenantPortalState } from "../tenant-status";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
 import { Form, InvitationForm, Invitations } from "./Workspace";
 
-type Profile = {
+export type Profile = {
   userId: string;
   status: string;
   version: number;
@@ -22,11 +24,11 @@ type Profile = {
     emailVerified: boolean;
   };
 };
-type Detail = Profile & {
+export type ResidentProfileDetail = Profile & {
   assignments: { property: { id: string; name: string; address: string } }[];
   activity: { id: string; action: string; createdAt: string }[];
 };
-const fields = {
+export const residentContactFields = {
   contactName: "Contact name",
   contactPhone: "Contact phone",
   emergencyContactName: "Emergency contact name",
@@ -34,6 +36,8 @@ const fields = {
 } as const;
 export function ResidentProfiles() {
   const { data } = useAuth();
+  const [params] = useSearchParams();
+  if (params.get("residentId")) return <Navigate replace to={tenantPath(params.get("residentId")!, params)} />;
   return (
     <Directory
       key={`${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}`}
@@ -41,158 +45,55 @@ export function ResidentProfiles() {
   );
 }
 function Directory() {
-  const [params] = useSearchParams();
-  const r = useResource<Profile[]>(
-    "/api/company/resident-profiles",
-    true,
-    true,
-  );
-  const [query, setQuery] = useState(""),
-    [selected, setSelected] = useState(params.get("residentId") || ""),
-    [inviting, setInviting] = useState(false),
+  const [params, setParams] = useSearchParams();
+  const r = useResource<Profile[]>("/api/company/resident-profiles", true, true);
+  const query = params.get("q") || "", access = ["active", "verification", "disabled"].includes(params.get("access") || "") ? params.get("access")! : "all";
+  const [inviting, setInviting] = useState(false),
     [invitationRevision, setInvitationRevision] = useState(0);
-  const rows = r.data?.filter((p) =>
-    `${p.contactName || ""} ${p.user.name || ""} ${p.user.email}`
-      .toLowerCase()
-      .includes(query.trim().toLowerCase()),
-  );
   const { can, data } = useAuth();
-  return (
-    <>
-      <header className="page-heading">
-        <p className="eyebrow">People</p>
-        <h1>Tenants</h1>
-        <p>
-          Contact information, property access and activity for residents in
-          your company.
-        </p>
-        {can("members.manage") && (
-          <button onClick={() => setInviting(true)}>Invite tenant</button>
-        )}
-      </header>
-      <section className="panel">
-        <div className="section-heading">
-          <h2>Resident directory</h2>
-          <span className="badge">{rows?.length ?? "…"} residents</span>
-        </div>
-        <label className="search-field">
-          Find resident
-          <input
-            placeholder="Name or email"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </label>
-        {r.error && (
-          <p role="alert">
-            {r.error}{" "}
-            <button className="secondary" onClick={r.reload}>
-              Try again
-            </button>
-          </p>
-        )}
-        {!r.data ? (
-          !r.error && <p role="status">Loading residents…</p>
-        ) : !rows?.length ? (
-          <div className="empty-state">
-            <h3>{query ? "No matching residents" : "No residents yet"}</h3>
-            <p>
-              {query
-                ? "Try another name or email."
-                : "Invite a tenant here. They appear in this directory after accepting."}
-            </p>
-          </div>
-        ) : (
-          <div className="table-wrap">
-            <table className="tenant-directory">
-              <thead>
-                <tr>
-                  <th>Resident</th>
-                  <th>Contact</th>
-                  <th>Access</th>
-                  <th>
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((p) => (
-                  <tr key={p.userId}>
-                    <td>
-                      <strong>
-                        {p.contactName || p.user.name || p.user.email}
-                      </strong>
-                      <span className="cell-detail">{p.user.email}</span>
-                    </td>
-                    <td data-label="Contact">{p.contactPhone || "No phone recorded"}</td>
-                    <td data-label="Access">
-                      <span className="badge">
-                        {p.status === "active" && p.user.status === "active"
-                          ? p.user.emailVerified
-                            ? "Active"
-                            : "Email verification needed"
-                          : "Disabled"}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        className="secondary"
-                        onClick={() => setSelected(p.userId)}
-                      >
-                        Manage resident
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-      {can("members.manage") && (
-        <>
-          <EditorDialog
-            open={inviting}
-            title="Invite tenant"
-            onClose={() => setInviting(false)}
-          >
-            <InvitationForm
-              companyId={data?.membership?.companyId}
-              audience="tenants"
-              reload={() => setInvitationRevision((v) => v + 1)}
-            />
-          </EditorDialog>
-          <Invitations key={invitationRevision} audience="tenants" />
-        </>
-      )}
-      {selected && (
-        <ResidentEditor
-          id={selected}
-          close={() => {
-            setSelected("");
-            r.reload();
-          }}
-        />
-      )}
-    </>
-  );
+  const rows = r.data?.filter(p =>
+    `${p.contactName || ""} ${p.user.name || ""} ${p.user.email}`.toLowerCase().includes(query.trim().toLowerCase()) &&
+    (access === "all" || tenantPortalState(p) === access));
+  const filter = (key: string, value: string) => {
+    const next = new URLSearchParams(tenantDirectorySearch(params));
+    if (value && value !== "all") next.set(key, value); else next.delete(key);
+    setParams(next, { replace: true });
+  };
+  return <div className="tenant-directory-page">
+    <header className="page-heading page-heading-row">
+      <div><p className="record-kicker">People / Tenants</p><h1>Tenants</h1><p>People, rental history and portal access in one place.</p></div>
+      {can("members.manage") && <button onClick={() => setInviting(true)}>Invite tenant</button>}
+    </header>
+    <section className="panel tenant-directory-panel" aria-label="Tenant directory">
+      <div className="tenant-directory-toolbar">
+        <label className="tenant-search">Find resident<input type="search" placeholder="Search name or email" value={query} maxLength={200} onChange={e => filter("q", e.target.value)} /></label>
+        <label>Portal access<select aria-label="Portal access" value={access} onChange={e => filter("access", e.target.value)}><option value="all">All access</option><option value="active">Active</option><option value="verification">Verification needed</option><option value="disabled">Disabled</option></select></label>
+        <span className="directory-count" role="status">{rows ? `${rows.length} ${rows.length === 1 ? "tenant" : "tenants"}` : "Loading tenants…"}</span>
+      </div>
+      {r.error && <p role="alert" className="notice error">{r.error} <button className="secondary" onClick={r.reload}>Try again</button></p>}
+      {!r.data ? (!r.error && <p role="status">Loading residents…</p>) : !rows?.length ? <div className="empty-state"><h2>{query || access !== "all" ? "No matching tenants" : "Your tenant directory starts here"}</h2><p>{query || access !== "all" ? "Try a different name or access filter." : "Invite a tenant to your company. They appear here after accepting."}</p>{(query || access !== "all") && <button className="secondary" onClick={() => setParams({})}>Clear filters</button>}</div> : <div className="table-wrap"><table className="tenant-directory"><thead><tr><th>Tenant</th><th>Phone</th><th>Portal access</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{rows.map(p => <tr key={p.userId}>
+        <td><div className="tenant-person"><span className="tenant-avatar small" aria-hidden="true">{(p.contactName || p.user.name || p.user.email).slice(0,1).toUpperCase()}</span><div><Link className="tenant-name" to={tenantPath(p.userId, params)}>{p.contactName || p.user.name || p.user.email}</Link><span className="cell-detail">{p.user.email}</span></div></div></td>
+        <td data-label="Phone">{p.contactPhone || "—"}</td><td data-label="Portal access"><span className={`tenant-status ${tenantPortalState(p) === "active" ? "" : "neutral"}`}>{tenantPortalState(p) === "active" ? "Active" : tenantPortalState(p) === "verification" ? "Verification needed" : "Disabled"}</span></td>
+        <td><Link className="tenant-row-action" to={tenantPath(p.userId, params)} aria-label={`View tenant ${p.contactName || p.user.name || p.user.email}`}>View tenant <span aria-hidden="true">→</span></Link></td>
+      </tr>)}</tbody></table></div>}
+    </section>
+    {can("members.manage") && <><EditorDialog open={inviting} title="Invite tenant" onClose={() => setInviting(false)}><InvitationForm companyId={data?.membership?.companyId} audience="tenants" reload={() => setInvitationRevision(v => v + 1)} /></EditorDialog><Invitations key={invitationRevision} audience="tenants" /></>}
+  </div>;
 }
-function ResidentEditor({ id, close }: { id: string; close: () => void }) {
+export function ResidentEditor({ id, close, mode = "contact", open = true }: { id: string; close: () => void; mode?: "contact" | "access"; open?: boolean }) {
   const { can } = useAuth();
-  const [accessEditing, setAccessEditing] = useState(false);
+  const helpId = useId();
+  const [accessEditing, setAccessEditing] = useState(mode === "access");
   const endpoint = `/api/company/resident-profiles/${encodeURIComponent(id)}`;
-  const r = useResource<Detail>(endpoint);
+  const r = useResource<ResidentProfileDetail>(endpoint);
   const [draft, setDraft] = useState<Profile>();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(true);
   const person = r.data;
+  useEffect(() => { if (person && !draft) setDraft(person); }, [person, draft]);
   return (
     <EditorDialog
-      open
-      title={
-        person
-          ? `Resident · ${person.contactName || person.user.name || person.user.email}`
-          : "Resident profile"
-      }
+      open={open}
+      title={mode === "access" ? "Tenant portal access" : "Tenant contact information"}
       onClose={close}
     >
       {r.error && (
@@ -204,6 +105,7 @@ function ResidentEditor({ id, close }: { id: string; close: () => void }) {
         !r.error && <p role="status">Loading profile…</p>
       ) : (
         <>
+          {mode === "contact" && <>
           <div className="profile-summary">
             <span className="avatar">
               {(person.contactName || person.user.name || person.user.email)
@@ -248,33 +150,45 @@ function ResidentEditor({ id, close }: { id: string; close: () => void }) {
                 r.reload();
               }}
             >
-              <div className="form-grid">
-                {Object.entries(fields).map(([name, label]) => (
-                  <label key={name}>
-                    {label}
-                    <input
-                      name={name}
-                      type={name.includes("Phone") ? "tel" : "text"}
-                      maxLength={name.includes("Phone") ? 40 : 200}
-                      defaultValue={draft[name as keyof typeof fields] || ""}
-                    />
-                  </label>
-                ))}
-              </div>
-              <label>
-                Internal management notes
-                <textarea
-                  name="managementNotes"
-                  defaultValue={draft.managementNotes || ""}
-                  maxLength={2000}
-                  rows={4}
-                />
-              </label>
-              <p className="help">
-                Contact details are optional and visible to company owners and
-                managers. This form does not change the sign-in email or company
-                role.
-              </p>
+              <p className="help">All fields are optional. Add the details your team needs to contact this tenant and manage their rental.</p>
+              {([
+                { title: "Tenant contact", fields: ["contactName", "contactPhone"] as const, help: "These details do not change the tenant’s sign-in email or company role." },
+                { title: "Emergency contact", fields: ["emergencyContactName", "emergencyContactPhone"] as const, help: "A person to contact in an emergency. This does not add a roommate or grant portal access." },
+              ]).map((section, index) => (
+                <fieldset key={section.title} className="form-section" aria-describedby={`${helpId}-${index}`}>
+                  <legend>{section.title}</legend>
+                  <p className="help" id={`${helpId}-${index}`}>{section.help}</p>
+                  <div className="form-grid">
+                    {section.fields.map(name => (
+                      <label key={name}>
+                        {residentContactFields[name]}
+                        <input
+                          name={name}
+                          type={name.includes("Phone") ? "tel" : "text"}
+                          maxLength={name.includes("Phone") ? 40 : 200}
+                          defaultValue={draft[name] || ""}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ))}
+              <fieldset className="form-section">
+                <legend>Internal notes</legend>
+                <label>
+                  Internal management notes
+                  <textarea
+                    name="managementNotes"
+                    aria-describedby={`${helpId}-notes`}
+                    defaultValue={draft.managementNotes || ""}
+                    maxLength={2000}
+                    rows={4}
+                  />
+                </label>
+                <p className="help" id={`${helpId}-notes`}>
+                  Contact details and notes are visible to company owners and managers. Notes can contain up to 2,000 characters.
+                </p>
+              </fieldset>
               <button
                 type="button"
                 className="secondary"
@@ -288,11 +202,11 @@ function ResidentEditor({ id, close }: { id: string; close: () => void }) {
             </Form>
           ) : (
             <dl className="details">
-              {Object.entries(fields).map(([name, label]) => (
+              {Object.entries(residentContactFields).map(([name, label]) => (
                 <div key={name}>
                   <dt>{label}</dt>
                   <dd>
-                    {person[name as keyof typeof fields] || "Not supplied"}
+                    {person[name as keyof typeof residentContactFields] || "Not supplied"}
                   </dd>
                 </div>
               ))}
@@ -304,7 +218,8 @@ function ResidentEditor({ id, close }: { id: string; close: () => void }) {
               </div>
             </dl>
           )}
-          {can("members.manage") && (
+          </>}
+          {mode === "access" && can("members.manage") && (
             <section className="editor-section">
               <h3>Company access</h3>
               {accessEditing ? (
@@ -365,51 +280,6 @@ function ResidentEditor({ id, close }: { id: string; close: () => void }) {
               )}
             </section>
           )}
-          <section className="editor-section">
-            <h3>Property access</h3>
-            {person.assignments.length ? (
-              <ul className="record-list">
-                {person.assignments.map(({ property }) => (
-                  <li key={property.id}>
-                    <div>
-                      <Link
-                        to={`/company/properties/${encodeURIComponent(property.id)}/residents`}
-                      >
-                        {property.name}
-                      </Link>
-                      <p>{property.address}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>No properties assigned.</p>
-            )}
-            <p className="help">
-              Use Manage residents in a property's workspace to change
-              assignments.
-            </p>
-          </section>
-          <details className="editor-section">
-            <summary>Resident activity</summary>
-            <p className="help">
-              Latest 100 events for this resident in this company.
-            </p>
-            {person.activity.length ? (
-              <ol className="activity-list">
-                {person.activity.map((e) => (
-                  <li key={e.id}>
-                    <strong>{e.action.replace(/\./g, " ")}</strong>
-                    <time dateTime={e.createdAt}>
-                      {new Date(e.createdAt).toLocaleString()}
-                    </time>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <p>No recorded activity.</p>
-            )}
-          </details>
         </>
       )}
     </EditorDialog>

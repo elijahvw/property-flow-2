@@ -142,15 +142,12 @@ test("resident profile is a focused form with conflict recovery, assignments, ac
 }) => {
   const state = await fixture(page);
   await page.goto("/company/residents");
-  const manage = page.getByRole("button", {
-    name: "Manage resident",
-    exact: true,
-  });
+  const manage = page.getByRole("link", { name: /View tenant/ });
   await manage.click();
+  await expect(page.getByRole("link", { name: "Maple House" })).toBeVisible();
+  await page.getByRole("button", { name: "Edit resident profile" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("link", { name: "Maple House" })).toBeVisible();
-  await dialog.getByRole("button", { name: "Edit resident profile" }).click();
   await dialog.getByLabel("Contact phone", { exact: true }).fill("555-0123");
   await dialog.getByLabel("Internal management notes").fill("Call after 5 PM");
   state.version = 2;
@@ -167,8 +164,9 @@ test("resident profile is a focused form with conflict recovery, assignments, ac
   await expect(dialog.getByText("555-0123", { exact: true })).toBeVisible();
   expect(state.version).toBe(3);
   expect(state.notes).toBe("Call after 5 PM");
-  await dialog.getByText("Resident activity", { exact: true }).click();
-  await expect(dialog.getByText("membership assigned")).toBeVisible();
+  await dialog.getByRole("button", {name:"Close",exact:true}).click();
+  await expect(page.getByText("membership assigned")).toBeVisible();
+  await page.getByRole("button", {name:"Edit resident profile",exact:true}).click();
   await page.screenshot({
     path: "/tmp/propertyflow-resident-profile-desktop.png",
     fullPage: false,
@@ -189,7 +187,7 @@ test("resident profile is a focused form with conflict recovery, assignments, ac
   });
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
-  await expect(manage).toBeFocused();
+  await expect(page.getByRole("button", {name:"Edit resident profile",exact:true})).toBeFocused();
 });
 test("staff and residents cannot mount or fetch management contact records", async ({
   page,
@@ -243,9 +241,9 @@ test("resident editor cannot be dismissed while a save is pending", async ({
   );
   try {
     await page.goto("/company/residents");
-    await page.getByRole("button", { name: "Manage resident" }).click();
+    await page.getByRole("link", { name: /View tenant/ }).click();
+    await page.getByRole("button", { name: "Edit resident profile" }).click();
     const dialog = page.getByRole("dialog");
-    await dialog.getByRole("button", { name: "Edit resident profile" }).click();
     await dialog.getByLabel("Contact phone", { exact: true }).fill("555-0123");
     await dialog.getByRole("button", { name: "Save resident profile" }).click();
     await expect(

@@ -325,14 +325,14 @@ test("October retained then voided is explained separately from next November; r
     .getByRole("button", { name: "Check next installment", exact: true })
     .click();
   await expect(
-    page.getByText(/Next installment 2026-11 posts 2026-11-01/),
-  ).toContainText("2026-10 was already processed");
+    page.getByText(/Next installment November 2026 posts November 1, 2026/),
+  ).toContainText("October 2026 was already processed");
   expect(state.reposts).toHaveLength(0);
   await page
     .getByText("Posting history · latest page", { exact: true })
     .click();
   await page
-    .getByRole("button", { name: "Review repost for 2026-10", exact: true })
+    .getByRole("button", { name: "Review repost for October 2026", exact: true })
     .click();
   await expect(page.getByRole("dialog")).toContainText("$1,000.00");
   await page.getByLabel("Reason for reposting").fill("Restore October test");
@@ -352,7 +352,7 @@ test("October retained then voided is explained separately from next November; r
     .getByText("Posting history · latest page", { exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: "Review repost for 2026-10" }),
+    page.getByRole("button", { name: "Review repost for October 2026" }),
   ).not.toBeVisible();
 });
 test("voided history uses its original stopped schedule when a newer schedule is current", async ({
@@ -371,7 +371,7 @@ test("voided history uses its original stopped schedule when a newer schedule is
       "/api/company/rent-schedules/schedule-a/repost-preview",
   );
   await page
-    .getByRole("button", { name: "Review repost for 2026-10", exact: true })
+    .getByRole("button", { name: "Review repost for October 2026", exact: true })
     .click();
   await preview;
   await expect(page.getByRole("dialog")).toContainText("$1,000.00");
@@ -514,6 +514,6 @@ test("renewal review carries forward context, stays a draft and preserves retry 
   expect(state.parent.rentCents).toBe(100000);
   expect(state.rows).toHaveLength(2);
   await expect(
-    page.getByText("Renewal · previous term ended 2026-12-31"),
+    page.getByText("Renewal · previous term ended December 31, 2026"),
   ).toBeVisible();
 });

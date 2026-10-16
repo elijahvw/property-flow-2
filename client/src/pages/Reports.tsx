@@ -1,3 +1,5 @@
+import { formatDate } from "../dates";
+import { DateField } from "../components/DateField";
 import { usePropertySearchParams } from "../usePropertySearchParams";
 
 import { PropertyNavigation } from "../components/PropertyNavigation";
@@ -122,6 +124,10 @@ function Builder({ today }: { today: string }) {
     [report, setReport] = useState<Report>(),
     [page, setPage] = useState(0),
     [running, setRunning] = useState(false);
+  const initialFrom = params.get("dateFrom") || `${today.slice(0, 4)}-01-01`,
+    initialTo = params.get("dateTo") || today;
+  const [dateFrom, setDateFrom] = useState(initialFrom), [dateTo, setDateTo] = useState(initialTo);
+  useEffect(() => { setDateFrom(initialFrom); setDateTo(initialTo); }, [initialFrom, initialTo]);
   const routeProperty = params.get("propertyId") || "",
     routeKind = params.get("kind");
   useEffect(() => {
@@ -301,24 +307,24 @@ function Builder({ today }: { today: string }) {
               <>
                 <label>
                   From date
-                  <input
+                  <DateField
                     key={params.get("dateFrom")}
-                    name="dateFrom"
-                    type="date"
+                    name="dateFrom" aria-label="From date"
                     required
-                    defaultValue={
-                      params.get("dateFrom") || `${today.slice(0, 4)}-01-01`
-                    }
+                    value={dateFrom}
+                    onChange={event => setDateFrom(event.target.value)}
+                    max={dateTo || undefined}
                   />
                 </label>
                 <label>
                   Through date
-                  <input
+                  <DateField
                     key={params.get("dateTo")}
-                    name="dateTo"
-                    type="date"
+                    name="dateTo" aria-label="Through date"
                     required
-                    defaultValue={params.get("dateTo") || today}
+                    value={dateTo}
+                    onChange={event => setDateTo(event.target.value)}
+                    min={dateFrom || undefined}
                   />
                 </label>
               </>
@@ -394,7 +400,7 @@ function Builder({ today }: { today: string }) {
           {report.kind === "cash" ? (
             <>
               <p>
-                {report.filters.dateFrom} through {report.filters.dateTo} ·{" "}
+                {formatDate(report.filters.dateFrom)} through {formatDate(report.filters.dateTo)} ·{" "}
                 {report.summary.voidedCount} voided records excluded from totals
               </p>
               <div className="metric-grid">
@@ -476,7 +482,7 @@ function Builder({ today }: { today: string }) {
                   <tbody>
                     {report.items.slice(page * 50, page * 50 + 50).map((r) => (
                       <tr key={r.id}>
-                        <td>{r.occurredOn}</td>
+                        <td>{formatDate(r.occurredOn)}</td>
                         <td>{r.property.name}</td>
                         <td>
                           {r.kind} · {r.category.replace("_", " ")}
@@ -534,7 +540,7 @@ function Builder({ today }: { today: string }) {
                         </td>
                         <td>{r.resident.name || r.resident.email}</td>
                         <td>
-                          {r.startsOn} — {r.endsOn || "Open ended"}
+                          {formatDate(r.startsOn)} — {formatDate(r.endsOn, "Open ended")}
                         </td>
                         <td>{dollars(r.rentCents)}</td>
                         <td>

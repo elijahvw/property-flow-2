@@ -1,3 +1,5 @@
+import { formatDate, formatMonth } from "../dates";
+import { DateField } from "../components/DateField";
 import {
   RentRepost,
   pendingRepost,
@@ -82,10 +84,10 @@ function Preview({ items }: { items: Installment[] }) {
       {items.map((item) => (
         <li key={item.periodOn}>
           <strong>
-            {item.periodOn.slice(0, 7)} · {dollars(String(item.amountCents))}
+            {formatMonth(item.periodOn)} · {dollars(String(item.amountCents))}
           </strong>
           <span>
-            Post {item.postOn.slice(0, 10)} · due {item.dueOn.slice(0, 10)}
+            Post {formatDate(item.postOn)} · due {formatDate(item.dueOn)}
           </span>
           <small>
             {
@@ -197,8 +199,8 @@ export function RentSchedule({
           </div>
           <p className="help">
             Posts {schedule.leadDays} calendar days before due.{" "}
-            {schedule.firstPeriodOn.slice(0, 7)} through{" "}
-            {schedule.lastPeriodOn?.slice(0, 7) || "lease end or manual stop"}.{" "}
+            {formatMonth(schedule.firstPeriodOn)} through{" "}
+            {formatMonth(schedule.lastPeriodOn, "lease end or manual stop")}.{" "}
             {schedule.firstAmountCents !== null &&
               `First month ${dollars(String(schedule.firstAmountCents))}. `}
             {schedule.lastAmountCents !== null &&
@@ -251,7 +253,7 @@ export function RentSchedule({
                       setNote(
                         result.outcome === "not_due"
                           ? result.periodOn && result.postOn
-                            ? `Next installment ${result.periodOn.slice(0, 7)} posts ${result.postOn.slice(0, 10)} (due ${result.dueOn?.slice(0, 10)}; company date ${result.businessDate}).${result.previousInstallment?.voided ? ` ${result.previousInstallment.periodOn.slice(0, 7)} was already processed and its charge is now voided. Review a repost below to bill that month again.` : ""}`
+                            ? `Next installment ${formatMonth(result.periodOn)} posts ${formatDate(result.postOn)} (due ${formatDate(result.dueOn)}; company date ${formatDate(result.businessDate)}).${result.previousInstallment?.voided ? ` ${formatMonth(result.previousInstallment.periodOn)} was already processed and its charge is now voided. Review a repost below to bill that month again.` : ""}`
                             : "The next installment is not due for posting yet."
                           : "Billing check complete. Review the posting history.",
                       );
@@ -305,7 +307,7 @@ export function RentSchedule({
               <li key={row.id}>
                 <div>
                   <strong>
-                    {row.periodOn.slice(0, 7)} ·{" "}
+                    {formatMonth(row.periodOn)} ·{" "}
                     {row.outcome === "posted"
                       ? "Automatically posted"
                       : row.outcome === "existing"
@@ -314,7 +316,7 @@ export function RentSchedule({
                   </strong>
                   <p className="help">
                     {row.charge &&
-                      `${dollars(String(row.charge.amountCents))} · due ${row.charge.dueOn.slice(0, 10)}${row.charge.voidedAt ? " · now voided" : ""} · `}
+                      `${dollars(String(row.charge.amountCents))} · due ${formatDate(row.charge.dueOn)}${row.charge.voidedAt ? " · now voided" : ""} · `}
                     {new Date(row.createdAt).toLocaleString()}
                   </p>
                 </div>
@@ -331,7 +333,7 @@ export function RentSchedule({
                   (row.scheduleId || schedule?.id) && (
                     <Form
                       operation="page.data.load"
-                      label={`Review repost for ${row.periodOn.slice(0, 7)}`}
+                      label={`Review repost for ${formatMonth(row.periodOn)}`}
                       submit={async () => {
                         setRepostError("");
                         const review = await api<RepostReview>(
@@ -516,9 +518,8 @@ function ScheduleSetup({
           post {reviewed.config.leadDays} days before due.
         </p>
         <p className="help">
-          Rent months {reviewed.config.firstPeriodOn.slice(0, 7)} through{" "}
-          {reviewed.config.lastPeriodOn?.slice(0, 7) ||
-            "lease end or manual stop"}
+          Rent months {formatMonth(reviewed.config.firstPeriodOn)} through{" "}
+          {formatMonth(reviewed.config.lastPeriodOn, "lease end or manual stop")}
           . First amount{" "}
           {dollars(
             String(
@@ -538,7 +539,7 @@ function ScheduleSetup({
           )}
           .{" "}
           {reviewed.config.firstDueOn &&
-            `First due date ${reviewed.config.firstDueOn.slice(0, 10)}.`}
+            `First due date ${formatDate(reviewed.config.firstDueOn)}.`}
         </p>
         <Preview items={reviewed.preview} />
         <p className="notice">
@@ -654,9 +655,8 @@ function ScheduleSetup({
         </label>
         <label>
           First due date override (optional)
-          <input
-            name="firstDueOn"
-            type="date"
+          <DateField
+            name="firstDueOn" aria-label="First due date override (optional)"
             defaultValue={draft.firstDueOn || ""}
           />
         </label>

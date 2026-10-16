@@ -204,8 +204,8 @@ test("lease create and edit use complete payment terms, preserve clear instructi
     )
     .fill("Pay at the office.");
   await expect(
-    page.getByText(/Example: November rent due 2026-11-30/),
-  ).toContainText("past grace from 2026-12-06");
+    page.getByText(/Example: November rent due November 30, 2026/),
+  ).toContainText("past grace from December 6, 2026");
   await page.getByRole("button",{name:"Review lease",exact:true}).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
@@ -257,9 +257,9 @@ test("charge preview uses clamped due day and preserves the reviewed grace polic
     .click();
   await page.getByLabel("Rent month", { exact: true }).fill("2027-02");
   await expect(page.getByLabel("Due date")).toHaveValue("2027-02-28");
-  await expect(page.getByText(/Grace through 2027-03-05/)).toBeVisible();
+  await expect(page.getByText(/Grace through March 5, 2027/)).toBeVisible();
   await page.getByLabel("Due date").fill("2027-02-20");
-  await expect(page.getByText(/Grace through 2027-02-25/)).toBeVisible();
+  await expect(page.getByText(/Grace through February 25, 2027/)).toBeVisible();
   await page
     .getByRole("button", { name: "Post rent charge", exact: true })
     .click();
@@ -329,7 +329,7 @@ test("dashboard collections drilldown, account filters, charge grace statuses an
   await page.getByRole("link", { name: "Open ledger →" }).click();
   await expect(page.getByText("within grace", { exact: true })).toBeVisible();
   await expect(page.getByText("past grace", { exact: true })).toBeVisible();
-  await expect(page.getByText(/through 2026-10-15/)).toBeVisible();
+  await expect(page.getByText(/through October 15, 2026/)).toBeVisible();
   await page.screenshot({
     path: "/tmp/pf-collections-ledger-desktop.png",
     fullPage: true,
@@ -360,7 +360,7 @@ test("resident sees shared payment terms and saved charge grace without manageme
   await expect(
     page.getByRole("button", { name: "Post monthly rent", exact: true }),
   ).toHaveCount(0);
-  await expect(page.getByText(/through 2026-10-15/)).toBeVisible();
+  await expect(page.getByText(/through October 15, 2026/)).toBeVisible();
 });
 
 test("a capped initial rent query retains independent property scope and recovers without fabricating balances", async ({

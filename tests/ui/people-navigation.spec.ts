@@ -194,12 +194,10 @@ test("team and tenants have distinct people, roles, invitations and focused acce
   });
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page
-    .getByRole("button", { name: "Manage resident", exact: true })
+    .getByRole("link", { name: /View tenant/ })
     .click();
   await expect(
-    page
-      .getByRole("dialog")
-      .getByRole("link", { name: "Maple House", exact: true }),
+    page.getByRole("link", { name: "Maple House", exact: true }),
   ).toHaveAttribute("href", "/company/properties/maple/residents");
   await page
     .getByRole("button", { name: "Edit tenant access", exact: true })
@@ -217,6 +215,7 @@ test("team and tenants have distinct people, roles, invitations and focused acce
     { role: "resident", status: "disabled", expectedVersion: 3 },
   ]);
   await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("link", {name:"All tenants",exact:true}).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
     page.getByRole("heading", { name: "Tenants", exact: true }),
@@ -226,7 +225,7 @@ test("team and tenants have distinct people, roles, invitations and focused acce
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
-  await expect(page.getByRole("button", {name:"Manage resident",exact:true})).toBeInViewport({ratio:1});
+  await expect(page.getByRole("link", {name:/View tenant/})).toBeInViewport({ratio:1});
   await page.screenshot({
     path: "/tmp/pf-tenant-directory-mobile.png",
     fullPage: true,
@@ -238,7 +237,7 @@ test("stale tenant access cannot silently overwrite another change and managers 
   const state = await fixture(page);
   await page.goto("/company/residents");
   await page
-    .getByRole("button", { name: "Manage resident", exact: true })
+    .getByRole("link", { name: /View tenant/ })
     .click();
   await page
     .getByRole("button", { name: "Edit tenant access", exact: true })
@@ -259,7 +258,7 @@ test("stale tenant access cannot silently overwrite another change and managers 
     page.getByRole("heading", { name: "Tenant invitations", exact: true }),
   ).toHaveCount(0);
   await page
-    .getByRole("button", { name: "Manage resident", exact: true })
+    .getByRole("link", { name: /View tenant/ })
     .click();
   await expect(
     page.getByRole("button", { name: "Edit tenant access", exact: true }),

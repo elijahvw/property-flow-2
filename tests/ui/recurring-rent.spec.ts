@@ -235,7 +235,7 @@ test("billing is opt in and reviewed before activation; date preview and mobile 
     page.getByText(/First amount \$500.00; final amount \$1,000.00/),
   ).toBeVisible();
   await expect(
-    page.getByText("Post 2026-11-27 · due 2026-11-30"),
+    page.getByText("Post November 27, 2026 · due November 30, 2026"),
   ).toBeVisible();
   await expect(page.getByText("Already posted — no duplicate")).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
@@ -332,7 +332,7 @@ test("a caught-up account retains paid-late history for manager and CSV", async 
   ).toBeVisible();
   await expect(page.getByText("paid late", { exact: true })).toBeVisible();
   await expect(
-    page.getByText("Paid 2026-09-10", { exact: false }),
+    page.getByText("Paid September 10, 2026", { exact: false }),
   ).toBeVisible();
   await page.screenshot({
     path: "/tmp/pf-recurring-ledger-desktop.png",

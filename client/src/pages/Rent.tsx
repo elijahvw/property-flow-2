@@ -1,4 +1,7 @@
+import { formatDate, formatMonth } from "../dates";
+import { DateField } from "../components/DateField";
 import { usePropertySearchParams } from "../usePropertySearchParams";
+import { TenantReturnLink } from "../components/TenantReturnLink";
 import { DepositPanel } from "./Deposits";
 import { RecordIdentity } from "../components/RecordIdentity";
 import { RentSchedule } from "./RentSchedule";
@@ -246,6 +249,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
         />
       )}
       <header className="page-heading">
+        {!resident && <TenantReturnLink />}
         <p className="eyebrow">
           {resident ? "My rental" : "Money · Rent operations"}
         </p>
@@ -508,8 +512,8 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                                 <span className="badge">{a.lease.status}</span>
                               </p>
                               <small>
-                                {a.lease.startsOn.slice(0, 10)} –{" "}
-                                {a.lease.endsOn?.slice(0, 10) || "Open-ended"}
+                                {formatDate(a.lease.startsOn)} –{" "}
+                                {formatDate(a.lease.endsOn, "Open ended")}
                               </small>
                             </div>
                             <div className="rent-account-balance">
@@ -574,7 +578,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
             )
           )}
           <p className="help">
-            As of {r.data.businessDate} in your company timezone. Last updated{" "}
+            As of {formatDate(r.data.businessDate)} in your company timezone. Last updated{" "}
             {new Date(r.data.generatedAt).toLocaleTimeString()}. Past due means
             a posted unpaid charge has a due date before today. Past grace means
             its saved grace window has also ended. Aging uses the due date; no
@@ -666,8 +670,8 @@ function LeaseLedger({
             <span className="badge">{lease.status}</span>
           </p>
           <p>
-            {lease.startsOn.slice(0, 10)} –{" "}
-            {lease.endsOn?.slice(0, 10) || "Open-ended"} ·{" "}
+            {formatDate(lease.startsOn)} –{" "}
+            {formatDate(lease.endsOn, "Open ended")} ·{" "}
             {dollars(lease.rentCents)} monthly
           </p>
           <p>
@@ -888,13 +892,13 @@ function LeaseLedger({
                   <div>
                     <h3>
                       {tab === "charges"
-                        ? `Rent · ${row.periodOn?.slice(0, 7)}`
+                        ? `Rent · ${formatMonth(row.periodOn)}`
                         : "Payment received"}
                     </h3>
                     <p>
                       {tab === "charges"
-                        ? `Due ${row.dueOn?.slice(0, 10)}`
-                        : row.occurredOn?.slice(0, 10)}
+                        ? `Due ${formatDate(row.dueOn)}`
+                        : formatDate(row.occurredOn)}
                     </p>
                     {row.memo && <p>{row.memo}</p>}
                     {tab === "charges" && row.collectionStatus && (
@@ -908,7 +912,7 @@ function LeaseLedger({
                         </span>
                         <p>
                           {row.settledOn
-                            ? `Paid ${row.settledOn} · fully paid`
+                            ? `Paid ${formatDate(row.settledOn)} · fully paid`
                             : `${dollars(row.remainingCents || "0")} unpaid · ${row.daysPastDue || 0} days past due`}
                         </p>
                         {BigInt(row.paidAfterGraceCents ?? "0") > 0n && (
@@ -919,8 +923,8 @@ function LeaseLedger({
                         )}
                         <p className="help">
                           {row.graceDays} days grace · through{" "}
-                          {row.graceThrough} · past grace from{" "}
-                          {row.afterGraceOn}
+                          {formatDate(row.graceThrough)} · past grace from{" "}
+                          {formatDate(row.afterGraceOn)}
                         </p>
                       </>
                     )}
@@ -938,9 +942,7 @@ function LeaseLedger({
                           ?.filter((a) => a.entryId === row.id)
                           .map((a) => (
                             <li key={a.id}>
-                              {account.charges
-                                ?.find((c) => c.id === a.chargeId)
-                                ?.periodOn?.slice(0, 7)}{" "}
+                              {formatMonth(account.charges?.find(c => c.id === a.chargeId)?.periodOn)}{" "}
                               rent · {dollars(a.amountCents)}
                             </li>
                           ))}
@@ -1252,10 +1254,9 @@ function RentDraft({
             </label>
             <label>
               Due date
-              <input
+              <DateField
                 key={month}
-                name="dueOn"
-                type="date"
+                name="dueOn" aria-label="Due date"
                 required
                 value={actualDue}
                 onChange={(e) =>
@@ -1267,9 +1268,8 @@ function RentDraft({
         ) : (
           <label>
             Date received
-            <input
-              name="occurredOn"
-              type="date"
+            <DateField
+              name="occurredOn" aria-label="Date received"
               required
               defaultValue={pending?.occurredOn || today}
               max={today}
@@ -1302,7 +1302,7 @@ function RentDraft({
       </fieldset>
       {mode === "charge" && (
         <p className="policy-example">
-          Grace through {grace.through} · past grace from {grace.after}. This
+          Grace through {formatDate(grace.through)} · past grace from {formatDate(grace.after)}. This
           charge saves {savedGrace} grace days. No late fee is generated.
         </p>
       )}

@@ -32,6 +32,7 @@ import { FeedbackProvider } from "./components/Feedback";
 import { Reports } from "./pages/Reports";
 import { NavigationIcon } from "./components/NavigationIcon";
 import { ResidentProfiles } from "./pages/ResidentProfiles";
+import { ResidentDetail } from "./pages/ResidentDetail";
 import { Maintenance } from "./pages/Maintenance";
 import { Deposits } from "./pages/Deposits";
 import { Rent } from "./pages/Rent";
@@ -72,6 +73,8 @@ function Shell({ children }: { children: React.ReactNode }) {
     routes.find((r) => r.path === location.pathname) ||
     (location.pathname.startsWith("/company/properties/")
       ? routes.find((r) => r.path === "/company/properties")
+      : location.pathname.startsWith("/company/residents/")
+        ? routes.find((r) => r.path === "/company/residents")
       : undefined);
   useEffect(() => {
     document.title = `${route?.title || "Property Flow"} · Property Flow`;
@@ -268,6 +271,10 @@ function Pages() {
           }
         />
       ))}
+      <Route
+        path="/company/residents/:userId"
+        element={<Shell><ProtectedRoute permission="resident.assignment.manage"><ResidentDetail /></ProtectedRoute></Shell>}
+      />
       <Route
         path="/company/properties/:propertyId/residents"
         element={

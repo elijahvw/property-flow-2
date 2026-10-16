@@ -1,3 +1,4 @@
+import { formatDate, formatMonth } from "../dates";
 import { useState } from "react";
 import { api, ApiError } from "../api";
 import { Form } from "./Workspace";
@@ -88,11 +89,11 @@ export function RentRepost({
       }}
     >
       <p className="eyebrow">
-        One-time recovery · {review.periodOn.slice(0, 7)}
+        One-time recovery · {formatMonth(review.periodOn)}
       </p>
       <p>
         <strong>{dollars(review.amountCents)}</strong> · due{" "}
-        {review.dueOn.slice(0, 10)} · {review.graceDays} days grace.
+        {formatDate(review.dueOn)} · {review.graceDays} days grace.
       </p>
       <p className="notice">
         This creates one replacement charge using the saved schedule terms. The

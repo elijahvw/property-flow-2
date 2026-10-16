@@ -1,3 +1,4 @@
+import { formatDate } from "../dates";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
@@ -355,7 +356,7 @@ function OverviewWorkspace() {
                     <Link to={url("/company/reports")}>Reports</Link>
                   </div>
                   <p className="help">
-                    {d.cash.dateFrom} – {d.cash.dateTo} · received / paid
+                    {formatDate(d.cash.dateFrom)} – {formatDate(d.cash.dateTo)} · received / paid
                   </p>
                   <dl className="cash-summary">
                     <div>
@@ -401,7 +402,7 @@ function OverviewWorkspace() {
                             <strong>
                               {l.property.name} · {l.unit.label}
                             </strong>
-                            <span>Ends {l.endsOn.slice(0, 10)}</span>
+                            <span>Ends {formatDate(l.endsOn)}</span>
                           </Link>
                         </li>
                       ))}

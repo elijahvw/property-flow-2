@@ -1,3 +1,4 @@
+import { formatDate } from "../dates";
 import { useState } from "react";
 import { api, ApiError } from "../api";
 import { Form } from "../pages/Workspace";
@@ -74,8 +75,8 @@ export function LeaseReview({
         <div>
           <dt>Term</dt>
           <dd>
-            {String(p.startsOn)} through{" "}
-            {p.endsOn ? String(p.endsOn) : "Open-ended"}
+            {formatDate(String(p.startsOn))} through{" "}
+            {formatDate(p.endsOn ? String(p.endsOn) : null, "Open ended")}
           </dd>
         </div>
         <div>

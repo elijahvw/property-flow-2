@@ -124,6 +124,8 @@ async function sources(tx: Tx, companyId: string, leaseIds: string[]) {
   );
   return { charges, payments, allocations };
 }
+// Connected workspaces use the same bounded sources and balance rules as rent.
+export { sources as readRentSources };
 // Persistent allocations retain their original source identity. A voided payment's
 // allocations stay in history but contribute zero to current balances.
 export function rentBalances(

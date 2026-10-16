@@ -1,3 +1,5 @@
+import { formatDate } from "../dates";
+import { DateField } from "../components/DateField";
 import { usePropertySearchParams } from "../usePropertySearchParams";
 import { RecordIdentity } from "../components/RecordIdentity";
 import { Link } from "react-router-dom";
@@ -182,7 +184,7 @@ function LedgerWorkspace() {
             </label>
             <label>
               Date received or paid
-              <input name="occurredOn" type="date" required />
+              <DateField name="occurredOn" aria-label="Date received or paid" required />
             </label>
             <label>
               Amount (USD)
@@ -264,19 +266,17 @@ function LedgerWorkspace() {
           </label>
           <label>
             From date
-            <input
+            <DateField
               key={filters.dateFrom}
-              name="dateFrom"
-              type="date"
+              name="dateFrom" aria-label="From date"
               defaultValue={filters.dateFrom}
             />
           </label>
           <label>
             Through date
-            <input
+            <DateField
               key={filters.dateTo}
-              name="dateTo"
-              type="date"
+              name="dateTo" aria-label="Through date"
               defaultValue={filters.dateTo}
             />
           </label>
@@ -329,7 +329,7 @@ function LedgerWorkspace() {
                       · {dollars(entry.amountCents)}
                     </h3>
                     <p>
-                      {entry.occurredOn.slice(0, 10)} ·{" "}
+                      {formatDate(entry.occurredOn)} ·{" "}
                       {entry.category.replace("_", " ")}
                     </p>
                     {entry.depositReceipt && (
@@ -399,7 +399,7 @@ function LedgerWorkspace() {
         >
           <p>
             {selected.property.name} · {dollars(selected.amountCents)} ·{" "}
-            {selected.occurredOn.slice(0, 10)}
+            {formatDate(selected.occurredOn)}
           </p>
           <Form
             key={`${selected.id}:${selected.version}`}

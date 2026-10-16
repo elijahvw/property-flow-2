@@ -1,9 +1,11 @@
+import { formatDate } from "../dates";
+import { DateField } from "../components/DateField";
 import {
   LeaseReview,
   leasePending,
   type LeaseReviewData,
 } from "../components/LeaseReview";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -520,15 +522,14 @@ function LeaseList() {
                         {lease.status}
                       </p>
                       <p>
-                        {lease.startsOn.slice(0, 10)} to{" "}
-                        {lease.endsOn?.slice(0, 10) || "Open-ended"} ·{" "}
+                        {formatDate(lease.startsOn)} to{" "}
+                        {formatDate(lease.endsOn, "Open ended")} ·{" "}
                         {usd(lease.rentCents)} monthly
                       </p>
                       {lease.previousLeaseId && (
                         <p className="help">
                           Renewal · previous term ended{" "}
-                          {lease.previousLease?.endsOn?.slice(0, 10) ||
-                            "on record"}
+                          {formatDate(lease.previousLease?.endsOn, "on record")}
                         </p>
                       )}
                     </div>
@@ -561,7 +562,7 @@ function LeaseList() {
                       {lease.renewals?.length ? (
                         <span className="help">
                           {lease.renewals[0].status} renewal starts{" "}
-                          {lease.renewals[0].startsOn.slice(0, 10)}
+                          {formatDate(lease.renewals[0].startsOn)}
                         </span>
                       ) : null}
                       <button
@@ -823,58 +824,62 @@ function LeaseTerms({
   value?: Lease;
   draftOnly?: boolean;
 }) {
+  const endDateHelpId = useId();
   return (
     <>
-      <div className="form-grid">
-        <label>
-          {prefix} start date
-          <input
-            name="startsOn"
-            type="date"
-            required
-            defaultValue={value?.startsOn.slice(0, 10)}
-          />
-        </label>
-        <div>
+      <fieldset className="form-section">
+        <legend>Lease dates and rent</legend>
+        <p className="help">Start date and monthly rent are required. Dates use the month name, day and year.</p>
+        <div className="form-grid">
           <label>
-            {prefix} end date
-            <input
-              name="endsOn"
-              type="date"
-              defaultValue={value?.endsOn?.slice(0, 10)}
+            {prefix} start date
+            <DateField
+              name="startsOn" aria-label={`${prefix} start date`}
+              required
+              defaultValue={value?.startsOn.slice(0, 10)}
             />
           </label>
-          <p className="help">
-            Leave blank for an open-ended record; ended records require a date.
-          </p>
+          <div>
+            <label>
+              {prefix} end date
+              <DateField
+                name="endsOn" aria-label={`${prefix} end date`}
+                aria-describedby={endDateHelpId}
+                defaultValue={value?.endsOn?.slice(0, 10)}
+              />
+            </label>
+            <p className="help" id={endDateHelpId}>
+              Leave blank for an open-ended record; ended records require a date.
+            </p>
+          </div>
+          <label>
+            {prefix} monthly rent (USD)
+            <input
+              name="monthlyRent"
+              type="number"
+              min="0"
+              max="1000000"
+              step="0.01"
+              required
+              defaultValue={
+                value ? (value.rentCents / 100).toFixed(2) : undefined
+              }
+            />
+          </label>
+          <label>
+            {prefix} status
+            <select
+              name="status"
+              defaultValue={draftOnly ? "draft" : value?.status || "draft"}
+              disabled={draftOnly}
+            >
+              <option value="draft">Draft</option>
+              {!draftOnly && <option value="active">Active</option>}
+              {!draftOnly && <option value="ended">Ended</option>}
+            </select>
+          </label>
         </div>
-        <label>
-          {prefix} monthly rent (USD)
-          <input
-            name="monthlyRent"
-            type="number"
-            min="0"
-            max="1000000"
-            step="0.01"
-            required
-            defaultValue={
-              value ? (value.rentCents / 100).toFixed(2) : undefined
-            }
-          />
-        </label>
-        <label>
-          {prefix} status
-          <select
-            name="status"
-            defaultValue={draftOnly ? "draft" : value?.status || "draft"}
-            disabled={draftOnly}
-          >
-            <option value="draft">Draft</option>
-            {!draftOnly && <option value="active">Active</option>}
-            {!draftOnly && <option value="ended">Ended</option>}
-          </select>
-        </label>
-      </div>
+      </fieldset>
       <PaymentTerms prefix={prefix} value={value} />
     </>
   );
@@ -933,9 +938,9 @@ function PaymentTerms({ prefix, value }: { prefix: string; value?: Lease }) {
         timezone.
       </p>
       <p className="policy-example">
-        Example: November rent due {preview.toISOString().slice(0, 10)} · grace
-        through {through.toISOString().slice(0, 10)} · past grace from{" "}
-        {after.toISOString().slice(0, 10)}.
+        Example: November rent due {formatDate(preview.toISOString())} · grace
+        through {formatDate(through.toISOString())} · past grace from{" "}
+        {formatDate(after.toISOString())}.
       </p>
       <label>
         {prefix} payment instructions shared with resident (optional)
@@ -1017,7 +1022,7 @@ function LeaseRenewal({
             {previous.resident.name || previous.resident.email}
           </p>
           <p className="notice">
-            Previous term ends {previous.endsOn!.slice(0, 10)}. Review a new
+            Previous term ends {formatDate(previous.endsOn)}. Review a new
             term starting afterward. This does not end the previous lease or
             stop its rent schedule.
           </p>
