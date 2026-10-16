@@ -1,0 +1,37 @@
+# Offline tenant contacts: PF-03a identity bridge
+
+This is the first reviewable slice of PF-03, based on merged PR #34 / main `0e492f8`. The user reports #34 deployed. The [backlog](product-backlog.md) splits contact identity/backfill, offline contact and lease forms, and verified portal linking into separate reviews.
+
+## Implemented contract
+
+`ResidentContact` is a company-owned business identity with a name, optional email/phone, emergency contact and management notes. Its optional `userId` maps an existing account by its exact stored identifier. This mapping grants no membership, property assignment, portal permission or financial access. No identity-provider users or invitations are created by this bridge.
+
+Migration `202610160017_resident_contacts` runs in an explicit PostgreSQL transaction. It backfills current resident memberships and historical lease/household identities, using a distinct contact for each company/User pair. It copies membership contact/private fields only from that same company's membership, including a former resident now assigned a staff/manager role when lease history establishes the contact. A transferred person's current company's notes cannot populate their former company's contact. Original identity names/emails are bounded display snapshots; the original User and membership fields remain intact.
+
+Unlinked household records receive separate contacts, even when their names or emails match each other or a linked account. There is no automatic deduplication or merge. Previously recorded unlinked residents in different leases remain distinct because their common identity has not been reviewed. New renewal drafts reuse the source participant's contact ID; they still require the existing explicit owner portal approval. A null bridge left by an earlier-version rollout is filled on its source roster before copying; transferred accounts use the historical roster snapshot and receive no new access.
+
+Leases gain `residentContactId`; household participants gain `contactId`. Composite foreign keys keep both within their company. Existing lease, User, participant, rent, receipt, allocation, deposit, reference, submission, version and audit identities remain unchanged. Neither household size nor the new contact table changes the shared financial obligation.
+
+New application membership, lease, household and accepted-invitation writes create/reuse contacts in their existing serializable transactions. Retries reuse the committed source and contact. Profile edits update the membership compatibility fields and contact together; an audit failure rolls both back. Household edits remain lease-specific for linked and record-only participants; independent source/renewal participant versions cannot overwrite shared contact details. Company profile edits update linked contact details. A dedicated versioned contact editor follows with PF-03b. Removing a participant, disabling access or transferring a membership retains contacts and money history. Before a transfer or role/ownership change, a private compatibility-profile snapshot detects fields edited by the previous application during rollout. Only changed source fields are reconciled into the departing company's contact, preserving independently curated fields whose compatibility values have not changed. Transfers then clear membership private fields and create/reuse the distinct target-company contact.
+
+Contacts have forced company RLS, explicit transaction company context and restricted runtime grants. Runtime cannot delete contacts or update their company/User identity mapping. Existing current membership, verification, role and property/lease authorization remains the source of portal authority. The additive contact IDs are returned only in existing management lease/household responses; contact private fields are not added to bootstrap, platform user lists, tenant finances or invitation preview.
+
+## Rollout and compatibility
+
+Bridge columns remain nullable so the previous application can continue operating during coordinated rollout or application rollback. Previous-version writes can leave bridge IDs null; the next contact workflow slice must resolve these legacy rows before requiring contact identities. This increment does not switch existing routes or client payloads to contact IDs and does not expose a new contact linking endpoint. Old durable submission fingerprints remain valid.
+
+Deploy through the existing user-run migration/backend workflow after review. Preserve a database restore point as usual. The previous app may run against the additive schema; do not drop contacts or bridge columns after new writes. Prefer a forward fix. Transaction rollback during a failed migration is distinct from deleting an applied migration or reversing later business activity. A failed Prisma migration still requires normal operator review/resolution before retry.
+
+## Following slices
+
+PF-03b will make contacts the tenant directory/detail and primary lease selection source, allow an owner/manager to record an offline tenant and lease/manual rent/deposit, and adapt every management/report/household projection to a primary contact without a User. It needs focused readable forms, useful contact detail, month-name dates, review, durable recovery and clear next steps. It will retain existing User-based URLs as compatibility entries.
+
+Verified portal invitation/linking follows separately: explicit intended-contact selection and owner approval, recipient preview, verified matching acceptance, concurrency/revocation checks and conflicts for existing membership elsewhere. Email matching alone cannot grant authority, merge contacts or combine financial liability. Contact archive/search policy belongs with the directory transition. No multi-company membership expansion is implied.
+
+This foundation does **not** yet let an offline contact be the primary leaseholder. Existing primary tenant selection still requires an eligible account; additional record-only household residents continue working. It contains no new form redesign, infrastructure/provider change or deployment.
+
+## Verification
+
+Disposable PostgreSQL checks seed populated pre-migration data, apply the bridge inside a transaction, verify every original source field and financial reference, roll back, and apply again. They cover same-email distinct contacts, historical transfers/private notes, current profiles/emergency contacts, forced RLS, cross-company foreign keys, restricted mapping grants, concurrent bridge creation, curated contact preservation, lease/household retry, renewal contact reuse and atomic audit rollback. Existing user-profile transfer, leasing/renewal and financial/household/browser suites protect compatibility. The report test restores its timezone before later suites so midnight does not make receipt fixtures future-dated. Access-race cleanup removes retained contacts with its disposable database administrator before deleting fixture users; runtime retention grants remain unchanged.
+
+Local validation: client and server builds pass; finance/contact/household 100, leasing/renewal 19, user/profile 22, access-lifecycle/concurrency 40, UI fixture 131 and safe Node 61 checks pass. Five database suites are intentionally skipped in the safe Node run; relevant database behavior is exercised by the disposable suites above. Exact-head hosted CI/review status is checked on the published PR. No live/shared database, user account or provider setting is modified by these checks.

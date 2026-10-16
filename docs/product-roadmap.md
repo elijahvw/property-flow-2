@@ -1,6 +1,6 @@
 # Property Flow product roadmap
 
-Updated 2026-10-15. Repository baseline: main `e94fe86`. This replaces the build order in historical handoffs. The [implementation backlog](product-backlog.md) contains dependencies and acceptance criteria; [workflow research](tenantcloud-workflows.md) records sources and limits.
+Updated 2026-10-16. Repository baseline: main `0e492f8` (merged PR #34). This replaces the build order in historical handoffs. The [implementation backlog](product-backlog.md) contains dependencies and acceptance criteria; [workflow research](tenantcloud-workflows.md) records sources and limits.
 
 ## Product direction
 
@@ -72,9 +72,9 @@ Deliver **PF-25** imports/reconciliation/integration contracts, then **PF-26** s
 
 ## First reviewable increments
 
-1. **PF-01, implemented locally / review pending:** tenant detail route, linked leases/balances and return navigation, using existing data. Includes the requested shared form/date/UI improvements; see [scope](tenant-workspace.md).
-2. **PF-02:** exact lease workspace and working links to rent/deposits/terms/renewal, using existing data.
-3. **PF-03a:** offline contact identity/backfill with compatibility; **PF-03b:** contact forms and verified invitation/linking. Do not combine a people/identity rewrite into one PR.
+1. **PF-01, merged in #33:** tenant detail route, linked leases/balances and return navigation, using existing data. Includes the requested shared form/date/UI improvements; see [scope](tenant-workspace.md).
+2. **PF-02, merged in #34:** exact lease workspace and working links to rent/deposits/terms/renewal, using existing data.
+3. **PF-03a, current:** contact identity/backfill with compatibility; see [contract and rollout](resident-contacts.md). **PF-03b:** offline contact/directory/lease forms next, then verified invitation/linking as a separate review. Do not combine a people/identity rewrite into one PR.
 4. **PF-04:** statement and traceable CSV from existing charges/receipts/allocations with separate credit/deposit summaries.
 5. **PF-05a:** reviewed one-time non-rent charges/noncash credits; then PF-06 money movements after their accounting contract is settled.
 

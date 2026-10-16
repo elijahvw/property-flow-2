@@ -33,7 +33,9 @@ export async function reportCases(t, admin, call, app, db) {
   const empty=(await call('owner','GET','/api/company/reports/cash?dateFrom=2025-01-01&dateTo=2025-01-01&propertyId=other-home')).json();assert.equal(empty.summary.netCents,'0');assert.deepEqual(empty.items,[]);
   await admin.query(`DELETE FROM "LedgerEntry" WHERE id LIKE 'limit-%'`);
  });
- await t.test('lease register uses company business date and inclusive current terms, not cash receipts or historical balances',async()=>{
+ await t.test('lease register uses company business date and inclusive current terms, not cash receipts or historical balances',async reportTest=>{
+  const originalTimezone=(await admin.query(`SELECT timezone FROM "Company" WHERE id='a'`)).rows[0].timezone;
+  reportTest.after(()=>admin.query(`UPDATE "Company" SET timezone=$1 WHERE id='a'`,[originalTimezone]));
   await admin.query(`UPDATE "Company" SET timezone='America/Los_Angeles' WHERE id='a'`);
   const ctx=(await call('owner','GET','/api/company/reports/context')).json();assert.equal(ctx.timezone,'America/Los_Angeles');
   const today=ctx.today,shift=n=>{const d=new Date(today+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);};

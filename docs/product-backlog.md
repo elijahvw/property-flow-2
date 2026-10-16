@@ -6,11 +6,11 @@ Each item is an epic to split into bounded PRs. Dependencies are prerequisites, 
 
 ## Connected records
 
-### PF-01 · Tenant detail workspace — P1, implemented locally / review pending
+### PF-01 · Tenant detail workspace — P1, merged in #33
 
 Audience: owner/manager; tenant receives only their authorized self-service projection. Dependencies: existing profiles, leases, rent and deposits.
 
-Previous baseline: the resident directory opened a contact/access editor without connected lease/financial history. This increment adds the permanent workspace and source-ledger links; see [scope and validation](tenant-workspace.md). Merge, deployment and real-account acceptance remain pending.
+Previous baseline: the resident directory opened a contact/access editor without connected lease/financial history. This increment adds the permanent workspace and source-ledger links; see [scope and validation](tenant-workspace.md). PR #33 is merged; the user reports deployment. Real-account acceptance remains separate.
 
 Acceptance:
 - Stable tenant route supports refresh, copied URLs, browser back and existing residentId entry links. Follow a ledger/lease and return to the same tenant/filter.
@@ -18,7 +18,7 @@ Acceptance:
 - Recheck company/current authority. Management notes never enter tenant responses; access revocation clears private state.
 - Test no lease, multiple/future/ended leases, missing/denied records, mobile and keyboard focus. Define historical tenant access explicitly; do not bypass current assignment revocation.
 
-### PF-02 · Individual lease workspace — P1, implemented locally / validation in progress
+### PF-02 · Individual lease workspace — P1, merged in #34
 
 Audience: owner/manager and authorized tenant. Dependencies: existing lease/rent/deposit APIs; reuse PF-01 navigation conventions.
 
@@ -34,7 +34,7 @@ Acceptance:
 
 Audience: owner/manager and prospective/current tenant. Dependencies: PF-01/PF-02 surfaces and additive migration design.
 
-Baseline: contact fields are on CompanyMembership; Lease.residentId references User. A user currently has one company membership. Recording a person and granting portal access are coupled.
+Baseline: contact fields are on CompanyMembership; Lease.residentId references User. A user currently has one company membership. Recording a primary leaseholder and granting portal access are coupled. PF-03a now adds a company-owned contact identity bridge/backfill and dual writes without switching authorization or forms; see [contract and rollout](resident-contacts.md). Offline primary leaseholder forms and verified portal linking remain following slices.
 
 Split: contact identity/backfill and compatibility first; contact/lease creation UI next; verified invitation/linking as a separately reviewable slice. Preserve existing source IDs/history or provide explicit migration mappings; do not rebuild financial records.
 

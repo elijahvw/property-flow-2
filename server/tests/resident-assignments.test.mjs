@@ -6,13 +6,19 @@ import { permissions } from '../dist/access.js';
 const person = (id, role = 'resident', companyId = 'a') => ({ id, email: `${id}@test.invalid`, name: id, status: 'active', emailVerified: true, platformRole: null, membership: {userId:id, companyId, role, status:'active', company:{id:companyId,status:'active'}} });
 async function fixture(t, actor = person('owner','owner')) {
   const users = new Map([actor,person('resident'),person('other'),person('foreign','resident','b'),person('staff','staff')].map(u=>[u.id,u]));
-  const rows = [], locks = [], audits = []; let company;
+  const rows = [], locks = [], audits = [], contacts = []; let company;
   const properties = [{id:'home',companyId:'a',name:'Home',address:'1 Main',city:'private'}, {id:'foreign-home',companyId:'b',name:'Foreign',address:'2 Main'}];
   const tx = {
     $queryRaw: async (strings,...values) => { if(strings.join('').includes('UPDATE')) locks.push(values[0]); else company=values[0]; return []; },
     user: {findUnique:async({where})=>users.get(where.id), update:async({where,data})=>Object.assign(users.get(where.id),data)},
     company: {findUnique:async({where})=>({id:where.id,status:'active'})},
+    residentContact: {
+      findUnique:async({where})=>contacts.find(c=>c.companyId===where.companyId_userId.companyId&&c.userId===where.companyId_userId.userId),
+      create:async({data})=>{assert.equal(company,data.companyId);const row={id:'contact-'+contacts.length,...data};contacts.push(row);return row;},
+      update:async({where,data})=>Object.assign(contacts.find(c=>c.id===where.id),data),
+    },
     companyMembership: {
+      findFirst:async({where})=>{const u=users.get(where.userId);return u?.membership?.companyId===where.companyId&&(!where.role||u.membership.role===where.role)?{...u.membership,user:u}:null;},
       findUnique:async({where})=>{const u=users.get(where.userId); return u?.membership ? {...u.membership,user:u}:null;},
       findMany:async({where})=>[...users.values()].filter(u=>u.membership?.companyId===where.companyId && u.membership.role==='resident' && u.membership.status==='active' && u.status==='active').map(u=>({userId:u.id,user:{name:u.name,email:u.email}})),
       update:async({where,data})=>Object.assign(users.get(where.userId).membership,{role:data.role,status:data.status}),
@@ -30,7 +36,7 @@ async function fixture(t, actor = person('owner','owner')) {
   const app=Fastify({routerOptions:{maxParamLength:MAX_USER_ID_BYTES}}); t.after(()=>app.close());
   registerApplication(app,db,async request=>{request.principal=actor;},'https://example.test');
   const call=(method,url,payload,headers={})=>{if(payload&&url.endsWith('/membership'))payload={...payload,expectedVersion:null};return app.inject({method,url,headers,...(payload?{payload}:{})});};
-  return {call,users,rows,locks,audits,actor};
+  return {call,users,rows,locks,audits,actor,contacts};
 }
 test('assignment permission belongs only to active company owners/managers',()=>{
  for(const role of ['owner','manager','staff','resident',null]) assert.equal(permissions(person('u',role)).includes('resident.assignment.manage'),['owner','manager'].includes(role));
@@ -80,6 +86,7 @@ test('serialization failures retry boundedly and expose actionable 409 after exh
 test('ownership transfer removes former resident associations under the shared lock',async t=>{
  const f=await fixture(t);f.rows.push({companyId:'a',propertyId:'home',userId:'resident'});
  assert.equal((await f.call('POST','/api/company/transfer-ownership',{userId:'resident'})).statusCode,200);assert.equal(f.rows.length,0);assert.deepEqual(f.locks,['resident']);
+ assert.equal(f.contacts.length,1);assert.equal(f.contacts[0].userId,'resident');assert.equal(f.contacts[0].companyId,'a');
 });
 
 const opaqueSubjects = ['auth0|abc+def', 'auth0|' + 'x'.repeat(240), 'samlp|directory|!@£$%^&*()+}{:;|P9/opaque?#%', 'oidc|provider|CaseSensitive'];

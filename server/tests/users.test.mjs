@@ -1174,6 +1174,8 @@ test(
       for(const extra of [{origin:"https://evil.test"},{"x-csrf-token":"wrong"}]) assert.equal((await call("profile-manager","PATCH",path,valid,extra)).statusCode,403);
       const saved=await call("profile-manager","PATCH",path,valid);assert.equal(saved.statusCode,200,saved.body);assert.equal(saved.json().version,2);
       assert.equal((await call("profile-owner","GET",path)).json().contactPhone,"555-0100");
+      const contactBefore=(await admin.query(`SELECT * FROM "ResidentContact" WHERE "companyId"='profile-a' AND "userId"='profile-resident'`)).rows[0];
+      assert.equal(contactBefore.name,"Resident Contact");assert.equal(contactBefore.managementNotes,"Company A private note");
       assert.equal((await call("profile-manager","PATCH",path,{...valid,contactName:"Stale overwrite"})).statusCode,409);
       const bootstrap=(await call("profile-resident","GET","/api/bootstrap")).json();
       for(const key of ["contactName","contactPhone","managementNotes","emergencyContactName","emergencyContactPhone"]) assert.equal(Object.hasOwn(bootstrap.membership,key),false);
@@ -1182,21 +1184,34 @@ test(
       finally { await admin.query(`DROP TRIGGER reject_profile_audit ON "AuditEvent"; DROP FUNCTION reject_profile_audit()`); }
       assert.equal((await call("profile-owner","GET",path)).json().contactName,"Resident Contact");
       assert.equal((await call("profile-owner","GET",path)).json().version,2);
+      assert.deepEqual((await admin.query(`SELECT * FROM "ResidentContact" WHERE id=$1`,[contactBefore.id])).rows[0],contactBefore,"audit rollback retains both profile copies");
       const privateKeys=["contactName","contactPhone","emergencyContactName","emergencyContactPhone","managementNotes"];
       const directory=(await call("platform","GET","/api/platform/users")).json();
       const company=(await call("platform","GET","/api/platform/companies/profile-a")).json();
       for(const row of [directory.find(p=>p.id==="profile-resident").membership,company.memberships.find(m=>m.userId==="profile-resident"),(await call("profile-owner","GET","/api/company/members")).json().find(m=>m.userId==="profile-resident")]) for(const key of privateKeys) assert.equal(Object.hasOwn(row,key),false,"access responses must omit "+key);
+      await admin.query(`UPDATE "ResidentContact" SET name='Curated business name' WHERE id=$1`,[contactBefore.id]);
       const unchanged=await call("platform","PUT","/api/platform/users/profile-resident/membership",{companyId:"profile-a",role:"resident",status:"active",expectedVersion:2});assert.equal(unchanged.statusCode,200,unchanged.body);
       for(const key of privateKeys) assert.equal(Object.hasOwn(unchanged.json(),key),false,"membership mutations must omit "+key);
+      assert.equal((await admin.query(`SELECT name FROM "ResidentContact" WHERE id=$1`,[contactBefore.id])).rows[0].name,"Curated business name");
       assert.equal((await call("profile-owner","GET",path)).json().managementNotes,"Company A private note");
       await db.auditEvent.createMany({data:[{id:"profile-authored-a",companyId:"profile-a",actorId:"profile-resident",targetId:"maintenance-one",action:"maintenance.created",requestId:"fixture"},{id:"profile-authored-foreign",companyId:"profile-b",actorId:"profile-resident",targetId:"maintenance-other",action:"maintenance.created",requestId:"fixture"}]});
       const recent=(await call("profile-owner","GET",path)).json().activity;assert.ok(recent.some(e=>e.id==="profile-authored-a"));assert.equal(recent.some(e=>e.id==="profile-authored-foreign"),false);
       const audit=(await call("profile-owner","GET",path)).json().activity;assert.equal(audit.filter(x=>x.action==="resident.profile.updated").length,1);assert.equal(JSON.stringify(audit).includes("private note"),false);
       await db.companyMembership.update({where:{userId:"profile-manager"},data:{status:"disabled"}});
       assert.equal((await call("profile-manager","PATCH",path,{...valid,expectedVersion:2})).statusCode,403);
-      const transfer=await call("platform","PUT","/api/platform/users/profile-resident/membership",{companyId:"profile-b",role:"resident",status:"active",expectedVersion:3});assert.equal(transfer.statusCode,200,transfer.body);
+      // Simulate the old app editing compatibility fields after the bridge
+      // exists. Transfer must retain those edits without replacing a separately
+      // curated name whose source profile field has not changed.
+      await admin.query(`UPDATE "CompanyMembership" SET "contactPhone"='555-0199',"emergencyContactName"='Updated emergency',"managementNotes"='Latest company A note',version=version+1,"updatedAt"=NOW() WHERE "userId"='profile-resident'`);
+      const transfer=await call("platform","PUT","/api/platform/users/profile-resident/membership",{companyId:"profile-b",role:"resident",status:"active",expectedVersion:4});assert.equal(transfer.statusCode,200,transfer.body);
       assert.equal((await call("profile-owner","GET",path)).statusCode,404);
       const moved=(await call("profile-foreign","GET",path)).json();assert.equal(moved.contactName,null);assert.equal(moved.managementNotes,null);assert.equal(moved.activity.some(e=>e.action==="resident.profile.updated"),false);
+      const contacts=(await admin.query(`SELECT * FROM "ResidentContact" WHERE "userId"='profile-resident' ORDER BY "companyId"`)).rows;
+      assert.equal(contacts.length,2);assert.equal(contacts[0].id,contactBefore.id);
+      assert.equal(contacts[0].name,"Curated business name");assert.equal(contacts[0].phone,"555-0199");assert.equal(contacts[0].emergencyContactName,"Updated emergency");assert.equal(contacts[0].managementNotes,"Latest company A note");
+      assert.notEqual(contacts[1].id,contactBefore.id);assert.equal(contacts[1].managementNotes,null);assert.equal(contacts[1].phone,null);
+      const bootstrapAfter=(await call("profile-resident","GET","/api/bootstrap")).json();
+      assert.equal(JSON.stringify(bootstrapAfter).includes("private note"),false);
     });
     await t.test("platform profile writes cannot pass a queued administrator revocation", async () => {
       const lock = await admin.connect();let pending;

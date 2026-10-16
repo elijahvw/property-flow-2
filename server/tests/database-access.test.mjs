@@ -227,7 +227,13 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
             else await call('platform','PUT',`/api/platform/users/${targetId}/membership`,{companyId:'a',role:'resident',status:'active'});
             assert.deepEqual((await call(targetId,'GET','/api/resident/properties')).json(),[]);
           }
+          if(change!=='account-disable') {
+            const retained=(await admin.query('SELECT "companyId" FROM "ResidentContact" WHERE "userId"=$1 ORDER BY "companyId"',[targetId])).rows;
+            assert.deepEqual(retained.map(c=>c.companyId),change==='transfer'?['a','b']:['a'],'business contacts survive role, membership and ownership changes');
+          }
           // Preserve the baseline suite's last-owner assumptions after each case.
+          // Only this disposable fixture's administrator removes retained contacts.
+          await admin.query('DELETE FROM "ResidentContact" WHERE "userId" = ANY($1::text[])',[[targetId,ownerId]]);
           await admin.query('DELETE FROM "CompanyMembership" WHERE "userId" = ANY($1::text[])',[[targetId,ownerId]]);
           await admin.query('DELETE FROM "Session" WHERE "userId" = ANY($1::text[])',[[targetId,ownerId]]);
           await admin.query('DELETE FROM "User" WHERE id = ANY($1::text[])',[[targetId,ownerId]]);

@@ -1,3 +1,4 @@
+import { linkedResidentContact, preserveResidentContactProfile } from "./resident-contacts.js";
 import { registerDeposits } from "./deposits.js";
 import { registerRentRecovery } from "./rent-recovery.js";
 import { auditLabels } from "./audit-labels.js";
@@ -341,6 +342,9 @@ export function registerApplication(
           throw new AccessError(409, 'RECORD_CHANGED', 'This assignment changed. Close and reopen access before editing again.');
         if (old && (old.companyId !== companyId || old.role !== role || status !== "active"))
           await clearAssignments(tx, userId, old.companyId);
+        // Preserve the old company's business contact before a transfer clears
+        // membership profile fields. That contact grants no portal authority.
+        if (old) await preserveResidentContactProfile(tx, old.companyId, userId);
         const resetContact = old && old.companyId !== companyId ? {contactName:null,contactPhone:null,emergencyContactName:null,emergencyContactPhone:null,managementNotes:null} : {};
         const result = await tx.companyMembership.upsert({
           where: { userId },
@@ -348,6 +352,7 @@ export function registerApplication(
           update: { companyId, role, status, ...resetContact, version: { increment: 1 } },
           select: membershipAccessSelect,
         });
+        if (role === "resident") await linkedResidentContact(tx, companyId, userId);
         // Clear obsolete assignment evidence after explicit review. Local membership is authoritative.
         await tx.user.update({
           where: { id: userId },
@@ -488,11 +493,13 @@ export function registerApplication(
             "Use ownership transfer to change an owner.",
           );
         if (member.role !== role || status !== "active") await clearAssignments(tx, userId, companyId);
+        await preserveResidentContactProfile(tx, companyId, userId);
         const result = await tx.companyMembership.update({
           where: { userId },
           data: { role, status, version: { increment: 1 } },
           select: membershipAccessSelect,
         });
+        if (role === "resident") await linkedResidentContact(tx, companyId, userId);
         await audit(tx, request, "membership.updated", companyId, userId, {
           role,
           status,
@@ -534,6 +541,7 @@ export function registerApplication(
           "Choose an active member of this company.",
         );
       await clearAssignments(tx, userId, companyId);
+      await preserveResidentContactProfile(tx, companyId, userId);
       await tx.companyMembership.update({
         where: { userId },
         data: { role: "owner", version: { increment: 1 } },
@@ -808,6 +816,7 @@ export function registerApplication(
           role: invitation.role,
         },
       });
+      if (invitation.role === "resident") await linkedResidentContact(tx, invitation.companyId, user.id);
       }
       await tx.invitation.update({
         where: { id: invitation.id },
