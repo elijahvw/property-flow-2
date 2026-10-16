@@ -137,6 +137,9 @@ async function fixture(page: Page, role = "owner") {
       }
       return json({ items: [lease], nextCursor: null });
     }
+    if (req.method() === "GET" && /^\/api\/company\/leases\/[^/]+(?:\/participants)?$/.test(p)) {
+      return p.endsWith('/participants') ? json({lease,items:[],candidates:[]}) : json(lease);
+    }
     if (p === "/api/company/leases/lease-a" && req.method() === "PATCH") {
       const b = req.postDataJSON();
       state.patches.push(b);
@@ -224,6 +227,8 @@ test("lease create and edit use complete payment terms, preserve clear instructi
     graceDays: 5,
     paymentInstructions: "Pay at the office.",
   });
+  await expect(page).toHaveURL(/\/company\/leases\/new-lease\?onboarding=household/);
+  await page.getByRole('link',{name:'← All leases',exact:true}).click();
   await page.getByRole("button", { name: "Edit lease", exact: true }).click();
   await expect(
     page.getByLabel("Lease Apartment 1 grace period (days after due date)"),

@@ -1,5 +1,7 @@
 import { formatDate, formatMonth } from "../dates";
+import { leasePath,leaseContext } from "../lease-links";
 import { DateField } from "../components/DateField";
+import { LeaseReturnLink } from "../components/LeaseReturnLink";
 import { usePropertySearchParams } from "../usePropertySearchParams";
 import { TenantReturnLink } from "../components/TenantReturnLink";
 import { DepositPanel } from "./Deposits";
@@ -250,6 +252,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
       )}
       <header className="page-heading">
         {!resident && <TenantReturnLink />}
+        {!resident && <LeaseReturnLink />}
         <p className="eyebrow">
           {resident ? "My rental" : "Money · Rent operations"}
         </p>
@@ -640,6 +643,7 @@ function LeaseLedger({
   stale: boolean;
 }) {
   const { lease, summary } = account;
+  const [linkParams]=usePropertySearchParams();
   const chargeReferences = new Map(
     (account.charges || []).map((c) => [c.id, c.reference || c.id]),
   );
@@ -698,7 +702,7 @@ function LeaseLedger({
             >
               Post monthly rent
             </button>
-            <Link to={propertyLink("/company/leases", lease.propertyId)}>
+            <Link to={leasePath(lease.id,leaseContext(linkParams))}>
               Lease details →
             </Link>
           </div>

@@ -8,6 +8,7 @@ import { ResidentEditor, type ResidentProfileDetail } from "./ResidentProfiles";
 import { dollars } from "./Finances";
 import { formatDate } from "../dates";
 import { tenantPortalState } from "../tenant-status";
+import { leasePath } from "../lease-links";
 
 type RentSummary = { outstandingCents: string; creditCents: string; afterGraceCents: string; upcomingCents: string; withinGraceCents: string; dueTodayCents: string };
 type DepositSummary = { requiredCents: string; heldCents: string; outstandingCents: string; excessHeldCents: string; pastDueCents: string };
@@ -88,7 +89,7 @@ function TenantFinancials({ id }: { id: string }) {
         <div><span>Unapplied rent credit</span><strong>{dollars(data.rent.creditCents)}</strong><small>Received money not yet allocated</small></div>
         <div><span>Deposit held</span><strong>{dollars(data.deposits.heldCents)}</strong><small>{dollars(data.deposits.outstandingCents)} still to collect</small></div>
       </div>
-      <p className="section-caption tenant-balance-note">Current recorded balances across all leases. Deposits are separate from rent and are not a verified bank balance.</p>
+      <p className="section-caption tenant-balance-note">Current recorded balances across all linked leases. Shared lease totals are not individual resident shares. Deposits are separate from rent and are not a verified bank balance.</p>
     </section>
     <section className="panel tenant-leases-panel" aria-label="Tenant leases">
       <div className="section-heading"><div><h2>Leases &amp; balances</h2><p className="section-caption">Rental history and the records behind each balance.</p></div><span className="directory-count">{data.leases.length} {data.leases.length === 1 ? "lease" : "leases"}</span></div>
@@ -96,7 +97,7 @@ function TenantFinancials({ id }: { id: string }) {
       {!data.leases.length ? <div className="empty-state"><h3>No lease recorded yet</h3><p>Record a lease to connect this tenant's rental terms and financial history.</p><Link className="button secondary" to="/company/leases?new=lease">Record a lease</Link></div> : !rows.length ? <p className="tenant-muted">No leases match this status.</p> : <ul className="tenant-lease-list">{rows.map(lease => {
         const status = lease.status === "draft" ? "Draft" : lease.status === "ended" ? "Ended" : lease.startsOn.slice(0,10) > data.businessDate ? "Upcoming" : lease.endsOn && lease.endsOn.slice(0,10) < data.businessDate ? "Expired · review needed" : "In effect";
         return <li key={lease.id}>
-          <div className="tenant-lease-top"><div><Link className="tenant-property-name" to={`/company/properties/${encodeURIComponent(lease.propertyId)}`}>{lease.property.name}</Link><h3>{lease.unit.label}</h3></div><span className={`tenant-status ${status !== "In effect" ? "neutral" : ""}`}>{status}</span></div>
+          <div className="tenant-lease-top"><div><Link className="tenant-property-name" to={`/company/properties/${encodeURIComponent(lease.propertyId)}`}>{lease.property.name}</Link><h3><Link to={leasePath(lease.id,context)}>{lease.unit.label}</Link></h3></div><span className={`tenant-status ${status !== "In effect" ? "neutral" : ""}`}>{status}</span></div>
           <p className="tenant-lease-term">{formatDate(lease.startsOn)} <span aria-hidden="true">—</span> {lease.endsOn ? formatDate(lease.endsOn) : "Open ended"}</p>
           <dl className="tenant-lease-money"><div><dt>Monthly rent</dt><dd>{dollars(lease.rentCents)}</dd></div><div><dt>Rent outstanding</dt><dd>{dollars(lease.rent.outstandingCents)}</dd></div><div><dt>Deposit held</dt><dd>{lease.deposit ? dollars(lease.deposit.heldCents) : "Not set up"}</dd></div></dl>
           <div className="tenant-lease-footer"><span className="section-caption">Due day {lease.rentDueDay} · {lease.graceDays} {lease.graceDays === 1 ? "day" : "days"} grace</span><div className="tenant-lease-actions"><Link to={propertyLink("/company/rent", lease.propertyId, { leaseId: lease.id, ...context })} aria-label={`Open rent ledger for ${lease.unit.label}`}>Rent ledger <span aria-hidden="true">→</span></Link><Link to={propertyLink("/company/deposits", lease.propertyId, { leaseId: lease.id, ...context })} aria-label={`Open deposit details for ${lease.unit.label}`}>Deposit details <span aria-hidden="true">→</span></Link></div></div>

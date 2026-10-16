@@ -39,6 +39,7 @@ import { Rent } from "./pages/Rent";
 import { Finances } from "./pages/Finances";
 import { EmailVerification } from "./components/EmailVerification";
 import { Units, Leases } from "./pages/Leasing";
+import { LeaseDetail } from "./pages/LeaseDetail";
 import PropertyDetail from "./pages/PropertyDetail";
 import "./App.css";
 class ErrorBoundary extends Component<
@@ -75,6 +76,8 @@ function Shell({ children }: { children: React.ReactNode }) {
       ? routes.find((r) => r.path === "/company/properties")
       : location.pathname.startsWith("/company/residents/")
         ? routes.find((r) => r.path === "/company/residents")
+        : location.pathname.startsWith("/company/leases/")
+          ? routes.find((r) => r.path === "/company/leases")
       : undefined);
   useEffect(() => {
     document.title = `${route?.title || "Property Flow"} · Property Flow`;
@@ -271,6 +274,10 @@ function Pages() {
           }
         />
       ))}
+      <Route
+        path="/company/leases/:leaseId"
+        element={<Shell><ProtectedRoute permission="lease.manage"><LeaseDetail /></ProtectedRoute></Shell>}
+      />
       <Route
         path="/company/residents/:userId"
         element={<Shell><ProtectedRoute permission="resident.assignment.manage"><ResidentDetail /></ProtectedRoute></Shell>}

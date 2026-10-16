@@ -1,5 +1,7 @@
 import { formatDate } from "../dates";
 import { DateField } from "../components/DateField";
+import { LeaseReturnLink } from "../components/LeaseReturnLink";
+import { leasePath,leaseContext } from "../lease-links";
 import { usePropertySearchParams } from "../usePropertySearchParams";
 import { TenantReturnLink } from "../components/TenantReturnLink";
 import { useState } from "react";
@@ -192,6 +194,7 @@ function DepositDirectory({ resident }: { resident: boolean }) {
       {propertyId && !resident && <PropertyNavigation id={propertyId} />}
       <header className="page-heading">
         {!resident && <TenantReturnLink />}
+        {!resident && <LeaseReturnLink />}
         <p className="eyebrow">{resident ? "Your rental" : "Money"}</p>
         <h1>Security deposits</h1>
         <p>
@@ -391,6 +394,7 @@ function DepositAccountPanel({
   resident: boolean;
   changed?: () => void;
 }) {
+  const [returnParams]=usePropertySearchParams();
   const auth = useAuth().data,
     root = `${resident ? "/api/resident" : "/api/company"}/deposits/${encodeURIComponent(leaseId)}${propertyId ? "?" + new URLSearchParams({ propertyId }) : ""}`,
     r = useResource<Detail>(root, true, true),
@@ -449,6 +453,7 @@ function DepositAccountPanel({
               </>
             )}
           </p>
+          {!resident&&<p><Link to={leasePath(r.data.lease.id,leaseContext(returnParams))}>Open lease workspace →</Link></p>}
           {!resident && retained && (
             <button className="secondary" onClick={() => start(retained.kind)}>
               Recover pending deposit save

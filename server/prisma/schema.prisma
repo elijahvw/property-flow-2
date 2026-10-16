@@ -63,6 +63,9 @@ model User {
   identities Identity[]
   maintenanceRequests MaintenanceRequest[]
   leases Lease[] @relation("LeaseResident")
+  leaseParticipants LeaseParticipant[]
+  createdLeaseParticipants LeaseParticipant[] @relation("LeaseParticipantCreator")
+  approvedLeaseInvitations Invitation[] @relation("LeaseInvitationApprover")
   createdLeases Lease[] @relation("LeaseCreator")
   createdUnits Unit[]
   createdLedgerEntries LedgerEntry[]
@@ -109,6 +112,15 @@ model CompanyMembership {
 }
 
 model Invitation {
+  leaseId String?
+  propertyId String?
+  participantRole String?
+  participantName String?
+  participantStartsOn DateTime? @db.Date
+  approvedAt DateTime?
+  approvedBy String?
+  lease Lease? @relation(fields: [leaseId, propertyId, companyId], references: [id, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict, map: "Invitation_lease_fkey")
+  approver User? @relation("LeaseInvitationApprover", fields: [approvedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
   id String @id @default(cuid())
   companyId String
   company Company @relation(fields: [companyId], references: [id])
@@ -121,6 +133,7 @@ model Invitation {
   createdBy String
   createdAt DateTime @default(now())
   @@index([companyId])
+  @@index([companyId, leaseId])
 }
 
 model Session {
@@ -250,6 +263,8 @@ model Unit {
   @@index([companyId, propertyId, id])
 }
 model Lease {
+  participants LeaseParticipant[]
+  residentInvitations Invitation[]
  depositAccounts DepositAccount[]
  @@unique([companyId,previousLeaseId])
  previousLeaseId String?
@@ -287,6 +302,34 @@ model Lease {
   @@unique([companyId, createdById, submissionKey])
   @@index([companyId, propertyId, id])
   @@index([companyId, unitId])
+}
+
+model LeaseParticipant {
+  removedAt DateTime?
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  leaseId String
+  userId String?
+  name String
+  email String?
+  phone String?
+  role String
+  startsOn DateTime @db.Date
+  endsOn DateTime? @db.Date
+  version Int @default(1)
+  createdById String
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lease Lease @relation(fields: [leaseId, propertyId, companyId], references: [id, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
+  user User? @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  creator User @relation("LeaseParticipantCreator", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([leaseId, userId])
+  @@unique([companyId, createdById, submissionKey])
+  @@index([companyId, leaseId])
+  @@index([companyId, userId])
 }
 
 model LedgerEntry {

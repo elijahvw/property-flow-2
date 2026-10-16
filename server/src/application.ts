@@ -26,6 +26,8 @@ import { registerRentSchedules } from "./rent-schedules.js";
 import { registerRent } from "./rent.js";
 import { registerFinances } from "./finances.js";
 import { registerLeasing } from "./leasing.js";
+import { registerLeaseParticipants } from "./lease-participants.js";
+import { registerLeaseInvitations, acceptLeaseInvitation, replayLeaseAcceptance } from "./lease-invitations.js";
 import { registerMaintenance } from "./maintenance.js";
 import { digest } from "./sessions.js";
 import { propertySelect, propertyData, propertyKeys } from "./property-fields.js";
@@ -206,6 +208,8 @@ export function registerApplication(
 ) {
   registerMaintenance(server, db, authenticate, origin);
   registerLeasing(server, db, authenticate, origin);
+  registerLeaseParticipants(server, db, authenticate, origin);
+  registerLeaseInvitations(server, db, authenticate, origin);
   registerFinances(server, db, authenticate, origin);
   registerDeposits(server, db, authenticate, origin);
   registerRent(server, db, authenticate, origin);
@@ -759,6 +763,10 @@ export function registerApplication(
       const invitation = await tx.invitation.findUnique({
         where: { tokenHash: digest(token) },
       });
+      if(invitation?.leaseId&&invitation.acceptedAt&&!invitation.revokedAt&&invitation.email===user.email.toLowerCase()){
+        await activeCompany(tx,invitation.companyId);
+        return replayLeaseAcceptance(tx,request,invitation);
+      }
       if (
         !invitation ||
         invitation.acceptedAt ||
@@ -774,6 +782,8 @@ export function registerApplication(
       await activeCompany(tx, invitation.companyId);
       // An invitation can only create a membership. It cannot reactivate,
       // promote or transfer an existing member (including a disabled member).
+      if (invitation.leaseId) await acceptLeaseInvitation(tx,request,invitation);
+      else {
       if (await tx.companyMembership.findUnique({ where: { userId: user.id } }))
         throw new AccessError(
           409,
@@ -787,6 +797,7 @@ export function registerApplication(
           role: invitation.role,
         },
       });
+      }
       await tx.invitation.update({
         where: { id: invitation.id },
         data: { acceptedAt: new Date() },

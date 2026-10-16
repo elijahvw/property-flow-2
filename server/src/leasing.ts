@@ -141,7 +141,25 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
       if (unit.status !== "active") throw new AccessError(409, "UNIT_ARCHIVED", "Restore this unit before creating a lease.");
       if (data.status === "active") await activeSlot(tx, companyId, unitId);
       const row = await tx.lease.create({ data: { companyId, propertyId, unitId, residentId, createdById: request.principal!.id, ...data, ...policy, previousLeaseId, ...key }, select: leaseSelect });
+      const primary=await tx.user.findUniqueOrThrow({where:{id:residentId},select:{name:true,email:true}});
+      await tx.leaseParticipant.create({data:{companyId,propertyId,leaseId:row.id,userId:residentId,name:Array.from(primary.name?.trim()||primary.email).slice(0,200).join(""),email:primary.email.length<=254?primary.email:null,role:"leaseholder",startsOn:data.startsOn,createdById:request.principal!.id,submissionKey:`primary:${row.id}`,submissionHash:key.submissionHash}});
+      if(previousLeaseId){
+        // Copy the reviewed household into the linked draft. Dates/roles remain
+        // visible for review; no invitations, money or portal access are copied.
+        const members=await tx.leaseParticipant.findMany({where:{companyId,leaseId:previousLeaseId,removedAt:null,AND:[{OR:[{userId:null},{userId:{not:residentId}}]},{OR:[{endsOn:null},{endsOn:{gte:data.startsOn}}]}]},take:201});
+        if(members.length>200)throw new AccessError(422,"HOUSEHOLD_SCOPE_TOO_LARGE","Too many household records to prepare a complete renewal.");
+        for(const member of members)await tx.leaseParticipant.create({data:{companyId,propertyId,leaseId:row.id,userId:member.userId,name:member.name,email:member.email,phone:member.phone,role:member.role,startsOn:member.startsOn>data.startsOn?member.startsOn:data.startsOn,endsOn:member.endsOn,createdById:request.principal!.id,submissionKey:`renewal:${row.id}:${member.id}`,submissionHash:key.submissionHash}});
+      }
       await audit(tx, request, companyId, row.id, "lease.created", { unitId, status: data.status, rentDueDay:policy.rentDueDay, graceDays:policy.graceDays, ...(previousLeaseId?{previousLeaseId}:{} ) });
+      return row;
+    });
+  });
+  server.get<{ Params: { leaseId: string } }>("/api/company/leases/:leaseId", auth, request => {
+    const leaseId=assignmentId(request.params.leaseId);
+    if(Object.keys(request.query as object).length)throw new AccessError(400,"INVALID_INPUT","Unknown lease detail filter.");
+    return scoped(db,request,"lease.manage",async(tx,companyId)=>{
+      const row=await tx.lease.findFirst({where:{id:leaseId,companyId},select:leaseSelect});
+      if(!row)throw new AccessError(404,"NOT_FOUND","Lease not found.");
       return row;
     });
   });

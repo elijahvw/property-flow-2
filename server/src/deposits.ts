@@ -4,6 +4,7 @@ import { AccessError } from "./access.js";
 import { assignmentId } from "./application.js";
 import { lockRentLease } from "./rent.js";
 import { companyDay } from "./reports.js";
+import { sharedLeaseAccess } from "./lease-participants.js";
 import {
   audit,
   boundedText,
@@ -95,16 +96,14 @@ async function today(tx: Tx, companyId: string) {
 function leaseWhere(
   companyId: string,
   residentId?: string,
+  businessDate?: string,
 ): Prisma.LeaseWhereInput {
   return {
     companyId,
     ...(residentId
       ? {
-          residentId,
+          ...sharedLeaseAccess(companyId, residentId, new Date(businessDate! + "T00:00:00Z")),
           status: { not: "draft" },
-          property: {
-            assignments: { some: { companyId, userId: residentId } },
-          },
         }
       : {}),
   };
@@ -116,7 +115,7 @@ async function visibleLease(
   residentId?: string,
 ) {
   const row = await tx.lease.findFirst({
-    where: { ...leaseWhere(companyId, residentId), id },
+    where: { ...leaseWhere(companyId, residentId, residentId ? await today(tx, companyId) : undefined), id },
     select: leaseSelect,
   });
   if (!row)
@@ -299,6 +298,7 @@ export function registerDeposits(
                 lease: leaseWhere(
                   companyId,
                   resident ? request.principal!.id : undefined,
+                  businessDate,
                 ),
               },
               select: accountSelect,

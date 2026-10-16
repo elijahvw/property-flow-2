@@ -1,4 +1,5 @@
 import { residentWorkspaceCases } from "./resident-workspace-cases.mjs";
+import { householdCases } from "./household-cases.mjs";
 import {depositCases} from "./deposit-cases.mjs";
 import {rentRecoveryCases} from "./rent-recovery-cases.mjs";
 import { recurringRentCases } from "./recurring-rent-cases.mjs";
@@ -29,7 +30,16 @@ test('manual finance isolation, replay, corrections and totals',{skip:!url},asyn
  const target=new URL(url);assert.equal(target.hostname,'127.0.0.1');assert.equal(target.pathname,'/propertyflow_finances_test');assert.equal(process.env.FINANCES_DISPOSABLE,'tmpfs-verified');
  const admin=new pg.Pool({connectionString:url});t.after(()=>admin.end());
  assert.equal((await admin.query(`SELECT count(*)::int n FROM information_schema.tables WHERE table_schema='public'`)).rows[0].n,0);
- for(const name of readdirSync(new URL('../prisma/migrations/',import.meta.url)).filter(n=>/^\d/.test(n)).sort())await admin.query(readFileSync(new URL(`../prisma/migrations/${name}/migration.sql`,import.meta.url),'utf8'));
+ for(const name of readdirSync(new URL('../prisma/migrations/',import.meta.url)).filter(n=>/^\d/.test(n)).sort()){
+  if(name==='202610150016_lease_participants')await admin.query(`
+   INSERT INTO "Company"(id,name,"updatedAt") VALUES('migration-company','Existing company',NOW());
+   INSERT INTO "User"(id,email,"emailVerified",name,"updatedAt") VALUES('migration-owner','migration-owner@test.invalid',true,'Owner',NOW()),('migration-resident','migration-resident@test.invalid',true,'Existing resident',NOW());
+   INSERT INTO "Property"(id,name,address,city,state,zip,"companyId","updatedAt") VALUES('migration-property','Existing property','Street','City','State','Zip','migration-company',NOW());
+   INSERT INTO "Unit"(id,"companyId","propertyId",label,"createdById","submissionKey","submissionHash","updatedAt") VALUES('migration-unit','migration-company','migration-property','Existing unit','migration-owner','existing-unit','original',NOW());
+   INSERT INTO "Lease"(id,"companyId","propertyId","unitId","residentId","createdById","submissionKey","submissionHash","startsOn","endsOn","rentCents",status,"updatedAt") VALUES('migration-lease','migration-company','migration-property','migration-unit','migration-resident','migration-owner','existing-lease','original','2019-01-01','2019-12-31',123456,'ended',NOW());
+  `);
+  await admin.query(readFileSync(new URL(`../prisma/migrations/${name}/migration.sql`,import.meta.url),'utf8'));
+ }
  await admin.query(`ALTER ROLE propertyflow_runtime LOGIN PASSWORD 'finances-test-only'`);
  const runtime=new URL(url);runtime.username='propertyflow_runtime';runtime.password='finances-test-only';
  const pool=new pg.Pool({connectionString:runtime.href,max:8}),db=new PrismaClient({adapter:new PrismaPg(pool)});t.after(async()=>{await db.$disconnect();await pool.end();});
@@ -44,6 +54,10 @@ test('manual finance isolation, replay, corrections and totals',{skip:!url},asyn
  const app=Fastify();t.after(()=>app.close());const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(app,db,auth,'https://app.test');
  const call=(user,method,path,payload,extra={})=>app.inject({method,url:path,headers:{...(user?{cookie:`__Host-pf-session=token-${user}`} : {}),origin:'https://app.test','x-csrf-token':'csrf',...extra},...(payload?{payload}:{})});
  const path='/api/company/finances';let entry;const body=(extra={})=>({propertyId:'home',occurredOn:'2026-10-14',amount:'1234.56',kind:'income',category:'rent',memo:null,submissionKey:randomUUID(),...extra});
+ await t.test('household migration backfills existing primary residents without replacing lease identities or terms',async()=>{
+  assert.deepEqual((await admin.query(`SELECT id,"residentId","rentCents",version,"submissionHash" FROM "Lease" WHERE id='migration-lease'`)).rows[0],{id:'migration-lease',residentId:'migration-resident',rentCents:123456,version:1,submissionHash:'original'});
+  const row=(await admin.query(`SELECT "userId",role,name,"removedAt" FROM "LeaseParticipant" WHERE "leaseId"='migration-lease'`)).rows;assert.equal(row.length,1);assert.deepEqual(row[0],{userId:'migration-resident',role:'leaseholder',name:'Existing resident',removedAt:null});
+ });
  await t.test('durable concurrent replay, mismatches, validation and authority',async()=>{
   const payload=body();const results=await Promise.all([call('owner','POST',path,payload),call('owner','POST',path,payload)]);for(const r of results)assert.equal(r.statusCode,200,r.body);entry=results[0].json();assert.equal(entry.amountCents,123456);assert.equal(results[1].json().id,entry.id);
   assert.equal((await call('owner','POST',path,{...payload,amount:'9.99'})).statusCode,409);
@@ -98,4 +112,5 @@ test('manual finance isolation, replay, corrections and totals',{skip:!url},asyn
  await t.test('explicit rent recovery and readable identities',async recoveryTest=>rentRecoveryCases(recoveryTest,admin,call,db));
  await t.test('refundable deposits and linked cash sources',async depositTest=>depositCases(depositTest,admin,call,db));
  await t.test("connected tenant workspace", async workspaceTest => residentWorkspaceCases(workspaceTest,admin,call,app));
+ await t.test("shared lease household and approvals", async householdTest => householdCases(householdTest,admin,call,app));
 });

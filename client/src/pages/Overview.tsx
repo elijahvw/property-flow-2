@@ -395,9 +395,7 @@ function OverviewWorkspace() {
                       {d.leases.endingSoon.map((l) => (
                         <li key={l.id}>
                           <Link
-                            to={propertyLink("/company/leases", l.propertyId, {
-                              attention: "ending_soon",
-                            })}
+                            to={`/company/leases/${encodeURIComponent(l.id)}?section=renewal`}
                           >
                             <strong>
                               {l.property.name} · {l.unit.label}

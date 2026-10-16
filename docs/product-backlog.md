@@ -18,11 +18,11 @@ Acceptance:
 - Recheck company/current authority. Management notes never enter tenant responses; access revocation clears private state.
 - Test no lease, multiple/future/ended leases, missing/denied records, mobile and keyboard focus. Define historical tenant access explicitly; do not bypass current assignment revocation.
 
-### PF-02 · Individual lease workspace — P1, next
+### PF-02 · Individual lease workspace — P1, implemented locally / validation in progress
 
 Audience: owner/manager and authorized tenant. Dependencies: existing lease/rent/deposit APIs; reuse PF-01 navigation conventions.
 
-Baseline: Rent's “Lease details” link goes to a property lease directory, which has no selected-lease URL.
+Previous baseline: Rent's “Lease details” link went to a property lease directory, which had no selected-lease URL. The current increment adds an exact lease route and a connected onboarding/household/invitation/terms/renewal hub. See [scope and limits](lease-workflow.md). This does not complete PF-03's offline primary-contact migration or PF-10's coordinated billing/deposit transition.
 
 Acceptance:
 - A specific lease route shows the named lease after reload/back/copied URL; old entry links still resolve.
@@ -125,6 +125,8 @@ Acceptance:
 ### PF-11 · Households and co-tenant responsibility — P1
 
 Audience: owner/manager and tenant participants. Dependencies: PF-03/PF-05/PF-08 contracts.
+
+User-directed initial slice accompanies PF-02: one shared lease ledger, leaseholder/occupant roster, effective dates, owner-controlled additions/removals/primary contact, leaseholder invitation requests with owner approval for every new resident, and current linked leaseholder financial access. Existing primary residents are backfilled without replacing leases or money. Additional residents can be recorded without logins. Guarantor/dependent-specific models, full contact migration, separately allocated liability and recurring-term transitions remain future scope.
 
 Acceptance:
 - Distinguish responsible tenant, occupant/dependent, guarantor and emergency contact with effective dates and sharing rights.

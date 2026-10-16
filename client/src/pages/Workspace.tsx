@@ -1,4 +1,5 @@
 import { RecordIdentity } from "../components/RecordIdentity";
+import { ResidentLeaseInvitations } from "../components/LeaseInvitations";
 import {
   UserProvisioning,
   UserVerificationControls,
@@ -1337,6 +1338,7 @@ export function Resident() {
         <Link to="/resident/rent">My rent</Link> for your charges, payments, and
         balance.
       </p>
+      <ResidentLeaseInvitations />
     </>
   );
 }
