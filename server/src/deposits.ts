@@ -1,3 +1,4 @@
+import { leasePerson, leasePersonSelect } from "./lease-person.js";
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { AccessError } from "./access.js";
@@ -30,7 +31,7 @@ const leaseSelect = {
   endsOn: true,
   property: { select: { name: true } },
   unit: { select: { label: true } },
-  resident: { select: { name: true, email: true } },
+  ...leasePersonSelect,
 } as const;
 const accountSelect = {
   id: true,
@@ -124,7 +125,7 @@ async function visibleLease(
       "NOT_FOUND",
       "Lease not found in your current workspace.",
     );
-  return residentId ? { ...row, resident: undefined } : row;
+  return residentId ? { ...row, resident: undefined, residentContact:undefined } : {...row,resident:leasePerson(row)};
 }
 export function depositSummary(
   requiredCents: number,
@@ -338,7 +339,7 @@ export function registerDeposits(
           }
           const rows = accounts.map((a) => ({
             ...a,
-            lease: resident ? { ...a.lease, resident: undefined } : a.lease,
+            lease: resident ? { ...a.lease, resident: undefined, residentContact:undefined } : {...a.lease,resident:leasePerson(a.lease)},
             summary: depositSummary(
               a.requiredCents,
               held.get(a.id) || 0n,

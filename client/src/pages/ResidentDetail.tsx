@@ -69,15 +69,15 @@ function TenantWorkspace({ id }: { id: string }) {
   </div>;
 }
 
-function TenantFinancials({ id }: { id: string }) {
+export function TenantFinancials({ id, contact=false }: { id: string; contact?:boolean }) {
   const [params] = useSearchParams();
   const [view, setView] = useState("all");
-  const resource = useResource<Workspace>(`/api/company/resident-profiles/${encodeURIComponent(id)}/workspace`, true, true);
+  const resource = useResource<Workspace>(`/api/company/${contact?"resident-contacts":"resident-profiles"}/${encodeURIComponent(id)}/workspace`, true, true);
   const data = resource.data;
   // A failed refresh must not present old financial values as a current balance.
   if (resource.error) return <section className="panel tenant-load-state"><h2>Balances and leases unavailable</h2><p role="alert">{resource.error}</p><p>No partial or outdated balances are shown.</p><button className="secondary" onClick={resource.reload}>Try balances again</button></section>;
   if (!data) return <section className="panel tenant-load-state" role="status">Loading balances and lease history…</section>;
-  const context = tenantLedgerContext(id, params);
+  const context = tenantLedgerContext(id, params,contact);
   const rank = (lease: Lease) => lease.status === "ended" ? 4 : lease.status === "draft" ? 3 : lease.startsOn.slice(0, 10) > data.businessDate ? 2 : lease.endsOn && lease.endsOn.slice(0, 10) < data.businessDate ? 1 : 0;
   const rows = data.leases.filter(l => view === "all" || l.status === view).sort((a, b) => rank(a) - rank(b) || b.startsOn.localeCompare(a.startsOn) || a.id.localeCompare(b.id));
   return <>
@@ -94,7 +94,7 @@ function TenantFinancials({ id }: { id: string }) {
     <section className="panel tenant-leases-panel" aria-label="Tenant leases">
       <div className="section-heading"><div><h2>Leases &amp; balances</h2><p className="section-caption">Rental history and the records behind each balance.</p></div><span className="directory-count">{data.leases.length} {data.leases.length === 1 ? "lease" : "leases"}</span></div>
       <div className="tenant-lease-toolbar"><label>Lease status<select aria-label="Lease status" value={view} onChange={e => setView(e.target.value)}><option value="all">All leases</option><option value="active">Active records</option><option value="draft">Drafts</option><option value="ended">Ended</option></select></label></div>
-      {!data.leases.length ? <div className="empty-state"><h3>No lease recorded yet</h3><p>Record a lease to connect this tenant's rental terms and financial history.</p><Link className="button secondary" to="/company/leases?new=lease">Record a lease</Link></div> : !rows.length ? <p className="tenant-muted">No leases match this status.</p> : <ul className="tenant-lease-list">{rows.map(lease => {
+      {!data.leases.length ? <div className="empty-state"><h3>No lease recorded yet</h3><p>Record a lease to connect this tenant's rental terms and financial history.</p><Link className="button secondary" to={"/company/leases?new=lease"+(contact?`&contactId=${encodeURIComponent(id)}`:"")}>Record a lease</Link></div> : !rows.length ? <p className="tenant-muted">No leases match this status.</p> : <ul className="tenant-lease-list">{rows.map(lease => {
         const status = lease.status === "draft" ? "Draft" : lease.status === "ended" ? "Ended" : lease.startsOn.slice(0,10) > data.businessDate ? "Upcoming" : lease.endsOn && lease.endsOn.slice(0,10) < data.businessDate ? "Expired · review needed" : "In effect";
         return <li key={lease.id}>
           <div className="tenant-lease-top"><div><Link className="tenant-property-name" to={`/company/properties/${encodeURIComponent(lease.propertyId)}`}>{lease.property.name}</Link><h3><Link to={leasePath(lease.id,context)}>{lease.unit.label}</Link></h3></div><span className={`tenant-status ${status !== "In effect" ? "neutral" : ""}`}>{status}</span></div>

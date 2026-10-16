@@ -74,7 +74,7 @@ Deliver **PF-25** imports/reconciliation/integration contracts, then **PF-26** s
 
 1. **PF-01, merged in #33:** tenant detail route, linked leases/balances and return navigation, using existing data. Includes the requested shared form/date/UI improvements; see [scope](tenant-workspace.md).
 2. **PF-02, merged in #34:** exact lease workspace and working links to rent/deposits/terms/renewal, using existing data.
-3. **PF-03a, current:** contact identity/backfill with compatibility; see [contract and rollout](resident-contacts.md). **PF-03b:** offline contact/directory/lease forms next, then verified invitation/linking as a separate review. Do not combine a people/identity rewrite into one PR.
+3. **PF-03a, merged/deployed:** contact identity/backfill with compatibility. **PF-03b, current review:** offline contact/directory/lease forms, connected optional invitations and verified linking, plus the requested form/address UI audit; see [contract and rollout](resident-contacts.md). The user explicitly brought invitation linking into this slice. Existing identity and financial source IDs remain intact.
 4. **PF-04:** statement and traceable CSV from existing charges/receipts/allocations with separate credit/deposit summaries.
 5. **PF-05a:** reviewed one-time non-rent charges/noncash credits; then PF-06 money movements after their accounting contract is settled.
 

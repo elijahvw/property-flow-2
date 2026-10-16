@@ -1,3 +1,4 @@
+import { Address, PropertyAddressFields } from "../components/Address";
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, ApiError } from "../api";
@@ -24,13 +25,6 @@ type Property = PropertyExtras & {
   state: string;
   zip: string;
 };
-const fields = [
-  ["name", "Property name", 200],
-  ["address", "Street address", 200],
-  ["city", "City", 200],
-  ["state", "State / region", 100],
-  ["zip", "Postal code", 30],
-] as const;
 export default function PropertyDetail() {
   const { propertyId = "" } = useParams();
   const { data, can } = useAuth();
@@ -197,19 +191,7 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
                   }}
                 >
                   <fieldset disabled={busy || deniedSave}>
-                    <div className="form-grid">
-                      {fields.map(([name, label, max]) => (
-                        <label key={name}>
-                          {label}
-                          <input
-                            name={name}
-                            defaultValue={property[name]}
-                            required
-                            maxLength={max}
-                          />
-                        </label>
-                      ))}
-                    </div>
+                    <PropertyAddressFields value={property} />
                     <PropertyFields value={property} />
                     <div className="actions">
                       <button type="submit">
@@ -257,31 +239,11 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
                 </form>
               </EditorDialog>
             )}
-            <dl className="details">
-              {fields.map(([name, label]) => (
-                <div key={name}>
-                  <dt>{label}</dt>
-                  <dd>{property[name]}</dd>
-                </div>
-              ))}
-            </dl>
-            <dl className="details">
-              {[
-                [
-                  "Property type",
-                  propertyTypes.find(([v]) => v === property.propertyType)?.[1],
-                ],
-                ["Year built", property.yearBuilt],
-                ["Parcel / tax ID", property.parcelId],
-                ["Country", property.countryCode],
-                ["Property notes", property.notes],
-              ].map(([label, value]) => (
-                <div key={String(label)}>
-                  <dt>{label}</dt>
-                  <dd className="preserve-lines">{value ?? "Not recorded"}</dd>
-                </div>
-              ))}
-            </dl>
+            <div className="property-details-layout">
+              <section className="property-location" aria-label="Property location"><p className="record-kicker">Location</p><Address street={property.address} city={property.city} region={property.state} postalCode={property.zip} country={property.countryCode}/></section>
+              <dl className="details property-building-facts">{[["Property type",propertyTypes.find(([v])=>v===property.propertyType)?.[1]],["Year built",property.yearBuilt],["Parcel / tax ID",property.parcelId]].map(([label,value])=><div key={String(label)}><dt>{label}</dt><dd>{value??"Not recorded"}</dd></div>)}</dl>
+            </div>
+            <div className="property-notes"><h3>Property notes</h3><p className="preserve-lines">{property.notes||"No property notes added."}</p></div>
             {!editable && (
               <p className="help">
                 You have read-only access to this property.

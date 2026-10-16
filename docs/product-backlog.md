@@ -34,9 +34,9 @@ Acceptance:
 
 Audience: owner/manager and prospective/current tenant. Dependencies: PF-01/PF-02 surfaces and additive migration design.
 
-Baseline: contact fields are on CompanyMembership; Lease.residentId references User. A user currently has one company membership. Recording a primary leaseholder and granting portal access are coupled. PF-03a now adds a company-owned contact identity bridge/backfill and dual writes without switching authorization or forms; see [contract and rollout](resident-contacts.md). Offline primary leaseholder forms and verified portal linking remain following slices.
+Baseline: contact fields are on CompanyMembership; Lease.residentId references User. A user currently has one company membership. Recording a primary leaseholder and granting portal access are coupled. PF-03a now adds a company-owned contact identity bridge/backfill and dual writes without switching authorization or forms; see [contract and rollout](resident-contacts.md). The current PF-03b review adds offline primary leaseholder forms and, at the user’s explicit request, optional invitations and verified same-profile linking.
 
-Split: contact identity/backfill and compatibility first; contact/lease creation UI next; verified invitation/linking as a separately reviewable slice. Preserve existing source IDs/history or provide explicit migration mappings; do not rebuild financial records.
+Delivered foundation: contact identity/backfill and compatibility. Current review: contact/lease creation UI with connected optional invitations and verified linking, as requested by the user. Preserve existing source IDs/history or provide explicit migration mappings; do not rebuild financial records.
 
 Acceptance:
 - Add an offline tenant and record a lease/manual rent/deposit without sending an invitation or creating an identity-provider user.

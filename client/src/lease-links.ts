@@ -1,4 +1,4 @@
-const keys=["tenantId","tenantQ","tenantAccess","leaseListProperty","leaseListStatus","leaseListAttention","leaseListNested","leaseListApprovals"];
+const keys=["tenantContact","tenantId","tenantQ","tenantAccess","leaseListProperty","leaseListStatus","leaseListAttention","leaseListNested","leaseListApprovals"];
 export function leaseContext(params:URLSearchParams){return Object.fromEntries(keys.filter(key=>params.get(key)).map(key=>[key,params.get(key)!]));}
 export function leasePath(id:string,context:Record<string,string>={}){const search=new URLSearchParams(context).toString();return `/company/leases/${encodeURIComponent(id)}`+(search?`?${search}`:"");}
 export function leaseDirectoryPath(params:URLSearchParams){

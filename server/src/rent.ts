@@ -1,3 +1,4 @@
+import { leasePerson, leasePersonSelect } from "./lease-person.js";
 import { chargeTiming } from "./payment-policy.js";
 import type {
   FastifyInstance,
@@ -38,7 +39,7 @@ const leaseSelect = {
   version: true,
   property: { select: { name: true } },
   unit: { select: { label: true } },
-  resident: { select: { name: true, email: true } },
+  ...leasePersonSelect,
 } as const;
 const chargeSelect = {
   reference:true,
@@ -398,7 +399,7 @@ export function registerRent(
                 ...summary
               } = rentBalances(scopedData, today);
               return {
-                lease: resident ? { ...lease, resident: undefined } : lease,
+                lease: resident ? { ...lease, resident: undefined, residentContact:undefined } : {...lease,resident:leasePerson(lease)},
                 summary,
                 ...(leaseId
                   ? {

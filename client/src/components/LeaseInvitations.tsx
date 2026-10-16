@@ -23,7 +23,7 @@ export function LeaseInvitations({leaseId,startsOn,resident=false}:{leaseId:stri
         <label>Requested resident role<select name="role" aria-label="Requested resident role" defaultValue="occupant"><option value="occupant">Occupant · no financial access</option><option value="leaseholder">Leaseholder · shared financial access</option></select></label>
         <label>Invited resident start date<DateField aria-label="Invited resident start date" name="startsOn" required defaultValue={startsOn.slice(0,10)}/></label>
       </div></fieldset>
-      <p className="help">An invitation adds a person to this household only after owner approval and verified acceptance. It does not change the rent, sign an agreement or split the balance.</p>
+      <p className="help">Owner approval saves a tenant profile for tracking. Verified acceptance connects their login and adds the approved household access. To invite a profile you already recorded, use Leaseholders & occupants. It does not change the rent, sign an agreement or split the balance.</p>
     </Form>
     {link&&<label className="notice">Approved invitation link<input className="dd-privacy-hidden" readOnly value={link} aria-label="Resident invitation acceptance link" onFocus={e=>e.currentTarget.select()}/><span>Copy and share this link now. It is shown once.</span></label>}
     {error&&<p role="alert" className="notice error">{error}</p>}

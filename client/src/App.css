@@ -800,3 +800,44 @@ button, .button { border-radius: 6px; }
   .tenant-directory-panel td[data-label]::before { margin: 0; }
   .tenant-directory-panel .tenant-row-action { margin-left: calc(36px + .8rem); display: inline-flex; min-height: 44px; align-items: center; }
 }
+
+/* Postal layout follows the address rather than the generic metadata grid. */
+.postal-address { display: block; font-style: normal; line-height: 1.65; overflow-wrap: anywhere; }
+.postal-address > span { display: block; }
+.address-fields { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr) minmax(0,1fr); gap: 0 1rem; }
+.address-street, .address-country { grid-column: 1 / -1; }
+.property-details-layout { display: grid; grid-template-columns: minmax(240px,1fr) minmax(0,1.5fr); gap: 2rem; align-items: start; padding: .5rem 0 1.5rem; }
+.property-location { padding: 1.3rem 1.5rem; background: #f6f9f7; border: 1px solid #e0e8e3; border-radius: 10px; }
+.property-location h3 { margin: 0 0 .5rem; }
+.property-building-facts { margin: .5rem 0 0; }
+.property-notes { border-top: 1px solid #e3e9e5; padding-top: 1rem; }
+.property-notes h3 { font-size: .85rem; margin: 0 0 .5rem; }
+.property-notes p { margin: 0; max-width: 75ch; }
+.tenant-form .form-grid, [aria-label="Lease household"] .form-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.tenant-form .form-section { margin: 1rem 0; }
+.tenant-next-step { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; border-left: 3px solid #16725f; background: #f7fbf8; }
+.tenant-next-step h2 { margin: 0 0 .4rem; }
+.tenant-next-step p { margin: 0; max-width: 65ch; }
+.tenant-next-step .button { flex-shrink: 0; }
+[aria-label="Lease household"] > .workflow-form { max-width: 920px; padding: 1.25rem; background: #f8faf9; border: 1px solid #dde7e1; border-radius: 10px; margin: 1.25rem 0; }
+@media (max-width:700px) {
+  .property-details-layout { grid-template-columns: 1fr; gap: 1.25rem; }
+  .address-fields { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .address-city { grid-column: 1 / -1; }
+  .tenant-form .form-grid, [aria-label="Lease household"] .form-grid { grid-template-columns: 1fr; }
+  .tenant-next-step { align-items: stretch; flex-direction: column; }
+}
+.invitation-scope { list-style: none; padding: 0; margin: 1rem 0; border: 1px solid #dfe7e1; border-radius: 10px; overflow: hidden; }
+.invitation-scope li { padding: 1rem 1.2rem; border-bottom: 1px solid #e1e8e3; }
+.invitation-scope li:last-child { border-bottom: 0; }
+.invitation-scope span { display: block; color: #52675d; font-size: .85rem; line-height: 1.7; }
+.invitation-welcome { max-width: 760px; margin-inline: auto; }
+.invitation-welcome .lease-next-steps { margin-bottom: 0; }
+.property-location .record-kicker { margin-top: 0; }
+@media (max-width:700px) {
+  .tenant-directory-toolbar label:not(.tenant-search) { flex: 1 1 calc(50% - .5rem); }
+  .tenant-directory-toolbar .directory-count { margin-left: 0; flex-basis: 100%; }
+}
+.field-full { grid-column: 1 / -1; }
+.address-section { border: 0; padding: 0; margin: 0; min-width: 0; }
+.address-section > .help { margin-top: 0; }

@@ -107,6 +107,7 @@ export function LeaseReview({
         Recurring billing is enabled separately from the rent ledger. This
         record does not create or sign a legal agreement.
       </p>
+      {!!p.residentContactId&&<p className="help">This connects the tenant to this property. An active linked resident account receives property access; shared financial access follows the approved leaseholder role. A profile without an account remains available for tracking.</p>}
       {pending ? (
         <p role="status">
           A previous save may have succeeded. Retry preserves the original

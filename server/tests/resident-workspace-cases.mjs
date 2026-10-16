@@ -67,7 +67,7 @@ export async function residentWorkspaceCases(t, admin, call, app) {
       await page.getByRole('link',{name:'Open rent ledger for Current apartment'}).click();
       await expect(page.getByRole('heading',{name:'Rent ledger',exact:true})).toBeVisible();
       await page.getByRole('link',{name:'Back to tenant'}).click();
-      await expect(page).toHaveURL(/residents\/ws-resident\?q=Jordan/);
+      await expect(page).toHaveURL(/tenants\/[^?]+\?q=Jordan/);
       await page.setViewportSize({width:390,height:844});
       await expect(page.getByRole('heading',{name:'Jordan Rivera',exact:true})).toBeVisible();
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);

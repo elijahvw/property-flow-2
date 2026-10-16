@@ -1,3 +1,4 @@
+import { TenantForm,type TenantContact } from "../components/TenantForm";
 import { formatDate } from "../dates";
 import { leasePath } from "../lease-links";
 import { DateField } from "../components/DateField";
@@ -33,7 +34,8 @@ export type Lease = {
   id: string;
   propertyId: string;
   unitId: string;
-  residentId: string;
+  residentId: string|null;
+  residentContactId?:string|null;
   startsOn: string;
   endsOn: string | null;
   rentCents: number;
@@ -447,6 +449,7 @@ function LeaseList() {
               >
                 <LeaseCreate
                   propertyId={id}
+                  initialContactId={params.get("contactId")||undefined}
                   propertyName={
                     properties.data!.find((p) => p.id === id)?.name ||
                     "Property"
@@ -663,10 +666,12 @@ function LeaseList() {
 export function LeaseCreate({
   propertyId,
   propertyName,
+  initialContactId,
   saved,
 }: {
   propertyId: string;
   propertyName: string;
+  initialContactId?:string;
   saved: (row: { id:string }) => void;
 }) {
   const auth = useAuth().data,
@@ -680,12 +685,14 @@ export function LeaseCreate({
   const units = useResource<Records<Unit>>(
     `/api/company/properties/${encodeURIComponent(propertyId)}/units?${new URLSearchParams(unitCursor ? { cursor: unitCursor } : {})}`,
   );
-  const residents = useResource<
-    {
-      userId: string;
-      membership: { user: { name: string | null; email: string } };
-    }[]
-  >(`/api/company/properties/${encodeURIComponent(propertyId)}/residents`);
+  type Candidate={userId:string|null;contactId?:string;name?:string;email?:string|null;membership?:{user:{name:string|null;email:string}}};
+  const residents=useResource<Candidate[]>(`/api/company/properties/${encodeURIComponent(propertyId)}/residents?includeContacts=true`);
+  const [addingTenant,setAddingTenant]=useState(false),[newTenant,setNewTenant]=useState<TenantContact|null>(null);
+  const [selectedTenant,setSelectedTenant]=useState<string|null>(initialContactId||null);
+  const choices:Candidate[]=[...(residents.data||[]),...(newTenant&&!residents.data?.some(p=>p.contactId===newTenant.id)?[{userId:newTenant.userId,contactId:newTenant.id,name:newTenant.name,email:newTenant.email}]:[])];
+  const requestedTenant=selectedTenant??choices[0]?.contactId??choices[0]?.userId??"";
+  const selectedTenantId=choices.some(p=>(p.contactId||p.userId)===requestedTenant)?requestedTenant:"";
+  const candidateName=(p:Candidate)=>p.name||p.membership?.user.name||p.email||p.membership?.user.email||"Tenant";
   // Browsing options must never remount a pending draft or change its retry identity.
   // Keep already-seen choices so the selected unit survives an independent page load.
   useEffect(() => {
@@ -699,6 +706,7 @@ export function LeaseCreate({
   }, [units.data]);
   return (
     <>
+      <EditorDialog open={addingTenant} title="Add tenant for this lease" onClose={()=>setAddingTenant(false)}><TenantForm saved={row=>{setNewTenant(row);setSelectedTenant(row.id);setAddingTenant(false);residents.reload();}} cancel={()=>setAddingTenant(false)}/></EditorDialog>
       <div className="prerequisite-links">
         <Link
           to={`/company/properties/${encodeURIComponent(propertyId)}/residents`}
@@ -712,6 +720,7 @@ export function LeaseCreate({
           Manage units for this property
         </Link>
       </div>
+      <p className="help">Choose an existing tenant or add a contact without leaving this lease. A portal account is not required.</p><button type="button" className="secondary" onClick={()=>setAddingTenant(true)}>Add tenant for this lease</button>
       <ol className="lease-setup-progress" aria-label="Lease setup progress">
         <li aria-current={!review?"step":undefined}>1. Rental and terms</li>
         <li aria-current={review?"step":undefined}>2. Review and record</li>
@@ -725,11 +734,10 @@ export function LeaseCreate({
         />
       ) : (
         <>
-          {!unitOptions.length || !residents.data.length ? (
+          {!unitOptions.length || !choices.length ? (
             units.data && (
               <p>
-                Choose an active unit and assign an accepted resident before
-                creating a lease.
+                Choose an active unit, then add a tenant or select an assigned resident before creating a lease.
               </p>
             )
           ) : (
@@ -761,13 +769,11 @@ export function LeaseCreate({
                         unitOptions.find((u) => u.id === form.get("unitId"))
                           ?.label || "Unit",
                       resident:
-                        residents.data!.find(
-                          (p) => p.userId === form.get("residentId"),
-                        )?.membership.user.email || "Resident",
+                        candidateName(choices.find(p=>(p.contactId||p.userId)===form.get("residentId"))!),
                       payload: {
                         propertyId,
                         unitId: form.get("unitId"),
-                        residentId: form.get("residentId"),
+                        ...(choices.find(p=>(p.contactId||p.userId)===form.get("residentId"))?.contactId?{residentContactId:form.get("residentId")}:{residentId:form.get("residentId")}),
                         startsOn: form.get("startsOn"),
                         endsOn: form.get("endsOn") || null,
                         monthlyRent: form.get("monthlyRent"),
@@ -794,16 +800,17 @@ export function LeaseCreate({
                     </label>
                     <label>
                       Primary resident
-                      <select name="residentId" required>
-                        {residents.data.map((person) => (
-                          <option key={person.userId} value={person.userId}>
-                            {person.membership.user.name ||
-                              person.membership.user.email}
+                      <select name="residentId" required value={selectedTenantId} onChange={e=>setSelectedTenant(e.target.value)}>
+                        <option value="">Choose a tenant</option>
+                        {choices.map((person) => (
+                          <option key={person.contactId||person.userId} value={person.contactId||person.userId||""}>
+                            {candidateName(person)}{!person.userId?" · No portal account":""}
                           </option>
                         ))}
                       </select>
                     </label>
                   </div>
+                  {initialContactId&&!choices.some(p=>p.contactId===initialContactId)&&!selectedTenantId&&<p role="alert">This tenant is not eligible for the selected property. Review their record or choose another tenant explicitly.</p>}
                   <LeaseTerms prefix="New lease" />
                   <p className="help">
                     One active lease is allowed per unit. Review the details,
@@ -1015,11 +1022,11 @@ export function LeaseRenewal({
             setReview({
               property: previous.property.name,
               unit: previous.unit.label,
-              resident: previous.resident.email,
+              resident: previous.resident.name||previous.resident.email,
               payload: {
                 propertyId: previous.propertyId,
                 unitId: previous.unitId,
-                residentId: previous.residentId,
+                ...(previous.residentContactId?{residentContactId:previous.residentContactId}:{residentId:previous.residentId}),
                 previousLeaseId: previous.id,
                 expectedPreviousVersion: previous.version,
                 startsOn: f.get("startsOn"),

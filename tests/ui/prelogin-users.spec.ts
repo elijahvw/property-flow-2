@@ -122,6 +122,7 @@ async function fixture(page: Page, { verified = true, platform = true } = {}) {
             },
             409,
           );
+        if(req.method()==="DELETE"){state.people[0].membership=null;return json({success:true});}
         state.people[0].membership = {
           companyId: req.postDataJSON().companyId,
           version: (state.people[0].membership?.version ?? 0) + 1,
@@ -421,4 +422,11 @@ test("assignment conflict loads the current row while preserving the draft until
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect.poll(() => state.membershipRequests.length).toBe(2);
   expect(state.membershipRequests[1].expectedVersion).toBe(7);
+});
+
+test("platform user can explicitly remove company access without deleting the profile",async({page})=>{
+ const state=await fixture(page);await page.goto('/platform/users');await page.getByRole('button',{name:'Manage',exact:true}).click();
+ await page.getByRole('combobox',{name:'Company',exact:true}).selectOption('a');await page.getByRole('button',{name:'Save changes',exact:true}).click();
+ await page.getByRole('combobox',{name:'Company',exact:true}).selectOption('');await expect(page.getByRole('combobox',{name:'Company role',exact:true})).toBeDisabled();await page.getByRole('button',{name:'Save changes',exact:true}).click();
+ await expect(page.getByRole('combobox',{name:'Company',exact:true})).toHaveValue('');expect(state.people).toHaveLength(1);expect(state.people[0].membership).toBeNull();expect(state.membershipRequests.at(-1)).toEqual({expectedVersion:1,expectedCompanyId:'a',expectedCreatedAt:null});
 });

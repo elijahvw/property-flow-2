@@ -1,3 +1,5 @@
+import { InvitationEntry } from "./components/ContactInvitation";
+import { ContactDetail } from "./pages/ContactDetail";
 import { recordBrowserEvent } from "./browser-telemetry";
 import React, { Component, useEffect, useRef, useState } from "react";
 import {
@@ -22,7 +24,6 @@ import {
   Account,
   AccessStatus,
   Resident,
-  AcceptInvitation,
   Audit,
 } from "./pages/Workspace";
 import { Overview } from "./pages/Overview";
@@ -74,7 +75,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     routes.find((r) => r.path === location.pathname) ||
     (location.pathname.startsWith("/company/properties/")
       ? routes.find((r) => r.path === "/company/properties")
-      : location.pathname.startsWith("/company/residents/")
+      : (location.pathname.startsWith("/company/residents/")||location.pathname.startsWith("/company/tenants/"))
         ? routes.find((r) => r.path === "/company/residents")
         : location.pathname.startsWith("/company/leases/")
           ? routes.find((r) => r.path === "/company/leases")
@@ -138,6 +139,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                   <NavLink
                     key={r.path}
                     to={r.path}
+                    className={({isActive})=>isActive||(r.path==="/company/residents"&&location.pathname.startsWith("/company/tenants/"))?"active":undefined}
                     onClick={() => setMenuOpen(false)}
                   >
                     <NavigationIcon path={r.path} />
@@ -278,6 +280,7 @@ function Pages() {
         path="/company/leases/:leaseId"
         element={<Shell><ProtectedRoute permission="lease.manage"><LeaseDetail /></ProtectedRoute></Shell>}
       />
+      <Route path="/company/tenants/:contactId" element={<Shell><ProtectedRoute permission="resident.assignment.manage"><ContactDetail /></ProtectedRoute></Shell>} />
       <Route
         path="/company/residents/:userId"
         element={<Shell><ProtectedRoute permission="resident.assignment.manage"><ResidentDetail /></ProtectedRoute></Shell>}
@@ -377,9 +380,7 @@ function Pages() {
         path="/invite"
         element={
           <Shell>
-            <ProtectedRoute>
-              <AcceptInvitation />
-            </ProtectedRoute>
+            <InvitationEntry />
           </Shell>
         }
       />

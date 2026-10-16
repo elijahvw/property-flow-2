@@ -15,11 +15,6 @@ on:
         required: true
         default: false
         type: boolean
-      retire_datadog:
-        description: Retire the reviewed legacy AWS monitoring integration after the checked release
-        required: true
-        default: true
-        type: boolean
       run_terraform:
         description: 'Control Terraform apply for this deploy'
         required: false
@@ -333,33 +328,6 @@ jobs:
           bash scripts/verify-dev-public.sh "$PUBLIC_URL"
           echo "Deployed commit: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Application: $PUBLIC_URL" >> "$GITHUB_STEP_SUMMARY"
-
-  retire-datadog:
-    name: Retire legacy monitoring after verified cutover
-    if: always() && github.event_name == 'workflow_dispatch' && !inputs.plan_only && inputs.retire_datadog && needs.deploy-backend.result == 'success' && (needs.deploy-frontend.result == 'success' || needs.deploy-frontend.result == 'skipped')
-    needs: [deploy-backend, deploy-frontend]
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
-          aws-region: us-east-1
-      - name: Install pinned AWS SDK
-        run: python3 -m pip install boto3==1.43.114
-      - name: Recheck new-release telemetry before retiring the integration
-        env:
-          GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.GRAFANA_SERVICE_ACCOUNT_TOKEN }}
-        run: python3 scripts/grafana-monitoring.py verify --attempts 3
-      - name: Inspect exact legacy resources and retirement guards
-        run: python3 scripts/retire-datadog.py
-      - name: Retire reviewed integration and unused agent task definitions
-        run: python3 scripts/retire-datadog.py --execute
 
   record-release-state:
     name: Remember successful component releases

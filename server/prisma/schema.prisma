@@ -64,7 +64,8 @@ model User {
   identities Identity[]
   maintenanceRequests MaintenanceRequest[]
   leases Lease[] @relation("LeaseResident")
-  residentContacts ResidentContact[]
+  residentContacts ResidentContact[] @relation("ContactAccount")
+  createdResidentContacts ResidentContact[] @relation("ContactCreator")
   leaseParticipants LeaseParticipant[]
   createdLeaseParticipants LeaseParticipant[] @relation("LeaseParticipantCreator")
   approvedLeaseInvitations Invitation[] @relation("LeaseInvitationApprover")
@@ -114,6 +115,10 @@ model CompanyMembership {
 }
 
 model Invitation {
+  contactLeaseApprovals Json?
+  contactId String?
+  contact ResidentContact? @relation(fields:[contactId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+  @@index([companyId,contactId])
   leaseId String?
   propertyId String?
   participantRole String?
@@ -265,6 +270,22 @@ model Unit {
   @@index([companyId, propertyId, id])
 }
 model ResidentContact {
+  status String @default("active")
+  preferredName String?
+  alternatePhone String?
+  preferredContact String?
+  addressLine1 String?
+  addressLine2 String?
+  city String?
+  region String?
+  postalCode String?
+  country String?
+  emergencyRelationship String?
+  createdById String?
+  submissionKey String?
+  submissionHash String?
+  creator User? @relation("ContactCreator", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([companyId, createdById, submissionKey])
   compatibilityProfile Json?
   id String @id @default(cuid())
   companyId String
@@ -279,7 +300,8 @@ model ResidentContact {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  user User? @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user User? @relation("ContactAccount", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  invitations Invitation[]
   primaryLeases Lease[]
   participants LeaseParticipant[]
   @@unique([id, companyId])
@@ -310,7 +332,7 @@ model Lease {
   companyId String
   propertyId String
   unitId String
-  residentId String
+  residentId String?
   createdById String
   submissionKey String
   submissionHash String
@@ -325,7 +347,7 @@ model Lease {
   company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   property Property @relation(fields: [propertyId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Restrict)
   unit Unit @relation(fields: [unitId, propertyId, companyId], references: [id, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
-  resident User @relation("LeaseResident", fields: [residentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  resident User? @relation("LeaseResident", fields: [residentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   creator User @relation("LeaseCreator", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   @@unique([companyId, createdById, submissionKey])
   @@index([companyId, propertyId, id])

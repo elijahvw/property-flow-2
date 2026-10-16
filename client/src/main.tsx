@@ -9,6 +9,8 @@ if (window.location.pathname === '/invite' && window.location.hash) {
   sessionStorage.setItem('pf-invitation', window.location.hash.slice(1));
   if(new URLSearchParams(window.location.search).get('lease')==='1')sessionStorage.setItem('pf-lease-invitation','true');
   else sessionStorage.removeItem('pf-lease-invitation');
+  if(new URLSearchParams(window.location.search).get('contact')==='1')sessionStorage.setItem('pf-contact-invitation','true');
+  else sessionStorage.removeItem('pf-contact-invitation');
   window.history.replaceState(null, '', '/invite');
 }
 

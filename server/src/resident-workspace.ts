@@ -1,7 +1,7 @@
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { AccessError, companyScope } from "./access.js";
-import { opaqueUserId } from "./application.js";
+import { assignmentId, opaqueUserId } from "./application.js";
 import { depositSummary } from "./deposits.js";
 import { scoped } from "./operational.js";
 import { companyDay } from "./reports.js";
@@ -23,11 +23,11 @@ export function registerResidentWorkspace(
   db: PrismaClient,
   authenticate: preValidationHookHandler,
 ) {
-  server.get<{ Params: { userId: string } }>(
-    "/api/company/resident-profiles/:userId/workspace",
+  for(const contactMode of [false,true])server.get<{ Params: { userId: string; contactId:string } }>(
+    contactMode?"/api/company/resident-contacts/:contactId/workspace":"/api/company/resident-profiles/:userId/workspace",
     { preValidation: authenticate },
     request => {
-      const userId = opaqueUserId(request.params.userId);
+      const userId = contactMode?assignmentId(request.params.contactId):opaqueUserId(request.params.userId);
       if (Object.keys(request.query as object).length)
         throw new AccessError(400, "INVALID_INPUT", "Unknown tenant workspace filter.");
       return scoped(db, request, "resident.assignment.manage", async (tx, companyId) => {
@@ -38,7 +38,7 @@ export function registerResidentWorkspace(
         });
         companyScope(current, "lease.manage", companyId);
         companyScope(current, "finance.manage", companyId);
-        const member = await tx.companyMembership.findFirst({
+        const member = contactMode ? await tx.residentContact.findFirst({where:{id:userId,companyId},select:{id:true}}) : await tx.companyMembership.findFirst({
           where: { userId, companyId, role: "resident" }, select: { userId: true },
         });
         if (!member) throw new AccessError(404, "NOT_FOUND", "Resident not found in this company.");
@@ -47,7 +47,7 @@ export function registerResidentWorkspace(
         // Include draft/future/ended history for management, independent of portal
         // assignment. This endpoint is never used as a tenant self-service API.
         const leases = complete(await tx.lease.findMany({
-          where: { companyId, OR: [{ residentId: userId }, { participants: { some: { companyId, userId } } }] },
+          where: { companyId, OR: contactMode?[{residentContactId:userId},{participants:{some:{companyId,contactId:userId}}}]:[{ residentId: userId }, { participants: { some: { companyId, userId } } },{residentContact:{companyId,userId}},{participants:{some:{companyId,contact:{companyId,userId}}}}] },
           select: {
             id: true, propertyId: true, startsOn: true, endsOn: true,
             status: true, rentCents: true, rentDueDay: true, graceDays: true,

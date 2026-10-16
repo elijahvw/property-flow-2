@@ -1,3 +1,4 @@
+import { contactDirectory } from "./contact-records.js";
 import { linkedResidentContact, residentCompatibilityProfile } from "./resident-contacts.js";
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import type { PrismaClient } from "@prisma/client";
@@ -60,11 +61,7 @@ export function registerResidentProfiles(
   registerResidentWorkspace(server, db, authenticate);
   server.get("/api/company/resident-profiles", auth, (request) =>
     scoped(db, request, "resident.assignment.manage", (tx, companyId) =>
-      tx.companyMembership.findMany({
-        where: { companyId, role: "resident" },
-        select,
-        orderBy: { user: { email: "asc" } },
-      }),
+      contactDirectory(tx, companyId),
     ),
   );
   server.get<{ Params: { userId: string } }>(
