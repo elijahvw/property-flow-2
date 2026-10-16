@@ -13,6 +13,7 @@ CREATE TABLE "ResidentContact" (
  "emergencyContactName" TEXT,
  "emergencyContactPhone" TEXT,
  "managementNotes" TEXT,
+ "compatibilityProfile" JSONB,
  "version" INTEGER NOT NULL DEFAULT 1 CHECK("version">0),
  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
  "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -37,13 +38,13 @@ WITH people AS (
  UNION SELECT "companyId","residentId" FROM "Lease"
  UNION SELECT "companyId","userId" FROM "LeaseParticipant" WHERE "userId" IS NOT NULL
 )
-INSERT INTO "ResidentContact"(id,"companyId","userId",name,email,phone,"emergencyContactName","emergencyContactPhone","managementNotes","createdAt","updatedAt")
+INSERT INTO "ResidentContact"(id,"companyId","userId",name,email,phone,"emergencyContactName","emergencyContactPhone","managementNotes","compatibilityProfile","createdAt","updatedAt")
  SELECT 'rc-'||md5(json_build_array(p."companyId",p."userId")::text),p."companyId",p."userId",
  LEFT(COALESCE(NULLIF(btrim(m."contactName"),''),NULLIF(btrim(u.name),''),NULLIF(btrim(u.email),''),'Resident'),200),
  CASE WHEN length(u.email) BETWEEN 1 AND 254 THEN u.email ELSE NULL END,
- m."contactPhone",m."emergencyContactName",m."emergencyContactPhone",m."managementNotes",COALESCE(m."createdAt",u."createdAt"),CURRENT_TIMESTAMP
+ m."contactPhone",m."emergencyContactName",m."emergencyContactPhone",m."managementNotes",CASE WHEN m."userId" IS NOT NULL THEN jsonb_build_object('contactName',m."contactName",'contactPhone',m."contactPhone",'emergencyContactName',m."emergencyContactName",'emergencyContactPhone',m."emergencyContactPhone",'managementNotes',m."managementNotes") ELSE NULL END,COALESCE(m."createdAt",u."createdAt"),CURRENT_TIMESTAMP
  FROM people p JOIN "User" u ON u.id=p."userId"
- LEFT JOIN "CompanyMembership" m ON m."companyId"=p."companyId" AND m."userId"=p."userId" AND m.role='resident';
+ LEFT JOIN "CompanyMembership" m ON m."companyId"=p."companyId" AND m."userId"=p."userId";
 
 -- Record-only household entries have no identity to deduplicate by. Keep each
 -- one distinct rather than guessing that a matching name/email is one person.
@@ -62,7 +63,7 @@ CREATE POLICY resident_contact_company_boundary ON "ResidentContact" FOR ALL TO 
  USING("companyId"=NULLIF(current_setting('app.company_id',true),''))
  WITH CHECK("companyId"=NULLIF(current_setting('app.company_id',true),''));
 GRANT SELECT,INSERT ON "ResidentContact" TO propertyflow_runtime;
-GRANT UPDATE("name","email","phone","emergencyContactName","emergencyContactPhone","managementNotes","version","updatedAt") ON "ResidentContact" TO propertyflow_runtime;
+GRANT UPDATE("name","email","phone","emergencyContactName","emergencyContactPhone","managementNotes","compatibilityProfile","version","updatedAt") ON "ResidentContact" TO propertyflow_runtime;
 GRANT UPDATE("residentContactId") ON "Lease" TO propertyflow_runtime;
 GRANT UPDATE("contactId") ON "LeaseParticipant" TO propertyflow_runtime;
 

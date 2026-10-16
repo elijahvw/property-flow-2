@@ -21,7 +21,7 @@ export async function seedContactMigration(admin) {
       VALUES('migration-resident','contact-new-company','resident','New company private name','555-9999','New company private notes',NOW());
     INSERT INTO "User"(id,email,name,"updatedAt") VALUES('migration-current','current@test.invalid','Account name',NOW());
     INSERT INTO "CompanyMembership"("userId","companyId",role,"contactName","contactPhone","emergencyContactName","emergencyContactPhone","managementNotes","updatedAt")
-      VALUES('migration-current','migration-company','resident','Current contact','555-0100','Emergency person','555-0101','Private contact notes',NOW());
+      VALUES('migration-current','migration-company','manager','Current contact','555-0100','Emergency person','555-0101','Private contact notes',NOW());
     INSERT INTO "LeaseParticipant"(id,"companyId","propertyId","leaseId","userId",name,email,role,"startsOn","createdById","submissionKey","submissionHash","updatedAt")
       VALUES('migration-linked','migration-company','migration-property','migration-lease','migration-current','Lease-specific name','current@test.invalid','occupant','2019-01-01','migration-owner','linked','original',NOW());
     INSERT INTO "LeaseParticipant"(id,"companyId","propertyId","leaseId",name,email,phone,role,"startsOn","removedAt","createdById","submissionKey","submissionHash","updatedAt")
@@ -143,6 +143,15 @@ export async function residentContactCases(t, admin, call, db) {
     const contact = (await admin.query(`SELECT "companyId",name,email FROM "ResidentContact" WHERE id=$1`,[rollout.contactId])).rows[0];
     assert.deepEqual(contact,{companyId:'a',name:'Historical roster name',email:'historical@test.invalid'});
     assert.equal((await admin.query(`SELECT count(*)::int n FROM "ResidentContact" WHERE id IN ($1,$2)`,[offline.contactId,second.contactId])).rows[0].n,2);
+    // Renewal roster edits are lease-specific. They cannot silently overwrite
+    // the shared contact through independent participant versions.
+    const {userId:_user,submissionKey:_key,...partyDetails}=details;
+    ok(await call('owner','PATCH',`${root}/${offline.id}`,{...partyDetails,name:'Source lease name',expectedVersion:offline.version}));
+    const renewalParty=copied.find(p=>p.contactId===offline.contactId);
+    ok(await call('owner','PATCH',`/api/company/leases/${renewal.id}/participants/${renewalParty.id}`,{...partyDetails,name:'Renewal lease name',startsOn:renewalParty.startsOn.slice(0,10),expectedVersion:renewalParty.version}));
+    assert.equal((await admin.query(`SELECT name FROM "ResidentContact" WHERE id=$1`,[offline.contactId])).rows[0].name,'Record only');
+    const names=(await admin.query(`SELECT name FROM "LeaseParticipant" WHERE id IN ($1,$2) ORDER BY name`,[offline.id,renewalParty.id])).rows.map(p=>p.name);
+    assert.deepEqual(names,['Renewal lease name','Source lease name']);
   });
   await t.test('failed audit rolls back contact creation together with its lease', async () => {
     await admin.query(`INSERT INTO "User"(id,email,"updatedAt") VALUES('contact-rollback','rollback@test.invalid',NOW());

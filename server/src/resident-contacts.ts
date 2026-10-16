@@ -1,6 +1,12 @@
 import type { Tx } from "./operational.js";
 import { AccessError } from "./access.js";
 
+const profileKeys = ["contactName", "contactPhone", "emergencyContactName", "emergencyContactPhone", "managementNotes"] as const;
+type CompatibilityProfile = Record<typeof profileKeys[number], string | null>;
+export function residentCompatibilityProfile(member: Partial<CompatibilityProfile>): CompatibilityProfile {
+  return Object.fromEntries(profileKeys.map(key => [key, member[key] ?? null])) as CompatibilityProfile;
+}
+
 // A business contact is company-owned data, not a grant of portal access. This
 // bridge only uses exact stored User IDs. Email/name matching is never linking.
 export async function linkedResidentContact(tx: Tx, companyId: string, userId: string) {
@@ -21,6 +27,37 @@ export async function linkedResidentContact(tx: Tx, companyId: string, userId: s
     emergencyContactName: member.emergencyContactName,
     emergencyContactPhone: member.emergencyContactPhone,
     managementNotes: member.managementNotes,
+    compatibilityProfile: residentCompatibilityProfile(member),
+  } });
+}
+
+// Called under the target User write fence before compatibility fields can be
+// cleared or their resident role changed. A private snapshot detects old-version
+// profile writes during rollout without overwriting a separately curated contact
+// simply because the login name/email or membership role/version changed.
+export async function preserveResidentContactProfile(tx: Tx, companyId: string, userId: string) {
+  await tx.$queryRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
+  const member = await tx.companyMembership.findFirst({ where: { companyId, userId }, include: { user: true } });
+  if (!member) return;
+  let contact = await tx.residentContact.findUnique({ where: { companyId_userId: { companyId, userId } } });
+  if (!contact && member.role === "resident") contact = await linkedResidentContact(tx, companyId, userId);
+  if (!contact) {
+    const historical = await tx.lease.findFirst({ where: { companyId, OR: [{ residentId: userId }, { participants: { some: { companyId, userId } } }] }, select: { id: true } });
+    if (!historical) return;
+    contact = await participantContact(tx, companyId, { userId, name: Array.from(member.contactName?.trim() || member.user.name?.trim() || member.user.email).slice(0, 200).join(""), email: member.user.email.length <= 254 ? member.user.email : null, phone: member.contactPhone });
+  }
+  const snapshot = residentCompatibilityProfile(member);
+  const baseline = contact.compatibilityProfile as Partial<CompatibilityProfile> | null;
+  const changed = (key: keyof CompatibilityProfile) => !baseline || baseline[key] !== snapshot[key];
+  if (!profileKeys.some(changed)) return;
+  await tx.residentContact.update({ where: { id: contact.id }, data: {
+    ...(changed("contactName") ? { name: Array.from(member.contactName?.trim() || member.user.name?.trim() || member.user.email.trim() || "Resident").slice(0, 200).join("") } : {}),
+    ...(changed("contactPhone") ? { phone: member.contactPhone } : {}),
+    ...(changed("emergencyContactName") ? { emergencyContactName: member.emergencyContactName } : {}),
+    ...(changed("emergencyContactPhone") ? { emergencyContactPhone: member.emergencyContactPhone } : {}),
+    ...(changed("managementNotes") ? { managementNotes: member.managementNotes } : {}),
+    compatibilityProfile: snapshot,
+    version: { increment: 1 },
   } });
 }
 

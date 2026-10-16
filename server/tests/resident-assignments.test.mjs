@@ -15,9 +15,10 @@ async function fixture(t, actor = person('owner','owner')) {
     residentContact: {
       findUnique:async({where})=>contacts.find(c=>c.companyId===where.companyId_userId.companyId&&c.userId===where.companyId_userId.userId),
       create:async({data})=>{assert.equal(company,data.companyId);const row={id:'contact-'+contacts.length,...data};contacts.push(row);return row;},
+      update:async({where,data})=>Object.assign(contacts.find(c=>c.id===where.id),data),
     },
     companyMembership: {
-      findFirst:async({where})=>{const u=users.get(where.userId);return u?.membership?.companyId===where.companyId&&u.membership.role===where.role?{...u.membership,user:u}:null;},
+      findFirst:async({where})=>{const u=users.get(where.userId);return u?.membership?.companyId===where.companyId&&(!where.role||u.membership.role===where.role)?{...u.membership,user:u}:null;},
       findUnique:async({where})=>{const u=users.get(where.userId); return u?.membership ? {...u.membership,user:u}:null;},
       findMany:async({where})=>[...users.values()].filter(u=>u.membership?.companyId===where.companyId && u.membership.role==='resident' && u.membership.status==='active' && u.status==='active').map(u=>({userId:u.id,user:{name:u.name,email:u.email}})),
       update:async({where,data})=>Object.assign(users.get(where.userId).membership,{role:data.role,status:data.status}),

@@ -265,6 +265,7 @@ model Unit {
   @@index([companyId, propertyId, id])
 }
 model ResidentContact {
+  compatibilityProfile Json?
   id String @id @default(cuid())
   companyId String
   userId String?

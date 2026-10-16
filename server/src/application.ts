@@ -1,4 +1,4 @@
-import { linkedResidentContact } from "./resident-contacts.js";
+import { linkedResidentContact, preserveResidentContactProfile } from "./resident-contacts.js";
 import { registerDeposits } from "./deposits.js";
 import { registerRentRecovery } from "./rent-recovery.js";
 import { auditLabels } from "./audit-labels.js";
@@ -344,7 +344,7 @@ export function registerApplication(
           await clearAssignments(tx, userId, old.companyId);
         // Preserve the old company's business contact before a transfer clears
         // membership profile fields. That contact grants no portal authority.
-        if (old?.role === "resident") await linkedResidentContact(tx, old.companyId, userId);
+        if (old) await preserveResidentContactProfile(tx, old.companyId, userId);
         const resetContact = old && old.companyId !== companyId ? {contactName:null,contactPhone:null,emergencyContactName:null,emergencyContactPhone:null,managementNotes:null} : {};
         const result = await tx.companyMembership.upsert({
           where: { userId },
@@ -493,7 +493,7 @@ export function registerApplication(
             "Use ownership transfer to change an owner.",
           );
         if (member.role !== role || status !== "active") await clearAssignments(tx, userId, companyId);
-        if (member.role === "resident") await linkedResidentContact(tx, companyId, userId);
+        await preserveResidentContactProfile(tx, companyId, userId);
         const result = await tx.companyMembership.update({
           where: { userId },
           data: { role, status, version: { increment: 1 } },
@@ -541,7 +541,7 @@ export function registerApplication(
           "Choose an active member of this company.",
         );
       await clearAssignments(tx, userId, companyId);
-      if (target.role === "resident") await linkedResidentContact(tx, companyId, userId);
+      await preserveResidentContactProfile(tx, companyId, userId);
       await tx.companyMembership.update({
         where: { userId },
         data: { role: "owner", version: { increment: 1 } },

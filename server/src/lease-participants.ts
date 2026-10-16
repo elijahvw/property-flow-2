@@ -82,7 +82,6 @@ export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient
       // assignment/membership changes against the roster mutation.
       if(old.userId)await linked(tx,companyId,record.propertyId,old.userId,false);
       const contactId=old.contactId??(await participantContact(tx,companyId,{...old,...data})).id;
-      if(!old.userId)await tx.residentContact.update({where:{id:contactId},data:{name:data.name,email:data.email,phone:data.phone,version:{increment:1}}});
       const row=await tx.leaseParticipant.update({where:{id:participantId},data:{...data,contactId,version:{increment:1}},select});
       await tx.lease.update({where:{id},data:{version:{increment:1}}});
       await audit(tx,request,companyId,id,"lease.participant.updated",{participantId,from:{role:old.role,portalApproved:old.portalApproved,startsOn:old.startsOn.toISOString(),endsOn:old.endsOn?.toISOString()??null},to:{role:row.role,portalApproved:row.portalApproved,startsOn:row.startsOn.toISOString(),endsOn:row.endsOn?.toISOString()??null}});

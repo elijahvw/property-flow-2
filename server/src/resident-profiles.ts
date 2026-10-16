@@ -1,4 +1,4 @@
-import { linkedResidentContact } from "./resident-contacts.js";
+import { linkedResidentContact, residentCompatibilityProfile } from "./resident-contacts.js";
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { AccessError } from "./access.js";
@@ -142,6 +142,7 @@ export function registerResidentProfiles(
             emergencyContactName: result.emergencyContactName,
             emergencyContactPhone: result.emergencyContactPhone,
             managementNotes: result.managementNotes,
+            compatibilityProfile: residentCompatibilityProfile(result),
             version: { increment: 1 },
           } });
           // Contact values and internal notes do not belong in the event payload.
