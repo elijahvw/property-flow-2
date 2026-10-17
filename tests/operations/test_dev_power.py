@@ -126,5 +126,54 @@ class DevPowerTests(unittest.TestCase):
         result,calls,state=self.run_power('start-database',db='stopped',db_start_stuck=True)
         self.assertNotEqual(result.returncode,0)
 
+    def test_existing_backup_finishes_before_startup_without_database_restart(self):
+        for action in ('start', 'start-database'):
+            with self.subTest(action=action):
+                result,calls,state=self.run_power(action,count=0,statuses=['backing-up','backing-up','available'])
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertIn('currently backing-up',result.stdout)
+                self.assertNotIn(['rds','start-db-instance'],[c[:2] for c in calls])
+                if action=='start':
+                    index=next(i for i,c in enumerate(calls) if c[:2]==['ecs','update-service'])
+                    self.assertEqual(calls[index-1][:2],['rds','describe-db-instances'])
+                    self.assertEqual(state['count'],1)
+                else:
+                    self.assertFalse(any(c[0]=='ecs' for c in calls))
+
+    def test_backup_during_database_start_is_a_waitable_state(self):
+        result,calls,state=self.run_power('start-database',count=0,statuses=['stopped','backing-up','available'])
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual([c[:2] for c in calls].count(['rds','start-db-instance']),1)
+        self.assertIn('currently backing-up',result.stdout)
+
+    def test_persistent_backup_times_out_without_starting_database_or_backend(self):
+        for action in ('start','start-database'):
+            with self.subTest(action=action):
+                result,calls,state=self.run_power(action,db='backing-up',count=0)
+                self.assertNotEqual(result.returncode,0)
+                self.assertIn('within the wait limit',result.stderr)
+                self.assertFalse(any(c[:2] in (['rds','start-db-instance'],['ecs','update-service']) for c in calls))
+
+    def test_stop_waits_for_backup_before_stopping_database(self):
+        result,calls,state=self.run_power('stop',statuses=['backing-up','backing-up','available'])
+        self.assertEqual(result.returncode,0,result.stderr)
+        index=next(i for i,c in enumerate(calls) if c[:2]==['rds','stop-db-instance'])
+        self.assertEqual(calls[index-1][:2],['rds','describe-db-instances'])
+        self.assertEqual((state['db'],state['count']),('stopped',0))
+
+    def test_stop_does_not_interrupt_a_persistent_backup(self):
+        result,calls,state=self.run_power('stop',db='backing-up')
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('within the wait limit',result.stderr)
+        self.assertNotIn(['rds','stop-db-instance'],[c[:2] for c in calls])
+
+    def test_unhealthy_or_unknown_state_still_fails_closed(self):
+        for status in ('failed','incompatible-restore','unrecognized'):
+            with self.subTest(status=status):
+                result,calls,state=self.run_power('start-database',statuses=['backing-up',status])
+                self.assertNotEqual(result.returncode,0)
+                self.assertIn('Unexpected database state: '+status,result.stderr)
+                self.assertFalse(any(c[:2]==['rds','start-db-instance'] for c in calls))
+
 if __name__=='__main__': unittest.main()
 
