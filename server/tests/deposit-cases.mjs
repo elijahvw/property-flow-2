@@ -186,7 +186,7 @@ export async function depositCases(t, admin, call, db) {
         incomeCents: "0",
         expenseCents: "0",
         netCents: "0",
-        depositReceivedCents: "75000",
+        depositReceivedCents: "75000",rentRefundCents:'0',depositRefundCents:'0',
         cashMovementCents: "75000",
       });
       assert.equal(

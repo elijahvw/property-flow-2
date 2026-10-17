@@ -42,6 +42,7 @@ async function fixture(page: Page, { verified = true, platform = true } = {}) {
         destination: platform ? "/platform/users" : "/access",
         csrfToken: "fixture",
       });
+    if (path === "/api/account") return json({name:"Test User",email:"user@test.invalid",emailVerified:state.verified,version:0,nameVersion:"2026-10-16T00:00:00Z",companyId:null,contactVersion:null,contactEmail:"user@test.invalid",sharedWithManagement:false,details:{},assignments:[],updatedAt:null});
     if (path === "/api/platform/users" && req.method() === "GET")
       return json(state.people);
     if (path === "/api/platform/companies") return json(state.companies);
@@ -220,7 +221,7 @@ test("verification status refresh updates profile and dismisses persistent remin
   await page.goto("/account");
   await expect(page.getByRole("alertdialog")).toBeVisible();
   await expect(
-    page.getByText(/user@test.invalid · Not verified/),
+    page.locator(".account-identity-card").getByText("Verify email",{exact:true}),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "I verified my email — check status" })
@@ -231,7 +232,7 @@ test("verification status refresh updates profile and dismisses persistent remin
     .getByRole("button", { name: "I verified my email — check status" })
     .click();
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
-  await expect(page.getByText(/user@test.invalid · Verified/)).toBeVisible();
+  await expect(page.locator(".account-identity-card").getByText("Verified",{exact:true})).toBeVisible();
 });
 test("new-account retry keeps submission key and a new account gets a fresh key", async ({
   page,

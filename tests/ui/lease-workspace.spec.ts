@@ -54,17 +54,17 @@ test('lease workspace keeps household drafts across section navigation and retri
 
 test('lease term drafts retain their reviewed version across dismissal and background changes',async({page})=>{
  const state=await fixture(page);await page.goto('/company/leases/shared');
- await page.getByRole('button',{name:'Review lease terms',exact:true}).click();
+ await page.getByRole('button',{name:'Edit lease record',exact:true}).click();
  const dialog=page.getByRole('dialog',{name:'Review lease terms',exact:true});
  await dialog.getByLabel('Lease monthly rent (USD)',{exact:true}).fill('1200.00');
  await dialog.getByRole('button',{name:'Close',exact:true}).click();
  state.lease.version++;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
- await page.getByRole('button',{name:'Review lease terms',exact:true}).click();
+ await page.getByRole('button',{name:'Edit lease record',exact:true}).click();
  await expect(dialog.getByLabel('Lease monthly rent (USD)',{exact:true})).toHaveValue('1200.00');
  await dialog.getByRole('button',{name:'Save lease terms',exact:true}).click();
  await expect(dialog.getByRole('alert')).toContainText('record changed');expect(state.writes[0].expectedVersion).toBe(1);
  await dialog.getByRole('button',{name:'Discard lease changes',exact:true}).click();
- await page.getByRole('button',{name:'Review lease terms',exact:true}).click();
+ await page.getByRole('button',{name:'Edit lease record',exact:true}).click();
  await expect(dialog.getByLabel('Lease monthly rent (USD)',{exact:true})).toHaveValue('1000.01');
  const reads=state.requests.filter(p=>p==='/api/company/leases/shared').length;
  state.status=403;await expect.poll(async()=>{await page.evaluate(()=>window.dispatchEvent(new Event('focus')));return state.requests.filter(p=>p==='/api/company/leases/shared').length;}).toBeGreaterThan(reads);
@@ -79,7 +79,7 @@ test('owner approval is explicit for an occupant invitation and phone layout rem
  expect(state.writes[0].action).toBe('approve');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.getByRole('button',{name:'Renewal',exact:true}).click();await page.reload();
- await expect(page.getByRole('heading',{name:'Renew this lease',exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Prepare the next term',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'Prepare linked renewal',exact:true})).toBeVisible();
 });
 
@@ -132,4 +132,27 @@ test('owner attention queue opens the relevant approval section and preserves th
  await expect(page).toHaveURL(/\/company\/leases\?approvals=pending$/);await expect(page.getByLabel('Lease view',{exact:true})).toHaveValue('resident_approvals');
  await page.getByRole('link',{name:'Open lease workspace',exact:true}).click();await expect(page.getByRole('heading',{name:'Invite and approve residents',exact:true})).toBeVisible();
  await page.getByRole('link',{name:'← All leases',exact:true}).click();await expect(page).toHaveURL(/\/company\/leases\?approvals=pending$/);
+});
+
+test('established lease opens to details without repeating onboarding or optional invitation setup',async({page})=>{
+ const state=await fixture(page);Object.assign(state.lease,{overview:{householdCount:2,pendingApprovals:0,scheduleStatus:'active',depositRecorded:true}});
+ await page.goto('/company/leases/shared');
+ await expect(page.getByRole('heading',{name:'Lease details',exact:true})).toBeVisible();
+ await expect(page.getByText('2 current residents',{exact:true})).toBeVisible();
+ await expect(page.getByText('Recurring billing active',{exact:true})).toBeVisible();
+ await expect(page.getByText('Deposit record available',{exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Edit lease record',exact:true})).toBeVisible();
+ await expect(page.getByText('Work through the lease in order.',{exact:false})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Review draft & activate',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Review resident requests',exact:true})).toHaveCount(0);
+ await page.setViewportSize({width:390,height:844});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+test('lease overview prompts only for an actual draft and outstanding owner approvals',async({page})=>{
+ const state=await fixture(page);state.lease.status='draft';Object.assign(state.lease,{overview:{householdCount:1,pendingApprovals:2,scheduleStatus:null,depositRecorded:false}});
+ await page.goto('/company/leases/shared');
+ await expect(page.getByRole('button',{name:'Review draft & activate',exact:true})).toBeVisible();
+ await expect(page.getByText('2 resident requests need your approval.',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Review resident requests',exact:true}).click();
+ await expect(page).toHaveURL(/section=invitations/);
 });

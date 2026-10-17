@@ -1,3 +1,4 @@
+import {currentLeaseTerms,readTermChanges} from "./lease-term-policy.js";
 import { leasePerson, leasePersonSelect } from "./lease-person.js";
 import { linkedResidentContact, participantContact } from "./resident-contacts.js";
 import { paymentPolicyKeys, paymentPolicyPatch } from "./payment-policy.js";
@@ -14,14 +15,14 @@ async function property(tx: Tx, companyId: string, propertyId: string) {
   if (!await tx.property.findFirst({ where: { id: propertyId, companyId }, select: { id: true } }))
     throw new AccessError(404, "NOT_FOUND", "Property not found.");
 }
-async function lockUnit(tx: Tx, companyId: string, unitId: string) {
+export async function lockUnit(tx: Tx, companyId: string, unitId: string) {
   // The write fence orders archive/edit against activation and concurrent lease changes.
   await tx.$queryRaw`UPDATE "Unit" SET "updatedAt"="updatedAt" WHERE id=${unitId} AND "companyId"=${companyId} RETURNING id`;
   const row = await tx.unit.findFirst({ where: { id: unitId, companyId }, select: unitSelect });
   if (!row) throw new AccessError(404, "NOT_FOUND", "Unit not found.");
   return row;
 }
-async function eligible(tx: Tx, companyId: string, residentId: string, propertyId: string, assign = false) {
+export async function eligible(tx: Tx, companyId: string, residentId: string, propertyId: string, assign = false) {
   await tx.$queryRaw`UPDATE "User" SET "updatedAt"="updatedAt" WHERE id=${residentId} RETURNING id`;
   const member = await tx.companyMembership.findFirst({ where: { userId: residentId, companyId }, include: { user: true } });
   if (!member) throw new AccessError(404, "NOT_FOUND", "Resident not found.");
@@ -33,7 +34,7 @@ async function connectProperty(tx:Tx,companyId:string,userId:string,propertyId:s
   await eligible(tx,companyId,userId,propertyId,true);
   await tx.residentPropertyAssignment.upsert({where:{propertyId_userId:{propertyId,userId}},create:{companyId,propertyId,userId},update:{}});
 }
-async function contactEligible(tx: Tx, companyId: string, id: string, propertyId: string, assign=false) {
+export async function contactEligible(tx: Tx, companyId: string, id: string, propertyId: string, assign=false) {
   const selected=await tx.residentContact.findFirst({where:{id,companyId}});
   if(!selected)throw new AccessError(404,"NOT_FOUND","Tenant not found.");
   if(selected.userId){if(assign)await connectProperty(tx,companyId,selected.userId,propertyId);else await eligible(tx,companyId,selected.userId,propertyId);}
@@ -49,7 +50,7 @@ function terms(b: Record<string, unknown>) {
   if (status === "ended" && !endsOn) throw new AccessError(400, "INVALID_INPUT", "Ended leases require an end date.");
   return { startsOn, endsOn, rentCents: cents(b.monthlyRent), currency: "USD", status };
 }
-async function activeSlot(tx: Tx, companyId: string, unitId: string, except?: string) {
+export async function activeSlot(tx: Tx, companyId: string, unitId: string, except?: string) {
   if (await tx.lease.findFirst({ where: { companyId, unitId, status: "active", ...(except ? { id: { not: except } } : {}) }, select: { id: true } }))
     throw new AccessError(409, "ACTIVE_LEASE_EXISTS", "This unit already has an active lease. End it before archiving the unit or activating another lease.");
 }
@@ -122,7 +123,7 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
         const company=await tx.company.findUniqueOrThrow({where:{id:companyId},select:{timezone:true}}),today=new Date(companyDay(company.timezone)+"T00:00:00Z"),through=new Date(today);through.setUTCDate(through.getUTCDate()+30);
         dates=approvals?{status:{in:["draft","active"]},OR:[{endsOn:null},{endsOn:{gte:today}}],residentInvitations:{some:{companyId,approvedAt:null,acceptedAt:null,revokedAt:null,expiresAt:{gt:new Date()}}}}:attention==="in_effect"?{status:"active",unit:{status:"active"},startsOn:{lte:today},OR:[{endsOn:null},{endsOn:{gte:today}}]}:{status:"active",unit:{status:"active"},endsOn:attention==="ending_soon"?{gte:today,lte:through}:{lt:today}};
       }
-      return page(await tx.lease.findMany({where:{companyId,...(propertyId?{propertyId}:{}),...(status?{status}:{}),...dates,...(cursor?{id:{lt:cursor}}:{})},select:leaseSelect,take:51,orderBy:{id:"desc"}}).then(rows=>rows.map(row=>({...row,resident:leasePerson(row)}))));
+      return page(await tx.lease.findMany({where:{companyId,...(propertyId?{propertyId}:{}),...(status?{status}:{}),...dates,...(cursor?{id:{lt:cursor}}:{})},select:leaseSelect,take:51,orderBy:{id:"desc"}}).then(async rows=>(await currentLeaseTerms(tx,companyId,rows)).map(row=>({...row,resident:leasePerson(row)}))));
     });
   });
   server.post("/api/company/leases", auth, request => {
@@ -189,7 +190,15 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
     return scoped(db,request,"lease.manage",async(tx,companyId)=>{
       const row=await tx.lease.findFirst({where:{id:leaseId,companyId},select:leaseSelect});
       if(!row)throw new AccessError(404,"NOT_FOUND","Lease not found.");
-      return {...row,resident:leasePerson(row)};
+      const [current]=await currentLeaseTerms(tx,companyId,[row]);
+      const company=await tx.company.findUniqueOrThrow({where:{id:companyId},select:{timezone:true}}),today=new Date(companyDay(company.timezone)+"T00:00:00Z");
+      const [householdCount,pendingApprovals,schedule,deposit]=await Promise.all([
+        tx.leaseParticipant.count({where:{companyId,leaseId,removedAt:null,startsOn:{lte:today},OR:[{endsOn:null},{endsOn:{gte:today}}]}}),
+        tx.invitation.count({where:{companyId,leaseId,approvedAt:null,acceptedAt:null,revokedAt:null,expiresAt:{gt:new Date()}}}),
+        tx.rentSchedule.findFirst({where:{companyId,leaseId,status:{in:["active","paused"]}},select:{status:true}}),
+        tx.depositAccount.findFirst({where:{companyId,leaseId},select:{id:true}})
+      ]);
+      return {...current,resident:leasePerson(row),overview:{householdCount,pendingApprovals,scheduleStatus:schedule?.status??null,depositRecorded:!!deposit}};
     });
   });
   server.patch<{ Params: { leaseId: string } }>("/api/company/leases/:leaseId", auth, request => {
@@ -203,6 +212,13 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
       const previous = await tx.lease.findFirst({ where: { companyId, id: leaseId }, select: leaseSelect });
       if (!previous) throw new AccessError(404, "NOT_FOUND", "Lease not found.");
       if (previous.version !== expectedVersion) throw conflict();
+      const retainedTerms=await readTermChanges(tx,companyId,[leaseId]);
+      const [currentTerms]=await currentLeaseTerms(tx,companyId,[previous]);
+      if(retainedTerms.length){
+        if(data.rentCents!==currentTerms.rentCents||(policy.rentDueDay!==undefined&&policy.rentDueDay!==currentTerms.rentDueDay)||(policy.graceDays!==undefined&&policy.graceDays!==currentTerms.graceDays)||(policy.paymentInstructions!==undefined&&policy.paymentInstructions!==currentTerms.paymentInstructions))throw new AccessError(409,"LEASE_VERSIONED_TERMS","Use the future terms review to change payment terms. The recorded baseline is preserved.");
+        data.rentCents=previous.rentCents;policy.rentDueDay=previous.rentDueDay;policy.graceDays=previous.graceDays;policy.paymentInstructions=previous.paymentInstructions;
+        if(data.status==="draft"||retainedTerms.some(t=>!t.cancellation&&(t.effectiveOn<data.startsOn||(data.endsOn&&t.effectiveOn>data.endsOn))))throw new AccessError(409,"LEASE_TERM_CONFLICT","These dates conflict with retained term changes. Cancel an unposted future change before shortening the lease.");
+      }
       if(previous.previousLeaseId){
         const parent=await tx.lease.findFirstOrThrow({where:{id:previous.previousLeaseId,companyId},select:{endsOn:true,status:true}});
         if(parent.status==="draft"||!parent.endsOn||data.startsOn<=parent.endsOn)throw new AccessError(409,"RENEWAL_TERMS_INVALID","A renewal must start after the previous lease ends.");
@@ -214,7 +230,7 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
         throw new AccessError(409,"LEASE_SCHEDULE_CONFLICT","Stop the recurring rent schedule before changing lease dates, rent, status or payment terms. Posted charges remain unchanged.");
       const firstTermMonth = new Date(data.startsOn); firstTermMonth.setUTCDate(1);
       const outsideTerm = await tx.rentCharge.findFirst({
-        where: { companyId, leaseId, voidedAt: null, ...(data.status === "draft" ? {} : { OR: [{ periodOn: { lt: firstTermMonth } }, ...(data.endsOn ? [{ periodOn: { gt: data.endsOn } }] : [])] }) },
+        where: { companyId, leaseId, voidedAt: null, ...(data.status === "draft" ? {} : { kind:"rent", OR: [{ periodOn: { lt: firstTermMonth } }, ...(data.endsOn ? [{ periodOn: { gt: data.endsOn } }] : [])] }) },
         select: { id: true },
       });
       if(data.status === "draft" && await tx.depositReceipt.findFirst({where:{companyId,leaseId,cashEntries:{some:{voidedAt:null}}},select:{id:true}}))throw new AccessError(409,"LEASE_DEPOSIT_CONFLICT","A lease holding a recorded deposit cannot become a draft. Correct recording errors in its deposit ledger first.");
@@ -232,7 +248,7 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
       if (updated.count !== 1) throw conflict();
       const row = await tx.lease.findFirstOrThrow({ where: { id: leaseId, companyId }, select: leaseSelect });
       await audit(tx, request, companyId, leaseId, "lease.updated", { from: previous.status, to: data.status, paymentPolicy:{from:{rentDueDay:previous.rentDueDay,graceDays:previous.graceDays},to:{rentDueDay:row.rentDueDay,graceDays:row.graceDays},instructionsChanged:previous.paymentInstructions!==row.paymentInstructions} });
-      return {...row,resident:leasePerson(row)};
+      return {...(await currentLeaseTerms(tx,companyId,[row]))[0],resident:leasePerson(row)};
     });
   });
 }

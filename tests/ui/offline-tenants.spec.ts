@@ -8,6 +8,8 @@ async function fixture(
     creates: [] as any[],
     invites: [] as any[],
     setup: 0,
+    workspace: null as any,
+    updates: [] as any[],
     loseSave: !!options.loseSave,
   };
   const workspace = {
@@ -22,6 +24,7 @@ async function fixture(
     },
     deposits: { heldCents: "0", outstandingCents: "0" },
   };
+  state.workspace = workspace;
   await page.route("**/api/**", async (route) => {
     const req = route.request(),
       p = new URL(req.url()).pathname,
@@ -62,7 +65,7 @@ async function fixture(
               {
                 ...state.contact,
                 contactId: state.contact.id,
-                recordStatus: "active",
+                recordStatus: state.contact.status,
                 portalState: "offline",
                 user: null,
               },
@@ -90,8 +93,14 @@ async function fixture(
       }
       return json(state.contact);
     }
-    if (p === "/api/company/resident-contacts/jordan-profile")
+    if (p === "/api/company/resident-contacts/jordan-profile") {
+      if (req.method() === "PATCH") {
+        const body = req.postDataJSON();
+        state.updates.push(body);
+        state.contact = {...state.contact, ...body, version: state.contact.version + 1};
+      }
       return json(state.contact);
+    }
     if (p === "/api/company/resident-contacts/jordan-profile/workspace")
       return json(workspace);
     if (p === "/api/company/resident-contacts/jordan-profile/invitations") {
@@ -383,4 +392,73 @@ test("a lost accepted invitation recovers after reload without asking the owner 
   expect(
     await page.evaluate(() => sessionStorage.getItem("pf-invitation")),
   ).toBeNull();
+});
+
+function recordedTenant() {
+  return {id:"jordan-profile",userId:null,name:"Jordan Rivera",email:"jordan@test.invalid",phone:"555-0101",status:"active",version:3,portal:null,activity:[],invitations:[],managementNotes:"Preserve these internal details",canArchive:false};
+}
+function activeLease() {
+  return {id:"lease-1",propertyId:"home",startsOn:"2026-10-01",endsOn:null,status:"active",rentCents:150000,rentDueDay:1,graceDays:5,property:{name:"Oak Place"},unit:{label:"Apartment 4"},rent:{outstandingCents:"0",creditCents:"0",afterGraceCents:"0",upcomingCents:"0"},deposit:null};
+}
+test("existing current and upcoming leases never prompt recording another lease, including on a failed refresh", async ({page}) => {
+  const state = await fixture(page);
+  state.contact = recordedTenant();
+  state.workspace.leases = [activeLease()];
+  await page.goto("/company/tenants/jordan-profile");
+  await expect(page.getByRole("link",{name:"Apartment 4",exact:true})).toBeVisible();
+  await expect(page.getByRole("link",{name:/Record a lease/})).toHaveCount(0);
+  await expect(page.getByText("Keep this tenant's rental work connected")).toHaveCount(0);
+  await page.getByText("More tenant actions",{exact:true}).click();
+  await expect(page.getByRole("button",{name:"Archive tenant",exact:true})).toBeDisabled();
+  state.workspace.leases[0].startsOn="2026-12-01";
+  await page.reload();
+  await expect(page.getByText("Upcoming",{exact:true})).toBeVisible();
+  await expect(page.getByRole("link",{name:/Record a lease/})).toHaveCount(0);
+  await page.route("**/api/company/resident-contacts/jordan-profile/workspace",route=>route.fulfill({status:503,json:{error:"Lease check unavailable"}}));
+  await page.reload();
+  await expect(page.getByRole("heading",{name:"Balances and leases unavailable"})).toBeVisible();
+  await expect(page.getByRole("link",{name:/Record a lease/})).toHaveCount(0);
+});
+test("tenant directory shows each property, unit and relationship, searches rental context and blocks archiving current residents", async ({page})=>{
+  const state=await fixture(page);
+  state.contact={...recordedTenant(),rentals:[
+    {leaseId:"lease-1",propertyId:"home",propertyName:"Oak Place",unitLabel:"Apartment 4",status:"current",role:"leaseholder",startsOn:"2026-10-01",endsOn:null},
+    {leaseId:"lease-2",propertyId:"maple",propertyName:"Maple House",unitLabel:"Suite 9",status:"former",role:"occupant",startsOn:"2025-01-01",endsOn:"2025-12-31"},
+  ]};
+  await page.goto("/company/residents");
+  const row=page.getByRole("row").filter({hasText:"Jordan Rivera"});
+  await expect(row.getByRole("link",{name:/Oak Place/})).toHaveAttribute("href",/lease-1/);
+  await expect(row.getByText("Apartment 4",{exact:true})).toBeVisible();
+  await expect(row.getByText("Former · Occupant",{exact:true})).toBeVisible();
+  await expect(row.getByRole("button",{name:"Archive tenant",exact:true})).toHaveCount(0);
+  await page.getByRole("searchbox").fill("Suite 9");
+  await expect(row).toBeVisible();
+  await page.screenshot({path:"/tmp/propertyflow-tenant-directory-desktop.png",fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:"/tmp/propertyflow-tenant-directory-mobile.png",fullPage:true});
+});
+test("archive and restore live in tenant details and retain profile/history discovery",async({page})=>{
+  const state=await fixture(page);
+  state.contact={...recordedTenant(),canArchive:true,rentals:[]};
+  await page.goto("/company/residents");
+  await expect(page.getByRole("button",{name:"Archive tenant",exact:true})).toHaveCount(0);
+  await page.getByRole("link",{name:"View tenant Jordan Rivera"}).click();
+  await page.getByText("More tenant actions",{exact:true}).click();
+  await page.getByRole("button",{name:"Archive tenant",exact:true}).click();
+  await expect(page.getByRole("dialog")).toContainText("rental, financial and audit history will remain");
+  await page.getByRole("button",{name:"Confirm archive",exact:true}).click();
+  expect(state.updates[0]).toMatchObject({expectedVersion:3,status:"archived",name:"Jordan Rivera",managementNotes:"Preserve these internal details"});
+  await page.getByRole("link",{name:"← All tenants",exact:true}).click();
+  await expect(page.getByRole("link",{name:"View tenant Jordan Rivera"})).toHaveCount(0);
+  await page.getByLabel("Tenant records",{exact:true}).selectOption("archived");
+  await page.getByRole("link",{name:"View tenant Jordan Rivera"}).click();
+  await page.getByText("More tenant actions",{exact:true}).click();
+  await page.getByRole("button",{name:"Restore tenant",exact:true}).click();
+  await page.getByRole("button",{name:"Confirm restore",exact:true}).click();
+  await page.getByRole("link",{name:"← All tenants",exact:true}).click();
+  await expect(page.getByRole("heading",{name:"No archived tenants"})).toBeVisible();
+  await page.getByLabel("Tenant records",{exact:true}).selectOption("active");
+  await expect(page.getByRole("link",{name:"View tenant Jordan Rivera"})).toBeVisible();
+  expect(state.updates[1]).toMatchObject({expectedVersion:4,status:"active",managementNotes:"Preserve these internal details"});
 });

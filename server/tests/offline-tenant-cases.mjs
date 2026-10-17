@@ -210,6 +210,12 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
         ),
       );
       assert.equal(workspace.leases[0].id, lease.id);
+      const directory = ok(await call("offline-owner", "GET", "/api/company/resident-profiles"));
+      const person = directory.find(c => c.contactId === tenant.id);
+      assert.equal(person.canArchive, false);
+      assert.equal(person.rentals.find(r => r.leaseId === lease.id).status, "current");
+      assert.equal(person.rentals.find(r => r.leaseId === lease.id).unitLabel, "Apt 4");
+      assert.ok(person.rentals.every(r => r.propertyId === "offline-home"));
       assert.equal(
         (
           await call("offline-owner", "PATCH", contactPath(tenant.id), {
@@ -620,6 +626,16 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
         }),
       );
       assert.equal(archived.status, "archived");
+      const directory = ok(await call("offline-owner", "GET", "/api/company/resident-profiles"));
+      const former = directory.find(row => row.contactId === c.id);
+      assert.equal(former.recordStatus, "archived");
+      assert.equal(former.canArchive, true);
+      assert.equal(former.rentals.find(r => r.leaseId === lease.id).status, "former");
+      assert.equal(former.rentals.find(r => r.leaseId === lease.id).role, "occupant");
+      const event = (await admin.query(`SELECT "actorId",detail FROM "AuditEvent" WHERE "targetId"=$1 AND action='resident.contact.archived'`,[c.id])).rows[0];
+      assert.equal(event.actorId, "offline-owner");
+      assert.equal(event.detail.previousStatus, "active");
+      assert.equal(event.detail.status, "archived");
       assert.equal(
         (
           await admin.query(

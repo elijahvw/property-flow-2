@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -73,6 +74,18 @@ export function EditorDialog({
       if (opener?.isConnected) opener.focus();
     };
   }, [open, visited]);
+  const previousTitle = useRef(title);
+  useLayoutEffect(() => {
+    const changed = previousTitle.current !== title;
+    previousTitle.current = title;
+    const node = dialog.current;
+    if (changed && open && node?.open) {
+      node.scrollTop = 0;
+      node
+        .querySelector<HTMLElement>(".editor-heading h2")
+        ?.focus({ preventScroll: true });
+    }
+  }, [title, open]);
   if (!visited) return null;
   return createPortal(
     <dialog
@@ -88,7 +101,9 @@ export function EditorDialog({
       <div className="editor-heading">
         <div>
           <p className="eyebrow">Property Flow</p>
-          <h2 id={titleId}>{title}</h2>
+          <h2 id={titleId} tabIndex={-1}>
+            {title}
+          </h2>
         </div>
         <button
           type="button"
@@ -106,7 +121,9 @@ export function EditorDialog({
           </p>
         )}
         <EditorContext.Provider value={{ busy: blocked, register }}>
-          <fieldset disabled={blocked} className="editor-contents">{children}</fieldset>
+          <fieldset disabled={blocked} className="editor-contents">
+            {children}
+          </fieldset>
         </EditorContext.Provider>
       </div>
     </dialog>,

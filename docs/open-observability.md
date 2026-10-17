@@ -59,3 +59,8 @@ Old Git history, retained images and versioned Terraform-state history are prese
 Local checks include both builds; existing UI and disposable PostgreSQL suites; authenticated/CSRF/rate-limited browser telemetry; real PostgreSQL child-span correlation; authenticated OTLP metrics/logs/traces; exporter privacy, metric label filtering, outage isolation; real Grafana API provisioning/reprovisioning; and actual Prometheus expression evaluation. CI retains all previous suites and JUnit artifacts, adds these regressions, and removes the vendor upload step. Terraform format/validation and AWS IAM Access Analyzer validation cover the proposed configuration. No agent-run deployment, live database mutation, secret retrieval/deletion, IAM grant or provider message is part of implementation.
 
 References: [Grafana native OTLP ingestion](https://grafana.com/docs/grafana-cloud/send-data/otlp/send-data-otlp/), [Node.js instrumentation](https://grafana.com/docs/opentelemetry/instrument/node/), [Application Observability configuration](https://grafana.com/docs/grafana-cloud/observe-and-act/monitor-applications/application-observability/manual/configure/).
+
+
+## Queued AWS metrics connection
+
+The user requested a Terraform-managed Grafana CloudWatch connection. Its role, resource tags and separate disabled scrape job are prepared locally; see [configuration and approved activation](grafana-cloudwatch.md). Nothing has been applied. This supersedes the earlier future-work description for the AWS read integration.

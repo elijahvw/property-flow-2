@@ -132,7 +132,7 @@ test("property deposit directory connects named lease, complete balances, export
     exact: true,
   });
   await expect(account).toContainText("Maple House · Unit Apartment 1");
-  await expect(account).toContainText("DR-123");
+  await expect(account).toContainText("Deposit receipt #123");
   await expect(account.getByText(receipt.id, { exact: true })).toHaveCount(0);
   const download = page.waitForEvent("download");
   await account.getByRole("button", { name: "Download deposit CSV" }).click();
@@ -182,7 +182,7 @@ test("resident deposit view is read only and conceals internal notes; access rev
     name: "Security deposit account",
     exact: true,
   });
-  await expect(account).toContainText("DR-123");
+  await expect(account).toContainText("Deposit receipt #123");
   await expect(
     account.getByRole("region", { name: "Security deposit balances" }),
   ).toContainText("$750.00");

@@ -841,3 +841,48 @@ button, .button { border-radius: 6px; }
 .field-full { grid-column: 1 / -1; }
 .address-section { border: 0; padding: 0; margin: 0; min-width: 0; }
 .address-section > .help { margin-top: 0; }
+
+/* Keep each rental relationship readable as a compact property/unit block. */
+.tenant-rental-associations { display: grid; gap: .85rem; min-width: 180px; max-width: 360px; }
+.tenant-rental-association { display: grid; gap: .2rem; }
+.tenant-rental-association > a { font-weight: 600; text-decoration: none; }
+.tenant-rental-association > a:hover { text-decoration: underline; }
+.tenant-rental-association .cell-detail { margin: .1rem 0 0; }
+.tenant-rental-state { font-size: .75rem; color: #52685f; }
+.tenant-rental-state.current { color: #176250; font-weight: 600; }
+.tenant-directory-actions { display: grid; justify-items: start; gap: .65rem; min-width: 130px; }
+.tenant-directory-actions button { font-size: .8rem; min-height: 36px; padding: .4rem .65rem; }
+@media (max-width: 700px) {
+  .tenant-directory-panel td[data-label="Property & unit"] { display: block; }
+  .tenant-rental-associations { margin-top: .4rem; min-width: 0; }
+  .tenant-directory-actions { padding-left: calc(36px + .8rem); }
+  .tenant-directory-panel .tenant-directory-actions .tenant-row-action { margin-left: 0; }
+}
+
+.tenant-archive-help { max-width: 20ch; font-size: .72rem; }
+.tenant-directory-panel td { vertical-align: top; }
+
+@media (min-width: 701px) {
+  .tenant-directory th:nth-child(1) { width: 28%; }
+  .tenant-directory th:nth-child(2) { width: 32%; }
+  .tenant-directory th:nth-child(3) { width: 17%; }
+  .tenant-directory th:nth-child(4) { width: 23%; }
+}
+.tenant-record-options { border-top:1px solid #dfe7e1; padding:.8rem .25rem; }
+.tenant-record-options summary { cursor:pointer; color:#64766b; font-size:.8rem; font-weight:600; }
+.tenant-record-options > p { font-size:.85rem; margin:1rem 0 .5rem; }
+.tenant-record-options > button { font-size:.85rem; }
+.lease-section-nav { flex-wrap:nowrap; overflow-x:auto; border-bottom:1px solid #d9e3dc; gap:1rem; padding:0 .2rem .25rem; }
+.lease-section-nav > button,.lease-section-nav > button.secondary { flex-shrink:0; background:transparent; border:0; border-bottom:3px solid transparent; border-radius:0; color:#52685e; min-height:44px; padding:.65rem .2rem; font-size:.85rem; white-space:nowrap; }
+.lease-section-nav > button[aria-current=page] { color:#155f4e; border-bottom-color:#16725f; }
+
+.lease-overview { display:grid;gap:1.25rem; }
+.lease-overview > .panel,.lease-overview-cards .panel { margin:0; }
+.lease-overview-facts { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.5rem 2rem;margin:1.5rem 0; }
+.lease-overview-facts div { min-width:0; }.lease-overview-facts dt { color:#64756d;font-size:.83rem;margin-bottom:.4rem; }.lease-overview-facts dd { margin:0;font-weight:600;overflow-wrap:anywhere; }
+.lease-payment-note { background:#f5f8f6;padding:1rem 1.25rem;border-radius:8px;margin-bottom:1rem; }.lease-payment-note h3 { font-size:.85rem;margin:0 0 .5rem; }.lease-payment-note p { margin:0;white-space:pre-wrap; }
+.lease-overview-cards { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.25rem; }.lease-overview-cards h2 { font-size:1.05rem; }.lease-overview-cards .panel { display:flex;flex-direction:column;align-items:flex-start; }.lease-overview-cards .help { flex:1; }.lease-overview-value { font-weight:600;margin:.5rem 0; }.lease-setup-notice { display:flex;align-items:center;justify-content:space-between;gap:1rem; }.lease-setup-notice h2 { font-size:1rem;margin:0; }.lease-setup-notice p { margin:.4rem 0 0; }
+@media(max-width:1100px){.lease-overview-cards { grid-template-columns:1fr; }}
+@media(max-width:700px){.lease-section-nav { display:flex; }.lease-overview-facts { grid-template-columns:repeat(2,minmax(0,1fr));gap:1.25rem; }.lease-setup-notice { align-items:flex-start;flex-direction:column; }}
+
+.lease-section-nav > button:hover,.lease-section-nav > button.secondary:hover { background:#edf5f0;color:#155f4e; }

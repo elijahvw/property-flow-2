@@ -1,3 +1,4 @@
+import type {MoneyMovement} from "./components/LeaseMovements";
 import { moneyCell } from "./report-export";
 import { leaseContext } from "./lease-links";
 
@@ -25,6 +26,10 @@ export type Statement = {
   filters: { dateFrom: string | null; dateTo: string | null };
   basis: string;
   current: {
+    rentOutstandingCents?: string;
+    otherOutstandingCents?: string;
+    noncashCreditCents?: string;
+    depositAppliedCents?:string; refundedCents?:string;
     outstandingCents: string;
     creditCents: string;
     netCents: string;
@@ -40,6 +45,8 @@ export type Statement = {
     openingNetCents: string;
     chargedCents: string;
     receivedCents: string;
+    noncashCreditCents?: string;
+    depositAppliedCents?:string; refundedCents?:string;
     closingNetCents: string;
     laterNetCents: string;
     currentNetCents: string;
@@ -47,7 +54,12 @@ export type Statement = {
     voidedCount: number;
   };
   items: {
-    type: "charge" | "receipt";
+    type: "charge" | "receipt" | "credit" | "credit_reversal" | "refund" | "deposit_application" | "movement_reversal";
+    category?: string | null;
+    dueOn?: string | null;
+    description?: string | null;
+    relatedId?: string | null;
+    relatedReference?: string | null;
     id: string;
     reference: string;
     date: string;
@@ -80,6 +92,8 @@ export type Statement = {
     id: string;
     reference: string;
     dueOn: string;
+    movements?:MoneyMovement[];
+    receivedCents?:string;appliedCents?:string;returnedCents?:string;correctedCents?:string;
     requiredCents: string;
     heldCents: string;
     outstandingCents: string;
@@ -89,6 +103,11 @@ export type Statement = {
 };
 
 export const statementStatuses: Record<string, string> = {
+  credit_applied: "Credit applied",
+  credit_reversed: "Credit reversed",
+  credit_reversal: "Credit reversal",
+  settled: "Settled with credit",
+  settled_deposit:"Settled from deposit",returned:"Returned",partly_returned:"Partly returned",deposit_applied:"Deposit applied",movement_corrected:"Corrected / reversed",movement_reversal:"Record correction",
   upcoming: "Future due",
   due_today: "Due today",
   within_grace: "Within grace",
@@ -160,11 +179,21 @@ export function statementCsv(s: Statement) {
     ["Opening net USD", moneyCell(s.period.openingNetCents)],
     ["Period charges USD", moneyCell(s.period.chargedCents)],
     ["Period receipts USD", moneyCell(s.period.receivedCents)],
+    [
+      "Period net noncash credits USD",
+      moneyCell(s.period.noncashCreditCents ?? "0"),
+    ],
+    [
+      "Current noncash reductions USD",
+      moneyCell(s.current.noncashCreditCents ?? "0"),
+    ],
+    ["Period net deposit applications USD",moneyCell(s.period.depositAppliedCents??"0")],
+    ["Period manual payment refunds USD",moneyCell(s.period.refundedCents??"0")],
     ["Closing net USD", moneyCell(s.period.closingNetCents)],
     ["Later-dated net activity USD", moneyCell(s.period.laterNetCents)],
     ["Current whole-lease net USD", moneyCell(s.current.netCents)],
     [
-      "Current whole-lease unpaid rent USD",
+      "Current whole-lease unpaid charges USD",
       moneyCell(s.current.outstandingCents),
     ],
     [
@@ -211,6 +240,11 @@ export function statementCsv(s: Statement) {
       "Voided at (correction, not refund)",
       "Recorded at",
       "Schedule ID",
+      "Category",
+      "Due date",
+      "Tenant-visible description",
+      "Related source ID",
+      "Related source reference",
     ],
     ...s.items.map((r) => [
       r.date,
@@ -229,6 +263,11 @@ export function statementCsv(s: Statement) {
       r.voidedAt ?? "",
       r.createdAt,
       r.scheduleId ?? "",
+      r.category ?? "",
+      r.dueOn ?? "",
+      r.description ?? "",
+      r.relatedId ?? "",
+      r.relatedReference ?? "",
     ]),
     [],
     [
@@ -271,6 +310,10 @@ export function statementCsv(s: Statement) {
       [
         "Required USD",
         moneyCell(s.deposit.requiredCents),
+        "Valid receipts USD",moneyCell(s.deposit.receivedCents??s.deposit.heldCents),
+        "Applied to charges USD",moneyCell(s.deposit.appliedCents??"0"),
+        "Money returned USD",moneyCell(s.deposit.returnedCents??"0"),
+        "Corrected receipts USD",moneyCell(s.deposit.correctedCents??"0"),
         "Recorded held USD",
         moneyCell(s.deposit.heldCents),
         "Uncollected USD",
@@ -280,5 +323,6 @@ export function statementCsv(s: Statement) {
       ],
     );
   else rows.push(["Deposit account", "Not set up"]);
+  if(s.deposit?.movements?.length)rows.push([], ["Deposit movement reference","Source ID","Kind","Effective date","Amount USD","Reason","Charge ID","Cash source ID","Cash reference","Correction ID","Correction date","Correction reason"],...s.deposit.movements.map(m=>[m.reference,m.id,m.kind,m.effectiveOn.slice(0,10),moneyCell(String(m.amountCents)),m.reason,m.chargeId||"",m.cashEntries[0]?.id||"",m.cashEntries[0]?.reference||"",m.reversal?.id||"",m.reversal?.effectiveOn.slice(0,10)||"",m.reversal?.reason||""]));
   return rows;
 }

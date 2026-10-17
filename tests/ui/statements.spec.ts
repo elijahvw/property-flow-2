@@ -229,7 +229,7 @@ test("statement presents grouped address, current balances, activity and allocat
   await page.locator(".statement-allocations summary").click();
   await expect(
     page.getByRole("table", { name: "Receipt-to-charge allocation details" }),
-  ).toContainText("TX-202");
+  ).toContainText("Transaction #202");
   await expect(
     page.getByRole("link", { name: "Back to lease workspace" }),
   ).toHaveAttribute(

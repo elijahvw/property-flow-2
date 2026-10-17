@@ -25,6 +25,8 @@ type Unit = UnitExtras & {
   version: number;
 };
 export type Lease = {
+  hasTermHistory?:boolean;
+  overview?:{householdCount:number;pendingApprovals:number;scheduleStatus:string|null;depositRecorded:boolean};
   previousLeaseId?: string | null;
   previousLease?: { id: string; endsOn: string | null; status: string } | null;
   renewals?: { id: string; status: string; startsOn: string }[];
@@ -839,10 +841,12 @@ export function LeaseTerms({
   prefix,
   value,
   draftOnly = false,
+  lockPaymentTerms = !!value?.hasTermHistory,
 }: {
   prefix: string;
   value?: Lease;
   draftOnly?: boolean;
+  lockPaymentTerms?:boolean;
 }) {
   const endDateHelpId = useId();
   return (
@@ -876,6 +880,7 @@ export function LeaseTerms({
             {prefix} monthly rent (USD)
             <input
               name="monthlyRent"
+              readOnly={lockPaymentTerms}
               type="number"
               min="0"
               max="1000000"
@@ -900,12 +905,13 @@ export function LeaseTerms({
           </label>
         </div>
       </fieldset>
-      <PaymentTerms prefix={prefix} value={value} />
+      {lockPaymentTerms&&<p className="notice">Use Terms &amp; changes to review future payment terms. This form manages dates and the recorded lease setup.</p>}
+      <PaymentTerms prefix={prefix} value={value} locked={lockPaymentTerms} />
     </>
   );
 }
 
-function PaymentTerms({ prefix, value }: { prefix: string; value?: Lease }) {
+function PaymentTerms({ prefix, value,locked=false }: { prefix: string; value?: Lease;locked?:boolean }) {
   const [due, setDue] = useState(value?.rentDueDay ?? 1),
     [grace, setGrace] = useState(String(value?.graceDays ?? 0));
   const preview = new Date("2026-11-01T00:00:00Z");
@@ -921,7 +927,8 @@ function PaymentTerms({ prefix, value }: { prefix: string; value?: Lease }) {
   const after = new Date(through);
   after.setUTCDate(after.getUTCDate() + 1);
   return (
-    <fieldset className="editor-section payment-terms">
+    <>{locked&&<><input type="hidden" name="rentDueDay" value={due}/><input type="hidden" name="graceDays" value={grace}/><input type="hidden" name="paymentInstructions" value={value?.paymentInstructions||""}/></>}
+    <fieldset disabled={locked} className="editor-section payment-terms">
       <legend>Rent payment terms</legend>
       <div className="form-grid">
         <label>
@@ -975,7 +982,7 @@ function PaymentTerms({ prefix, value }: { prefix: string; value?: Lease }) {
         Settings apply to newly posted charges. Existing charges retain their
         saved grace period. No automatic late fees are charged.
       </p>
-    </fieldset>
+    </fieldset></>
   );
 }
 
@@ -1051,7 +1058,7 @@ export function LeaseRenewal({
             term starting afterward. This does not end the previous lease or
             stop its rent schedule.
           </p>
-          <LeaseTerms prefix="Renewal" value={proposed} draftOnly />
+          <LeaseTerms prefix="Renewal" value={proposed} draftOnly lockPaymentTerms={false} />
         </Form>
       </div>
     </>

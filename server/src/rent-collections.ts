@@ -17,12 +17,17 @@ export async function rentCollections(
       afterGraceLeases: number;
     }[]
   >(Prisma.sql`
-    WITH applied AS (
-      SELECT a."chargeId", SUM(a."amountCents") amount
+    WITH settlements AS (
+      SELECT a."chargeId", a."amountCents" amount
       FROM "RentAllocation" a JOIN "LedgerEntry" p ON p.id=a."entryId" AND p."companyId"=a."companyId"
       WHERE a."companyId"=${companyId} AND p."voidedAt" IS NULL
-      GROUP BY a."chargeId"
-    ), balances AS (
+      UNION ALL
+      SELECT c."chargeId",c."amountCents" amount FROM "LeaseCredit" c
+      WHERE c."companyId"=${companyId} AND NOT EXISTS(SELECT 1 FROM "LeaseCreditReversal" r WHERE r."creditId"=c.id AND r."companyId"=c."companyId")
+      UNION ALL
+      SELECT m."chargeId",m."amountCents" amount FROM "LeaseMovement" m
+      WHERE m."companyId"=${companyId} AND m.kind='deposit_application' AND NOT EXISTS(SELECT 1 FROM "LeaseMovementReversal" r WHERE r."movementId"=m.id AND r."companyId"=m."companyId")
+    ), applied AS (SELECT "chargeId",SUM(amount) amount FROM settlements GROUP BY "chargeId"), balances AS (
       SELECT c."leaseId", c."dueOn", c."graceDays", c."amountCents"-COALESCE(a.amount,0) remaining
       FROM "RentCharge" c LEFT JOIN applied a ON a."chargeId"=c.id
       WHERE c."companyId"=${companyId} AND c."voidedAt" IS NULL ${propertyId ? Prisma.sql`AND c."propertyId"=${propertyId}` : Prisma.empty}

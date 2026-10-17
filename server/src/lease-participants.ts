@@ -35,7 +35,7 @@ async function linked(tx:Tx,companyId:string,propertyId:string,userId:string,req
 // leaseholders need approved portal access before move-in to review deposits.
 // scoped() independently fences current company, membership and verification.
 export function sharedLeaseAccess(companyId:string,userId:string,today:Date,includeDraft=false):Prisma.LeaseWhereInput {
-  return { OR:[{residentId:userId,participants:{none:{userId,OR:[{removedAt:{not:null}},{endsOn:{lt:today}},{role:{not:"leaseholder"}},{portalApproved:false}]}}},{...(!includeDraft?{status:{not:"draft"}}:{}),participants:{some:{companyId,userId,role:"leaseholder",removedAt:null,portalApproved:true,OR:[{endsOn:null},{endsOn:{gte:today}}]}}}],
+  return { ...(!includeDraft?{status:{not:"draft"}}:{}), OR:[{residentId:userId,participants:{none:{userId,OR:[{removedAt:{not:null}},{endsOn:{lt:today}},{role:{not:"leaseholder"}},{portalApproved:false}]}}},{...(!includeDraft?{status:{not:"draft"}}:{}),participants:{some:{companyId,userId,role:"leaseholder",removedAt:null,portalApproved:true,OR:[{endsOn:null},{endsOn:{gte:today}}]}}}],
     property:{assignments:{some:{companyId,userId}}} };
 }
 export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient,authenticate:preValidationHookHandler,origin:string){

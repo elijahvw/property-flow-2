@@ -198,6 +198,18 @@ jobs:
           cache-to: type=gha,mode=max,scope=propertyflow-server
       - name: Ensure database is available before starting backend
         run: bash scripts/dev-power.sh start-database
+      - name: Preserve a database restore point before migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot="propertyflow-dev-pre-${GITHUB_SHA:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          aws rds create-db-snapshot \
+            --db-instance-identifier propertyflow-dev-db \
+            --db-snapshot-identifier "$snapshot" \
+            --tags Key=Application,Value=propertyflow Key=Environment,Value=dev \
+            --query 'DBSnapshot.DBSnapshotIdentifier' --output text
+          aws rds wait db-snapshot-available --db-snapshot-identifier "$snapshot"
+          echo "Pre-migration database restore point: $snapshot" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

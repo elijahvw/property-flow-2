@@ -1,0 +1,22 @@
+.lease-movements { margin-top: 1.6rem; padding-top: 1.4rem; border-top: 1px solid #dde6e1; }
+.lease-movements h3 { margin: 0 0 .5rem; }
+.lease-movements h4 { margin: 1.4rem 0 .7rem; }
+.movement-context, .movement-review { padding: 1.2rem; border: 1px solid #cedfd6; background: #f5faf7; border-radius: 10px; margin: 0 0 1.3rem; }
+.movement-context > span { display: block; color: #52685f; font-size: .85rem; }
+.movement-context > strong { display: block; margin-top: .4rem; font-size: 1.35rem; }
+.movement-context p { margin-bottom: 0; font-size: .9rem; }
+.movement-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.movement-review dl { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; margin-bottom: 0; }
+.movement-review dt { color: #52685f; font-size: .85rem; }
+.movement-review dd { margin: .35rem 0 0; font-weight: 600; overflow-wrap: anywhere; white-space: pre-wrap; }
+.movement-review dl > div:last-child { grid-column: 1/-1; }
+.movement-confirm { display: flex; align-items: flex-start; gap: .8rem; line-height: 1.5; }
+.movement-confirm input { width: 1.2rem; height: 1.2rem; margin: .2rem 0; flex-shrink: 0; }
+.movement-history { list-style: none; padding: 0; }
+.movement-history > li { border-top: 1px solid #e0e7e3; padding: 1.2rem 0; display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
+.movement-history p { margin: .45rem 0; overflow-wrap: anywhere; }
+.movement-title { display: flex; flex-wrap: wrap; gap: .7rem; align-items: center; }
+.movement-correction { border-left: 3px solid #bacfc3; padding-left: 1rem; margin-top: 1rem; font-size: .85rem; }
+.movement-pending { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-top: 1rem; }
+@media(max-width:650px) { .movement-fields, .movement-review dl { grid-template-columns: 1fr; } .movement-history > li { flex-direction: column; } }
+.workflow-form label.movement-confirm { display: flex; flex-direction: row; align-items: flex-start; gap: .8rem; }

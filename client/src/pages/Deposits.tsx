@@ -1,10 +1,12 @@
+import { LeaseMovements, type MoneyMovement } from "../components/LeaseMovements";
+import { recordReference } from "../record-reference";
 import { formatDate } from "../dates";
 import { DateField } from "../components/DateField";
 import { LeaseReturnLink } from "../components/LeaseReturnLink";
 import { leasePath,leaseContext } from "../lease-links";
 import { usePropertySearchParams } from "../usePropertySearchParams";
 import { TenantReturnLink } from "../components/TenantReturnLink";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -19,6 +21,7 @@ import { Form } from "./Workspace";
 import { dollars } from "./Finances";
 import { downloadReport, moneyCell } from "../report-export";
 type Summary = {
+  receivedCents?:string;appliedCents?:string;returnedCents?:string;correctedCents?:string;
   requiredCents: string;
   heldCents: string;
   outstandingCents: string;
@@ -53,6 +56,7 @@ type Receipt = {
   };
 };
 type Account = {
+  movements?:MoneyMovement[];
   id: string;
   reference: string;
   leaseId: string;
@@ -129,6 +133,7 @@ function DepositMetrics({ summary }: { summary: Summary }) {
         <strong>{dollars(summary.outstandingCents)}</strong>
         <small>{dollars(summary.pastDueCents)} past due</small>
       </div>
+      {([['Deposit receipts',summary.receivedCents],['Applied to charges',summary.appliedCents],['Money returned',summary.returnedCents],['Corrected receipts',summary.correctedCents]] as [string,string|undefined][]).map(([label,value])=>value!==undefined && BigInt(value)>0n ? <div key={label}><span>{label}</span><strong>{dollars(value)}</strong></div>:null)}
       {BigInt(summary.excessHeldCents) > 0n && (
         <div>
           <span>Held above requirement</span>
@@ -400,6 +405,7 @@ function DepositAccountPanel({
     r = useResource<Detail>(root, true, true),
     key = `pf:deposit:${auth?.user.id}:${auth?.membership?.companyId}:${leaseId}`,
     retained = pending(key);
+  useEffect(()=>{const refresh=(event:Event)=>{if((event as CustomEvent).detail===leaseId)r.reload();};window.addEventListener("lease-money-changed",refresh);return()=>window.removeEventListener("lease-money-changed",refresh);},[leaseId]);
   const [editor, setEditor] = useState<{
       kind: Kind;
       snapshot: Detail;
@@ -466,8 +472,7 @@ function DepositAccountPanel({
               <DepositMetrics summary={current.summary} />
               <p className="help">
                 Due {formatDate(current.dueOn)} · company date{" "}
-                {formatDate(r.data.businessDate)}. Held balance reflects nonvoided receipts
-                recorded here, not a verified bank balance.
+                {formatDate(r.data.businessDate)}. Held balance equals valid receipts less deposit applications and money returned. It is not a verified bank balance. Applications and returns do not automatically create a new collection requirement.
               </p>
               <RecordIdentity
                 id={current.id}
@@ -519,6 +524,7 @@ function DepositAccountPanel({
                             "Business date",
                             r.data!.businessDate,
                           ],
+                          ["Valid receipts USD",moneyCell(current.summary.receivedCents??current.summary.heldCents),"Applied USD",moneyCell(current.summary.appliedCents??"0"),"Returned USD",moneyCell(current.summary.returnedCents??"0"),"Corrected receipts USD",moneyCell(current.summary.correctedCents??"0")],
                           [
                             "Receipt reference",
                             "Receipt internal ID",
@@ -545,6 +551,8 @@ function DepositAccountPanel({
                             x.memo || "",
                             x.cashEntry.voidReason || "",
                           ]),
+                          ["Movement reference","Source ID","Kind","Effective date","Amount USD","Reason","Charge ID","Cash ID","Cash reference","Correction reference","Correction date","Correction reason"],
+                          ...(current.movements??[]).map(m=>[m.reference,m.id,m.kind,m.effectiveOn.slice(0,10),moneyCell(String(m.amountCents)),m.reason,m.chargeId??"",m.cashEntries[0]?.id??"",m.cashEntries[0]?.reference??"",m.reversal?.reference??"",m.reversal?.effectiveOn.slice(0,10)??"",m.reversal?.reason??""]),
                         ],
                       )
                     }
@@ -560,6 +568,7 @@ function DepositAccountPanel({
                   before move-in.
                 </p>
               )}
+              <LeaseMovements leaseId={leaseId} resident={resident} area="deposit" changed={()=>{r.reload();changed?.();}} stale={!!r.error}/>
               <h3>Deposit receipts</h3>
               {!current.receipts.length ? (
                 <p>No deposit received yet.</p>
@@ -592,7 +601,7 @@ function DepositAccountPanel({
                         />
                         {!resident && (
                           <p className="help">
-                            Cash source {receipt.cashEntry.reference}
+                            Cash source {recordReference(receipt.cashEntry.reference)}
                           </p>
                         )}
                       </div>

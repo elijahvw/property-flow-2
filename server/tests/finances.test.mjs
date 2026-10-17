@@ -1,5 +1,11 @@
+import {leaseLifecycleCases} from "./lease-lifecycle-cases.mjs";
+import {leaseTermCases} from "./lease-term-cases.mjs";
+import {leaseSettlementCases} from "./lease-settlement-cases.mjs";
+import {profileCases} from "./profile-cases.mjs";
+import {leaseMovementCases} from "./lease-movement-cases.mjs";
 import {offlineTenantCases} from "./offline-tenant-cases.mjs";
 import {statementCases} from "./statement-cases.mjs";
+import {leaseChargeCases} from "./lease-charge-cases.mjs";
 import { seedContactMigration, verifyContactMigration, residentContactCases } from "./resident-contact-cases.mjs";
 import { residentWorkspaceCases } from "./resident-workspace-cases.mjs";
 import { householdCases } from "./household-cases.mjs";
@@ -89,13 +95,13 @@ test('manual finance isolation, replay, corrections and totals',{skip:!url},asyn
   const payload={expectedVersion:1,reason:'Entered on wrong property'};const responses=await Promise.all([call('owner','POST',`${path}/${entry.id}/void`,payload),call('manager','POST',`${path}/${entry.id}/void`,payload)]);for(const r of responses)assert.equal(r.statusCode,200,r.body);assert.equal(responses[0].json().version,2);
   assert.equal((await call('owner','POST',`${path}/${entry.id}/void`,payload)).statusCode,200);assert.equal((await call('owner','POST',`${path}/${entry.id}/void`,{...payload,reason:'Different'})).statusCode,409);assert.equal((await call('foreign','POST',`${path}/${entry.id}/void`,payload)).statusCode,404);
   assert.equal((await call('owner','POST',`${path}/${entry.id}/void`,{reason:'',expectedVersion:1})).statusCode,400);
-  assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='finance.voided'`)).rows[0].n,1);const result=(await call('owner','GET',path)).json();assert.equal(result.items.length,1);assert.deepEqual(result.summary,{incomeCents:'0',expenseCents:'0',netCents:'0',depositReceivedCents:'0',cashMovementCents:'0'});
+  assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='finance.voided'`)).rows[0].n,1);const result=(await call('owner','GET',path)).json();assert.equal(result.items.length,1);assert.deepEqual(result.summary,{incomeCents:'0',expenseCents:'0',netCents:'0',depositReceivedCents: '0',rentRefundCents:'0',depositRefundCents:'0',cashMovementCents:'0'});
  });
  await t.test('filtered totals include all pages, exact cents and void exclusion',async()=>{
   for(let i=0;i<51;i++)await admin.query(`INSERT INTO "LedgerEntry"(id,"companyId","propertyId","createdById","submissionKey","submissionHash","occurredOn","amountCents",kind,category) VALUES($1,'a','home','owner',$2,'fixture','2026-10-14',101,'income','rent')`,['paging-'+String(i).padStart(3,'0'),randomUUID()]);
   assert.equal((await call('manager','POST',path,body({kind:'expense',category:'repairs',amount:'100.00'}))).statusCode,200);assert.equal((await call('manager','POST',path,body({propertyId:'other-home',amount:'10.00'}))).statusCode,200);
-  const filter='?propertyId=home&dateFrom=2026-10-14&dateTo=2026-10-14';const first=(await call('owner','GET',path+filter)).json(),second=(await call('owner','GET',path+filter+'&cursor='+first.nextCursor)).json();assert.equal(first.items.length,50);assert.ok(first.nextCursor);assert.equal(second.nextCursor,null);assert.deepEqual(first.summary,{incomeCents:'5151',expenseCents:'10000',netCents:'-4849',depositReceivedCents:'0',cashMovementCents:'-4849'});assert.deepEqual(first.summary,second.summary);assert.equal(new Set([...first.items,...second.items].map(r=>r.id)).size,53);
-  assert.deepEqual((await call('manager','GET',path+'?dateTo=2026-10-13')).json().summary,{incomeCents:'0',expenseCents:'0',netCents:'0',depositReceivedCents:'0',cashMovementCents:'0'});
+  const filter='?propertyId=home&dateFrom=2026-10-14&dateTo=2026-10-14';const first=(await call('owner','GET',path+filter)).json(),second=(await call('owner','GET',path+filter+'&cursor='+first.nextCursor)).json();assert.equal(first.items.length,50);assert.ok(first.nextCursor);assert.equal(second.nextCursor,null);assert.deepEqual(first.summary,{incomeCents:'5151',expenseCents:'10000',netCents:'-4849',depositReceivedCents: '0',rentRefundCents:'0',depositRefundCents:'0',cashMovementCents:'-4849'});assert.deepEqual(first.summary,second.summary);assert.equal(new Set([...first.items,...second.items].map(r=>r.id)).size,53);
+  assert.deepEqual((await call('manager','GET',path+'?dateTo=2026-10-13')).json().summary,{incomeCents:'0',expenseCents:'0',netCents:'0',depositReceivedCents: '0',rentRefundCents:'0',depositRefundCents:'0',cashMovementCents:'0'});
   for(const query of ['?propertyId=foreign-home','?companyId=b','?dateFrom=2026-02-30','?dateFrom=2027-01-01&dateTo=2026-01-01'])assert.ok([400,404].includes((await call('owner','GET',path+query)).statusCode));
   await admin.query(`DELETE FROM "LedgerEntry" WHERE id LIKE 'paging-%'`);
  });
@@ -134,5 +140,15 @@ test('manual finance isolation, replay, corrections and totals',{skip:!url},asyn
  await t.test("resident contact compatibility", async contactTest => residentContactCases(contactTest,admin,call,db));
  await t.test("offline tenant and connected invitation workflow",async offlineTest=>offlineTenantCases(offlineTest,admin,call,providerCalls));
  await t.test("tenant statements and shared financial sources",async statementTest=>statementCases(statementTest,admin,call));
+ await t.test("one-time lease charges and noncash credit notes",async chargeTest=>leaseChargeCases(chargeTest,admin,call,app,db));
+
+ await t.test("deposit applications and actual manual refunds",async movementTest=>leaseMovementCases(movementTest,admin,call,app,db));
+
+ await t.test("itemized move-out settlement",async settlementTest=>leaseSettlementCases(settlementTest,admin,call,app,db));
+ await t.test("personal and company profiles",async profileTest=>profileCases(profileTest,admin,call,app,db));
+
+ await t.test("reviewed future lease terms",async termTest=>leaseTermCases(termTest,admin,call,app,db));
+
+ await t.test("reviewed proration and renewal handoffs",async lifecycleTest=>leaseLifecycleCases(lifecycleTest,admin,call,app,db));
 
 });

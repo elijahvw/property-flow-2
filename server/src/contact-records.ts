@@ -221,7 +221,56 @@ export async function contactDirectory(tx: Tx, companyId: string) {
       "TENANT_DIRECTORY_TOO_LARGE",
       "This tenant directory exceeds 2,000 records. No partial directory is shown.",
     );
-  return result;
+  // Company-owned rental relationships are independent of portal assignments.
+  // Read them in one bounded query, including departed occupants and old leases.
+  const company = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { timezone: true } });
+  const today = companyDay(company.timezone);
+  const leases = await tx.lease.findMany({
+    where: { companyId },
+    select: {
+      id: true, propertyId: true, residentContactId: true, residentId: true,
+      startsOn: true, endsOn: true, status: true,
+      property: { select: { name: true } }, unit: { select: { label: true } },
+      participants: {
+        where: { companyId },
+        select: { contactId: true, userId: true, role: true, startsOn: true, endsOn: true, removedAt: true },
+        take: 1001,
+      },
+    },
+    orderBy: [{ startsOn: "desc" }, { id: "asc" }], take: 10001,
+  });
+  if (leases.length > 10000 || leases.some(l => l.participants.length > 1000) || leases.reduce((n,l) => n+l.participants.length,0) > 10000)
+    throw new AccessError(422, "TENANT_DIRECTORY_TOO_LARGE", "Too many rental relationships for a complete tenant directory. No partial associations are shown.");
+  type Association = { leaseId: string; propertyId: string; propertyName: string; unitLabel: string; role: string; status: string; startsOn: string; endsOn: string | null; blocksArchive: boolean };
+  const byIdentity = new Map<string, Association[]>();
+  for (const c of contacts) {
+    const rows: Association[] = [];
+    byIdentity.set(`contact:${c.id}`, rows);
+    if (c.userId) byIdentity.set(`user:${c.userId}`, rows);
+  }
+  for (const m of members) if (!byIdentity.has(`user:${m.userId}`)) byIdentity.set(`user:${m.userId}`, []);
+  const day = (date: Date) => date.toISOString().slice(0, 10);
+  for (const lease of leases) {
+    const linked = new Set<Association[]>();
+    const add = (contactId: string | null, userId: string | null, role: string, startsOn: Date, endsOn: Date | null, removed: boolean) => {
+      const rows = (contactId ? byIdentity.get(`contact:${contactId}`) : undefined) ?? (userId ? byIdentity.get(`user:${userId}`) : undefined);
+      if (!rows || linked.has(rows)) return;
+      linked.add(rows);
+      const start = day(startsOn) > day(lease.startsOn) ? day(startsOn) : day(lease.startsOn);
+      const end = [endsOn, lease.endsOn].filter((v): v is Date => !!v).map(day).sort()[0] ?? null;
+      const current = !removed && lease.status !== "ended" && (!end || end >= today);
+      const status = !current ? "former" : lease.status === "draft" ? "draft" : start > today ? "upcoming" : "current";
+      rows.push({ leaseId: lease.id, propertyId: lease.propertyId, propertyName: lease.property.name, unitLabel: lease.unit.label, role, status, startsOn: start, endsOn: end, blocksArchive: current });
+    };
+    add(lease.residentContactId, lease.residentId, "leaseholder", lease.startsOn, lease.endsOn, false);
+    for (const person of lease.participants) add(person.contactId, person.userId, person.role, person.startsOn, person.endsOn, !!person.removedAt);
+  }
+  const rank: Record<string, number> = { current: 0, upcoming: 1, draft: 2, former: 3 };
+  return result.map(row => {
+    const rentals = (("contactId" in row ? byIdentity.get(`contact:${row.contactId}`) : undefined) ?? (row.userId ? byIdentity.get(`user:${row.userId}`) : undefined) ?? [])
+      .sort((a,b) => rank[a.status]-rank[b.status] || b.startsOn.localeCompare(a.startsOn) || a.leaseId.localeCompare(b.leaseId));
+    return { ...row, rentals, canArchive: !rentals.some(r => r.blocksArchive) };
+  });
 }
 export function registerContactRecords(
   server: FastifyInstance,
@@ -358,7 +407,7 @@ export function registerContactRecords(
           const leases = await tx.leaseParticipant.findMany({
             where: {
               companyId,
-              contactId: id,
+              AND: [{ OR: [{ contactId: id }, ...(row.userId ? [{ userId: row.userId }] : [])] }],
               removedAt: null,
               OR: [{ endsOn: null }, { endsOn: { gte: today } }],
               lease: {
@@ -395,6 +444,10 @@ export function registerContactRecords(
           return {
             ...row,
             portal: await portal(tx, companyId, row.userId),
+            canArchive: leases.length === 0 && !await tx.lease.findFirst({
+              where: { companyId, status: { in: ["active", "draft"] }, AND: [{ OR: [{ residentContactId: id }, ...(row.userId ? [{ residentId: row.userId }] : [])] }, { OR: [{ endsOn: null }, { endsOn: { gte: today } }] }] },
+              select: { id: true },
+            }),
             invitations,
             leases,
             activity,
@@ -460,11 +513,12 @@ export function registerContactRecords(
                 AND: [{ OR: [{ endsOn: null }, { endsOn: { gte: today } }] }],
                 OR: [
                   { residentContactId: id },
+                  ...(old.userId ? [{ residentId: old.userId }] : []),
                   {
                     participants: {
                       some: {
                         companyId,
-                        contactId: id,
+                        AND: [{ OR: [{ contactId: id }, ...(old.userId ? [{ userId: old.userId }] : [])] }],
                         removedAt: null,
                         OR: [{ endsOn: null }, { endsOn: { gte: today } }],
                       },
@@ -526,7 +580,12 @@ export function registerContactRecords(
           });
           await audit(tx, request, companyId, id, "resident.contact.updated", {
             status,
+            previousStatus: old.status,
           });
+          if (old.status !== status)
+            await audit(tx, request, companyId, id, status === "archived" ? "resident.contact.archived" : "resident.contact.restored", {
+              previousStatus: old.status, status, version: row.version,
+            });
           return row;
         },
       );

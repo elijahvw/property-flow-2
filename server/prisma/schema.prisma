@@ -49,6 +49,7 @@ model Company {
 }
 
 model User {
+  accountProfile AccountProfile?
   id         String   @id // This will be the Auth0 ID
   email      String   @unique
   name       String?
@@ -310,6 +311,12 @@ model ResidentContact {
 }
 
 model Lease {
+ prorations LeaseProration[]
+ transitions LeaseTransition[] @relation("TransitionOld")
+ successorTransitions LeaseTransition[] @relation("TransitionNew")
+  termChanges LeaseTermChange[]
+  settlement LeaseSettlement?
+  movements LeaseMovement[]
   residentContactId String?
   residentContact ResidentContact? @relation(fields: [residentContactId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Restrict)
   @@index([companyId, residentContactId])
@@ -387,6 +394,9 @@ model LeaseParticipant {
 }
 
 model LedgerEntry {
+ movementId String? @unique
+ movement LeaseMovement? @relation("MovementCash", fields:[movementId,propertyId,companyId],references:[id,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ refundMovements LeaseMovement[] @relation("RefundSource")
  depositReceiptId String? @unique
  depositReceipt DepositReceipt? @relation(fields:[depositReceiptId,propertyId,companyId],references:[id,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
  reference String @unique @default(dbgenerated("('TX-'::text || (nextval('ledger_entry_reference_seq'::regclass))::text)"))
@@ -429,6 +439,15 @@ model UserProvision {
 }
 
 model RentCharge {
+ proration LeaseProration?
+ termChangeId String?
+ termsSnapshot Json?
+ termChange LeaseTermChange? @relation(fields:[termChangeId,leaseId,propertyId,companyId],references:[id,leaseId,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+  movements LeaseMovement[]
+ kind String @default("rent")
+ category String @default("rent")
+ effectiveOn DateTime? @db.Date
+ credits LeaseCredit[]
  reference String @unique @default(dbgenerated("('RC-'::text || (nextval('rent_charge_reference_seq'::regclass))::text)"))
  scheduleId String?
  schedule RentSchedule? @relation(fields: [scheduleId, leaseId, propertyId, companyId], references: [id, leaseId, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
@@ -516,6 +535,7 @@ model RentScheduleOccurrence {
 }
 
 model DepositAccount {
+  movements LeaseMovement[]
  id String @id @default(cuid())
  reference String @unique @default(dbgenerated("('DA-'::text || (nextval('deposit_account_reference_seq'::regclass))::text)"))
  companyId String
@@ -578,4 +598,245 @@ model DepositReceipt {
  @@unique([companyId,createdById,submissionKey])
  @@unique([id,propertyId,companyId])
  @@index([companyId,accountId,id])
+}
+
+model LeaseCredit {
+ id String @id @default(cuid())
+ reference String @unique @default(dbgenerated("('CN-'::text || (nextval('lease_credit_reference_seq'::regclass))::text)"))
+ companyId String
+ propertyId String
+ leaseId String
+ chargeId String
+ createdById String
+ submissionKey String
+ submissionHash String
+ kind String
+ effectiveOn DateTime @db.Date
+ amountCents Int
+ reason String
+ createdAt DateTime @default(now())
+ charge RentCharge @relation(fields:[chargeId,leaseId,propertyId,companyId],references:[id,leaseId,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ reversal LeaseCreditReversal?
+ @@unique([id,leaseId,propertyId,companyId])
+ @@unique([companyId,createdById,submissionKey])
+ @@index([companyId,leaseId])
+}
+model LeaseCreditReversal {
+ id String @id @default(cuid())
+ reference String @unique @default(dbgenerated("('CR-'::text || (nextval('lease_credit_reversal_reference_seq'::regclass))::text)"))
+ companyId String
+ propertyId String
+ leaseId String
+ creditId String @unique
+ createdById String
+ submissionKey String
+ submissionHash String
+ effectiveOn DateTime @db.Date
+ reason String
+ createdAt DateTime @default(now())
+ credit LeaseCredit @relation(fields:[creditId,leaseId,propertyId,companyId],references:[id,leaseId,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ @@unique([creditId,leaseId,propertyId,companyId])
+ @@unique([companyId,createdById,submissionKey])
+ @@index([companyId,leaseId])
+}
+
+model LeaseMovement {
+ id String @id @default(cuid())
+ reference String @unique @default(dbgenerated("('LM-'::text || (nextval('lease_movement_reference_seq'::regclass))::text)"))
+ companyId String
+ propertyId String
+ leaseId String
+ accountId String?
+ chargeId String?
+ paymentId String?
+ kind String
+ effectiveOn DateTime @db.Date
+ amountCents Int
+ reason String
+ payee String?
+ method String?
+ paymentReference String?
+ createdById String
+ submissionKey String
+ submissionHash String
+ createdAt DateTime @default(now())
+ lease Lease @relation(fields:[leaseId,propertyId,companyId],references:[id,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ account DepositAccount? @relation(fields:[accountId,leaseId,propertyId,companyId],references:[id,leaseId,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ charge RentCharge? @relation(fields:[chargeId,leaseId,propertyId,companyId],references:[id,leaseId,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ payment LedgerEntry? @relation("RefundSource",fields:[paymentId,leaseId,propertyId,companyId],references:[id,leaseId,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ cashEntries LedgerEntry[] @relation("MovementCash")
+ reversal LeaseMovementReversal?
+ @@unique([companyId,createdById,submissionKey])
+ @@unique([id,propertyId,companyId])
+ @@unique([id,leaseId,propertyId,companyId])
+ @@index([companyId,leaseId])
+}
+model LeaseMovementReversal {
+ id String @id @default(cuid())
+ reference String @unique @default(dbgenerated("('MR-'::text || (nextval('lease_movement_reversal_reference_seq'::regclass))::text)"))
+ companyId String
+ propertyId String
+ leaseId String
+ movementId String @unique
+ effectiveOn DateTime @db.Date
+ reason String
+ createdById String
+ submissionKey String
+ submissionHash String
+ createdAt DateTime @default(now())
+ movement LeaseMovement @relation(fields:[movementId,leaseId,propertyId,companyId],references:[id,leaseId,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ @@unique([movementId,leaseId,propertyId,companyId])
+ @@unique([companyId,createdById,submissionKey])
+ @@index([companyId,leaseId])
+}
+
+model LeaseSettlement {
+ id String @id @default(cuid())
+ companyId String
+ propertyId String
+ leaseId String
+ status String
+ version Int
+ createdAt DateTime @default(now())
+ lease Lease @relation(fields:[leaseId,propertyId,companyId],references:[id,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ revisions LeaseSettlementRevision[]
+ @@unique([companyId,leaseId])
+ @@unique([leaseId,propertyId,companyId])
+ @@unique([id,leaseId,propertyId,companyId])
+}
+model LeaseSettlementRevision {
+ id String @id @default(cuid())
+ reference String @unique @default(dbgenerated("('ST-'::text || (nextval('lease_settlement_reference_seq'::regclass))::text)"))
+ companyId String
+ propertyId String
+ leaseId String
+ settlementId String
+ version Int
+ action String
+ movedOutOn DateTime @db.Date
+ reason String
+ forwarding Json
+ snapshot Json
+ sourceHash String
+ createdById String
+ submissionKey String
+ submissionHash String
+ createdAt DateTime @default(now())
+ settlement LeaseSettlement @relation(fields:[settlementId,leaseId,propertyId,companyId],references:[id,leaseId,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ @@unique([settlementId,version])
+ @@unique([companyId,createdById,submissionKey])
+ @@index([companyId,leaseId])
+}
+model AccountProfile {
+ userId String @id
+ version Int
+ details Json
+ updatedAt DateTime @default(now())
+ user User @relation(fields:[userId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+ revisions AccountProfileRevision[]
+}
+model AccountProfileRevision {
+ id String @id @default(cuid())
+ userId String
+ version Int
+ details Json
+ createdAt DateTime @default(now())
+ submissionKey String
+ submissionHash String
+ profile AccountProfile @relation(fields:[userId],references:[userId],onDelete:Restrict,onUpdate:Restrict)
+ @@unique([userId,version])
+ @@unique([userId,submissionKey])
+}
+
+model CompanyProfileRevision {
+ id String @id @default(cuid())
+ companyId String
+ version Int
+ before Json
+ after Json
+ createdById String
+ submissionKey String
+ submissionHash String
+ createdAt DateTime @default(now())
+ @@unique([companyId,version])
+ @@unique([companyId,createdById,submissionKey])
+}
+
+model LeaseTermChange {
+ id String @id @default(cuid())
+ reference String @unique @default(dbgenerated("('LT-'::text || nextval('lease_term_reference_seq'::regclass)::text)"))
+ companyId String
+ propertyId String
+ leaseId String
+ effectiveOn DateTime @db.Date
+ rentCents Int
+ rentDueDay Int
+ graceDays Int
+ paymentInstructions String?
+ before Json
+ reason String
+ createdById String
+ submissionKey String
+ submissionHash String
+ createdAt DateTime @default(now())
+ lease Lease @relation(fields:[leaseId,propertyId,companyId],references:[id,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ cancellation LeaseTermCancellation?
+ charges RentCharge[]
+ @@unique([id,leaseId,propertyId,companyId])
+ @@unique([companyId,createdById,submissionKey])
+ @@index([companyId,leaseId,effectiveOn])
+}
+model LeaseTermCancellation {
+ id String @id @default(cuid())
+ companyId String
+ propertyId String
+ leaseId String
+ changeId String @unique
+ reason String
+ createdById String
+ submissionKey String
+ submissionHash String
+ createdAt DateTime @default(now())
+ @@unique([changeId,leaseId,propertyId,companyId])
+ change LeaseTermChange @relation(fields:[changeId,leaseId,propertyId,companyId],references:[id,leaseId,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ @@unique([companyId,createdById,submissionKey])
+}
+
+model LeaseProration {
+ id String @id @default(cuid())
+ reference String @unique @default(dbgenerated("('PR-'::text || (nextval('proration_reference_seq'::regclass))::text)"))
+ companyId String
+ propertyId String
+ leaseId String
+ chargeId String @unique
+ snapshot Json
+ createdById String
+ submissionKey String
+ submissionHash String
+ createdAt DateTime @default(now())
+ lease Lease @relation(fields:[leaseId,propertyId,companyId],references:[id,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ charge RentCharge @relation(fields:[chargeId,leaseId,propertyId,companyId],references:[id,leaseId,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ @@unique([companyId,createdById,submissionKey])
+ @@unique([chargeId,leaseId,propertyId,companyId])
+ @@index([companyId,leaseId,id])
+}
+model LeaseTransition {
+ id String @id @default(cuid())
+ reference String @unique @default(dbgenerated("('LH-'::text || (nextval('lease_transition_reference_seq'::regclass))::text)"))
+ companyId String
+ propertyId String
+ leaseId String
+ successorId String?
+ kind String
+ endsOn DateTime @db.Date
+ snapshot Json
+ reason String
+ createdById String
+ submissionKey String
+ submissionHash String
+ createdAt DateTime @default(now())
+ lease Lease @relation("TransitionOld",fields:[leaseId,propertyId,companyId],references:[id,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ successor Lease? @relation("TransitionNew",fields:[successorId,propertyId,companyId],references:[id,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ @@unique([companyId,createdById,submissionKey])
+ @@index([companyId,leaseId,id])
 }

@@ -1,0 +1,205 @@
+.settlement-intro .section-heading p {
+  max-width: 55rem;
+}
+.settlement-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  list-style: none;
+  padding: 0;
+  gap: 1.3rem;
+  margin: 1.5rem 0 2rem;
+}
+.settlement-steps li {
+  display: flex;
+  gap: 0.8rem;
+}
+.settlement-steps li > span {
+  border: 1px solid #d0e3d9;
+  background: #edf6f0;
+  color: #196d5b;
+  border-radius: 50%;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+}
+.settlement-steps p {
+  font-size: 0.9rem;
+  color: #52685f;
+  margin: 0.45rem 0;
+}
+.settlement-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid #dce6df;
+  border-radius: 12px;
+  background: #f7faf8;
+  margin: 1rem 0 1.5rem;
+}
+.settlement-totals > div {
+  padding: 1.2rem;
+  min-width: 0;
+}
+.settlement-totals > div + div {
+  border-left: 1px solid #dce6df;
+}
+.settlement-totals dt {
+  color: #52685f;
+  font-size: 0.88rem;
+}
+.settlement-totals dd {
+  margin: 0.7rem 0;
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: #1e4538;
+  overflow-wrap: anywhere;
+}
+.settlement-totals p {
+  color: #65786e;
+  font-size: 0.8rem;
+  margin: 0;
+}
+.settlement-facts {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+  overflow-wrap: anywhere;
+}
+.settlement-facts p {
+  margin: 0.5rem 0;
+  white-space: pre-wrap;
+}
+.settlement-history-toolbar {
+  display: flex;
+  gap: 1rem;
+  align-items: end;
+  flex-wrap: wrap;
+}
+.settlement-history-toolbar label {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 230px;
+}
+.settlement-source {
+  padding: 1rem 0;
+  border-top: 1px solid #dce6df;
+}
+.settlement-source summary {
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.4rem 0;
+}
+.settlement-source .postal-address {
+  margin: 1rem 0;
+}
+.settlement-lines {
+  list-style: none;
+  padding: 0;
+}
+.settlement-lines li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  border-top: 1px solid #e1e8e4;
+  padding: 1rem 0;
+  overflow-wrap: anywhere;
+}
+.settlement-lines li > strong {
+  flex-shrink: 0;
+}
+.settlement-lines p {
+  margin: 0.4rem 0;
+}
+.settlement-links {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+.settlement-links a {
+  display: grid;
+  gap: 0.7rem;
+  border: 1px solid #dce6df;
+  border-radius: 10px;
+  padding: 1.1rem;
+  text-decoration: none;
+}
+.settlement-links a:hover {
+  background: #f1f7f3;
+  border-color: #55927d;
+}
+.settlement-links span {
+  font-weight: 400;
+  font-size: 0.9rem;
+  color: #52685f;
+  line-height: 1.5;
+}
+.settlement-application {
+  border: 1px solid #d1e0d7;
+  border-radius: 10px;
+  padding: 1rem;
+  margin: 1rem 0;
+  background: #fafcfb;
+}
+.settlement-application h4 {
+  margin: 0;
+}
+@media (max-width: 800px) {
+  .settlement-steps,
+  .settlement-links {
+    grid-template-columns: 1fr;
+  }
+  .settlement-steps {
+    gap: 1.5rem;
+  }
+}
+@media (max-width: 600px) {
+  .settlement-totals,
+  .settlement-facts {
+    grid-template-columns: 1fr;
+  }
+  .settlement-totals > div + div {
+    border-left: 0;
+    border-top: 1px solid #dce6df;
+  }
+  .settlement-totals > div {
+    padding: 1rem;
+  }
+  .settlement-history-toolbar label {
+    min-width: 0;
+    width: 100%;
+  }
+}
+.settlement-progress {
+  margin-bottom: 1.2rem;
+}
+.settlement-progress h3 {
+  margin: 0 0 1rem;
+}
+.settlement-progress h3:focus {
+  outline: none;
+}
+.settlement-progress > div {
+  display: flex;
+  gap: 0.5rem;
+}
+.settlement-progress > div span {
+  height: 4px;
+  flex: 1;
+  background: #e0e8e2;
+  border-radius: 3px;
+}
+.settlement-progress > div span.complete {
+  background: #237660;
+}
+.settlement-guidance {
+  margin: 1rem 0 1.5rem;
+}
+.settlement-guidance summary {
+  cursor: pointer;
+  color: #50695c;
+  font-size: 0.9rem;
+  font-weight: 600;
+}

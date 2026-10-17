@@ -1,3 +1,4 @@
+import {currentLeaseTerms} from "./lease-term-policy.js";
 import { leasePerson, leasePersonSelect } from "./lease-person.js";
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import type { PrismaClient } from "@prisma/client";
@@ -83,6 +84,7 @@ export function registerReports(
         select: {
           id: true,
           reference: true,
+          movement:{select:{id:true,leaseId:true,reference:true,kind:true}},
           depositReceipt:{select:{id:true,reference:true,leaseId:true}},
           propertyId: true,
           occurredOn: true,
@@ -101,7 +103,7 @@ export function registerReports(
       ensureComplete(rows.length);
       let income = 0n,
         expense = 0n,
-        deposit = 0n,
+        deposit = 0n, rentRefund=0n, depositRefund=0n,
         voided = 0;
       const groups = new Map<
         string,
@@ -124,6 +126,8 @@ export function registerReports(
         if (row.kind === "income") income += amount;
         else if(row.kind === "expense") expense += amount;
         else if(row.kind === "deposit") deposit += amount;
+        else if(row.kind === "refund" && row.category === "rent") rentRefund += amount;
+        else if(row.kind === "refund") depositRefund += amount;
         const month = day(row.occurredOn).slice(0, 7),
           key = JSON.stringify([month, row.propertyId, row.kind, row.category]);
         const g = groups.get(key) || {
@@ -151,13 +155,13 @@ export function registerReports(
           dateTo: day(to),
         },
         basis:
-          "Recorded income, expenses and refundable security-deposit receipts. Operating net excludes deposits; cash movement includes them. Voided entries excluded at generation time.",
+          "Recorded income, expenses, refundable security-deposit receipts and manual refund outflows. Operating net subtracts rent refunds and excludes deposits/deposit returns; cash movement includes all cash sources. Voided entries excluded at generation time.",
         summary: {
           incomeCents: String(income),
           expenseCents: String(expense),
-          netCents: String(income - expense),
-          depositReceivedCents: String(deposit),
-          cashMovementCents: String(income - expense + deposit),
+          netCents: String(income - expense - rentRefund),
+          depositReceivedCents: String(deposit),rentRefundCents:String(rentRefund),depositRefundCents:String(depositRefund),
+          cashMovementCents: String(income - expense - rentRefund + deposit - depositRefund),
           includedCount: rows.length - voided,
           voidedCount: voided,
         },
@@ -231,7 +235,8 @@ export function registerReports(
           current = 0,
           future = 0,
           expired = 0;
-        const items = rows.map((row) => {
+        const effectiveRows=await currentLeaseTerms(tx,companyId,rows,today);
+        const items = effectiveRows.map((row) => {
           const startsOn = day(row.startsOn),
             endsOn = row.endsOn ? day(row.endsOn) : null;
           const inEffect =

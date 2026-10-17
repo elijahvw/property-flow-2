@@ -1,3 +1,9 @@
+import {registerLeaseProration} from "./lease-proration.js";
+import {registerLeaseTransitions} from "./lease-transitions.js";
+import {registerLeaseTermChanges} from "./lease-term-changes.js";
+import {registerCompanyProfile} from "./company-profile.js";
+import { registerLeaseSettlements } from "./lease-settlements.js";
+import { registerAccountProfile } from "./account-profile.js";
 import { registerContactInvitations, acceptContactInvitation, previewContactInvitation, replayContactAcceptance } from "./contact-invitations.js";
 import { registerContactRecords } from "./contact-records.js";
 import { linkedResidentContact, preserveResidentContactProfile } from "./resident-contacts.js";
@@ -28,6 +34,8 @@ import type { IdentityProvider } from "./identity-provider.js";
 import { registerRentSchedules } from "./rent-schedules.js";
 import { registerRent } from "./rent.js";
 import { registerStatements } from "./statements.js";
+import { registerLeaseMovements } from "./lease-movements.js";
+import { registerLeaseCharges } from "./lease-charges.js";
 import { registerFinances } from "./finances.js";
 import { registerLeasing } from "./leasing.js";
 import { registerLeaseParticipants } from "./lease-participants.js";
@@ -218,6 +226,13 @@ export function registerApplication(
   registerDeposits(server, db, authenticate, origin);
   registerRent(server, db, authenticate, origin);
   registerStatements(server, db, authenticate);
+  registerLeaseCharges(server, db, authenticate, origin);
+  registerLeaseMovements(server, db, authenticate, origin);
+  registerLeaseProration(server,db,authenticate,origin);
+  registerLeaseTransitions(server,db,authenticate,origin);
+  registerLeaseTermChanges(server,db,authenticate,origin);
+  registerLeaseSettlements(server, db, authenticate, origin);
+  registerAccountProfile(server, db, authenticate, origin);
   registerRentSchedules(server, db, authenticate, origin);
   registerRentRecovery(server, db, authenticate, origin);
   registerUserAdministration(server, db, authenticate, origin, identityProvider);
@@ -289,18 +304,7 @@ export function registerApplication(
       csrfToken: request.appSession!.csrfToken,
     };
   });
-  server.patch("/api/account", auth, async (request) => {
-    const name = requiredString(bodyOf(request).name, "Name");
-    return serial(request, async (tx) => {
-      const result = await tx.user.update({
-        where: { id: request.principal!.id },
-        data: { name },
-        select: { id: true, name: true },
-      });
-      await audit(tx, request, "profile.updated");
-      return result;
-    });
-  });
+
 
   server.get("/api/platform/users", auth, async (request) => {
     platform(request);
@@ -454,27 +458,7 @@ export function registerApplication(
     }));
   });
 
-  server.get("/api/company", auth, async (request) => {
-    const companyId = scope(request, "company.manage");
-    const company = await db.company.findUnique({ where: { id: companyId } });
-    if (!company) throw new AccessError(404, 'NOT_FOUND', 'Company not found.');
-    const {adminNotes,createdById,submissionKey,submissionHash,...profile}=company;
-    return profile;
-  });
-  server.patch("/api/company", auth, async (request) => {
-    const companyId = scope(request, "company.manage"),
-      name = requiredString(bodyOf(request).name, "Company name");
-    return serial(request, async (tx) => {
-      await activeCompany(tx, companyId);
-      const company = await tx.company.update({
-        where: { id: companyId },
-        data: { name, version: { increment: 1 } },
-      });
-      await audit(tx, request, "company.profile.updated", companyId);
-      const {adminNotes,createdById,submissionKey,submissionHash,...profile}=company;
-      return profile;
-    });
-  });
+  registerCompanyProfile(server,db,authenticate,origin);
   server.get("/api/company/members", auth, async (request) => {
     const companyId = scope(request, "members.manage");
     return db.companyMembership.findMany({
