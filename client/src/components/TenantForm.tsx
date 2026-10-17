@@ -3,7 +3,7 @@ import { Address } from "./Address";
 import { useState } from "react";
 import { api, ApiError } from "../api";
 import { useAuth } from "../context/AuthContext";
-import { Form } from "../pages/Workspace";
+import { Form } from "./Form";
 export type TenantContact = {
   id: string;
   userId: string | null;

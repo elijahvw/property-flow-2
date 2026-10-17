@@ -23,7 +23,7 @@ def relevant(component, path):
         return True
     if component == "backend":
         return path.startswith(("server/", "monitoring/")) or path in ("scripts/dev-power.sh", "scripts/grafana-monitoring.py", "scripts/deploy-backend.py", "scripts/release-snapshot.py")
-    return path.startswith("client/") or path == "scripts/verify-dev-public.sh"
+    return path.startswith("client/") or path in ("scripts/verify-dev-public.sh", "scripts/deploy-frontend.sh")
 
 def changed_files(base, head):
     if not base or not re.fullmatch(r"[0-9a-f]{40}", base):

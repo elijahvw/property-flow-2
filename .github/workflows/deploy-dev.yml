@@ -329,7 +329,7 @@ jobs:
           npm ci --no-audit --no-fund
           cd client && npm run build
           cd ..
-          aws s3 sync client/dist/ "s3://$FRONTEND_BUCKET" --delete
+          bash scripts/deploy-frontend.sh client/dist
       - name: Invalidate CloudFront
         run: |
           aws cloudfront create-invalidation --distribution-id ${{ needs.terraform.outputs.cloudfront_distribution_id }} --paths "/*"

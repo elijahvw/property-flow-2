@@ -604,7 +604,7 @@ export function registerApplication(
       await propertyInScope(tx, companyId, propertyId);
       if(Object.keys(request.query).some(k=>k!=="includeContacts")||request.query.includeContacts!==undefined&&request.query.includeContacts!=="true")throw new AccessError(400,"INVALID_INPUT","Unknown resident selection filter.");
       if(request.query.includeContacts==="true"){
-        const contacts=await tx.residentContact.findMany({where:{companyId,status:"active",OR:[{userId:null},{user:{status:"active",membership:{companyId,role:"resident",status:"active"}}}]},select:{id:true,userId:true,name:true,email:true},orderBy:[{name:"asc"},{id:"asc"}],take:2001});
+        const contacts=await tx.residentContact.findMany({where:{companyId,status:"active",OR:[{userId:null},{user:{status:"active",OR:[{membership:null},{membership:{companyId,role:"resident",status:"active"}}]}}]},select:{id:true,userId:true,name:true,email:true},orderBy:[{name:"asc"},{id:"asc"}],take:2001});
         const legacy=await tx.residentPropertyAssignment.findMany({where:{companyId,propertyId,membership:{role:"resident",status:"active",user:{status:"active",residentContacts:{none:{companyId}}}}},select:{userId:true,membership:{select:{user:{select:{name:true,email:true}}}}},take:2001});
         if(contacts.length+legacy.length>2000)throw new AccessError(422,"TENANT_SELECTION_TOO_LARGE","More than 2,000 tenants are eligible. No incomplete selection is shown.");
         return [...contacts.map(c=>({...c,contactId:c.id})),...legacy];

@@ -1,3 +1,4 @@
+import { useDebouncedValue } from "../useDebouncedValue";
 import { TenantForm,type TenantContact } from "../components/TenantForm";
 import { formatDate } from "../dates";
 import { leasePath, unitDirectoryPath, unitListContext } from "../lease-links";
@@ -7,7 +8,7 @@ import {
   leasePending,
   type LeaseReviewData,
 } from "../components/LeaseReview";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -16,7 +17,7 @@ import { UnitFields, type UnitExtras } from "../components/PropertyFields";
 import { EditorDialog } from "../components/EditorDialog";
 import { DraftReset } from "../components/DraftReset";
 import { PropertyNavigation } from "../components/PropertyNavigation";
-import { Form } from "./Workspace";
+import { Form } from "../components/Form";
 type Unit = UnitExtras & {
   id: string;
   propertyId: string;
@@ -131,11 +132,12 @@ function UnitList({
     else next.delete(field);
     setParams(next, { replace: true });
   };
+  const search = useDebouncedValue(query.trim());
   const property = useResource<{ id: string; name: string }>(
     `/api/company/properties/${encodeURIComponent(propertyId)}`,
   );
   const r = useResource<Records<Unit>>(
-    `/api/company/properties/${encodeURIComponent(propertyId)}/units?${new URLSearchParams(Object.entries({ cursor, q: query.trim(), status }).filter(([, value]) => value))}`,
+    `/api/company/properties/${encodeURIComponent(propertyId)}/units?${new URLSearchParams(Object.entries({ cursor, q: search, status }).filter(([, value]) => value))}`,
     true,
     true,
   );
@@ -217,6 +219,7 @@ function UnitList({
           )}
           <section className="panel directory-panel" aria-label="Unit directory">
             <h2>Unit records</h2>
+            {search !== query.trim() && <p role="status" className="help">Updating search…</p>}
             <div className="directory-toolbar">
               <label className="directory-search">
                 Find unit
@@ -393,14 +396,25 @@ function LeaseList() {
   const [cursor, setCursor] = useState(""),
     [propertyId, setPropertyId] = useState(contextId);
   useEffect(()=>setCursor(""),[contextId,unitId,status,attention,approvals,query]);
+  const search = useDebouncedValue(query.trim());
   const properties = useResource<{ id: string; name: string }[]>(
     "/api/company/properties",
   );
   const r = useResource<Records<Lease> & { unit?: { id: string; label: string; propertyId: string } }>(
-    `/api/company/leases?${new URLSearchParams(Object.entries({ cursor, propertyId: contextId, unitId, status, attention, approvals, q: query }).filter(([, value]) => value))}`,
+    `/api/company/leases?${new URLSearchParams(Object.entries({ cursor, propertyId: contextId, unitId, status, attention, approvals, q: search }).filter(([, value]) => value))}`,
     true,
     true,
   );
+  const initializedProperty = useRef(false);
+  useEffect(() => {
+    if (!properties.data || initializedProperty.current) return;
+    initializedProperty.current = true;
+    if (!propertyId && properties.data.length === 1) {
+      const id = properties.data[0].id;
+      setPropertyId(id);
+      setVisitedProperties(previous => previous.includes(id) ? previous : [...previous, id]);
+    }
+  }, [properties.data, propertyId]);
   const propertyName = properties.data?.find((p) => p.id === contextId)?.name;
   const detailPath = (id: string) =>
     leasePath(
@@ -544,6 +558,7 @@ function LeaseList() {
           </h2>
 
         </div>
+        {search !== query.trim() && <p role="status" className="help">Updating search…</p>}
         <div className="directory-toolbar">
           <label className="directory-search">
             Find lease
@@ -871,7 +886,7 @@ export function LeaseCreate({
   const [addingTenant,setAddingTenant]=useState(false),[newTenant,setNewTenant]=useState<TenantContact|null>(null);
   const [selectedTenant,setSelectedTenant]=useState<string|null>(initialContactId||null);
   const choices:Candidate[]=[...(residents.data||[]),...(newTenant&&!residents.data?.some(p=>p.contactId===newTenant.id)?[{userId:newTenant.userId,contactId:newTenant.id,name:newTenant.name,email:newTenant.email}]:[])];
-  const requestedTenant=selectedTenant??choices[0]?.contactId??choices[0]?.userId??"";
+  const requestedTenant=selectedTenant??(choices.length===1?(choices[0].contactId||choices[0].userId||""):"");
   const selectedTenantId=choices.some(p=>(p.contactId||p.userId)===requestedTenant)?requestedTenant:"";
   const candidateName=(p:Candidate)=>p.name||p.membership?.user.name||p.email||p.membership?.user.email||"Tenant";
   // Browsing options must never remount a pending draft or change its retry identity.
@@ -901,7 +916,7 @@ export function LeaseCreate({
           Manage units for this property
         </Link>
       </div>
-      <p className="help">Choose an existing tenant or add a contact without leaving this lease. A portal account is not required.</p><button type="button" className="secondary" onClick={()=>setAddingTenant(true)}>Add tenant for this lease</button>
+      <p className="help">Choose an existing tenant or add one here. Each tenant has one Auth0 account; activating portal access is optional.</p><button type="button" className="secondary" onClick={()=>setAddingTenant(true)}>Add tenant for this lease</button>
       <ol className="lease-setup-progress" aria-label="Lease setup progress">
         <li aria-current={!review?"step":undefined}>1. Rental and terms</li>
         <li aria-current={review?"step":undefined}>2. Review and record</li>
@@ -985,7 +1000,7 @@ export function LeaseCreate({
                         <option value="">Choose a tenant</option>
                         {choices.map((person) => (
                           <option key={person.contactId||person.userId} value={person.contactId||person.userId||""}>
-                            {candidateName(person)}{!person.userId?" · No portal account":""}
+                            {candidateName(person)}{!person.userId?" · Account will be prepared":""}
                           </option>
                         ))}
                       </select>

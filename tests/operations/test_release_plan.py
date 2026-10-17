@@ -12,6 +12,7 @@ class ReleasePlanTests(unittest.TestCase):
         return release.plan(self.versions, "head", diff=lambda _base, _head: paths)
     def test_frontend_only(self):
         self.assertEqual(self.plan(["client/src/App.tsx"]), {"infrastructure": False, "backend": False, "frontend": True})
+        self.assertEqual(self.plan(["scripts/deploy-frontend.sh"]), {"infrastructure": False, "backend": False, "frontend": True})
     def test_backend_only(self):
         self.assertEqual(self.plan(["server/src/index.ts"]), {"infrastructure": False, "backend": True, "frontend": False})
     def test_infrastructure_deploys_runtime_dependencies(self):

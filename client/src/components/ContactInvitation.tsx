@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api";
-import { AcceptInvitation, Form } from "../pages/Workspace";
+import { AcceptInvitation } from "../pages/Workspace";
+import { Form } from "./Form";
 export function InvitationEntry() {
   const { user, loading, error, signIn, refreshUser } = useAuth();
   const [setupMessage,setSetupMessage]=useState("");

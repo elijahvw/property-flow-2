@@ -1,7 +1,7 @@
 import { useEffect,useState } from "react";
 import { api } from "../api";
 import { formatDate } from "../dates";
-import { Form } from "../pages/Workspace";
+import { Form } from "./Form";
 
 type Preview={company:string;property:string;unit:string;name:string;role:string;startsOn:string;leaseStartsOn:string;leaseEndsOn:string|null;leaseStatus:string};
 export function LeaseInvitationReview({token,accepted}:{token:string;accepted:()=>Promise<void>}){

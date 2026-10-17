@@ -1,7 +1,7 @@
 import { formatDate } from "../dates";
 import { useState } from "react";
 import { api, ApiError } from "../api";
-import { Form } from "../pages/Workspace";
+import { Form } from "./Form";
 export type LeaseReviewData = {
   payload: Record<string, unknown>;
   property: string;

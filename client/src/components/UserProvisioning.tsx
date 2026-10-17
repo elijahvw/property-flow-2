@@ -1,7 +1,7 @@
 import { DraftReset } from "./DraftReset";
 import { useState } from "react";
 import { api } from "../api";
-import { Form } from "../pages/Workspace";
+import { Form } from "./Form";
 export function UserProvisioning({ saved }: { saved: (id?: string) => void }) {
   const [key, setKey] = useState(() => crypto.randomUUID());
   return (

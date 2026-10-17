@@ -9,7 +9,8 @@ import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
-import { Form, Invitations } from "./Workspace";
+import { Invitations } from "./Workspace";
+import { Form } from "../components/Form";
 
 export type Profile = {
   userId: string;
@@ -156,7 +157,7 @@ function Directory() {
       <EditorDialog
         open={adding}
         title="Add tenant"
-        description="Record the person first. Portal access is optional."
+        description="Save one account and tenant profile. You can activate portal access separately."
         onClose={() => {
           setAdding(false);
           setFormRevision((v) => v + 1);

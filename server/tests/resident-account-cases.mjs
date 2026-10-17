@@ -9,6 +9,17 @@ export async function residentAccountCases(t,db,admin,call,provider,remote,count
  const unit=ok(await call('owner','POST','/api/company/properties/home/units',{label:'Prepared account unit',submissionKey:randomUUID()}));
  const leaseBody={propertyId:'home',unitId:unit.id,residentContactId:person.id,startsOn:'2026-10-01',endsOn:'2027-09-30',monthlyRent:'1000',status:'draft',submissionKey:randomUUID()};
  let lease,accountId,invitation;
+ await t.test('a tenant with a prepared account is selectable for a lease before portal activation',async()=>{
+  assert.ok(person.userId,'saving the tenant prepared its account');
+  const before=counts().create;
+  const choices=ok(await call('owner','GET','/api/company/properties/home/residents?includeContacts=true'));
+  assert.ok(choices.some(c=>c.contactId===person.id && c.userId===person.userId));
+  assert.equal(await db.companyMembership.findUnique({where:{userId:person.userId}}),null);
+  assert.equal(counts().create,before,'loading the picker never provisions another account');
+  await admin.query(`UPDATE "User" SET status='disabled' WHERE id=$1`,[person.userId]);
+  assert.ok(!ok(await call('owner','GET','/api/company/properties/home/residents?includeContacts=true')).some(c=>c.contactId===person.id));
+  await admin.query(`UPDATE "User" SET status='active' WHERE id=$1`,[person.userId]);
+ });
  await t.test('saving a lease prepares Auth0 and its local mirror before first sign-in without granting portal access',async()=>{
   lease=ok(await call('owner','POST','/api/company/leases',leaseBody));
   const contact=(await admin.query('SELECT * FROM "ResidentContact" WHERE id=$1',[person.id])).rows[0];accountId=contact.userId;
