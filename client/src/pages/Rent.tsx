@@ -24,8 +24,8 @@ import {
 } from "../components/PropertyNavigation";
 import { EditorDialog } from "../components/EditorDialog";
 import { DraftReset } from "../components/DraftReset";
-import { Form } from "./Workspace";
-import { dollars } from "./Finances";
+import { Form } from "../components/Form";
+import { dollars } from "../money";
 import { downloadReport, moneyCell } from "../report-export";
 type Summary = {
   depositAppliedCents?:string; refundedCents?:string; rentOutstandingCents?:string; otherOutstandingCents?:string; noncashCreditCents?:string;

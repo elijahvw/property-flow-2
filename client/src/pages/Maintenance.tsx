@@ -1,3 +1,4 @@
+import { useDebouncedValue } from "../useDebouncedValue";
 import { usePropertySearchParams } from "../usePropertySearchParams";
 import { DraftReset } from "../components/DraftReset";
 import { PropertyNavigation } from "../components/PropertyNavigation";
@@ -9,7 +10,7 @@ import { api } from "../api";
 import { formatDate, formatActivityDate, formatActivityTime } from "../dates";
 import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
-import { Form } from "./Workspace";
+import { Form } from "../components/Form";
 import { MaintenanceCosts } from "../components/MaintenanceCosts";
 type Row = {
   id: string;
@@ -212,6 +213,7 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
     propertyId = params.get("propertyId") || "",
     query = params.get("q") || "",
     priority = params.get("priority") || "";
+  const search = useDebouncedValue(query.trim());
   const [newProperty, setNewProperty] = useState("");
   const [createdId, setCreatedId] = useState("");
   const base = resident
@@ -223,7 +225,7 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
     true,
   );
   const r = useResource<Row[]>(
-    `${base}?${new URLSearchParams(Object.entries({ status, propertyId, q: query.trim(), priority }).filter(([, v]) => v))}`,
+    `${base}?${new URLSearchParams(Object.entries({ status, propertyId, q: search, priority }).filter(([, v]) => v))}`,
     true,
     true,
   );
@@ -409,6 +411,7 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
             Open, in progress and completed work
           </span>
         </div>
+        {search !== query.trim() && <p role="status" className="help">Updating search…</p>}
         <div className="directory-toolbar">
           <label className="directory-search">
             Find request

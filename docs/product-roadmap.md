@@ -34,6 +34,8 @@ The batch in [PR #40](https://github.com/elijahvw/property-flow-2/pull/40) merge
 
 Grafana's existing dashboard now has 21 panels; all eight existing app alert rules are enabled and evaluated Normal. The user-selected email test succeeded and notification routing targets Property Flow dev. The RUM app exists, but deployed browser ingestion, infrastructure scraping, synthetic journeys and incident/recovery acceptance remain open. See PF-27 and the coverage register.
 
+Local workflow/performance audit: a repeatable isolated k6/production-browser baseline and aggregate Grafana dashboard are implemented locally, with permission-safe screen splitting, batched directory searches, contextual lease setup and pre-activation tenant selection. See [scope, measured budgets, fixes and acceptance limits](workflow-performance.md). This refines PF-27 monitoring and core workflow usability; no application deployment or live-provider acceptance is implied.
+
 ## Implemented baseline
 
 - Identity and administration: Auth0 cookie/CSRF sessions, platform company/user administration, explicit company membership/roles, separate Team and Tenants, invitations, company details and personal profiles with revocation boundaries.

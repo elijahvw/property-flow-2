@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { useResource } from "../useResource";
 import { formatDate } from "../dates";
-import { Form } from "../pages/Workspace";
+import { Form } from "./Form";
 import { DateField } from "./DateField";
 import { useAuth } from "../context/AuthContext";
 

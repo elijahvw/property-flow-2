@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { api } from "../api";
 import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
-import { Form } from "./Workspace";
+import { Form } from "../components/Form";
 export type CompanyProfile = {
   id: string;
   name: string;

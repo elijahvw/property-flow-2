@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "label": "after",
+  "measuredAt": "2026-10-17T17:30:53.577Z",
+  "revision": "baabda8",
+  "sourceDirty": true,
+  "clientFingerprint": "21db59112614005f",
+  "environment": "isolated-local",
+  "dataset": {
+    "properties": 20,
+    "units": 200,
+    "tenants": 200,
+    "leases": 200
+  },
+  "load": {
+    "vus": 5,
+    "durationSeconds": 20,
+    "requests": 1480,
+    "failedRate": 0,
+    "checks": 1,
+    "thresholdsPassed": true
+  },
+  "browserBudgetsPassed": true,
+  "browser": [
+    {
+      "workflow": "overview",
+      "samples": 5,
+      "medianMs": 148,
+      "maxMs": 241,
+      "apiRequests": 3,
+      "javascriptGzipBytes": 68158
+    },
+    {
+      "workflow": "properties",
+      "samples": 5,
+      "medianMs": 124,
+      "maxMs": 126,
+      "apiRequests": 3,
+      "javascriptGzipBytes": 91165
+    },
+    {
+      "workflow": "tenants",
+      "samples": 5,
+      "medianMs": 158,
+      "maxMs": 177,
+      "apiRequests": 3,
+      "javascriptGzipBytes": 100929
+    },
+    {
+      "workflow": "leases",
+      "samples": 5,
+      "medianMs": 124,
+      "maxMs": 125,
+      "apiRequests": 3,
+      "javascriptGzipBytes": 82082
+    },
+    {
+      "workflow": "lease",
+      "samples": 5,
+      "medianMs": 119,
+      "maxMs": 124,
+      "apiRequests": 2,
+      "javascriptGzipBytes": 117181
+    },
+    {
+      "workflow": "rent",
+      "samples": 5,
+      "medianMs": 143,
+      "maxMs": 162,
+      "apiRequests": 3,
+      "javascriptGzipBytes": 96753
+    },
+    {
+      "workflow": "deposits",
+      "samples": 5,
+      "medianMs": 133,
+      "maxMs": 133,
+      "apiRequests": 2,
+      "javascriptGzipBytes": 79541
+    },
+    {
+      "workflow": "maintenance",
+      "samples": 5,
+      "medianMs": 117,
+      "maxMs": 119,
+      "apiRequests": 3,
+      "javascriptGzipBytes": 74301
+    }
+  ],
+  "api": [
+    {
+      "workflow": "tenants",
+      "p95Ms": 48,
+      "p99Ms": 62.89,
+      "medianMs": 36.31
+    },
+    {
+      "workflow": "overview",
+      "p95Ms": 106.22,
+      "p99Ms": 114.69,
+      "medianMs": 79.56
+    },
+    {
+      "workflow": "properties",
+      "p95Ms": 17.43,
+      "p99Ms": 23.92,
+      "medianMs": 8.5
+    },
+    {
+      "workflow": "deposits",
+      "p95Ms": 57.94,
+      "p99Ms": 64.49,
+      "medianMs": 48.23
+    },
+    {
+      "workflow": "maintenance",
+      "p95Ms": 20.3,
+      "p99Ms": 22.17,
+      "medianMs": 15.4
+    },
+    {
+      "workflow": "rent",
+      "p95Ms": 72.04,
+      "p99Ms": 78.24,
+      "medianMs": 54.65
+    },
+    {
+      "workflow": "leases",
+      "p95Ms": 37.8,
+      "p99Ms": 40.53,
+      "medianMs": 24.06
+    },
+    {
+      "workflow": "lease",
+      "p95Ms": 27.72,
+      "p99Ms": 33.5,
+      "medianMs": 20.91
+    }
+  ]
+}

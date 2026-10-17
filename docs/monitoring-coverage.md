@@ -45,3 +45,7 @@ Dev session sampling is 100%; review actual ingestion and quotas before changing
 [Grafana dashboard](https://slimpillar2069.grafana.net/d/propertyflow-dev-operations) · [Frontend RUM](https://slimpillar2069.grafana.net/a/grafana-kowalski-app/apps/1169) · [Backend privacy/runbook](open-observability.md) · [AWS setup boundary](grafana-cloudwatch.md)
 
 Validation result: 25 client unit tests, 14 combined telemetry/privacy tests, 61 operations tests, the real SDK browser wire check, and the isolated Grafana API check passed. Both builds passed; the existing Vite main-bundle size advisory remains. Local preview and its mode-0600 checkpoints stayed running and were not restarted.
+
+## Isolated workflow performance testing
+
+The October 17 audit adds [local performance tests and a measured Grafana comparison](workflow-performance.md). Tests create their own disposable data and run k6/production Chromium locally. Only bounded aggregates are published to `propertyflow-local-performance`; no private records/session material or preview/cloud application traffic is exported. The manual GitHub workflow can repeat and publish a run after merge. These snapshots supplement operational/RUM monitoring; they do not establish deployed capacity or close the remaining activation/acceptance items above.

@@ -15,7 +15,7 @@ import {
 } from "../statement";
 import { recordReference } from "../record-reference";
 import { downloadReport } from "../report-export";
-import { dollars } from "./Finances";
+import { dollars } from "../money";
 import "./Statement.css";
 
 export function Statement({ resident = false }: { resident?: boolean }) {

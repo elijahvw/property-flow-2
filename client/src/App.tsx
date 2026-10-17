@@ -1,9 +1,5 @@
-import {ResidentLeaseTerms} from "./components/LeaseTermChanges";
-import {ResidentSettlement} from "./components/LeaseSettlement";
-import { InvitationEntry } from "./components/ContactInvitation";
-import { ContactDetail } from "./pages/ContactDetail";
 import { recordBrowserEvent } from "./browser-telemetry";
-import React, { Component, useEffect, useRef, useState } from "react";
+import React, { Component, lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -16,36 +12,42 @@ import {
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { routes, visibleRoutes } from "./navigation";
-import {
-  Companies,
-  CompanyDetail,
-  People,
-  Properties,
-  Team,
-  CompanySettings,
-  Account,
-  AccessStatus,
-  Resident,
-  Audit,
-} from "./pages/Workspace";
-import { Overview } from "./pages/Overview";
-import { PropertyResidents } from "./pages/PropertyResidents";
 import { PropertySearch } from "./components/PropertySearch";
 import { FeedbackProvider } from "./components/Feedback";
-import { Reports } from "./pages/Reports";
-import { Statement } from "./pages/Statement";
 import { NavigationIcon } from "./components/NavigationIcon";
-import { ResidentProfiles } from "./pages/ResidentProfiles";
-import { ResidentDetail } from "./pages/ResidentDetail";
-import { Maintenance, MaintenanceRequestDetail } from "./pages/Maintenance";
-import { Deposits } from "./pages/Deposits";
-import { Rent } from "./pages/Rent";
-import { Finances } from "./pages/Finances";
 import { EmailVerification } from "./components/EmailVerification";
-import { Units, Leases } from "./pages/Leasing";
-import { LeaseDetail } from "./pages/LeaseDetail";
-import PropertyDetail from "./pages/PropertyDetail";
 import "./App.css";
+
+const Companies = lazy(() => import("./pages/Workspace").then(module => ({ default: module.Companies })));
+const CompanyDetail = lazy(() => import("./pages/Workspace").then(module => ({ default: module.CompanyDetail })));
+const People = lazy(() => import("./pages/Workspace").then(module => ({ default: module.People })));
+const Properties = lazy(() => import("./pages/Workspace").then(module => ({ default: module.Properties })));
+const Team = lazy(() => import("./pages/Workspace").then(module => ({ default: module.Team })));
+const CompanySettings = lazy(() => import("./pages/Workspace").then(module => ({ default: module.CompanySettings })));
+const Account = lazy(() => import("./pages/Workspace").then(module => ({ default: module.Account })));
+const AccessStatus = lazy(() => import("./pages/Workspace").then(module => ({ default: module.AccessStatus })));
+const Resident = lazy(() => import("./pages/Workspace").then(module => ({ default: module.Resident })));
+const Audit = lazy(() => import("./pages/Workspace").then(module => ({ default: module.Audit })));
+const Overview = lazy(() => import("./pages/Overview").then(module => ({ default: module.Overview })));
+const PropertyResidents = lazy(() => import("./pages/PropertyResidents").then(module => ({ default: module.PropertyResidents })));
+const Reports = lazy(() => import("./pages/Reports").then(module => ({ default: module.Reports })));
+const Statement = lazy(() => import("./pages/Statement").then(module => ({ default: module.Statement })));
+const ResidentProfiles = lazy(() => import("./pages/ResidentProfiles").then(module => ({ default: module.ResidentProfiles })));
+const ResidentDetail = lazy(() => import("./pages/ResidentDetail").then(module => ({ default: module.ResidentDetail })));
+const ContactDetail = lazy(() => import("./pages/ContactDetail").then(module => ({ default: module.ContactDetail })));
+const Maintenance = lazy(() => import("./pages/Maintenance").then(module => ({ default: module.Maintenance })));
+const MaintenanceRequestDetail = lazy(() => import("./pages/Maintenance").then(module => ({ default: module.MaintenanceRequestDetail })));
+const Deposits = lazy(() => import("./pages/Deposits").then(module => ({ default: module.Deposits })));
+const Rent = lazy(() => import("./pages/Rent").then(module => ({ default: module.Rent })));
+const Finances = lazy(() => import("./pages/Finances").then(module => ({ default: module.Finances })));
+const Units = lazy(() => import("./pages/Leasing").then(module => ({ default: module.Units })));
+const Leases = lazy(() => import("./pages/Leasing").then(module => ({ default: module.Leases })));
+const LeaseDetail = lazy(() => import("./pages/LeaseDetail").then(module => ({ default: module.LeaseDetail })));
+const InvitationEntry = lazy(() => import("./components/ContactInvitation").then(module => ({ default: module.InvitationEntry })));
+const ResidentLeaseTerms = lazy(() => import("./components/LeaseTermChanges").then(module => ({ default: module.ResidentLeaseTerms })));
+const ResidentSettlement = lazy(() => import("./components/LeaseSettlement").then(module => ({ default: module.ResidentSettlement })));
+const PropertyDetail = lazy(() => import("./pages/PropertyDetail"));
+
 class ErrorBoundary extends Component<
   { children: React.ReactNode },
   { failed: boolean }
@@ -199,7 +201,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             </p>
           )}
           <EmailVerification />
-          {children}
+          <Suspense fallback={<section className="status-panel" role="status">Loading workspace…</section>}>{children}</Suspense>
         </main>
         <footer className="app-footer">
           Property Flow · A clearer place to manage your properties

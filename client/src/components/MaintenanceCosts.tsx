@@ -3,8 +3,8 @@ import { Link } from "react-router-dom";
 import { api } from "../api";
 import { formatDate, formatActivityTime } from "../dates";
 import { useResource } from "../useResource";
-import { dollars } from "../pages/Finances";
-import { Form } from "../pages/Workspace";
+import { dollars } from "../money";
+import { Form } from "./Form";
 import { EditorDialog } from "./EditorDialog";
 import { DraftReset } from "./DraftReset";
 

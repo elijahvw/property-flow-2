@@ -12,7 +12,7 @@ import { EditorDialog } from "../components/EditorDialog";
 import { TenantForm, type TenantContact } from "../components/TenantForm";
 import { TenantFinancials } from "./ResidentDetail";
 import { ResidentEditor } from "./ResidentProfiles";
-import { Form } from "./Workspace";
+import { Form } from "../components/Form";
 import { tenantDirectorySearch } from "../tenant-links";
 import { formatDate } from "../dates";
 type Contact = TenantContact & {

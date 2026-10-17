@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
 import { useResource } from "../useResource";
-import { Form } from "../pages/Workspace";
+import { Form } from "./Form";
 import { formatDate } from "../dates";
 export type ContactInvitationState = {
   id: string;
