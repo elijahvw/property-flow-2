@@ -1,4 +1,5 @@
 """Read-only HTTPS gate for the manually configured development hostname."""
+import argparse
 import json
 from pathlib import Path
 import re
@@ -10,15 +11,30 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "infra/terraform/envs/dev/custom-domain.auto.tfvars.json"
 
 
-def verify(config_path=CONFIG, open_url=urlopen):
-    config = json.loads(config_path.read_text())
+def configured_origin(config):
     domain = config["frontend_custom_domain"]
     if domain is None:
-        return "Custom domain explicitly disabled; using the original application origin."
+        origin = config["app_origin"]
+        parsed = urlsplit(origin)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.netloc != parsed.hostname or parsed.path or parsed.query or parsed.fragment:
+            raise ValueError("Rollback app_origin must be an HTTPS origin without a path.")
+        return origin
     hostname = domain["hostname"]
     if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+", hostname):
         raise ValueError("Custom-domain configuration must contain a DNS hostname without a scheme or path.")
-    origin = f"https://{hostname}"
+    return f"https://{hostname}"
+
+
+def public_url(config_path=CONFIG):
+    return configured_origin(json.loads(config_path.read_text()))
+
+
+def verify(config_path=CONFIG, open_url=urlopen):
+    config = json.loads(config_path.read_text())
+    origin = configured_origin(config)
+    if config["frontend_custom_domain"] is None:
+        return "Custom domain explicitly disabled; using the original application origin."
+    hostname = config["frontend_custom_domain"]["hostname"]
     try:
         # urllib uses certificate/hostname validation. The static homepage is
         # available even when the development database is stopped.
@@ -32,7 +48,10 @@ def verify(config_path=CONFIG, open_url=urlopen):
 
 
 def main():
-    print(verify())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--url", action="store_true", help="Print the configured public URL without reading Terraform state or making network requests.")
+    args = parser.parse_args()
+    print(public_url() if args.url else verify())
 
 
 if __name__ == "__main__":

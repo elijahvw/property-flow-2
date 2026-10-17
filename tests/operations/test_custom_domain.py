@@ -1,7 +1,10 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
 import tempfile
+import textwrap
 import unittest
 from unittest.mock import MagicMock
 from urllib.error import URLError
@@ -25,7 +28,41 @@ class CustomDomainTests(unittest.TestCase):
         self.response.url = "https://propertyflow.saasapps.cloud/"
 
     def write(self, value):
-        self.config.write_text(json.dumps({"frontend_custom_domain": value}))
+        self.config.write_text(json.dumps({"frontend_custom_domain": value, "app_origin": "https://drfbeumseaytt.cloudfront.net"}))
+
+    def test_public_url_uses_committed_domain_and_explicit_rollback_origin(self):
+        self.assertEqual(domain_check.public_url(self.config), "https://propertyflow.saasapps.cloud")
+        self.write(None)
+        self.assertEqual(domain_check.public_url(self.config), "https://drfbeumseaytt.cloudfront.net")
+        self.config.write_text(json.dumps({"frontend_custom_domain": None, "app_origin": ""}))
+        with self.assertRaises(ValueError):
+            domain_check.public_url(self.config)
+
+    def output_step(self, fail_output=""):
+        # Execute the actual workflow shell against pre-upgrade state, which has
+        # every existing output but no public_app_url. No Terraform/AWS is used.
+        workflow = (ROOT / ".github/workflows/deploy-dev.yml").read_text()
+        step = workflow.split("      - name: Get Outputs\n", 1)[1].split("\n  deploy-backend:", 1)[0]
+        script = textwrap.dedent(step.split("        run: |\n", 1)[1])
+        binary = Path(self.directory.name) / "terraform"
+        binary.write_text('#!/bin/sh\n[ "$3" != "public_app_url" ] || exit 1\n[ "$3" != "$FAIL_OUTPUT" ] || exit 1\nprintf "legacy-%s\\n" "$3"\n')
+        binary.chmod(0o755)
+        output = Path(self.directory.name) / "outputs"
+        result = subprocess.run(["bash", "-euo", "pipefail", "-c", script], cwd=ROOT, env={**os.environ, "PATH": f"{self.directory.name}:{os.environ['PATH']}", "GITHUB_OUTPUT": str(output), "FAIL_OUTPUT": fail_output}, capture_output=True, text=True)
+        return result, output.read_text()
+
+    def test_skipped_terraform_exports_url_without_new_remote_state_output(self):
+        result, output = self.output_step()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("public_app_url=https://propertyflow.saasapps.cloud\n", output)
+        self.assertIn("cloudfront_distribution_id=legacy-cloudfront_distribution_id\n", output)
+        self.assertIn("grafana_secret_arn=legacy-grafana_secret_arn\n", output)
+
+    def test_missing_existing_state_output_fails_instead_of_publishing_empty_value(self):
+        result, output = self.output_step("repository_url")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("repository_url=", output)
+        self.assertNotIn("ecs_service_name=", output)
 
     def test_static_homepage_passes_without_requiring_running_backend(self):
         self.assertIn("HTTPS verified", domain_check.verify(self.config, self.open_url))
