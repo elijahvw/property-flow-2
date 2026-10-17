@@ -51,6 +51,8 @@ Validation: both production builds pass; disposable financial/API/real-browser s
 
 ## PF-09 / PF-10 local batch update (2026-10-16)
 
+The owner subsequently authorized merge and cloud deployment of this batch in PR #38. Backend releases now create and verify an RDS snapshot before migrations, retaining this run's snapshot and the four newest other workflow snapshots. Cleanup requires the exact database, account, region, identifier pattern and all three workflow tags (`Application`, `Environment`, `BackupPurpose=pre-migration`). Unrelated backups are excluded. Failure to create/verify a restore point or inspect candidate tags stops rollout without removing older backups. Deployment IAM needs RDS create/describe/delete snapshot and tag read/add rights for these workflow-owned snapshots in addition to existing access.
+
 Partial first/final rent and connected lease endings/renewals are ready for local owner testing; see [contract](proration-renewal-transitions.md). Renewal review now shows dates, each new charge once, the total, and billing/deposit effects. Calculation and record details are expandable. The review opens at the top and retains a visible action footer; editing restores the entered values.
 
 Validation: both production builds pass; disposable financial/API/real-browser suite **174 passed**; UI suite **159 passed**; server units **51 passed**, with 5 intentional database-suite skips; client units **18 passed**; operations **51 passed**. The existing Vite chunk advisory remains. No push, PR, cloud deployment, Terraform apply or cloud database mutation occurred.
