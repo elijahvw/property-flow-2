@@ -1,0 +1,347 @@
+{
+  "projectKey": "PF",
+  "site": "https://property-flow-dev.atlassian.net",
+  "projectId": "10002",
+  "boardId": 3,
+  "overviewKey": "PF-43",
+  "release": {
+    "id": "10000",
+    "name": "Core workflows and safe RUM — PR 40",
+    "released": false
+  },
+  "issues": [
+    {
+      "roadmapId": "PF-01",
+      "key": "PF-1",
+      "summary": "Tenant workspace",
+      "type": "Epic",
+      "initialStatus": "In Review"
+    },
+    {
+      "roadmapId": "PF-02",
+      "key": "PF-2",
+      "summary": "Lease workspace",
+      "type": "Epic",
+      "initialStatus": "In Review"
+    },
+    {
+      "roadmapId": "PF-03",
+      "key": "PF-3",
+      "summary": "Offline contacts and optional portal access",
+      "type": "Epic",
+      "initialStatus": "In Review"
+    },
+    {
+      "roadmapId": "PF-04",
+      "key": "PF-4",
+      "summary": "Statements and collections detail",
+      "type": "Epic",
+      "initialStatus": "In Review"
+    },
+    {
+      "roadmapId": "PF-05",
+      "key": "PF-5",
+      "summary": "Non-rent charges and noncash credits",
+      "type": "Epic",
+      "initialStatus": "In Review"
+    },
+    {
+      "roadmapId": "PF-06",
+      "key": "PF-6",
+      "summary": "Deposit applications and actual refunds",
+      "type": "Epic",
+      "initialStatus": "In Review"
+    },
+    {
+      "roadmapId": "PF-07",
+      "key": "PF-7",
+      "summary": "Itemized move-out settlement",
+      "type": "Epic",
+      "initialStatus": "In Review"
+    },
+    {
+      "roadmapId": "PF-08",
+      "key": "PF-8",
+      "summary": "Future-effective terms",
+      "type": "Epic",
+      "initialStatus": "In Review"
+    },
+    {
+      "roadmapId": "PF-09",
+      "key": "PF-9",
+      "summary": "Proration",
+      "type": "Epic",
+      "initialStatus": "In Review"
+    },
+    {
+      "roadmapId": "PF-10",
+      "key": "PF-10",
+      "summary": "Ending and renewal handoff",
+      "type": "Epic",
+      "initialStatus": "In Review"
+    },
+    {
+      "roadmapId": "PF-11",
+      "key": "PF-11",
+      "summary": "Household participation and liability",
+      "type": "Epic",
+      "initialStatus": "In Progress"
+    },
+    {
+      "roadmapId": "PF-12",
+      "key": "PF-12",
+      "summary": "Team capabilities and property scope",
+      "type": "Epic",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-13",
+      "key": "PF-13",
+      "summary": "Work orders, vendors and costs",
+      "type": "Epic",
+      "initialStatus": "In Progress"
+    },
+    {
+      "roadmapId": "PF-14",
+      "key": "PF-14",
+      "summary": "Preventive work and task calendar",
+      "type": "Epic",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-15",
+      "key": "PF-15",
+      "summary": "Private documents and attachments",
+      "type": "Epic",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-16",
+      "key": "PF-16",
+      "summary": "Move-in/out inspections",
+      "type": "Epic",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-17",
+      "key": "PF-17",
+      "summary": "Agreements/signatures",
+      "type": "Epic",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-18",
+      "key": "PF-18",
+      "summary": "Resident home and self-service",
+      "type": "Epic",
+      "initialStatus": "In Progress"
+    },
+    {
+      "roadmapId": "PF-19",
+      "key": "PF-19",
+      "summary": "Messages, notifications and reminders",
+      "type": "Epic",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-20",
+      "key": "PF-20",
+      "summary": "Historical reports and accounting depth",
+      "type": "Epic",
+      "initialStatus": "In Progress"
+    },
+    {
+      "roadmapId": "PF-21",
+      "key": "PF-21",
+      "summary": "Vacancy, prospects and applications",
+      "type": "Epic",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-22",
+      "key": "PF-22",
+      "summary": "Company plans, usage and subscriptions",
+      "type": "Epic",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-23",
+      "key": "PF-23",
+      "summary": "UI and workflow acceptance",
+      "type": "Epic",
+      "initialStatus": "In Progress"
+    },
+    {
+      "roadmapId": "PF-24",
+      "key": "PF-24",
+      "summary": "Capacity and responsiveness",
+      "type": "Epic",
+      "initialStatus": "In Progress"
+    },
+    {
+      "roadmapId": "PF-25",
+      "key": "PF-25",
+      "summary": "Imports, reconciliation and integrations",
+      "type": "Epic",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-26",
+      "key": "PF-26",
+      "summary": "Payment collection",
+      "type": "Epic",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-27",
+      "key": "PF-27",
+      "summary": "Monitoring, recovery and release operations",
+      "type": "Epic",
+      "initialStatus": "In Progress"
+    },
+    {
+      "roadmapId": "PF-23a",
+      "key": "PF-28",
+      "summary": "Complete portfolio and directory overhaul acceptance",
+      "type": "Story",
+      "ref": "directory",
+      "parent": "PF-23",
+      "initialStatus": "In Review"
+    },
+    {
+      "roadmapId": "PF-13",
+      "key": "PF-29",
+      "summary": "Review maintenance intake, progress and paid-expense linking",
+      "type": "Story",
+      "ref": "maintenance",
+      "parent": "PF-13",
+      "initialStatus": "In Review"
+    },
+    {
+      "roadmapId": "PF-27",
+      "key": "PF-30",
+      "summary": "Release and validate PR #40 core workflows and safe RUM",
+      "type": "Task",
+      "ref": "release",
+      "parent": "PF-27",
+      "initialStatus": "In Review"
+    },
+    {
+      "roadmapId": "PF-27",
+      "key": "PF-31",
+      "summary": "Verify real browser RUM ingestion and API-to-database correlation",
+      "type": "Task",
+      "ref": "rum",
+      "parent": "PF-27",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-27",
+      "key": "PF-32",
+      "summary": "Activate reviewed AWS infrastructure coverage in Grafana",
+      "type": "Task",
+      "ref": "infra",
+      "parent": "PF-27",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-27",
+      "key": "PF-33",
+      "summary": "Add availability checks and non-destructive authenticated journeys",
+      "type": "Task",
+      "ref": "synthetic",
+      "parent": "PF-27",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-27",
+      "key": "PF-34",
+      "summary": "Measure Node runtime and PostgreSQL pool pressure",
+      "type": "Task",
+      "ref": "pressure",
+      "parent": "PF-27",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-27",
+      "key": "PF-35",
+      "summary": "Validate durable business execution and activated dependency failures",
+      "type": "Task",
+      "ref": "business",
+      "parent": "PF-27",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-27",
+      "key": "PF-36",
+      "summary": "Prove release recovery, backup restore and actionable email alerts",
+      "type": "Task",
+      "ref": "recovery",
+      "parent": "PF-27",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-27",
+      "key": "PF-37",
+      "summary": "Monitor telemetry delivery health, volume and cost",
+      "type": "Task",
+      "ref": "telemetry",
+      "parent": "PF-27",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-12",
+      "key": "PF-38",
+      "summary": "Grant and revoke reviewed staff capabilities by property",
+      "type": "Story",
+      "ref": "permissions",
+      "parent": "PF-12",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-13",
+      "key": "PF-39",
+      "summary": "Deliver vendor assignment through reviewed maintenance completion",
+      "type": "Story",
+      "ref": "assignment",
+      "parent": "PF-13",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-23",
+      "key": "PF-40",
+      "summary": "Record real-account acceptance of merged PF-01–10 workflows",
+      "type": "Task",
+      "ref": "acceptance",
+      "parent": "PF-23",
+      "initialStatus": "To Do"
+    },
+    {
+      "roadmapId": "PF-23",
+      "key": "PF-41",
+      "summary": "Establish Jira tracking, roadmap mapping and GitHub evidence links",
+      "type": "Task",
+      "ref": "jira",
+      "parent": "PF-23",
+      "initialStatus": "In Progress"
+    },
+    {
+      "roadmapId": "PF-13",
+      "key": "PF-42",
+      "summary": "Keep maintenance creation inside the property workspace",
+      "type": "Bug",
+      "ref": "scopebug",
+      "parent": "PF-13",
+      "initialStatus": "In Progress"
+    },
+    {
+      "roadmapId": "PF-23",
+      "key": "PF-43",
+      "summary": "Development overview — current release, roadmap and evidence",
+      "type": "Task",
+      "ref": "overview",
+      "parent": "PF-23",
+      "initialStatus": "In Progress"
+    }
+  ]
+}

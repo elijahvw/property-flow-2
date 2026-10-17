@@ -234,7 +234,7 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
     setParams(next, { replace: true });
   };
   const creatingProperty =
-    newProperty || propertyId || properties.data?.[0]?.id || "";
+    pathPropertyId || newProperty || propertyId || properties.data?.[0]?.id || "";
   return (
     <>
       {!resident && propertyId && <PropertyNavigation id={propertyId} />}
@@ -324,11 +324,13 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
                     value={creatingProperty}
                     onChange={(e) => setNewProperty(e.target.value)}
                   >
-                    {properties.data.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
+                    {properties.data
+                      .filter((p) => !pathPropertyId || p.id === pathPropertyId)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
                   </select>
                 </label>
                 {!resident && creatingProperty && (

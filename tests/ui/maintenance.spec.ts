@@ -1,11 +1,12 @@
 import {test,expect,Page} from '@playwright/test';
 async function fixture(page:Page,resident=true){
- const state={rows:[] as any[],fail:false,assigned:true,posts:[] as any[],patches:[] as any[],updates:[] as any[],updatePosts:[] as any[],updateFail:false,shareable:true,detailDenied:false};
+ const state={rows:[] as any[],properties:[{id:'home',name:'Home'}],fail:false,assigned:true,posts:[] as any[],patches:[] as any[],updates:[] as any[],updatePosts:[] as any[],updateFail:false,shareable:true,detailDenied:false};
  await page.route('**/api/**',async route=>{
   const url=new URL(route.request().url()),path=url.pathname,method=route.request().method(),json=(value:unknown,status=200)=>route.fulfill({json:value,status});
   if(path==='/api/bootstrap')return json({user:{id:'u',name:'Test Owner',email:'u@test.invalid',status:'active',emailVerified:true},membership:{companyId:'a',version:1,role:resident?'resident':'manager',status:'active',company:{name:'Company',status:'active'}},permissions:resident?['resident.self']:['property.read','maintenance.manage'],destination:resident?'/resident/maintenance':'/company/maintenance',csrfToken:'fixture'});
   if(path.endsWith('/units'))return json({items:[{id:'unit-a',label:'Apartment 1',status:'active'}],nextCursor:null});
-  if(path.endsWith('/properties'))return json(state.assigned?[{id:'home',name:'Home'}]:[]);
+  if(path.endsWith('/properties'))return json(state.assigned?state.properties:[]);
+  if(path==='/api/company/properties/home')return json({id:'home',name:'Home'});
   if(path.endsWith('/updates')){
    if(state.detailDenied)return json({error:'Request unavailable'},404);
    if(method==='POST'){
@@ -47,6 +48,14 @@ test('manager intake records unit, category and readable target date with no inv
  const state=await fixture(page,false);await page.goto('/company/maintenance');await page.getByRole('button',{name:'Add request',exact:true}).click();
  await page.getByLabel('Unit (optional)',{exact:true}).selectOption('unit-a');await page.getByLabel('Title',{exact:true}).fill('Inspect boiler');await page.getByLabel('Description',{exact:true}).fill('Annual inspection for the unit boiler.');await page.getByLabel('Category',{exact:true}).selectOption('hvac');await page.getByLabel('Target date',{exact:true}).fill('2026-10-23');
  await page.getByLabel('Title',{exact:true}).focus();await expect(page.getByText('October 23, 2026',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Save request',exact:true}).click();expect(state.posts[0]).toMatchObject({unitId:'unit-a',category:'hvac',targetOn:'2026-10-23'});expect(state.posts[0]).not.toHaveProperty('requesterId');
+});
+test('property maintenance intake stays in scope while company intake keeps property selection',async({page})=>{
+ const state=await fixture(page,false);state.properties.unshift({id:'garden',name:'Garden'});
+ await page.goto('/company/properties/home/maintenance');await page.getByRole('button',{name:'Add request',exact:true}).click();
+ const property=page.getByRole('dialog').getByRole('combobox',{name:'Property',exact:true});await expect(property.locator('option')).toHaveText(['Home']);await expect(property).toHaveValue('home');
+ await page.getByLabel('Title',{exact:true}).fill('Inspect boiler');await page.getByLabel('Description',{exact:true}).fill('Check the boiler at Home.');await page.getByRole('button',{name:'Save request',exact:true}).click();expect(state.posts[0].propertyId).toBe('home');
+ await page.getByRole('link',{name:'Manage request →',exact:true}).click();await expect(page).toHaveURL(/\/company\/maintenance\/request\?propertyId=home&nested=true$/);await page.getByRole('link',{name:'← Back to maintenance',exact:true}).click();await expect(page).toHaveURL(/\/company\/properties\/home\/maintenance$/);
+ await page.goto('/company/maintenance');await page.getByRole('button',{name:'Add request',exact:true}).click();const companyProperty=page.getByRole('dialog').getByRole('combobox',{name:'Property',exact:true});await expect(companyProperty.locator('option')).toHaveText(['Garden','Home']);await companyProperty.selectOption('garden');await expect(companyProperty).toHaveValue('garden');
 });
 test('stale maintenance editor preserves draft and opening version after background updates',async({page})=>{
  const state=await fixture(page,false);state.rows.push(sample());await page.goto('/company/maintenance/request');await page.getByRole('button',{name:'Update request',exact:true}).click();await page.getByLabel('Description',{exact:true}).fill('My unsaved update');state.rows[0].version=2;
