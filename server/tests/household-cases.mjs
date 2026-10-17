@@ -7,7 +7,7 @@ import {chromium,expect} from '@playwright/test';
 export async function householdCases(t,admin,call,app){
  const ok=r=>{assert.equal(r.statusCode,200,r.body);return r.json();},today=companyDay('America/New_York');
  let lease,co,occupant;
- const details=(extra={})=>({name:'Additional Resident',email:null,phone:null,role:'occupant',startsOn:'2020-01-01',endsOn:null,...extra});
+ const details=(extra={})=>({name:'Additional Resident',email:`additional-${randomUUID()}@test.invalid`,phone:null,role:'occupant',startsOn:'2020-01-01',endsOn:null,...extra});
  let root;
  await t.test('household setup retains one lease and the existing rent/deposit sources',async()=>{
   await admin.query(`INSERT INTO "Company"(id,name,"updatedAt") VALUES('hh-company','Household Company',NOW())`);
@@ -70,8 +70,9 @@ export async function householdCases(t,admin,call,app){
   assert.ok(ok(await call('hh-co','GET','/api/resident/leases')).some(l=>l.id===future.id));
   const invite=ok(await call('hh-manager','POST',`/api/company/leases/${future.id}/invitations`,{name:'Upcoming Occupant',email:'upcoming-occupant@test.invalid',role:'occupant',startsOn:'2028-01-01'}));assert.equal(invite.approvedAt,null);assert.equal(invite.acceptanceUrl,null);
   const approved=ok(await call('hh-owner','POST',`/api/company/leases/${future.id}/invitations/${invite.id}/approve`,{}));
-  await admin.query(`INSERT INTO "User"(id,email,"emailVerified","updatedAt") VALUES('upcoming-occupant','upcoming-occupant@test.invalid',true,NOW())`);
-  await admin.query(`INSERT INTO "Session"("tokenHash","csrfToken","userId","expiresAt","idleExpiresAt") VALUES($1,'csrf','upcoming-occupant',NOW()+interval '1 hour',NOW()+interval '1 hour')`,[digest('token-upcoming-occupant')]);
+  const invitedAccount=(await admin.query(`SELECT "accountId" FROM "Invitation" WHERE id=$1`,[invite.id])).rows[0].accountId;
+  await admin.query(`UPDATE "User" SET "emailVerified"=true WHERE id=$1`,[invitedAccount]);
+  await admin.query(`INSERT INTO "Session"("tokenHash","csrfToken","userId","expiresAt","idleExpiresAt") VALUES($1,'csrf',$2,NOW()+interval '1 hour',NOW()+interval '1 hour')`,[digest('token-upcoming-occupant'),invitedAccount]);
   ok(await call('hh-owner','PATCH',`/api/company/leases/${future.id}`,{startsOn:'2028-01-01',endsOn:'2028-12-31',monthlyRent:'1200.00',status:'ended',expectedVersion:future.version}));
   assert.equal((await call('upcoming-occupant','POST','/api/invitations/accept',{token:new URL(approved.acceptanceUrl).hash.slice(1)})).statusCode,409);
   assert.equal((await admin.query(`SELECT count(*)::int n FROM "CompanyMembership" WHERE "userId"='upcoming-occupant'`)).rows[0].n,0);
@@ -90,7 +91,7 @@ export async function householdCases(t,admin,call,app){
    const approval=`/api/company/leases/${lease.id}/invitations/${invited.id}/approve`;
    assert.equal((await call('hh-manager','POST',approval,{})).statusCode,403);
    const approved=ok(await call('hh-owner','POST',approval,{})),token=new URL(approved.acceptanceUrl).hash.slice(1);
-   const profileBefore=(await admin.query(`SELECT c.id,c."userId" FROM "ResidentContact" c JOIN "Invitation" i ON i."contactId"=c.id WHERE i.id=$1`,[invited.id])).rows[0];assert.ok(profileBefore.id);assert.equal(profileBefore.userId,null,'owner approval saves the profile before login');
+   const profileBefore=(await admin.query(`SELECT c.id,c."userId" FROM "ResidentContact" c JOIN "Invitation" i ON i."contactId"=c.id WHERE i.id=$1`,[invited.id])).rows[0];assert.ok(profileBefore.id);assert.equal(profileBefore.userId,id,'owner approval reuses the same canonical account before login');
    assert.equal((await call(null,'POST','/api/invitations/setup-account',{token})).statusCode,200);
 
    const preview=ok(await call(id,'POST','/api/invitations/preview',{token}));assert.equal(preview.role,role);assert.equal(preview.property,'Oak House');assert.equal(preview.unit,'Shared apartment');assert.equal(JSON.stringify(preview).includes(token),false);
@@ -229,6 +230,7 @@ export async function householdCases(t,admin,call,app){
    await expect(page.getByRole('heading',{name:'Co Tenant',exact:true})).toBeVisible();
    await page.getByRole('button',{name:'Add resident',exact:true}).click();
    await page.getByLabel('Resident full name',{exact:true}).fill('New Household Occupant');
+   await page.getByLabel('Resident contact email',{exact:true}).fill('browser-household@test.invalid');
    await page.getByRole('button',{name:'Add to household',exact:true}).click();
    await expect(page.getByRole('heading',{name:'New Household Occupant',exact:true})).toBeVisible();
    const dismiss=page.getByRole('button',{name:'Dismiss',exact:true});if(await dismiss.isVisible())await dismiss.click();await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/tmp/propertyflow-lease-household-desktop.png',fullPage:true});
@@ -240,4 +242,37 @@ export async function householdCases(t,admin,call,app){
    await page.screenshot({path:'/tmp/propertyflow-lease-workspace-mobile.png',fullPage:true});
   }finally{await browser.close();}
  });
+ await t.test('owner adds an existing company tenant without prior property access, reusing all source identities',async()=>{
+  const userId='hh-existing-tenant';
+  await admin.query(`INSERT INTO "User"(id,email,name,"emailVerified","updatedAt") VALUES($1,$2,'Existing Tenant',true,NOW())`,[userId,userId+'@test.invalid']);
+  await admin.query(`INSERT INTO "CompanyMembership"("userId","companyId",role,"updatedAt") VALUES($1,'hh-company','resident',NOW())`,[userId]);
+  const tenant=ok(await call('hh-owner','POST','/api/company/resident-contacts',{name:'Existing Tenant',email:userId+'@test.invalid',submissionKey:randomUUID()}));
+  assert.equal(tenant.userId,userId);
+  const source=await admin.query('SELECT id,"amountCents" FROM "RentCharge" WHERE "leaseId"=$1 ORDER BY id',[lease.id]);
+  const deposit=await admin.query('SELECT * FROM "DepositAccount" WHERE "leaseId"=$1',[lease.id]);
+  const before=(await admin.query('SELECT count(*)::int n FROM "User"')).rows[0].n;
+  assert.ok(ok(await call('hh-owner','GET',root)).contacts.some(c=>c.id===tenant.id),'an existing resident needs no earlier property assignment to be selected');
+  const payload={...details({name:tenant.name,email:tenant.email,role:'leaseholder'}),contactId:tenant.id,portalApproved:false,submissionKey:randomUUID()};
+  for(const actor of ['hh-manager','hh-primary','staff','platform','foreign'])assert.ok([403,404].includes((await call(actor,'POST',root,payload)).statusCode));
+  assert.equal((await admin.query('SELECT count(*)::int n FROM "ResidentPropertyAssignment" WHERE "userId"=$1',[userId])).rows[0].n,0);
+  await admin.query(`UPDATE "User" SET status='disabled' WHERE id=$1`,[userId]);
+  assert.ok(!ok(await call('hh-owner','GET',root)).contacts.some(c=>c.id===tenant.id));
+  assert.equal((await call('hh-owner','POST',root,payload)).statusCode,409);
+  await admin.query(`UPDATE "User" SET status='active' WHERE id=$1`,[userId]);
+  await admin.query(`CREATE FUNCTION hh_existing_audit_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='lease.participant.added' THEN RAISE EXCEPTION 'fixture audit unavailable'; END IF; RETURN NEW; END $$; CREATE TRIGGER hh_existing_audit_guard BEFORE INSERT ON "AuditEvent" FOR EACH ROW EXECUTE FUNCTION hh_existing_audit_guard()`);
+  try {
+   assert.equal((await call('hh-owner','POST',root,payload)).statusCode,500);
+   assert.equal((await admin.query('SELECT count(*)::int n FROM "ResidentPropertyAssignment" WHERE "userId"=$1',[userId])).rows[0].n,0,'a failed household write cannot leave a property grant');
+   assert.equal((await admin.query('SELECT count(*)::int n FROM "LeaseParticipant" WHERE "userId"=$1',[userId])).rows[0].n,0);
+  }finally{await admin.query('DROP TRIGGER hh_existing_audit_guard ON "AuditEvent"; DROP FUNCTION hh_existing_audit_guard()');}
+  const added=ok(await call('hh-owner','POST',root,payload));
+  assert.equal(added.userId,userId);assert.equal(added.contactId,tenant.id);assert.equal(added.portalApproved,false);
+  assert.equal(ok(await call('hh-owner','POST',root,payload)).id,added.id);
+  assert.equal((await admin.query('SELECT count(*)::int n FROM "ResidentPropertyAssignment" WHERE "userId"=$1 AND "propertyId"=$2',[userId,'hh-home'])).rows[0].n,1);
+  assert.equal((await admin.query('SELECT count(*)::int n FROM "User"')).rows[0].n,before);
+  assert.deepEqual((await admin.query('SELECT id,"amountCents" FROM "RentCharge" WHERE "leaseId"=$1 ORDER BY id',[lease.id])).rows,source.rows);
+  assert.deepEqual((await admin.query('SELECT * FROM "DepositAccount" WHERE "leaseId"=$1',[lease.id])).rows,deposit.rows);
+  assert.equal((await admin.query('SELECT count(*)::int n FROM "AuditEvent" WHERE action=$2 AND "targetId"=$1',[userId,'resident.assignment.assigned'])).rows[0].n,1);
+ });
+
 }

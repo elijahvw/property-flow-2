@@ -59,6 +59,7 @@ test("new email/password identity never exposes initial random password; retry r
       return Response.json({ access_token: "token", expires_in: 3600 });
     if (url.includes("users-by-email"))
       return Response.json(created ? [profile] : []);
+    if (url.includes("/users?")) return Response.json({users:created?[profile]:[],total:created?1:0});
     if (url.endsWith("/users")) {
       created = true;
       const b = JSON.parse(options.body);
@@ -98,4 +99,61 @@ test("verification and password setup call explicit provider endpoints; provider
       !e.message.includes("SECRET"),
   );
   assert.equal(identityProvider({}), undefined);
+});
+test("account rename patches the exact Auth0 subject and requires confirmation", async()=>{
+ const seen=[];
+ const p=identityProvider(env,async(url,options)=>{
+  seen.push({url,options});
+  return Response.json(url.endsWith('/oauth/token')?{access_token:'token',expires_in:3600}:{...profile,name:'Changed Name'});
+ });
+ const result=await p.rename(profile.user_id,'Changed Name');
+ assert.equal(result.user_id,profile.user_id);assert.equal(result.name,'Changed Name');
+ const change=seen.find(r=>r.options.method==='PATCH');assert.ok(change.url.endsWith('/users/auth0%7Cabc%2B1'));assert.deepEqual(JSON.parse(change.options.body),{name:'Changed Name'});
+ const mismatch=identityProvider(env,async url=>Response.json(url.endsWith('/oauth/token')?{access_token:'token',expires_in:3600}:profile));
+ await assert.rejects(mismatch.rename(profile.user_id,'Changed Name'),e=>e.code==='IDENTITY_PROFILE_CONFLICT');
+});
+test("ambiguous email identities never select the first match or create another user",async()=>{
+ let created=0;
+ const p=identityProvider(env,async(url,options)=>{
+  if(url.endsWith('/oauth/token'))return Response.json({access_token:'token',expires_in:3600});
+  if(url.includes('users-by-email'))return Response.json([profile,{...profile,user_id:'google-oauth2|other',identities:[{connection:'google-oauth2',provider:'google-oauth2'}]}]);
+  if(url.includes('/users?'))return Response.json({users:[profile],total:1});
+  if(options.method==='POST')created++;
+  throw Error('unexpected endpoint');
+ });
+ await assert.rejects(p.create(profile.email,'A'),e=>e.code==='IDENTITY_AMBIGUOUS');assert.equal(created,0);
+});
+test("an existing single federated Auth0 account is reused without creating a database account",async()=>{
+ const social={...profile,user_id:'google-oauth2|existing',identities:[{provider:'google-oauth2',connection:'google-oauth2'}]};let writes=0;
+ const p=identityProvider(env,async(url,options)=>{
+  if(url.endsWith('/oauth/token'))return Response.json({access_token:'token',expires_in:3600});
+  if(url.includes('users-by-email'))return Response.json([social]);
+  if(url.includes('/users?'))return Response.json({users:[social],total:1});
+  if(options.method==='POST')writes++;
+  throw Error('unexpected endpoint');
+ });
+ assert.equal((await p.create(profile.email,'Existing')).user_id,social.user_id);assert.equal(writes,0);
+});
+
+test("case-preserved upstream email is found before creating any account",async()=>{
+ const social={...profile,email:profile.email.toUpperCase(),user_id:'google-oauth2|case-preserved'};let writes=0;
+ const p=identityProvider(env,async(url,options)=>{
+  if(url.endsWith('/oauth/token'))return Response.json({access_token:'token',expires_in:3600});
+  if(url.includes('users-by-email'))return Response.json([]);
+  if(url.includes('/users?')){assert.equal(new URL(url).searchParams.get('q'),'email:'+JSON.stringify(profile.email));return Response.json({users:[social],total:1});}
+  if(options.method==='POST')writes++;
+  throw Error('unexpected endpoint');
+ });
+ assert.equal((await p.create(profile.email,'Existing')).user_id,social.user_id);assert.equal(writes,0);
+});
+test("case-insensitive duplicates cannot be hidden by a single exact email result",async()=>{
+ let writes=0;
+ const p=identityProvider(env,async(url,options)=>{
+  if(url.endsWith('/oauth/token'))return Response.json({access_token:'token',expires_in:3600});
+  if(url.includes('users-by-email'))return Response.json([profile]);
+  if(url.includes('/users?'))return Response.json({users:[profile,{...profile,email:profile.email.toUpperCase(),user_id:'google-oauth2|second'}],total:2});
+  if(options.method==='POST')writes++;
+  throw Error('unexpected endpoint');
+ });
+ await assert.rejects(p.create(profile.email,'A'),e=>e.code==='IDENTITY_AMBIGUOUS');assert.equal(writes,0);
 });

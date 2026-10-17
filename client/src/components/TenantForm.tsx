@@ -30,7 +30,7 @@ type Draft = Record<string, string>;
 const groups = [
   {
     title: "Tenant contact",
-    help: "Start with the full name. Email is required for portal invitations. Saving a profile does not create a login or send an invitation.",
+    help: "Enter the full name and sign-in email. Saving creates or reuses one Auth0 account and saves tenant details. Portal access is managed separately.",
     fields: [
       ["name", "Full name", 200],
       ["preferredName", "Preferred name", 200],
@@ -141,7 +141,7 @@ export function TenantForm({
     return (
       <div>
         <p className="notice" role="status">
-          Tenant profile saved. Their record is available even if you finish the
+          Account created. Their tenant details are saved even if you finish the
           invitation later.
         </p>
         <TenantInvitation contactId={created.id} done={() => finish(created)} />
@@ -228,8 +228,7 @@ export function TenantForm({
         >
           <h3>Review tenant details</h3>
           <p className="help">
-            Confirm the person and contact details before saving. Your tenant
-            profile is saved first; portal access is optional.
+            Confirm the person and contact details before saving. The Auth0 account and tenant details are saved first; portal access is optional.
           </p>
           <dl className="lease-review-summary">
             <div>
@@ -385,7 +384,7 @@ export function TenantForm({
                         required={
                           name === "name" ||
                           (name === "email" &&
-                            (draft.invitePortal === "yes" ||
+                            (!value || draft.invitePortal === "yes" ||
                               draft.preferredContact === "email")) ||
                           (name === "phone" &&
                             draft.preferredContact === "phone") ||
@@ -451,7 +450,7 @@ export function TenantForm({
               <legend>Invite to the portal?</legend>
               <p className="help">
                 Every tenant gets a profile for your records. Invitation and
-                login access are optional.
+                portal access are managed separately.
               </p>
               <label>
                 Portal invitation
@@ -460,7 +459,7 @@ export function TenantForm({
                   defaultValue={draft.invitePortal || "no"}
                   disabled={!can("members.manage")}
                 >
-                  <option value="no">No · save a profile for tracking</option>
+                  <option value="no">No · save the account without portal access</option>
                   <option value="yes">
                     Yes · review access and create an invitation link
                   </option>

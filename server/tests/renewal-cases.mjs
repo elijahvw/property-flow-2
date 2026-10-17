@@ -192,7 +192,7 @@ export async function renewalCases(t, admin, call, db) {
         call("owner", "POST", "/api/company/leases", proposal(source)),
         call("manager", "POST", "/api/company/leases", proposal(source)),
       ]);
-      assert.deepEqual(results.map((r) => r.statusCode).sort(), [200, 409]);
+      assert.deepEqual(results.map((r) => r.statusCode).sort(), [200, 409],results.map(r=>r.body).join("\n"));
       assert.equal(
         (
           await admin.query(

@@ -1,3 +1,4 @@
+import {residentAccountCases} from "./resident-account-cases.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -148,6 +149,11 @@ test(
           remote.set(row.user_id, row);
         }
         return { ...row };
+      },
+      async rename(id,name) {
+        if(providerError)throw Error("provider unavailable");
+        const row=remote.get(id);if(!row)throw Error("provider missing");
+        row.name=name;return {...row};
       },
       async verify() {
         verificationCalls++;
@@ -1226,10 +1232,14 @@ test(
     });
     await t.test("platform profile and target activity require platform authority and filter before the limit", async () => {
       const path="/api/platform/users/profile-resident/profile";
+      const row=await db.user.findUniqueOrThrow({where:{id:"profile-resident"}});
+      remote.set(row.id,{user_id:row.id,email:row.email,email_verified:row.emailVerified,name:row.name});
+      await db.identity.upsert({where:{issuer_subject:{issuer:provider.issuer,subject:row.id}},update:{},create:{issuer:provider.issuer,subject:row.id,userId:row.id}});
       assert.equal((await call("profile-owner","PATCH",path,{name:"Changed"})).statusCode,403);
       assert.equal((await call("platform","PATCH",path,{name:"Changed",platformRole:"owner"})).statusCode,400);
       assert.equal((await call("platform","PATCH",path,{name:"Changed"},{"x-csrf-token":"wrong"})).statusCode,403);
       assert.equal((await call("platform","PATCH",path,{name:"Changed"})).statusCode,200);
+      assert.equal(remote.get("profile-resident").name,"Changed","Platform account names must update the same Auth0 user");
       await db.auditEvent.createMany({data:Array.from({length:105},(_,n)=>({id:"unrelated-profile-"+n,actorId:"platform",action:"unrelated",targetId:"someone-else",requestId:"fixture",createdAt:new Date(Date.now()+10000)}))});
       const activity=await call("platform","GET","/api/platform/audit?targetId=profile-resident");assert.equal(activity.statusCode,200);
       assert.ok(activity.json().some(e=>e.action==="user.profile.updated"));assert.equal(activity.json().some(e=>e.action==="unrelated"),false);
@@ -1322,5 +1332,6 @@ test(
         }
       },
     );
+    await t.test("resident identity lifecycle", sub=>residentAccountCases(sub,db,admin,call,provider,remote,()=>({create:createCalls,setup:setupCalls,verification:verificationCalls})));
   },
 );

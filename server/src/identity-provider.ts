@@ -19,6 +19,7 @@ export interface IdentityProvider {
   create(email: string, name: string): Promise<ProviderUser>;
   verify(id: string): Promise<void>;
   setup(email: string): Promise<void>;
+  rename(id: string, name: string): Promise<ProviderUser>;
 }
 export function identityProvider(
   env = process.env,
@@ -83,9 +84,9 @@ export function identityProvider(
       })();
     return pending;
   }
-  async function api(path: string, body?: unknown) {
+  async function api(path: string, body?: unknown, method?: "PATCH") {
     const r = await request("/api/v2/" + path, {
-      method: body === undefined ? "GET" : "POST",
+      method: method ?? (body === undefined ? "GET" : "POST"),
       headers: {
         authorization: `Bearer ${await access()}`,
         "content-type": "application/json",
@@ -127,6 +128,26 @@ export function identityProvider(
     if (!Array.isArray(rows)) throw Error("Invalid provider response");
     return rows.map(user);
   }
+  async function matchingEmail(email: string) {
+    // Exact lookup is immediately consistent; indexed search also catches
+    // case-preserved emails from upstream social/enterprise providers.
+    const exact = await byEmail(email);
+    const indexed = await api("users?" + new URLSearchParams({
+      q: "email:" + JSON.stringify(email), search_engine: "v3",
+      page: "0", per_page: "2", include_totals: "true",
+      fields: "user_id,email,email_verified,name,blocked,identities", include_fields: "true",
+    }));
+    if (!Array.isArray(indexed.users) || !Number.isFinite(indexed.total))
+      throw new AccessError(503,"IDENTITY_PROFILE_INVALID","Identity search response is incomplete.");
+    const found = new Map(exact.map(u => [u.user_id,u]));
+    for (const value of indexed.users) {
+      const row = user(value);
+      if (row.email.toLowerCase() === email.toLowerCase()) found.set(row.user_id,row);
+    }
+    if (indexed.total > 1 || found.size > 1)
+      throw new AccessError(409,"IDENTITY_AMBIGUOUS","Multiple sign-in identities use this email. Choose the intended existing account in Property Flow Users; no account was created or linked.");
+    return [...found.values()];
+  }
   return {
     issuer: base + "/",
     databaseConnection: connection,
@@ -161,19 +182,9 @@ export function identityProvider(
       return value;
     },
     async create(email, name) {
-      const existing = await byEmail(email);
-      const match = existing.find((u) =>
-        u.identities?.some(
-          (i) => i.connection === connection && i.provider === "auth0",
-        ),
-      );
-      if (match) return match;
-      if (existing.length)
-        throw new AccessError(
-          409,
-          "IDENTITY_EXISTS",
-          "This email belongs to another sign-in connection. Add that identity from the directory instead.",
-        );
+      const existing = await matchingEmail(email);
+      if(existing.length===1)return existing[0];
+      if(existing.length>1)throw new AccessError(409,"IDENTITY_AMBIGUOUS","Multiple sign-in identities use this email. Choose the intended existing account in Property Flow Users; no account was created or linked.");
       try {
         return user(
           await api("users", {
@@ -186,14 +197,20 @@ export function identityProvider(
           }),
         );
       } catch (error) {
-        const found = (await byEmail(email)).find((u) =>
+        const recovered = await byEmail(email);
+        const found = recovered.find((u) =>
           u.identities?.some(
             (i) => i.connection === connection && i.provider === "auth0",
           ),
         );
-        if (found) return found;
+        if (found && recovered.length === 1) return found;
         throw error;
       }
+    },
+    async rename(id, name) {
+      const result=user(await api("users/"+encodeURIComponent(id), {name}, "PATCH"));
+      if(result.user_id !== id || result.name !== name) throw new AccessError(409,"IDENTITY_PROFILE_CONFLICT","The identity provider did not accept the account name. Refresh the account and retry.");
+      return result;
     },
     async verify(id) {
       await api("jobs/verification-email", {

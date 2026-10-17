@@ -69,6 +69,7 @@ model User {
   createdMaintenanceCosts MaintenanceCost[] @relation("MaintenanceCostCreator")
   unlinkedMaintenanceCosts MaintenanceCost[] @relation("MaintenanceCostUnlinker")
   residentContacts ResidentContact[] @relation("ContactAccount")
+  accountInvitations Invitation[] @relation("InvitationAccount")
   createdResidentContacts ResidentContact[] @relation("ContactCreator")
   leaseParticipants LeaseParticipant[]
   createdLeaseParticipants LeaseParticipant[] @relation("LeaseParticipantCreator")
@@ -119,6 +120,9 @@ model CompanyMembership {
 }
 
 model Invitation {
+  accountId String?
+  account User? @relation("InvitationAccount", fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@index([accountId])
   contactLeaseApprovals Json?
   contactId String?
   contact ResidentContact? @relation(fields:[contactId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)

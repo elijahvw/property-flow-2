@@ -1,3 +1,5 @@
+import { registerAccountPasswords } from "./account-passwords.js";
+import { prepareAccount, saveAccount } from "./resident-accounts.js";
 import {registerLeaseProration} from "./lease-proration.js";
 import {registerLeaseTransitions} from "./lease-transitions.js";
 import {registerLeaseTermChanges} from "./lease-term-changes.js";
@@ -145,7 +147,10 @@ export async function serializable<T>(db: PrismaClient, run: (tx: Tx) => Promise
           failure.meta?.driverAdapterError?.cause?.originalCode,
         ].some(code => ["40001", "40P01"].includes(code ?? "")));
       if (!retryable) throw error;
-      if (attempt >= 2) throw new AccessError(409, "ACCESS_CONFLICT", "Access changed. Refresh and try again.");
+      if (attempt >= 4) throw new AccessError(409, "ACCESS_CONFLICT", "Access changed. Refresh and try again.");
+      // Back off between multi-stage account operations to avoid retrying the
+      // same serialization conflict in lockstep. Authorization is re-read.
+      await new Promise(resolve => setTimeout(resolve, 10 * (attempt + 1) + Math.floor(Math.random() * 10)));
     }
   }
 }
@@ -219,11 +224,12 @@ export function registerApplication(
   origin: string,
   identityProvider?: IdentityProvider,
 ) {
+  registerAccountPasswords(server, db, authenticate, origin, identityProvider);
   registerMaintenance(server, db, authenticate, origin);
   registerMaintenanceCosts(server, db, authenticate, origin);
-  registerLeasing(server, db, authenticate, origin);
-  registerLeaseParticipants(server, db, authenticate, origin);
-  registerLeaseInvitations(server, db, authenticate, origin);
+  registerLeasing(server, db, authenticate, origin, identityProvider);
+  registerLeaseParticipants(server, db, authenticate, origin, identityProvider);
+  registerLeaseInvitations(server, db, authenticate, origin, identityProvider);
   registerFinances(server, db, authenticate, origin);
   registerDeposits(server, db, authenticate, origin);
   registerRent(server, db, authenticate, origin);
@@ -234,13 +240,13 @@ export function registerApplication(
   registerLeaseTransitions(server,db,authenticate,origin);
   registerLeaseTermChanges(server,db,authenticate,origin);
   registerLeaseSettlements(server, db, authenticate, origin);
-  registerAccountProfile(server, db, authenticate, origin);
+  registerAccountProfile(server, db, authenticate, origin, identityProvider);
   registerRentSchedules(server, db, authenticate, origin);
   registerRentRecovery(server, db, authenticate, origin);
   registerUserAdministration(server, db, authenticate, origin, identityProvider);
   registerCompanyAdministration(server, db, authenticate, origin);
   registerResidentProfiles(server, db, authenticate, origin);
-  registerContactRecords(server, db, authenticate, origin);
+  registerContactRecords(server, db, authenticate, origin, identityProvider);
   registerContactInvitations(server, db, authenticate, origin,identityProvider);
   registerReports(server, db, authenticate);
   registerOverview(server, db, authenticate);
@@ -439,10 +445,21 @@ export function registerApplication(
     platform(request); mutation(request, origin);
     const userId = opaqueUserId(request.params.userId), body = input(request, ["name"]);
     const name = boundedText(body.name, 200, "Display name");
+    const identity=await serial(request,async tx=>{
+      await lockTarget(tx,request.principal!.id);await lockTarget(tx,userId);
+      const user=await tx.user.findUnique({where:{id:userId},include:{identities:true}});
+      if(!user)throw new AccessError(404,"NOT_FOUND","User not found.");
+      const identity=user.identities.find(i=>i.issuer===identityProvider?.issuer);
+      if(!identityProvider?.rename || !identity)throw new AccessError(503,"IDENTITY_NOT_CONFIGURED","Account name changes require the Auth0 connection for this account. Reconcile the account from Property Flow Users first.");
+      return identity;
+    });
+    const remote=await identityProvider!.rename(identity.subject,name);
+    if(remote.user_id!==identity.subject||remote.name!==name)throw new AccessError(409,"IDENTITY_PROFILE_CONFLICT","Auth0 did not confirm this name. Refresh and retry.");
     return serial(request, async tx => {
       await lockTarget(tx, request.principal!.id);
       await lockTarget(tx, userId);
-      if (!await tx.user.findUnique({where:{id:userId}})) throw new AccessError(404,"NOT_FOUND","User not found.");
+      const currentIdentity=await tx.identity.findUnique({where:{issuer_subject:{issuer:identity.issuer,subject:identity.subject}}});
+      if(currentIdentity?.userId!==userId)throw new AccessError(409,"IDENTITY_CONFLICT","The account identity changed. Refresh and retry.");
       const result = await tx.user.update({where:{id:userId},data:{name},select:{id:true,name:true}});
       await audit(tx, request, "user.profile.updated", undefined, userId);
       return result;
@@ -692,12 +709,16 @@ export function registerApplication(
         "OWNER_PROTECTED",
         "Only the platform owner can invite a company owner.",
       );
+    await serial(request, tx => activeCompany(tx, companyId));
+    const account = await prepareAccount(identityProvider, email, email);
     const token = randomBytes(32).toString("base64url");
     return serial(request, async (tx) => {
       await activeCompany(tx, companyId);
+      const accountId = await saveAccount(tx, request, account, companyId);
       const invitation = await tx.invitation.create({
         data: {
           companyId,
+          accountId,
           email,
           role,
           tokenHash: digest(token),
@@ -780,6 +801,7 @@ export function registerApplication(
     return serial(request,async tx=>{
       const invitation=await tx.invitation.findUnique({where:{tokenHash:digest(token)}});
       if(!invitation||(!invitation.leaseId&&!invitation.contactId)||invitation.revokedAt||(!invitation.acceptedAt&&invitation.expiresAt.getTime()<=Date.now())||(invitation.email!==user.email.toLowerCase()&&!(invitation.contactId&&!invitation.leaseId&&invitation.acceptedAt)))throw new AccessError(403,"INVITATION_INVALID","This invitation is unavailable for your account.");
+      if(invitation.accountId && invitation.accountId !== user.id) throw new AccessError(403,"INVITATION_IDENTITY_MISMATCH","Sign in with the account this invitation was created for.");
       await activeCompany(tx,invitation.companyId);
       if(invitation.contactId&&!invitation.leaseId){if(invitation.acceptedAt){const {company,contact}=await replayContactAcceptance(tx,request,invitation);return {company:company.name,name:contact.name,contact:true,accepted:true,leaseApprovals:[],leases:[]};}return previewContactInvitation(tx,invitation);}
       if(invitation.acceptedAt)await replayLeaseAcceptance(tx,request,invitation);
@@ -819,6 +841,7 @@ export function registerApplication(
           "INVITATION_INVALID",
           "This invitation is unavailable for your account.",
         );
+      if(invitation.accountId && invitation.accountId !== user.id) throw new AccessError(403,"INVITATION_IDENTITY_MISMATCH","Sign in with the account this invitation was created for.");
       await activeCompany(tx, invitation.companyId);
       // An invitation can only create a membership. It cannot reactivate,
       // promote or transfer an existing member (including a disabled member).
