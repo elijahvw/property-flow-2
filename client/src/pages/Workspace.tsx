@@ -1419,8 +1419,14 @@ export function Resident() {
     <>
       <header className="page-heading">
         <p className="eyebrow">Resident</p>
-        <h1>My properties</h1>
-        <p>These associations are not leases or proof of occupancy.</p>
+        <h1>My rental</h1>
+        <p>View your rental records and updates from your property team.</p>
+        <nav className="actions" aria-label="Resident services">
+          <Link className="button secondary" to="/resident/rent">View rent & payments</Link>
+          <Link className="button secondary" to="/resident/deposits">View security deposit</Link>
+          <Link className="button secondary" to="/resident/maintenance">Maintenance requests</Link>
+          <Link className="button secondary" to="/account">My profile</Link>
+        </nav>
       </header>
       {!r.data ? (
         <LoadState error={r.error} retry={r.reload} />

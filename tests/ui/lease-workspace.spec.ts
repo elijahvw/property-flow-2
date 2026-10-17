@@ -83,15 +83,18 @@ test('owner approval is explicit for an occupant invitation and phone layout rem
  await expect(page.getByRole('button',{name:'Prepare linked renewal',exact:true})).toBeVisible();
 });
 
-test('leaseholders can request occupants without approving them or receiving an acceptance link',async({page})=>{
- const state=await fixture(page,'resident');state.invitations=[];
- await page.goto('/resident');await page.getByRole('button',{name:'Invite a resident · Apartment 2',exact:true}).click();
- await page.getByLabel('Invited resident name',{exact:true}).fill('Taylor Resident');await page.getByLabel('Invited resident email',{exact:true}).fill('taylor@test.invalid');
- await page.getByRole('button',{name:'Request owner approval',exact:true}).click();
+test('residents view invitation history without creating or cancelling household requests',async({page})=>{
+ const state=await fixture(page,'resident');
+ await page.goto('/resident');
+ await expect(page.getByRole('heading',{name:'My rental',exact:true})).toBeVisible();
+ await expect(page.getByRole('navigation',{name:'Resident services'})).toBeVisible();
+ await expect(page.getByText('Your lease and household records are view-only.',{exact:false})).toBeVisible();
+ expect(state.requests.some(p=>p.endsWith('/invitations'))).toBe(false);
+ await page.locator('summary').filter({hasText:'View invitation history'}).click();
  await expect(page.locator('.record-list').getByText('Awaiting owner approval',{exact:false})).toBeVisible();
- await expect(page.getByLabel('Resident invitation acceptance link',{exact:true})).toHaveCount(0);
- expect(state.requests.some(p=>p.endsWith('/approve'))).toBe(false);
- await expect(page.getByRole('button',{name:/Approve resident/})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:/Invite a resident|Request owner approval|Approve resident|Cancel invitation|Revoke invitation/})).toHaveCount(0);
+ await expect(page.locator('main form')).toHaveCount(0);
+ expect(state.writes).toHaveLength(0);
 });
 
 for(const role of ['staff','resident'])test(`${role} cannot fetch the management lease workspace`,async({page})=>{
