@@ -242,4 +242,37 @@ export async function householdCases(t,admin,call,app){
    await page.screenshot({path:'/tmp/propertyflow-lease-workspace-mobile.png',fullPage:true});
   }finally{await browser.close();}
  });
+ await t.test('owner adds an existing company tenant without prior property access, reusing all source identities',async()=>{
+  const userId='hh-existing-tenant';
+  await admin.query(`INSERT INTO "User"(id,email,name,"emailVerified","updatedAt") VALUES($1,$2,'Existing Tenant',true,NOW())`,[userId,userId+'@test.invalid']);
+  await admin.query(`INSERT INTO "CompanyMembership"("userId","companyId",role,"updatedAt") VALUES($1,'hh-company','resident',NOW())`,[userId]);
+  const tenant=ok(await call('hh-owner','POST','/api/company/resident-contacts',{name:'Existing Tenant',email:userId+'@test.invalid',submissionKey:randomUUID()}));
+  assert.equal(tenant.userId,userId);
+  const source=await admin.query('SELECT id,"amountCents" FROM "RentCharge" WHERE "leaseId"=$1 ORDER BY id',[lease.id]);
+  const deposit=await admin.query('SELECT * FROM "DepositAccount" WHERE "leaseId"=$1',[lease.id]);
+  const before=(await admin.query('SELECT count(*)::int n FROM "User"')).rows[0].n;
+  assert.ok(ok(await call('hh-owner','GET',root)).contacts.some(c=>c.id===tenant.id),'an existing resident needs no earlier property assignment to be selected');
+  const payload={...details({name:tenant.name,email:tenant.email,role:'leaseholder'}),contactId:tenant.id,portalApproved:false,submissionKey:randomUUID()};
+  for(const actor of ['hh-manager','hh-primary','staff','platform','foreign'])assert.ok([403,404].includes((await call(actor,'POST',root,payload)).statusCode));
+  assert.equal((await admin.query('SELECT count(*)::int n FROM "ResidentPropertyAssignment" WHERE "userId"=$1',[userId])).rows[0].n,0);
+  await admin.query(`UPDATE "User" SET status='disabled' WHERE id=$1`,[userId]);
+  assert.ok(!ok(await call('hh-owner','GET',root)).contacts.some(c=>c.id===tenant.id));
+  assert.equal((await call('hh-owner','POST',root,payload)).statusCode,409);
+  await admin.query(`UPDATE "User" SET status='active' WHERE id=$1`,[userId]);
+  await admin.query(`CREATE FUNCTION hh_existing_audit_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='lease.participant.added' THEN RAISE EXCEPTION 'fixture audit unavailable'; END IF; RETURN NEW; END $$; CREATE TRIGGER hh_existing_audit_guard BEFORE INSERT ON "AuditEvent" FOR EACH ROW EXECUTE FUNCTION hh_existing_audit_guard()`);
+  try {
+   assert.equal((await call('hh-owner','POST',root,payload)).statusCode,500);
+   assert.equal((await admin.query('SELECT count(*)::int n FROM "ResidentPropertyAssignment" WHERE "userId"=$1',[userId])).rows[0].n,0,'a failed household write cannot leave a property grant');
+   assert.equal((await admin.query('SELECT count(*)::int n FROM "LeaseParticipant" WHERE "userId"=$1',[userId])).rows[0].n,0);
+  }finally{await admin.query('DROP TRIGGER hh_existing_audit_guard ON "AuditEvent"; DROP FUNCTION hh_existing_audit_guard()');}
+  const added=ok(await call('hh-owner','POST',root,payload));
+  assert.equal(added.userId,userId);assert.equal(added.contactId,tenant.id);assert.equal(added.portalApproved,false);
+  assert.equal(ok(await call('hh-owner','POST',root,payload)).id,added.id);
+  assert.equal((await admin.query('SELECT count(*)::int n FROM "ResidentPropertyAssignment" WHERE "userId"=$1 AND "propertyId"=$2',[userId,'hh-home'])).rows[0].n,1);
+  assert.equal((await admin.query('SELECT count(*)::int n FROM "User"')).rows[0].n,before);
+  assert.deepEqual((await admin.query('SELECT id,"amountCents" FROM "RentCharge" WHERE "leaseId"=$1 ORDER BY id',[lease.id])).rows,source.rows);
+  assert.deepEqual((await admin.query('SELECT * FROM "DepositAccount" WHERE "leaseId"=$1',[lease.id])).rows,deposit.rows);
+  assert.equal((await admin.query('SELECT count(*)::int n FROM "AuditEvent" WHERE action=$2 AND "targetId"=$1',[userId,'resident.assignment.assigned'])).rows[0].n,1);
+ });
+
 }

@@ -3,7 +3,7 @@ import {test,expect,Page} from '@playwright/test';
 async function fixture(page:Page,role='owner'){
  const lease={id:'shared',propertyId:'home',unitId:'unit',residentId:'primary',version:1,status:'active',startsOn:'2020-01-01',endsOn:'2026-12-31',rentCents:100001,rentDueDay:1,graceDays:5,paymentInstructions:'Pay the owner',property:{name:'Oak House'},unit:{label:'Apartment 2'},resident:{name:'Jordan Rivera',email:'primary@test.invalid'},renewals:[]};
  const primary={id:'p-primary',userId:'primary',name:'Jordan Rivera',email:'primary@test.invalid',phone:null,role:'leaseholder',startsOn:'2020-01-01',endsOn:null,removedAt:null,version:1};
- const state={role,lease,status:200,previewStatus:200,failAdd:false,items:[primary] as any[],writes:[] as any[],requests:[] as string[],invitations:[{id:'invited',email:'alex@test.invalid',participantName:'Alex Rivera',participantRole:'occupant',approvedAt:null,acceptedAt:null,revokedAt:null,expiresAt:'2099-01-01'}] as any[]};
+ const state={role,lease,contacts:[] as any[],status:200,previewStatus:200,failAdd:false,items:[primary] as any[],writes:[] as any[],requests:[] as string[],invitations:[{id:'invited',email:'alex@test.invalid',participantName:'Alex Rivera',participantRole:'occupant',approvedAt:null,acceptedAt:null,revokedAt:null,expiresAt:'2099-01-01'}] as any[]};
  await page.route('**/api/**',async route=>{
   const req=route.request(),url=new URL(req.url()),p=url.pathname,json=(v:unknown,status=200)=>route.fulfill({json:v,status});state.requests.push(p);
   if(p==='/api/bootstrap')return json({user:{id:state.role,email:state.role+'@test.invalid',status:'active',emailVerified:true},membership:{companyId:'a',role:state.role,status:'active',version:1,company:{name:'Oak & Elm',status:'active'}},permissions:state.role==='owner'?['property.read','lease.manage','finance.manage','members.manage','resident.assignment.manage']:state.role==='resident'?['resident.self']:['property.read'],csrfToken:'fixture'});
@@ -21,7 +21,7 @@ async function fixture(page:Page,role='owner'){
   }
   if(p==='/api/company/leases/shared/participants'){
    if(req.method()==='POST'){const b=req.postDataJSON();state.writes.push(b);if(state.failAdd)return json({error:'Unable to save resident'},503);state.items.push({...b,id:'added',version:1,removedAt:null});return json(state.items.at(-1));}
-   return json({lease,businessDate:'2026-10-15',items:state.items,candidates:[]});
+   return json({lease,businessDate:'2026-10-15',items:state.items,candidates:[],contacts:state.contacts.length?state.contacts:undefined});
   }
   if(req.method()==='PATCH'&&p.startsWith('/api/company/leases/shared/participants/')){const b=req.postDataJSON();state.writes.push(b);const item=state.items.find(i=>p.endsWith('/'+i.id));Object.assign(item,b,{version:item.version+1});return json(item);}
   if(p.endsWith('/invitations')){
@@ -51,6 +51,23 @@ test('lease workspace keeps household drafts across section navigation and retri
  await expect(page.getByRole('heading',{name:'Taylor Tenant',exact:true})).toBeVisible();
  expect(state.writes[0].submissionKey).toBe(state.writes[1].submissionKey);
  await page.reload();await expect(page.getByRole('heading',{name:'Taylor Tenant',exact:true})).toBeVisible();
+});
+
+test('owner adds an existing tenant to an existing lease without a new tenant form',async({page})=>{
+ const state=await fixture(page);state.contacts.push({id:'existing-contact',userId:'existing-account',name:'Existing Tenant',email:'existing@test.invalid',phone:'555-0199'});
+ await page.goto('/company/leases/shared?section=household');
+ await page.getByRole('button',{name:'Add existing tenant',exact:true}).click();
+ const tenants=page.getByLabel('Tenant profile',{exact:true});
+ await expect(tenants.locator('option')).toHaveText(['Choose an existing tenant','Existing Tenant · existing@test.invalid']);
+ await tenants.selectOption('existing-contact');
+ await expect(page.getByLabel('Resident full name',{exact:true})).toHaveValue('Existing Tenant');
+ await expect(page.getByLabel('Resident contact phone',{exact:true})).toHaveValue('555-0199');
+ await expect(page.getByText('This reuses the existing tenant and account.',{exact:false})).toBeVisible();
+ await page.getByLabel('Resident role',{exact:true}).selectOption('leaseholder');
+ await page.getByRole('button',{name:'Add to household',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Existing Tenant',exact:true})).toBeVisible();
+ expect(state.writes).toHaveLength(1);expect(state.writes[0]).toMatchObject({contactId:'existing-contact',role:'leaseholder',portalApproved:true,name:'Existing Tenant'});
+ expect(state.writes[0]).not.toHaveProperty('userId');expect(state.contacts).toHaveLength(1);
 });
 
 test('lease term drafts retain their reviewed version across dismissal and background changes',async({page})=>{

@@ -26,11 +26,11 @@ export async function householdLease(tx:Tx,companyId:string,id:string,lock=false
   if(!row)throw new AccessError(404,"NOT_FOUND","Lease not found.");
   return {...row,resident:leasePerson(row)};
 }
-async function linked(tx:Tx,companyId:string,propertyId:string,userId:string,requireEligible:boolean){
+async function linked(tx:Tx,companyId:string,propertyId:string,userId:string,requireEligible:boolean,allowUnassigned=false){
   await tx.$queryRaw`UPDATE "User" SET "updatedAt"="updatedAt" WHERE id=${userId} RETURNING id`;
   const member=await tx.companyMembership.findFirst({where:{companyId,userId,role:"resident"},include:{user:true,assignments:{where:{propertyId}}}});
-  if(requireEligible&&(!member||member.status!=="active"||member.user.status!=="active"||!member.assignments.length))
-    throw new AccessError(409,"RESIDENT_INELIGIBLE","Choose a current resident assigned to this property. An unlinked record can be kept without portal access.");
+  if(requireEligible&&(!member||member.status!=="active"||member.user.status!=="active"||(!allowUnassigned&&!member.assignments.length)))
+    throw new AccessError(409,"RESIDENT_INELIGIBLE","Choose an active resident of this company. Review disabled or transferred account access first.");
 }
 // Existing primary access stays compatible. Additional leaseholders must be
 // linked to the current user and still assigned to the property. Upcoming
@@ -48,7 +48,7 @@ export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient
     return scoped(db,request,"lease.manage",async(tx,companyId)=>{
       const record=await householdLease(tx,companyId,id);
       const items=await tx.leaseParticipant.findMany({where:{companyId,leaseId:id},select,orderBy:[{startsOn:"asc"},{id:"asc"}],take:201});
-      const candidates=await tx.companyMembership.findMany({where:{companyId,role:"resident",status:"active",user:{status:"active"},assignments:{some:{propertyId:record.propertyId}}},select:{userId:true,contactName:true,user:{select:{name:true,email:true,emailVerified:true}}},orderBy:{userId:"asc"},take:1001});
+      const candidates=await tx.companyMembership.findMany({where:{companyId,role:"resident",status:"active",user:{status:"active"}},select:{userId:true,contactName:true,user:{select:{name:true,email:true,emailVerified:true}}},orderBy:{userId:"asc"},take:1001});
       if(items.length>200||candidates.length>1000)throw new AccessError(422,"HOUSEHOLD_SCOPE_TOO_LARGE","Too many household records or eligible residents to show a complete selection.");
       const company=await tx.company.findUniqueOrThrow({where:{id:companyId},select:{timezone:true}});
       const contacts=await tx.residentContact.findMany({where:{companyId,status:"active",OR:[{userId:null},{userId:{in:candidates.map(c=>c.userId)}},{user:{is:{status:"active",membership:null}}}]},select:{id:true,userId:true,name:true,email:true,phone:true},orderBy:{name:"asc"},take:1001});
@@ -66,7 +66,7 @@ export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient
       const record=await householdLease(tx,companyId,id);
       const old=await tx.leaseParticipant.findFirst({where:{companyId,createdById:request.principal!.id,submissionKey:key.submissionKey},select:{...select,submissionHash:true}});
       if(old){sameSubmission(old.submissionHash,key.submissionHash);const{submissionHash:_hash,...row}=old;return {replay:row,contact:null};}
-      const selected=contactId?await tx.residentContact.findFirst({where:{id:contactId,companyId,status:"active"}}):legacyUserId?(await linked(tx,companyId,record.propertyId,legacyUserId,true),await linkedResidentContact(tx,companyId,legacyUserId)):null;
+      const selected=contactId?await tx.residentContact.findFirst({where:{id:contactId,companyId,status:"active"}}):legacyUserId?(await linked(tx,companyId,record.propertyId,legacyUserId,true,true),await linkedResidentContact(tx,companyId,legacyUserId)):null;
       if(contactId&&!selected)throw new AccessError(404,"NOT_FOUND","Tenant not found.");
       return {replay:null,contact:selected};
     });
@@ -82,7 +82,7 @@ export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient
       const userId=selected?.userId??legacyUserId;
       if(contactId&&(contactId===record.residentContactId||await tx.leaseParticipant.findFirst({where:{companyId,leaseId:id,contactId},select:{id:true}})))throw new AccessError(409,"HOUSEHOLD_DUPLICATE","This tenant is already recorded. Edit their existing household record.");
       if(userId&&userId===record.residentId)throw new AccessError(409,"HOUSEHOLD_DUPLICATE","This resident is already the lease's primary contact.");
-      if(userId){const member=await tx.companyMembership.findUnique({where:{userId}});if(member)await linked(tx,companyId,record.propertyId,userId,true);if(await tx.leaseParticipant.findFirst({where:{companyId,leaseId:id,userId},select:{id:true}}))throw new AccessError(409,"HOUSEHOLD_DUPLICATE","This resident is already recorded. Edit their existing household record.");}
+      if(userId){const member=await tx.companyMembership.findUnique({where:{userId}});if(member)await linked(tx,companyId,record.propertyId,userId,true,true);if(await tx.leaseParticipant.findFirst({where:{companyId,leaseId:id,userId},select:{id:true}}))throw new AccessError(409,"HOUSEHOLD_DUPLICATE","This resident is already recorded. Edit their existing household record.");}
       if(await tx.leaseParticipant.count({where:{companyId,leaseId:id}})>=200)throw new AccessError(422,"HOUSEHOLD_SCOPE_TOO_LARGE","This lease already has 200 household records. No record was added.");
       const contact=selected??await participantContact(tx,companyId,{userId,...data});
       let accountUserId=userId;
@@ -93,6 +93,16 @@ export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient
         await tx.residentContact.update({where:{id:contact.id},data:{userId:accountId}});
         await audit(tx,request,companyId,contact.id,"resident.account.prepared");
       }else await requireContactAccount(tx,await tx.residentContact.findFirstOrThrow({where:{id:contact.id,companyId}}));
+      if(accountUserId && await tx.companyMembership.findFirst({where:{userId:accountUserId,companyId,role:"resident",status:"active"}})){
+        await linked(tx,companyId,record.propertyId,accountUserId,true,true);
+        // Only the owner's final, audited household transaction connects an
+        // existing active portal account to the lease's property.
+        const assigned=await tx.residentPropertyAssignment.findUnique({where:{propertyId_userId:{propertyId:record.propertyId,userId:accountUserId}}});
+        if(!assigned){
+          await tx.residentPropertyAssignment.create({data:{companyId,propertyId:record.propertyId,userId:accountUserId}});
+          await audit(tx,request,companyId,accountUserId,"resident.assignment.assigned",{propertyId:record.propertyId,source:"lease.participant"});
+        }
+      }
       const row=await tx.leaseParticipant.create({data:{companyId,propertyId:record.propertyId,leaseId:id,userId:accountUserId??contact.userId,contactId:contact.id,...data,createdById:request.principal!.id,...key},select});
       await tx.lease.update({where:{id},data:{version:{increment:1}}});
       await audit(tx,request,companyId,id,"lease.participant.added",{participantId:row.id,role:row.role,userId:row.userId,portalApproved:row.portalApproved,startsOn:row.startsOn.toISOString(),endsOn:row.endsOn?.toISOString()??null});
