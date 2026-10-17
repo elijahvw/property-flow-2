@@ -4,6 +4,7 @@ import fnmatch
 import importlib.util
 import io
 import json
+import re
 from pathlib import Path
 import unittest
 from types import SimpleNamespace
@@ -44,6 +45,20 @@ class FakeGrafana:
 
 
 class MonitoringTests(unittest.TestCase):
+    def test_dashboard_and_alert_metrics_are_scoped_to_property_flow_dev(self):
+        dashboard = json.loads((m.ROOT / "monitoring/propertyflow-dashboard.json").read_text())
+        self.assertEqual(len(dashboard["panels"]), 21)
+        expressions = [target["expr"] for panel in dashboard["panels"]
+                       if panel.get("datasource", {}).get("type") == "prometheus"
+                       for target in panel.get("targets", [])]
+        expressions += [rule["data"][0]["model"]["expr"] for rule in m.alert_rules("fixture")]
+        for expression in expressions:
+            selectors = re.findall(r'propertyflow_[a-z_]+(\{[^}]*\})?', expression)
+            self.assertTrue(selectors)
+            for selector in selectors:
+                self.assertIn('service_name="propertyflow-server"', selector)
+                self.assertIn('deployment_environment="dev"', selector)
+
     def cloud_catalog(self):
         return [
             {

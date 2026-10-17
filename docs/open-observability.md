@@ -64,3 +64,7 @@ References: [Grafana native OTLP ingestion](https://grafana.com/docs/grafana-clo
 ## Queued AWS metrics connection
 
 The user requested a Terraform-managed Grafana CloudWatch connection. Its role, resource tags and separate disabled scrape job are prepared locally; see [configuration and approved activation](grafana-cloudwatch.md). Nothing has been applied. This supersedes the earlier future-work description for the AWS read integration.
+
+## Expanded coverage review — October 17, 2026
+
+The dedicated dashboard now has 21 panels and explicit dev/service metric scopes. Full Faro browser RUM is implemented locally and its Grafana frontend app exists, but browser ingestion awaits an approved application release. This supersedes the original operation-metrics-only browser scope; replay remains off. See [monitoring coverage, actual live evidence and remaining work](monitoring-coverage.md).

@@ -230,6 +230,16 @@ class Grafana:
         return selected
 
 
+def scope_application_metrics(expression):
+    """Only the intended service/environment; never aggregate another stack app."""
+    scope = 'service_name="propertyflow-server",deployment_environment="dev"'
+    return re.sub(
+        r'(propertyflow_[a-z_]+)(\{[^}]*\})?',
+        lambda match: match[1] + '{' + scope + (',' + match[2][1:-1] if match[2] else '') + '}',
+        expression,
+    )
+
+
 def alert_rules(metrics_uid):
     definitions = [
         (
@@ -291,6 +301,7 @@ def alert_rules(metrics_uid):
     ]
     result = []
     for name, title, expression, period, severity in definitions:
+        expression = scope_application_metrics(expression)
         result.append(
             {
                 "uid": "pf-dev-" + name,

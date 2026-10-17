@@ -41,3 +41,12 @@ class ReleasePlanTests(unittest.TestCase):
         request = release.urllib.request.Request("https://api.github.com/artifact", headers={"Authorization": "Bearer private-token"})
         redirected = release.SafeRedirect().redirect_request(request, None, 302, "Found", {}, "https://signed-artifacts.example/blob")
         self.assertIsNone(redirected.get_header("Authorization"))
+
+    def test_snapshot_uses_successful_backend_baseline_and_only_migration_changes(self):
+        for path in ["server/src/rent.ts", "client/src/App.tsx", "infra/terraform/envs/dev/main.tf", "server/prisma/schema.prisma", "scripts/release-snapshot.py"]:
+            self.assertFalse(release.migration_snapshot_required(self.versions,"head",lambda base,head:[path]))
+        def diff(base, head):
+            self.assertEqual(base, self.versions["backend"])
+            return ["server/prisma/migrations/202610160025_proration_transitions/migration.sql"]
+        self.assertTrue(release.migration_snapshot_required(self.versions,"head",diff))
+        self.assertTrue(release.migration_snapshot_required({},"head",lambda *_:None))

@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import argparse
 
 ACCOUNT = "800754316001"
 DATABASE = "propertyflow-dev-db"
@@ -21,17 +22,29 @@ def aws(*arguments):
     return json.loads(result.stdout) if result.stdout.strip() else {}
 
 
-def preserve(call=aws, env=os.environ):
-    if call("sts", "get-caller-identity")["Account"] != ACCOUNT:
-        raise ValueError("Unexpected AWS account.")
+def snapshot_name(env):
     revision, run, attempt = (env.get(key, "") for key in ("GITHUB_SHA", "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT"))
     if not re.fullmatch(r"[a-f0-9]{40}", revision) or not re.fullmatch(r"[0-9]+", run) or not re.fullmatch(r"[0-9]+", attempt):
         raise ValueError("Expected an identified GitHub release run.")
-    snapshot = f"{PREFIX}{revision[:12]}-{run}-{attempt}"
+    return f"{PREFIX}{revision[:12]}-{run}-{attempt}"
+
+
+def start(call=aws, env=os.environ):
+    if call("sts", "get-caller-identity")["Account"] != ACCOUNT:
+        raise ValueError("Unexpected AWS account.")
+    snapshot = snapshot_name(env)
     created = call("rds", "create-db-snapshot", "--db-instance-identifier", DATABASE,
         "--db-snapshot-identifier", snapshot, "--tags", json.dumps([{"Key": k, "Value": v} for k, v in TAGS.items()]))["DBSnapshot"]
     if created["DBSnapshotIdentifier"] != snapshot or created["DBInstanceIdentifier"] != DATABASE:
         raise ValueError("Unexpected snapshot target.")
+    print("Database restore point started; the image can build while RDS prepares it.")
+    return snapshot
+
+
+def verify(call=aws, env=os.environ):
+    if call("sts", "get-caller-identity")["Account"] != ACCOUNT:
+        raise ValueError("Unexpected AWS account.")
+    snapshot = snapshot_name(env)
     call("rds", "wait", "db-snapshot-available", "--db-snapshot-identifier", snapshot)
     rows = call("rds", "describe-db-snapshots", "--db-instance-identifier", DATABASE, "--snapshot-type", "manual")["DBSnapshots"]
     current = next((r for r in rows if r["DBSnapshotIdentifier"] == snapshot), None)
@@ -66,10 +79,18 @@ def preserve(call=aws, env=os.environ):
     return snapshot
 
 
-if __name__ == "__main__":
+def preserve(call=aws, env=os.environ):
+    start(call, env)
+    return verify(call, env)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("action", nargs="?", choices=["start", "verify", "preserve"], default="preserve")
+    action = parser.parse_args().action
     try:
-        preserved = preserve()
-        if os.environ.get("GITHUB_STEP_SUMMARY"):
+        preserved = {"start": start, "verify": verify, "preserve": preserve}[action]()
+        if action != "start" and os.environ.get("GITHUB_STEP_SUMMARY"):
             with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
                 summary.write(f"Pre-migration database restore point: {preserved}. Retain the five latest workflow-owned backups.\n")
     except subprocess.CalledProcessError as error:
@@ -77,3 +98,7 @@ if __name__ == "__main__":
         raise SystemExit("Database restore-point preparation failed; backend rollout must not proceed.")
     except Exception:
         raise SystemExit("Database restore-point preparation failed; backend rollout must not proceed. Check AWS snapshot permissions and status.")
+
+
+if __name__ == "__main__":
+    main()

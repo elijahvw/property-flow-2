@@ -469,6 +469,7 @@ test("renewal review carries forward context, stays a draft and preserves retry 
 }) => {
   const state = await fixture(page);
   await page.goto("/company/leases");
+  await page.getByText("More actions",{exact:true}).first().click();
   await page
     .getByRole("button", { name: "Prepare renewal", exact: true })
     .click();

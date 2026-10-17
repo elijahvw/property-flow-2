@@ -1,6 +1,6 @@
 # Property Flow implementation backlog
 
-Reviewed 2026-10-15 against main `e94fe86`. PF IDs are local planning IDs, not GitHub issue numbers. No open GitHub issues were returned during this review; the existing [roadmap](product-roadmap.md) is the planning source. Every item below is **proposed / not implemented** unless its baseline explicitly identifies existing functionality. [Research](tenantcloud-workflows.md) distinguishes public product evidence from our recommendations.
+Status reconciled October 17, 2026 against main `3a68657` and the current local batch. PF IDs are stable planning IDs, not GitHub issue numbers. The [running feature register](product-roadmap.md#running-feature-register) is authoritative for current status and next scope; this document retains detailed acceptance and historical baselines. PF-01–10 are merged, PF-11/13/18/20/27 are partial, and PF-23/24 are continuous. Historical baseline descriptions below are not claims that delivered functionality is still absent. [Research](tenantcloud-workflows.md) distinguishes public product evidence from our recommendations.
 
 Each item is an epic to split into bounded PRs. Dependencies are prerequisites, not reasons to delay unrelated work. P1 completes core operating jobs; P2 broadens coverage; P3 commercializes/connects providers. PF-23/PF-24 accompany every increment. Use the roadmap's build sequence rather than sorting solely by priority.
 
@@ -297,6 +297,19 @@ Acceptance:
 - Signed deduplicated webhooks, out-of-order replay, failed/returned payments, allocation reversal and bank/provider reconciliation. Submitted is not settled.
 - Owner/tenant see actual fees/status; charge recurrence is separate from consent to automatic payment collection.
 - Sandbox acceptance/reconciliation and reviewed production activation precede real collection. This backlog authorizes no provider account or payment action.
+
+### PF-27 · Monitoring, recovery and release operations — P1, partial
+
+Audience: platform operator and product team. Dependencies: the app's real workflows and separately reviewed infrastructure/provider activation.
+
+Current evidence and remaining work: [monitoring coverage register](monitoring-coverage.md). Backend metrics/logs/traces, the 21-panel dashboard, enabled rules and tested email routing exist. RUM source is locally verified; real deployed sessions, AWS scrape jobs and full recovery acceptance remain open.
+
+Acceptance:
+- Each operating layer has a verified signal, useful scoped view, actionable threshold/runbook and an owner; distinguish application, dependency and telemetry failures.
+- Verify real-session Web Vitals, sanitized views/errors/API timings and browser → API → PostgreSQL correlation. No identity, private form/financial/contact values, tokens, SQL/binds or implicit replay.
+- Add reviewed infrastructure/synthetic/runtime/backup coverage in bounded increments. Explicitly verify failure and recovery; a configured integration or retained snapshot alone is insufficient evidence.
+- Track ingestion/cardinality/retention and current allowance/cost. Do not enable paid streams, high-volume logs or credentials/providers merely to populate empty dashboards.
+- Release checks cover safe additive migration, verified restore point, immutable release identity and post-release role/workflow acceptance. User authorization governs deployment and cloud changes.
 
 ## Definition of ready for the next PR
 

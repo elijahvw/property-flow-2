@@ -1,7 +1,8 @@
+import {formatDate} from "../dates";
 import {CompanyProfile} from "./CompanyProfile";
 import {AccountProfile} from "./AccountProfile";
 import { ContactInvitationReview } from "../components/ContactInvitation";
-import { PropertyAddressFields } from "../components/Address";
+import { Address, PropertyAddressFields } from "../components/Address";
 import { RecordIdentity } from "../components/RecordIdentity";
 import { ResidentLeaseInvitations } from "../components/LeaseInvitations";
 import { LeaseInvitationReview } from "../components/LeaseInvitationReview";
@@ -707,40 +708,107 @@ export function Properties() {
     />
   );
 }
+type PropertyDirectoryRow = {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  propertyType?: string | null;
+};
+type PropertyActivity = {
+  id: string;
+  activeUnits: number;
+  occupiedUnits?: number;
+  draftLeases?: number;
+  openMaintenance?: number;
+};
 function PropertyDirectory() {
   const [propertyKey, setPropertyKey] = useState(() => crypto.randomUUID());
   const [propertySuccess, setPropertySuccess] = useState("");
   const { can } = useAuth();
-  const r = useResource<
-    {
-      id: string;
-      name: string;
-      address: string;
-      city: string;
-      state: string;
-      zip: string;
-    }[]
-  >("/api/company/properties", true, true);
-  const [adding, setAdding] = useState(
-    new URLSearchParams(window.location.search).get("new") === "property",
+  const [params, setParams] = useSearchParams();
+  const r = useResource<PropertyDirectoryRow[]>(
+    "/api/company/properties",
+    true,
+    true,
   );
-  const [propertyQuery, setPropertyQuery] = useState("");
+  const activity = useResource<{ today: string; items: PropertyActivity[] }>(
+    "/api/company/property-directory",
+    true,
+    true,
+  );
+  const [adding, setAdding] = useState(params.get("new") === "property");
   const [managing, setManaging] = useState<{ id: string; name: string } | null>(
     null,
   );
+  const query = params.get("q") || "",
+    view = ["no_units","without_lease","maintenance"].includes(params.get("view")||"")?params.get("view")!:"all";
+  const hasCounts=!!activity.data?.items&&!activity.error;
+  const counts = new Map(hasCounts?activity.data!.items.map(row=>[row.id,row]):[]);
+  const update = (key: string, value: string) => {
+    const next = new URLSearchParams(params);
+    if (value && value !== "all") next.set(key, value);
+    else next.delete(key);
+    setParams(next, { replace: true });
+  };
+  const rows = r.data?.filter((p) => {
+    const count = counts.get(p.id);
+    return (
+      `${p.name} ${p.address} ${p.city} ${p.state} ${p.zip}`
+        .toLowerCase()
+        .includes(query.trim().toLowerCase()) &&
+      (!hasCounts || view === "all" ||
+        (view === "no_units" && count?.activeUnits === 0) ||
+        (view === "without_lease" &&
+          count?.occupiedUnits !== undefined &&
+          count.activeUnits > count.occupiedUnits) ||
+        (view === "maintenance" && !!count?.openMaintenance))
+    );
+  });
+  const total = (key: keyof Omit<PropertyActivity, "id">) => {
+    const items=hasCounts?activity.data?.items:undefined;
+    return items && items.every(p=>p[key]!==undefined) ? items.reduce((sum,p)=>sum+p[key]!,0) : undefined;
+  };
   return (
     <>
-      <header className="page-heading">
-        <p className="eyebrow">Company</p>
-        <h1>Properties</h1>
-        <p>Your company’s property directory.</p>
+      <header className="page-heading page-heading-row">
+        <div>
+          <p className="record-kicker">Workspace / Portfolio</p>
+          <h1>Properties</h1>
+          <p>Your properties, units and day-to-day work in one place.</p>
+        </div>
         {can("property.write") && (
-          <button onClick={() => setAdding((v) => !v)}>
-            {adding ? "Close form" : "Add property"}
-          </button>
+          <button onClick={() => setAdding(true)}>Add property</button>
         )}
       </header>
       <OwnerOnboarding properties={r} onAddProperty={() => setAdding(true)} />
+      {!!r.data?.length && (
+        <div className="portfolio-summary" aria-label="Portfolio summary">
+          <div>
+            <span>Properties</span>
+            <strong>{r.data.length}</strong>
+          </div>
+          <div>
+            <span>Active units</span>
+            <strong>{total("activeUnits") ?? "—"}</strong>
+          </div>
+          {can("lease.manage") && (
+            <div>
+              <span>Units on a current lease</span>
+              <strong>{total("occupiedUnits") ?? "—"}</strong>
+            </div>
+          )}
+          {can("maintenance.manage") && (
+            <div>
+              <span>Open maintenance</span>
+              <strong>{total("openMaintenance") ?? "—"}</strong>
+            </div>
+          )}
+        </div>
+      )}
+      {activity.data?.today&&!!r.data?.length&&<p className="section-caption">Current lease coverage as of {formatDate(activity.data.today)}. Units without a current lease may include future move-ins.</p>}
       {can("property.write") && (
         <EditorDialog
           open={adding}
@@ -769,6 +837,7 @@ function PropertyDirectory() {
               );
               setAdding(false);
               r.reload();
+              activity.reload();
             }}
           >
             <PropertyAddressFields />
@@ -781,69 +850,174 @@ function PropertyDirectory() {
           {propertySuccess}
         </p>
       )}
-      <section className="panel">
+      <section
+        className="panel directory-panel"
+        aria-label="Property directory"
+      >
         <div className="section-heading">
           <h2>Property directory</h2>
-          <span className="badge">{r.data?.length ?? "…"} properties</span>
+          <span className="badge">
+            {r.data
+              ? `${r.data.length} ${r.data.length === 1 ? "property" : "properties"}`
+              : "Loading…"}
+          </span>
         </div>
-        <label className="search-field">
-          Find property
-          <input
-            placeholder="Name, address or city"
-            value={propertyQuery}
-            onChange={(event) => setPropertyQuery(event.target.value)}
-          />
-        </label>
+        <div className="directory-toolbar">
+          <label className="directory-search">
+            Find property
+            <input
+              type="search"
+              placeholder="Name, address, city or postal code"
+              value={query}
+              maxLength={200}
+              onChange={(e) => update("q", e.target.value)}
+            />
+          </label>
+          <label>
+            Property view
+            <select
+              value={view}
+              onChange={(e) => update("view", e.target.value)}
+              disabled={!hasCounts}
+            >
+              <option value="all">All properties</option>
+              <option value="no_units">No active units</option>
+              {can("lease.manage") && (
+                <option value="without_lease">
+                  Units without a current lease
+                </option>
+              )}
+              {can("maintenance.manage") && (
+                <option value="maintenance">Open maintenance</option>
+              )}
+            </select>
+          </label>
+          <span className="directory-count" role="status">
+            {rows ? `${rows.length} shown` : "Loading properties…"}
+          </span>
+        </div>
+        {r.error && <LoadState error={r.error} retry={r.reload} />}
+        {activity.error && (
+          <p className="notice error" role="alert">
+            Activity counts and filters are unavailable. Showing properties matching your search.{" "}
+            <button className="text-button" onClick={activity.reload}>
+              Retry counts
+            </button>
+          </p>
+        )}
         {!r.data ? (
-          <LoadState error={r.error} retry={r.reload} />
-        ) : r.data.length ? (
+          !r.error && <LoadState retry={r.reload} />
+        ) : !rows?.length ? (
+          <div className="empty-state">
+            <h3>
+              {r.data.length ? "No matching properties" : "No properties yet"}
+            </h3>
+            <p>
+              {r.data.length
+                ? "Try a different search or property view."
+                : "Add a property to begin organizing its units, people and work."}
+            </p>
+            {(query || view !== "all") && (
+              <button className="secondary" onClick={() => setParams({})}>
+                Clear filters
+              </button>
+            )}
+          </div>
+        ) : (
           <div className="table-wrap">
-            <table>
+            <table className="core-table property-directory">
               <thead>
                 <tr>
-                  <th>Property</th>
-                  <th>Street address</th>
-                  <th>Location</th>
-                  {can("resident.assignment.manage") && <th>Residents</th>}
+                  <th>Property &amp; address</th>
+                  <th>Units</th>
+                  {can("lease.manage") && <th>Leasing</th>}
+                  {can("maintenance.manage") && <th>Maintenance</th>}
+                  <th>
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {r.data
-                  .filter((p) =>
-                    `${p.name} ${p.address} ${p.city}`
-                      .toLowerCase()
-                      .includes(propertyQuery.trim().toLowerCase()),
-                  )
-                  .map((p) => (
+                {rows.map((p) => {
+                  const count = counts.get(p.id),
+                    root = `/company/properties/${encodeURIComponent(p.id)}`;
+                  return (
                     <tr key={p.id}>
                       <td>
-                        <Link
-                          to={`/company/properties/${encodeURIComponent(p.id)}`}
-                        >
+                        <Link className="table-primary" to={root}>
                           {p.name}
                         </Link>
+                        <Address
+                          street={p.address}
+                          city={p.city}
+                          region={p.state}
+                          postalCode={p.zip}
+                        />
                       </td>
-                      <td>{p.address}</td>
-                      <td>
-                        {p.city}, {p.state} {p.zip}
+                      <td data-label="Units">
+                        <Link to={`${root}/units`}>
+                          {count ? `${count.activeUnits} active` : "View units"}
+                        </Link>
+                        {count?.occupiedUnits !== undefined && (
+                          <span className="cell-detail">
+                            {Math.max(
+                              0,
+                              count.activeUnits - count.occupiedUnits,
+                            )}{" "}
+                            without a current lease
+                          </span>
+                        )}
                       </td>
-                      {can("resident.assignment.manage") && (
-                        <td>
-                          <button
-                            className="secondary"
-                            onClick={() => setManaging(p)}
-                          >
-                            Manage residents
-                          </button>
+                      {can("lease.manage") && (
+                        <td data-label="Leasing">
+                          <Link to={`${root}/leases`}>
+                            {count?.occupiedUnits !== undefined
+                              ? `${count.occupiedUnits} current`
+                              : "View leases"}
+                          </Link>
+                          {!!count?.draftLeases && (
+                            <span className="cell-detail">
+                              {count.draftLeases} draft{" "}
+                              {count.draftLeases === 1 ? "lease" : "leases"}
+                            </span>
+                          )}
                         </td>
                       )}
+                      {can("maintenance.manage") && (
+                        <td data-label="Maintenance">
+                          <Link
+                            className={
+                              count?.openMaintenance ? "work-attention" : ""
+                            }
+                            to={`${root}/maintenance?status=unresolved`}
+                          >
+                            {count?.openMaintenance === undefined
+                              ? "View requests"
+                              : `${count.openMaintenance} open`}
+                          </Link>
+                        </td>
+                      )}
+                      <td>
+                        <div className="row-actions">
+                          <Link className="tenant-row-action" to={root}>
+                            View property →
+                          </Link>
+                          {can("resident.assignment.manage") && (
+                            <button
+                              className="text-button"
+                              onClick={() => setManaging(p)}
+                            >
+                              Manage residents
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
-                  ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        ) : (
-          <p>No properties have been added to your company.</p>
         )}
       </section>
       {managing && can("resident.assignment.manage") && (
@@ -856,6 +1030,7 @@ function PropertyDirectory() {
     </>
   );
 }
+
 export function Team() {
   const { data } = useAuth();
   return (

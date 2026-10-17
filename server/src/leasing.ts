@@ -8,7 +8,7 @@ import { unitDetailKeys, unitDetails, unitDetailSelect } from "./property-fields
 import { companyDay } from "./reports.js";
 import { AccessError } from "./access.js";
 import { assignmentId, opaqueUserId } from "./application.js";
-import { audit, boundedText, cents, choice, conflict, date, input, mutation, page, paging, sameSubmission, scoped, submission, version, type Tx } from "./operational.js";
+import { audit, boundedText, cents, choice, conflict, date, input, mutation, page, sameSubmission, scoped, submission, version, type Tx } from "./operational.js";
 const unitSelect = { ...unitDetailSelect, id: true, propertyId: true, label: true, status: true, version: true } as const;
 const leaseSelect = { ...leasePersonSelect, previousLeaseId:true, previousLease:{select:{id:true,endsOn:true,status:true}}, renewals:{take:1,select:{id:true,status:true,startsOn:true}}, rentDueDay:true, graceDays:true, paymentInstructions:true, id: true, propertyId: true, unitId: true, residentId: true, startsOn: true, endsOn: true, rentCents: true, currency: true, status: true, version: true, unit: { select: { label: true } }, property: { select: { name: true } } } as const;
 async function property(tx: Tx, companyId: string, propertyId: string) {
@@ -56,11 +56,14 @@ export async function activeSlot(tx: Tx, companyId: string, unitId: string, exce
 }
 export function registerLeasing(server: FastifyInstance, db: PrismaClient, authenticate: preValidationHookHandler, origin: string) {
   const auth = { preValidation: authenticate };
-  server.get<{ Params: { propertyId: string }; Querystring: { cursor?: string } }>("/api/company/properties/:propertyId/units", auth, request => {
-    const propertyId = assignmentId(request.params.propertyId), cursor = paging(request.query);
+  server.get<{ Params: { propertyId: string }; Querystring: { cursor?: string; status?: string; q?: string } }>("/api/company/properties/:propertyId/units", auth, request => {
+    const q = request.query;
+    if (Object.keys(q).some(k => !["cursor", "status", "q"].includes(k))) throw new AccessError(400, "INVALID_INPUT", "Unknown unit filter.");
+    if (q.q !== undefined && (typeof q.q !== "string" || q.q.length > 200 || q.q.includes("\0"))) throw new AccessError(400, "INVALID_INPUT", "Search must be at most 200 characters.");
+    const propertyId = assignmentId(request.params.propertyId), cursor = q.cursor === undefined ? undefined : assignmentId(q.cursor), status = q.status === undefined ? undefined : choice(q.status, ["active", "archived"], "unit status"), search = q.q?.trim();
     return scoped(db, request, "property.read", async (tx, companyId) => {
       await property(tx, companyId, propertyId);
-      return page(await tx.unit.findMany({ where: { companyId, propertyId, ...(cursor ? { id: { lt: cursor } } : {}) }, select: unitSelect, take: 51, orderBy: { id: "desc" } }));
+      return page(await tx.unit.findMany({ where: { companyId, propertyId, status, ...(search ? { OR: [{ label: { contains: search, mode: "insensitive" } }, { floor: { contains: search, mode: "insensitive" } }] } : {}), ...(cursor ? { id: { lt: cursor } } : {}) }, select: unitSelect, take: 51, orderBy: { id: "desc" } }));
     });
   });
   server.post<{ Params: { propertyId: string } }>("/api/company/properties/:propertyId/units", auth, request => {
@@ -108,22 +111,27 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
       return row;
     });
   });
-  server.get<{Querystring:{cursor?:string;propertyId?:string;status?:string;attention?:string;approvals?:string}}>("/api/company/leases",auth,request=>{
+  server.get<{Querystring:{cursor?:string;propertyId?:string;unitId?:string;status?:string;attention?:string;approvals?:string;q?:string}}>("/api/company/leases",auth,request=>{
     const q=request.query;
-    if(Object.keys(q).some(k=>!["cursor","propertyId","status","attention","approvals"].includes(k))) throw new AccessError(400,"INVALID_INPUT","Unknown lease filter.");
+    if(Object.keys(q).some(k=>!["cursor","propertyId","unitId","status","attention","approvals","q"].includes(k))) throw new AccessError(400,"INVALID_INPUT","Unknown lease filter.");
+    if(q.q!==undefined&&(typeof q.q!=="string"||q.q.length>200||q.q.includes("\0")))throw new AccessError(400,"INVALID_INPUT","Search must be at most 200 characters.");
+    const search=q.q?.trim();
+    const unitId=q.unitId===undefined?undefined:assignmentId(q.unitId);
     const cursor=q.cursor===undefined?undefined:assignmentId(q.cursor),propertyId=q.propertyId===undefined?undefined:assignmentId(q.propertyId),status=q.status===undefined?undefined:choice(q.status,["draft","active","ended"],"lease status"),attention=q.attention===undefined?undefined:choice(q.attention,["ending_soon","past_end","in_effect"],"lease attention filter");
     if(attention&&status) throw new AccessError(400,"INVALID_INPUT","Choose either status or an attention view.");
     const approvals=q.approvals===undefined?undefined:choice(q.approvals,["pending"],"resident approval filter");
     if(approvals&&(attention||status))throw new AccessError(400,"INVALID_INPUT","Choose resident approvals, status or an attention view.");
     return scoped(db,request,"lease.manage",async(tx,companyId)=>{
       if(propertyId) await property(tx,companyId,propertyId);
+      const selectedUnit = unitId ? await tx.unit.findFirst({where:{id:unitId,companyId,...(propertyId?{propertyId}:{})},select:{id:true,label:true,propertyId:true}}) : null;
+      if(unitId&&!selectedUnit)throw new AccessError(404,"NOT_FOUND","Unit not found in this property.");
       if(approvals&&(await tx.companyMembership.findUniqueOrThrow({where:{userId:request.principal!.id}})).role!=="owner")throw new AccessError(403,"ACCESS_DENIED","Only owners can review all resident approval requests.");
       let dates={};
       if(attention||approvals){
         const company=await tx.company.findUniqueOrThrow({where:{id:companyId},select:{timezone:true}}),today=new Date(companyDay(company.timezone)+"T00:00:00Z"),through=new Date(today);through.setUTCDate(through.getUTCDate()+30);
         dates=approvals?{status:{in:["draft","active"]},OR:[{endsOn:null},{endsOn:{gte:today}}],residentInvitations:{some:{companyId,approvedAt:null,acceptedAt:null,revokedAt:null,expiresAt:{gt:new Date()}}}}:attention==="in_effect"?{status:"active",unit:{status:"active"},startsOn:{lte:today},OR:[{endsOn:null},{endsOn:{gte:today}}]}:{status:"active",unit:{status:"active"},endsOn:attention==="ending_soon"?{gte:today,lte:through}:{lt:today}};
       }
-      return page(await tx.lease.findMany({where:{companyId,...(propertyId?{propertyId}:{}),...(status?{status}:{}),...dates,...(cursor?{id:{lt:cursor}}:{})},select:leaseSelect,take:51,orderBy:{id:"desc"}}).then(async rows=>(await currentLeaseTerms(tx,companyId,rows)).map(row=>({...row,resident:leasePerson(row)}))));
+      return {...page(await tx.lease.findMany({where:{companyId,...(propertyId?{propertyId}:{}),...(unitId?{unitId}:{}),...(status?{status}:{}),...dates,...(search?{AND:[{OR:[{property:{name:{contains:search,mode:"insensitive"}}},{unit:{label:{contains:search,mode:"insensitive"}}},{residentContact:{name:{contains:search,mode:"insensitive"}}},{residentContact:{email:{contains:search,mode:"insensitive"}}},{resident:{name:{contains:search,mode:"insensitive"}}},{resident:{email:{contains:search,mode:"insensitive"}}}]}]}:{}),...(cursor?{id:{lt:cursor}}:{})},select:leaseSelect,take:51,orderBy:{id:"desc"}}).then(async rows=>(await currentLeaseTerms(tx,companyId,rows)).map(row=>({...row,resident:leasePerson(row)})))),...(selectedUnit?{unit:selectedUnit}:{})};
     });
   });
   server.post("/api/company/leases", auth, request => {

@@ -22,3 +22,7 @@ test('empty and invalid dates never normalize into a misleading valid business d
   for(const value of [null,undefined,'','2026-02-29','2026-13-01','2026-00-01','2026-02-30','not-a-date'])assert.equal(formatDate(value),'—');
   assert.equal(formatDate(null,'Open ended'),'Open ended');
 });
+
+test('activity timestamps display the viewer calendar day instead of slicing UTC',()=>{
+ const prior=process.env.TZ;try{process.env.TZ='America/New_York';assert.equal(mod.exports.formatActivityDate('2026-10-17T02:30:00Z'),'October 16, 2026');assert.equal(formatDate('2026-10-17'),'October 17, 2026');assert.equal(mod.exports.formatActivityDate('invalid'),'—');}finally{if(prior===undefined)delete process.env.TZ;else process.env.TZ=prior;}
+});

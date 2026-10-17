@@ -65,6 +65,9 @@ model User {
   identities Identity[]
   maintenanceRequests MaintenanceRequest[]
   leases Lease[] @relation("LeaseResident")
+  createdMaintenanceUpdates MaintenanceUpdate[]
+  createdMaintenanceCosts MaintenanceCost[] @relation("MaintenanceCostCreator")
+  unlinkedMaintenanceCosts MaintenanceCost[] @relation("MaintenanceCostUnlinker")
   residentContacts ResidentContact[] @relation("ContactAccount")
   createdResidentContacts ResidentContact[] @relation("ContactCreator")
   leaseParticipants LeaseParticipant[]
@@ -223,6 +226,8 @@ model ResidentPropertyAssignment {
 }
 
 model MaintenanceRequest {
+  costs MaintenanceCost[]
+  updates MaintenanceUpdate[]
   submissionKey String?
   submissionHash String?
   @@unique([companyId, requesterId, submissionKey])
@@ -230,6 +235,11 @@ model MaintenanceRequest {
   companyId String
   propertyId String
   requesterId String
+  unitId String?
+  category String @default("other")
+  targetOn DateTime? @db.Date
+  version Int @default(1)
+  unit Unit? @relation(fields: [unitId, propertyId, companyId], references: [id, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict, map: "maintenance_unit_scope")
   title String
   description String
   priority String @default("normal")
@@ -241,6 +251,48 @@ model MaintenanceRequest {
   requester User @relation(fields: [requesterId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   @@index([companyId, status, propertyId])
   @@index([companyId, requesterId])
+  @@index([companyId, unitId], map: "maintenance_unit_lookup")
+  @@unique([id, companyId])
+  @@unique([id, propertyId, companyId])
+}
+
+model MaintenanceCost {
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  requestId String
+  entryId String
+  createdById String
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  version Int @default(1)
+  unlinkedAt DateTime?
+  unlinkedById String?
+  unlinkReason String?
+  request MaintenanceRequest @relation(fields: [requestId, propertyId, companyId], references: [id, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
+  entry LedgerEntry @relation(fields: [entryId, propertyId, companyId], references: [id, propertyId, companyId], onDelete: Restrict, onUpdate: Restrict)
+  creator User @relation("MaintenanceCostCreator", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  unlinker User? @relation("MaintenanceCostUnlinker", fields: [unlinkedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([companyId, createdById, submissionKey])
+  @@index([companyId, requestId, id])
+  @@index([companyId, entryId])
+}
+
+model MaintenanceUpdate {
+  id String @id @default(cuid())
+  companyId String
+  requestId String
+  content String
+  visibility String @default("internal")
+  createdById String
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  request MaintenanceRequest @relation(fields: [requestId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Restrict)
+  creator User @relation(fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([companyId, createdById, submissionKey])
+  @@index([companyId, requestId, createdAt, id])
 }
 
 model Unit {
@@ -265,6 +317,7 @@ model Unit {
   updatedAt DateTime @updatedAt
   company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   property Property @relation(fields: [propertyId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Restrict)
+  maintenanceRequests MaintenanceRequest[]
   leases Lease[]
   @@unique([id, propertyId, companyId])
   @@unique([companyId, propertyId, label])
@@ -394,6 +447,8 @@ model LeaseParticipant {
 }
 
 model LedgerEntry {
+ maintenanceCosts MaintenanceCost[]
+ @@unique([id, propertyId, companyId])
  movementId String? @unique
  movement LeaseMovement? @relation("MovementCash", fields:[movementId,propertyId,companyId],references:[id,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
  refundMovements LeaseMovement[] @relation("RefundSource")

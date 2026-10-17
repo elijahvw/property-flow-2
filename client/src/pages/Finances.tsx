@@ -16,6 +16,7 @@ import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "./Workspace";
 type Entry = {
+  maintenanceCosts?: { requestId: string }[];
   movementId?:string|null; movement?:{id:string;leaseId:string;reference:string;kind:string}|null;
   reference?: string;
   depositReceiptId?: string | null;
@@ -71,10 +72,12 @@ export function Finances() {
 }
 function LedgerWorkspace() {
   const [params, setParams, pathPropertyId] = usePropertySearchParams();
-  const [adding, setAdding] = useState(params.get("new") === "transaction"),
+  const maintenanceReturn = params.get("maintenanceReturn") || "",
+    entryId = params.get("entryId") || "";
+  const [adding, setAdding] = useState(["transaction", "expense"].includes(params.get("new") || "")),
     [selected, setSelected] = useState<Entry | null>(null);
   const [key, setKey] = useState(() => crypto.randomUUID()),
-    [kind, setKind] = useState("income"),
+    [kind, setKind] = useState(params.get("new") === "expense" ? "expense" : "income"),
     [filters, setFilters] = useState({
       propertyId: params.get("propertyId") || "",
       dateFrom: params.get("dateFrom") || "",
@@ -85,6 +88,7 @@ function LedgerWorkspace() {
     params.get("propertyId") || "",
     params.get("dateFrom") || "",
     params.get("dateTo") || "",
+    entryId,
   ]);
   useEffect(() => {
     const [propertyId, dateFrom, dateTo] = JSON.parse(routeFilter);
@@ -96,7 +100,7 @@ function LedgerWorkspace() {
     "/api/company/properties",
   );
   const query = new URLSearchParams(
-    Object.entries({ ...filters, cursor }).filter(([, v]) => v),
+    Object.entries({ ...filters, entryId, cursor }).filter(([, v]) => v),
   );
   const r = useResource<Ledger>(`/api/company/finances?${query}`);
   const reload = () => {
@@ -107,6 +111,7 @@ function LedgerWorkspace() {
     <>
       {filters.propertyId && <PropertyNavigation id={filters.propertyId} />}
       <header className="page-heading">
+        {maintenanceReturn && <p><Link to={`/company/maintenance/${encodeURIComponent(maintenanceReturn)}?${new URLSearchParams({ propertyId: filters.propertyId, ...(pathPropertyId ? { nested: "true" } : {}) })}`}>← Back to maintenance request</Link></p>}
         <p className="eyebrow">Company operations</p>
         <h1>Manual finances</h1>
         <p>
@@ -124,6 +129,7 @@ function LedgerWorkspace() {
           Transfers are not supported.
         </p>
         <button onClick={() => setAdding(true)}>Record a transaction</button>
+        {entryId && <p className="notice">Showing the selected transaction. <button className="text-button" onClick={() => { const next = new URLSearchParams(params); next.delete("entryId"); setParams(next); setCursor(""); }}>Show all transactions</button></p>}
       </header>
       <EditorDialog
         open={adding}
@@ -141,7 +147,7 @@ function LedgerWorkspace() {
             secondaryActions={
               <DraftReset
                 reset={() => {
-                  setKind("income");
+                  setKind(params.get("new") === "expense" ? "expense" : "income");
                   setKey(crypto.randomUUID());
                 }}
               />
@@ -165,6 +171,7 @@ function LedgerWorkspace() {
               setKey(crypto.randomUUID());
               setParams({
                 propertyId: pathPropertyId || String(form.get("propertyId")),
+                ...(maintenanceReturn ? { maintenanceReturn } : {}),
               });
             }}
           >
@@ -245,7 +252,7 @@ function LedgerWorkspace() {
               dateTo: String(form.get("dateTo") || ""),
             };
             setFilters(next);
-            setParams(next);
+            setParams({ ...next, ...(maintenanceReturn ? { maintenanceReturn } : {}) });
             setCursor("");
           }}
         >
@@ -360,6 +367,7 @@ function LedgerWorkspace() {
                       </p>
                     )}
                     {entry.memo && <p>{entry.memo}</p>}
+                    {entry.maintenanceCosts?.map(cost => <p key={cost.requestId}><Link to={`/company/maintenance/${encodeURIComponent(cost.requestId)}?${new URLSearchParams({ propertyId: entry.propertyId, nested: "true" })}`}>Linked maintenance request →</Link></p>)}
                     <RecordIdentity
                       id={entry.id}
                       reference={entry.reference}

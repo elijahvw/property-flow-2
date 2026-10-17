@@ -1,99 +1,112 @@
-# Property Flow product roadmap
+# Property Flow product roadmap and feature register
 
-Updated 2026-10-16. Repository baseline: main `b539516` (merged/deployed PR #37, confirmed by the user). This replaces the build order in historical handoffs. The [implementation backlog](product-backlog.md) contains dependencies and acceptance criteria; [workflow research](tenantcloud-workflows.md) records sources and limits.
+Updated October 17, 2026. Main baseline: `3a68657` (PRs #38–39 merged). This is the running list of product and operating capabilities, their remaining scope and the next complete user jobs. [Detailed acceptance backlog](product-backlog.md) · [Monitoring coverage](monitoring-coverage.md) · [Release and preview evidence](dev-release-performance.md).
 
 ## Product direction
 
-Build a complete daily operating product for owners managing their own portfolios. Managers and staff work in the same company workspace with appropriate authority; tenants receive connected self-service. The platform owner administers customer companies, access and eventually subscriptions. Platform authority alone must not grant access to customer operating records.
+Make daily property management easier through connected records, rich operational detail and dependable actions. Owners manage their portfolios; managers coordinate work; staff act only within granted authority; residents receive useful self-service. Platform administration stays separate from customer operating access.
 
-Competitive coverage is the long-term target across leasing, balances/accounting, maintenance, documents, communications and vacancy management. A navigation entry does not establish parity: users must be able to finish the underlying job. Use original interface, copy and implementation. TenantCloud's investor-owner portal serves a different customer model from our platform-owner console.
+Build complete workflows from real sources: property → unit → tenant/household → lease → balances/deposits → maintenance → evidence/history. Show the right next action from actual state, preserve context across detail links, and make corrections/recovery explicit. Rich data means useful source drilldowns, accurate complete totals and trustworthy history, not crowded screens or fabricated counters.
 
-Keep the main application ahead of subscription commercialization. Stripe, both subscription collection and tenant rent collection, remains last. Domain setup remains on hold. This review does not establish plan names, prices or delivery dates.
+Keep the UI clean: readable labels and dates, grouped forms, focused reviews, accessible mobile/keyboard use and progressive detail. Do not add decorative dashboards, empty navigation, nonfunctional controls, unsupported integrations or dummy features. Clearly labeled fictional preview fixtures never establish production readiness.
+
+Stripe subscriptions and tenant collection remain last. Domain setup is on hold. No plan names, prices, provider activations, delivery dates or parity percentages are established here.
+
+## Status and maintenance rules
+
+PF IDs are stable planning IDs, not GitHub issues. Preserve completed items; split remaining scope under the same ID unless the user outcome is genuinely new. New requests, refinements and discovered gaps go into this register and the linked acceptance item in the same PR.
+
+- **Planned:** defined outcome; implementation has not started.
+- **Partial:** usable parts exist; the entry names what remains.
+- **Local / PR:** implemented and locally checked; not yet on main. Add the PR when created.
+- **Merged:** on main; deployment and user acceptance remain separately evidenced.
+- **Deployed:** record the verified release/environment. This does not prove every workflow is accepted.
+- **Accepted:** record the user's real workflow/role acceptance and any remaining limitations. Unknown stays unverified.
+- **Continuous:** a standard applied and checked in each relevant increment, not an epic to declare permanently finished.
+
+A status changes only with evidence. Passing CI does not authorize merging, deploying or provider activation. The user handles merge and deployment unless explicitly delegated. Record the exact head/release, meaningful checks, migrations and activation prerequisites; do not repeatedly rerun unrelated checks without a reason.
+
+## Current position
+
+PF-01–10 and the first shared-household portion of PF-11 are implemented on main. The live backend dashboard identified release `3a68657` on October 17; real owner/manager/resident acceptance is still outstanding. Source identity, tenancy permissions, immutable financial history and reviewed transitions remain the foundation.
+
+The current local batch extends directories and maintenance operations, with additive migrations 026–028. It includes safe RUM source and monitoring/release improvements. Existing preview data and prior edits are retained. Nothing in this status authorizes an application deployment or Terraform apply.
+
+Grafana's existing dashboard now has 21 panels; all eight existing app alert rules are enabled and evaluated Normal. The user-selected email test succeeded and notification routing targets Property Flow dev. The RUM app exists, but deployed browser ingestion, infrastructure scraping, synthetic journeys and incident/recovery acceptance remain open. See PF-27 and the coverage register.
 
 ## Implemented baseline
 
-These capabilities exist on main and must not be rebuilt as future promises:
+- Identity and administration: Auth0 cookie/CSRF sessions, platform company/user administration, explicit company membership/roles, separate Team and Tenants, invitations, company details and personal profiles with revocation boundaries.
+- Inventory and context: company Overview, property workspaces, real property/unit records, resident/contact assignments, emergency contacts, private management notes and active/archive history.
+- Manual operating money: recurring rent and explicit posting recovery, manual receipts/allocations, balances/unapplied credit, due/grace/past-due/paid-late states, deposit requirements/receipts/corrections, paid income/expense and source-linked reports/CSV.
+- Resident service: authorized lease/household views, statements/balances/deposits, request submission/status and personal profile editing; richer additions and unfinished scope appear below.
 
-- Platform company/user administration, identity discovery/invitations, membership/role enforcement, separate Team and Tenants audiences.
-- Properties, unit details, resident assignments and contact/emergency/private-note profiles; company Overview and persistent property workspaces.
-- Reviewed draft/active/ended leases, linked renewal drafts, due day/grace/payment instructions and current lease-register reporting.
-- Immutable rent charges, manual receipts/allocations, balances, unapplied receipt credit, past-due aging, paid-late history, recurring schedules and explicit posting recovery.
-- Refundable deposit requirements/revisions, manual receipts, recorded held/uncollected/excess balances, correction history, resident visibility and linked cash sources.
-- Manual paid income/expense, cash reports/CSV and tenant maintenance submission with priority, management status updates and durable retry.
-- CI installation improvements and ECS/Grafana monitoring. Monitoring is an operational concern, not the next feature project.
+## Running feature register
 
-PRs #29–32 are merged through `e94fe86`; [PR #32](https://github.com/elijahvw/property-flow-2/pull/32) records cleanup recovery. The previous session verified app release `36286ad`, hosted metrics/logs/traces and approved Datadog cleanup. The original [deployment run](https://github.com/elijahvw/property-flow-2/actions/runs/38815801266) still records a failure from its first cleanup attempt; recovery does not rewrite that result. This review did not redeploy or repeat live acceptance. Grafana rules were provisioned initially paused; active notifications are not established here.
+### Connected portfolio, people and leasing
 
-Implemented does not mean user-accepted. Real owner/manager/resident acceptance remains required after deployment. Recorded deposits do not prove bank reconciliation; current reports are not historical as-of accounting. Existing unapplied payment credit is not a general concession, credit-note or refund capability.
+- **PF-01 · Tenant workspace — Merged (#33).** Connected contact, lease and separate rent/credit/deposit history with exact source links and return context. Local directory refinements preserve property/relationship filters. Remaining: real-account acceptance and ongoing edge-case/detail improvements. [Contract](tenant-workspace.md).
+- **PF-02 · Lease workspace — Merged (#34).** Exact lease destination with parties/unit/terms, finance and renewal links. Remaining: real-account acceptance; documents and communication join their source features when available. [Contract](lease-workflow.md).
+- **PF-03 · Offline contacts and optional portal access — Merged (through #36).** Record tenants/leases/manual money without a login; optional verified invitation links the intended profile. Contact migration preserves source identities. Remaining: acceptance of offline → invite → verified linking/revocation, and separately reviewed duplicate resolution. [Contract](resident-contacts.md).
+- **PF-08 · Future-effective terms — Merged (#38).** Reviewed before/after installments, immutable change/cancellation history and billing integration. Remaining: acceptance across due/grace boundaries and conflicting transitions. [Contract](future-lease-terms.md).
+- **PF-09 · Proration — Merged (#38).** Exact calendar-day partial rent, reviewed overrides and retained calculations. Remaining: real partial-month/renewal acceptance. [Contract](proration-renewal-transitions.md).
+- **PF-10 · Ending and renewal handoff — Merged (#38).** Explicit end planning, ending/renewal/billing transitions and debt preservation. Remaining: end-to-end owner/resident acceptance, then links to future inspection/document tasks. [Contract](proration-renewal-transitions.md).
+- **PF-11 · Household participation and liability — Partial.** Multiple residents, shared obligation, explicit participant access and owner-approved additions are implemented. Remaining: separately defined allocated liability, guarantor/dependent models and their financial/access consequences. Rent must never multiply by participant count. [Household scope](lease-workflow.md).
+- **PF-23a · Portfolio and directory overhaul — Local / PR.** Completed setup prompts disappear; counts derive from scoped records/business dates. Search/filter before pagination, useful property/unit/tenant/lease detail, exact unit history and return context. Remaining: merge/deploy and acceptance of empty/active/archived portfolios and role boundaries. No new unit-directory migration. [Evidence](dev-release-performance.md#core-unit-directory-continuation-2026-10-16).
 
-## Build order
+### Money, collections and portfolio understanding
 
-### 1. Connected tenant and lease work
+- **PF-04 · Statements and collections detail — Merged (#37).** Connected statement activity/CSV with traceable sources and distinct rent, cash credit and deposits. Existing recurring charges, manual receipts/allocations, aging and posting recovery remain. Remaining: real-account statement/export acceptance. [Contract](tenant-statements.md).
+- **PF-05 · Non-rent charges and noncash credits — Merged (#38).** Reviewed one-time charges, targeted credits and linked reversals. Remaining: real-account acceptance and explicitly scoped future financial refinements. Unapplied cash credit is not a concession. [Contract](lease-charges-credits.md).
+- **PF-06 · Deposit applications and actual refunds — Merged (#38).** Source-linked deposit application, manual cash refunds and immutable correction history. Remaining: acceptance of partial/refunded/voided cases. Recorded money is not bank reconciliation. [Contract](deposit-applications-refunds.md).
+- **PF-07 · Itemized move-out settlement — Merged (#38).** Guided review, versioned snapshots, applications, pause/reopen/correction history and explicit refund/end follow-up. Remaining: real-account completion acceptance; inspection/evidence links depend on PF-15/16. [Contract](move-out-settlements.md).
+- **PF-20 · Historical reports and accounting depth — Partial.** Cash reports/CSV, lease register, balances/aging and source drilldowns exist. Remaining: defined as-of accounting/event history, reconciled portfolio statements and useful comparisons with complete filter totals. Investor distributions/trust accounting are deferred.
+- **PF-25 · Imports, reconciliation and integrations — Planned.** Start with validated CSV preview/mapping, durable source identity, opening-balance meaning, commit summary and reconciliation. Provider sync, bank feeds, screening and external calendars require separate ownership/consent/retry contracts; no inactive connected switches.
 
-Deliver **PF-01 → PF-02**, then **PF-03**: true tenant/lease detail destinations, shared property/unit/tenant context, and offline contacts with optional verified portal access. A landlord should be able to record an existing tenant/lease before inviting them to log in.
+### Maintenance, delegation and daily operations
 
-Include PF-23 navigation/accessibility work. Preserve existing financial source IDs, authorization and audit history during contact migration. The user subsequently requested multiple residents per lease, resident-initiated invitations, owner approval for every addition, and connected onboarding/renewal workflows. Bring the initial shared-household portion of PF-11 into PF-02 under that explicit direction; emergency contacts remain separate. See [lease workflow scope](lease-workflow.md). Do not repeat the property workspace already implemented or spend this phase on a new visual theme.
+- **PF-12 · Team capabilities and property scope — Planned, next product slice.** Preserve current owner/manager behavior and staff read-only defaults. Next complete job: owner grants reviewed property/work permissions; the assigned teammate executes only authorized work; immediate revocation closes stale actions. Enforce list/detail/write/search/export boundaries and keep finance/team administration distinct. [Acceptance](product-backlog.md).
+- **PF-13 · Work orders, vendors and costs — Partial; current increments Local / PR.** Existing resident requests/status/retry remain. Migration 026 adds management intake/detail, optional unit/category/target date and versioned audit; 027 adds private versus requester-visible immutable updates; 028 links existing paid expenses with retained correction/source history. Remaining: vendor contact records, assignment/acceptance, completion review/reopen authority and useful due/assignee filters. Attachments depend on PF-15. Estimates/payables/splitting and resident-authored comments are not delivered. [Updates](maintenance-updates.md) · [Costs](maintenance-costs.md).
+- **PF-14 · Preventive work and task calendar — Planned.** Next complete job: create recurring source-linked tasks, assign/schedule, handle missed occurrences and complete with history. Calendar/list share scope, dates and overdue definitions. Recurrence uses explicit timezone and durable occurrence IDs. Begin internally before external sync.
 
-### 2. Financial understanding and completion
+### Documents, condition evidence and resident service
 
-Deliver **PF-04 → PF-05 → PF-06 → PF-07**: tenant statements, non-rent charges/noncash adjustments, manual refunds/deposit applications and itemized move-out settlement. Update management, tenant views and reports in each money increment.
+- **PF-15 · Private documents and attachments — Planned foundation.** Private storage, source associations, versions, explicit sharing, revocation and auditable retrieval. Next complete job: upload a real lease/work-order document, find its current version and share only with authorized recipients. Never use the public frontend bucket.
+- **PF-16 · Move-in/out inspections — Planned.** Structured condition records, evidence, reviewed completion and comparison with source-linked settlement follow-up. Depends on PF-15; preserve original evidence and separate observation from a reviewed financial charge.
+- **PF-17 · Agreements/signatures — Planned.** Draft/version/review/send/sign/decline/expire/cancel with an immutable signed result and audit trail. Provider activation is separate; signature status must reflect actual provider evidence.
+- **PF-18 · Resident home and self-service — Partial.** Authorized lease, rent, deposits, statements, maintenance and personal profile flows exist. Remaining: one coherent action-oriented home, clear household/access state and connected next steps from real records. Residents never edit their own role, assignment or lease authority.
+- **PF-19 · Messages, notifications and reminders — Planned.** Durable in-app notifications and source-linked conversations first; explicit audience, unread/delivery state, retry and privacy. External email/SMS delivery is separately activated and monitored. Sending is not receipt; no pretend inbox or delivery success.
+- **PF-21 · Vacancy, prospects and applications — Planned.** Actual availability → prospect → application → reviewed approval → tenant/lease conversion without duplicate contacts. Preserve consent and source history. Screening/syndication follow explicit provider contracts; a unit without a current lease is not automatically physically vacant.
 
-Keep due, within-grace, past-grace, unpaid and paid-late distinct. Separate rent owed, cash credit, refundable deposits and operating income. Correction voids are never represented as money returned. Manual operation must work without a bank/payment connection.
+### Platform, experience, performance and reliability
 
-### 3. Lease changes and renewals
+- **PF-22 · Company plans, usage and subscriptions — Planned.** Existing platform company/user administration remains. Add manual platform grants and server-enforced implemented entitlements first, with company-owner visibility and audited overrides. No invented limits or advertised unimplemented features.
+- **PF-23 · UI and workflow acceptance — Continuous.** Clean, accessible responsive pages; grouped forms, preserved drafts, useful errors/loading/empty states, keyboard focus, exact source links and return context. Keep secondary/archive actions unobtrusive. Every feature must complete a real operating job across its applicable roles.
+- **PF-24 · Capacity and responsiveness — Continuous.** Measure request/render/query latency and duplicate work before changing architecture. Use bounded server pagination/search, appropriate indexes and complete scoped totals. Track bundle size, list/detail responsiveness and representative portfolio scale. Keep meaningful CI checks; reuse valid evidence and avoid broad speculative rewrites.
+- **PF-26 · Payment collection — Planned, last.** SaaS subscriptions and tenant rent/deposit collection are independent scopes. Model methods/consent/fees, settlement, returns/refunds/disputes, signed deduplicated webhooks and reconciliation before activation. Submitted is not settled. Manual operations must remain usable without payment connectivity.
+- **PF-27 · Monitoring, recovery and release operations — Partial; current source Local / PR.** Backend metrics/logs/traces, 21-panel Grafana dashboard, eight enabled alerts and tested email routing are established. Safe Faro RUM source and browser → API correlation are locally verified. Remaining: approved release/activation and real-session ingestion, AWS ECS/ALB/RDS then CloudFront/storage coverage, synthetic journeys, runtime/pool pressure, backup/restore drills, telemetry health/cost and incident/recovery acceptance. [Coverage and evidence](monitoring-coverage.md).
 
-Deliver **PF-08 → PF-09 → PF-10**: future-effective terms, reviewed proration and explicit end/renewal/billing transitions. PF-08 can begin after the connected lease page without waiting for the entire financial phase. Preserve charge snapshots and posted money. Renewal drafts never silently start billing; lease ending never erases debt.
+## Build order and next complete increments
 
-Complete **PF-11** after PF-03/PF-05 contracts settle. Its initial shared-household/approval workflow accompanies PF-02 at the user's request. Begin with one shared obligation and explicit participant access. Separately allocated liability is an additional increment; rent never multiplies by the number of participants.
+1. **Finish current release/acceptance:** review this core/maintenance/RUM batch, retain restore points, merge/deploy under user control, verify actual role workflows and RUM ingestion. Preserve preview data; no automatic release from this task.
+2. **Close monitoring gaps (PF-27):** each increment delivers one verified signal → useful view → actionable alert/runbook → controlled recovery check. AWS read-role/Terraform changes and provider activation require their own reviewed scope.
+3. **Delegated maintenance (PF-12 + remaining PF-13):** capability/property scope → real vendor contacts → assignment/acceptance → progress → reviewed completion/reopen → existing paid-cost source. Staff authority must be explicitly introduced and tested, not inferred from assignment.
+4. **Preventive operations (PF-14), then private evidence (PF-15/16/17):** connected tasks/calendar, documents and inspections; signatures follow once ordinary document work is dependable.
+5. **Resident communication and portfolio depth (PF-18/19/20/21):** connect existing self-service, durable messages/notifications, as-of reports and vacancy/application conversion. Preserve financial events now instead of reconstructing history later.
+6. **Commercialization/integration (PF-22/25/26):** manual entitlements, validated imports/reconciliation, then subscription collection and tenant payments last. PF-23/24 accompany every slice.
 
-### 4. Maintenance operations and delegated work
-
-Deliver **PF-12 → PF-13 → PF-14**: scoped team authority, work-order details/assignment/vendor contacts, and preventive work/source-linked tasks/calendar. Managers coordinate work; staff receive explicit property/work-order permissions. Include manager-created requests for offline tenants, private versus tenant-visible updates, target dates, completion review and linked costs.
-
-PF-12/PF-13 are an independent operating slice after connected navigation; they need not wait for every lease feature. Attachments require PF-15. Vendor contact records do not require a vendor login.
-
-### 5. Private documents and condition evidence
-
-Deliver **PF-15 → PF-16**, then **PF-17**: private documents/versioning/sharing, inspections and agreement/signature lifecycle. Connect evidence to leases, work orders and settlement. Use private storage, never the public frontend bucket.
-
-PF-07 initially supports reviewed manual settlement references and connects inspection evidence when available. Storage provisioning/signature-provider activation need reviewed implementation scopes; e-signatures must not delay every financial improvement.
-
-### 6. Connected resident service and portfolio depth
-
-Deliver **PF-18 → PF-19**: coherent tenant home and durable in-app communication/notifications, followed by separately activated external delivery. Tenant improvements to balances/lease/maintenance ship with their source features before this phase; this phase connects them.
-
-Deliver **PF-20** deeper reports/as-of history and **PF-21** vacancy → prospect → application → approved tenant conversion. Capture financial events needed for history in PF-05/PF-06/PF-08 rather than reconstructing them later. Screening and syndication follow explicit provider contracts.
-
-### 7. Platform commercialization and integrations
-
-Deliver **PF-22** company subscription lifecycle and server-enforced implemented entitlements, using manual platform grants first. Company owners see their own plan/usage; platform owners administer assignments/overrides. Managers/staff/tenants do not inherit subscription authority.
-
-Deliver **PF-25** imports/reconciliation/integration contracts, then **PF-26** subscription collection followed by tenant payments. Both payment scopes require independent review. Fees, settlements, refunds, disputes, webhooks and reconciliation belong with collection. PF-24 performance work accompanies every phase.
-
-## First reviewable increments
-
-1. **PF-01, merged in #33:** tenant detail route, linked leases/balances and return navigation, using existing data. Includes the requested shared form/date/UI improvements; see [scope](tenant-workspace.md).
-2. **PF-02, merged in #34:** exact lease workspace and working links to rent/deposits/terms/renewal, using existing data.
-3. **PF-03a, merged/deployed:** contact identity/backfill with compatibility. **PF-03b, merged/deployed in #36:** offline contact/directory/lease forms, connected optional invitations and verified linking, plus the requested form/address UI audit; see [contract and rollout](resident-contacts.md). The user explicitly brought invitation linking into this slice. Existing identity and financial source IDs remain intact.
-4. **PF-04, merged/deployed in #37:** connected lease statements and traceable CSV from existing charges/receipts/allocations with separate credit/deposit summaries. Includes readable date filters, grouped postal addresses, mobile activity rows and complete print/export; see [statement contract](tenant-statements.md).
-5. **PF-05, implemented locally for review:** reviewed one-time non-rent charges, targeted noncash credits and linked reversals; tenant property/unit context and archive discovery; see [contract](lease-charges-credits.md). **PF-06 is also implemented locally for review:** deposit applications, actual manual deposit/payment refunds and immutable corrections; see [accounting and workflow contract](deposit-applications-refunds.md). Both remain undeployed.
-6. **PF-07, implemented locally for review:** guided itemized move-out review, versioned public financial snapshots, supported deposit applications, reviewed billing pause, reopen/correction history and explicit refund/lease-end follow-up; see [settlement contract](move-out-settlements.md). This batch also adds role-aware personal profiles, fuller sectioned company details and an authoritative permissions guide; see [profile and access scope](account-company-profiles.md). Resident profile editing cannot change unit, property, lease or access. All remain local and undeployed.
-7. **PF-08, implemented locally for review:** future-month lease payment terms with before/after installment preview, immutable changes/cancellations, worker/manual posting integration and current-term views. Includes a concise lease overview that only prompts for actual draft/approval work and compact detail-only tenant archive/restore; see [contract and validation](future-lease-terms.md). Local and undeployed.
-8. **PF-09 and PF-10, implemented together locally for review:** exact calendar-day partial rent with accepted overrides/history, plus reviewed end-date planning and atomic lease-ending/renewal/billing transitions. The simplified confirmation lists charges once and collapses calculation details; see [workflow and accounting contract](proration-renewal-transitions.md). Local and undeployed.
-
-If the contact migration needs longer review, PF-12/PF-13 provide the next independent feature slice. Keep one active implementation increment unless the user requests parallel work. Group UI improvements and optimizations requested during a feature increment with that feature, as the user authorized. Keep the resulting PR coherent and its validation proportional to the combined changes.
-
-## Local-first release batching
-
-The user requested an open local preview and continued feature/UI work without a deployment per feature. Validate each increment locally, preserve the reviewable batch, and wait for explicit user direction before a cloud deployment. Preview: `http://127.0.0.1:5090`; see [local workflow](dev-release-performance.md). Grafana AWS Terraform is prepared separately and has not been applied.
+A new request can reprioritize this order. Keep one bounded active implementation increment unless the user asks otherwise. Include related UI/performance work the user requests, without turning it into speculative feature expansion.
 
 ## Shared product and release requirements
 
-- The backlog is proposed work, not approval to merge/deploy, change shared data or activate providers.
-- Ship one complete job per increment, including relevant owner/tenant/manager/staff experiences. Staff-specific capabilities are assignment/scope/permissions, not a duplicate product.
-- Preserve current company/role/revocation checks, forced RLS, exact-cent money, immutable source history, durable retries, atomic audit and concurrency controls. Enforce permissions on APIs and direct URLs, not only buttons.
-- Preserve property context, names/readable references, focused forms, clear review, recoverable drafts, accessible mobile layouts and truthful loading/error/success states. Totals cover complete filters, not visible pages.
-- Reuse existing sources/components. Measure slow requests and duplicate loads before caching or rewriting. Keep required CI/database/browser checks; meaningful regressions protect changed boundaries.
-- Inspect every PR comment/review/thread and exact-head CI before requesting merge approval. The user approves merges and deploys manually. This documentation change needs no deployment.
+Fresh server-side authority, explicit company/property scope and forced RLS apply to every data path. Preserve financial source IDs, posted snapshots, exact-cent money and immutable audits; consequential changes use version checks, durable retries and atomic recording. Platform authority never bypasses customer access.
 
-Defer investor distributions/trust accounting, separate investor portal, vendor marketplace, speculative AI, native mobile applications and broad cosmetic redesign until core operating jobs are accepted. Responsive web is required throughout.
+Acceptance must cover the complete job, source/detail/history, correct filtered totals, correction/recovery, role revocation, competing writes/retries and relevant mobile/keyboard paths. Include observability without private form/contact/financial data. An exposed button is not a feature; a test-only fixture is not production data.
+
+For each PR update the relevant register entry and detailed acceptance, link evidence and state unfinished work. Record migrations, prerequisites/activation variables and material risks. Review exact-head CI and all review threads before recommending merge. Passing tests never grant merge/deployment permission.
+
+## Local-first release batching
+
+The local preview remains `http://127.0.0.1:5090`; [checkpoint/restore rules](dev-release-performance.md) protect existing preview data. Migrations 026–028 were applied only to isolated local databases. Keep private dumps and secrets outside Git.
+
+Defer investor distributions/trust accounting, a separate investor portal, vendor marketplace, speculative AI, native mobile apps and broad cosmetic redesign until core operating jobs are accepted. Responsive web is required throughout.

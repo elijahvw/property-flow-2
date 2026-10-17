@@ -68,6 +68,22 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
   }
   assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='lease.created'`)).rows[0].n,1);
  });
+ await t.test('lease search is scoped before pagination and current portfolio counts follow business dates',async()=>{
+  for(const q of ['home','Unit 1','resident@test.invalid']){const result=await call('owner','GET',leases+'?q='+encodeURIComponent(q));assert.equal(result.statusCode,200,result.body);assert.equal(result.json().items.length,1);}
+  assert.equal((await call('owner','GET',leases+'?q=unmatched')).json().items.length,0);
+  assert.equal((await call('foreign','GET',leases+'?q=resident')).json().items.length,0);
+  assert.equal((await call('owner','GET',leases+'?q='+ 'x'.repeat(201))).statusCode,400);
+  const portfolio=(await call('owner','GET','/api/company/property-directory')).json();const home=portfolio.items.find(p=>p.id==='home');assert.equal(home.activeUnits,1);assert.equal(home.occupiedUnits,portfolio.today>=terms.startsOn&&portfolio.today<=terms.endsOn?1:0);
+  const combined=await call('owner','GET',leases+'?q=unmatched&attention=in_effect');assert.equal(combined.json().items.length,0,'search AND date conditions must both apply');
+ });
+ await t.test('exact unit lease history is company-scoped and combines with property and search',async()=>{
+  const response=await call('owner','GET',leases+'?unitId='+unit.id+'&propertyId=home');assert.equal(response.statusCode,200,response.body);assert.equal(response.json().unit.id,unit.id);assert.equal(response.json().unit.label,unit.label);assert.deepEqual(response.json().items.map(r=>r.id),[lease.id]);
+  assert.equal((await call('owner','GET',leases+'?unitId='+unit.id+'&q=unmatched')).json().items.length,0);
+  for(const propertyId of ['other-home','foreign-home'])assert.equal((await call('owner','GET',leases+'?unitId='+unit.id+'&propertyId='+propertyId)).statusCode,404);
+  assert.equal((await call('foreign','GET',leases+'?unitId='+unit.id)).statusCode,404);
+  assert.equal((await call('staff','GET',leases+'?unitId='+unit.id)).statusCode,403);
+  assert.equal((await call('owner','GET',leases+'?unitId=missing')).statusCode,404);
+ });
  await t.test('optimistic edits, archive/active guard and ended history after transfer',async()=>{
   assert.equal((await call('owner','PATCH',`/api/company/units/${unit.id}`,{label:unit.label,status:'archived',expectedVersion:unit.version})).statusCode,409);
   const changes=await Promise.all([call('owner','PATCH',`${leases}/${lease.id}`,{...terms,status:'ended',expectedVersion:lease.version}),call('manager','PATCH',`${leases}/${lease.id}`,{...terms,monthlyRent:'1600.00',expectedVersion:lease.version})]);
@@ -142,6 +158,12 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
   assert.equal(ids.length,(await admin.query(`SELECT count(*)::int n FROM "Unit" WHERE "companyId"='a' AND "propertyId"='home'`)).rows[0].n);
   assert.deepEqual((await call('foreign','GET',units)).statusCode,404);
   assert.equal((await call('owner','GET',units+'?companyId=b')).statusCode,400);
+  await admin.query(`UPDATE "Unit" SET status='archived',floor='Garden' WHERE id='paging-unit-000'`);
+  const search=(await call('staff','GET',units+'?q=PAGING-unit-000&status=archived')).json();assert.deepEqual(search.items.map(r=>r.id),['paging-unit-000']);assert.equal(search.nextCursor,null);
+  assert.deepEqual((await call('staff','GET',units+'?q=Garden')).json().items.map(r=>r.id),['paging-unit-000']);
+  assert.equal((await call('staff','GET',units+'?q=paging-unit-000&status=active')).json().items.length,0);
+  assert.equal((await call('foreign','GET',units+'?q=Garden')).statusCode,404);
+  for(const query of ['status=vacant','q='+ 'x'.repeat(201),'q=a&q=b','cursor=','q=%00'])assert.equal((await call('owner','GET',units+'?'+query)).statusCode,400,query);
   await admin.query(`DELETE FROM "Unit" WHERE id LIKE 'paging-unit-%'`);
  });
  await t.test('unit details persist exact amounts, clear unknowns, validate bounds and preserve old-client replay',async()=>{

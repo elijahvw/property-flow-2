@@ -117,6 +117,24 @@ scenarios = [
         ],
     },
 ]
+# Match the deployed resource labels. The production queries intentionally do
+# not aggregate metrics from other services or environments.
+scenarios[0]["promql_expr_test"][0]["exp_samples"][0]["labels"] = '{service_name="propertyflow-server",deployment_environment="dev"}'
+for scenario in scenarios:
+    for series in scenario["input_series"]:
+        series["series"] = m.scope_application_metrics(series["series"])
+scenarios.append({
+    "name": "another service cannot hide this app's missing telemetry",
+    "interval": "1m",
+    "input_series": [{
+        "series": 'propertyflow_process_uptime_seconds{service_name="other-service",deployment_environment="dev"}',
+        "values": "0+60x10",
+    }],
+    "promql_expr_test": [{
+        "expr": queries["pf-dev-heartbeat"], "eval_time": "6m",
+        "exp_samples": [{"labels": '{service_name="propertyflow-server",deployment_environment="dev"}', "value": 1}],
+    }],
+})
 with tempfile.TemporaryDirectory(prefix="pf-promql-") as directory:
     # Prometheus runs as an unprivileged user. These synthetic, nonsecret
     # fixtures must be traversable on Linux bind mounts as well as Docker Desktop.
