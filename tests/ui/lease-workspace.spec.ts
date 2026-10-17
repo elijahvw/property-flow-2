@@ -39,6 +39,7 @@ test('lease workspace keeps household drafts across section navigation and retri
  await expect(page.getByRole('heading',{name:'Oak House · Apartment 2',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Add resident',exact:true}).click();
  await page.getByLabel('Resident full name',{exact:true}).fill('Taylor Tenant');
+ await page.getByLabel('Resident contact email',{exact:true}).fill('taylor@test.invalid');
  await page.getByLabel('Resident contact phone',{exact:true}).fill('555-0100');
  await page.getByRole('button',{name:'Invitations & approvals',exact:true}).click();
  await page.getByRole('button',{name:'Leaseholders & occupants',exact:true}).click();

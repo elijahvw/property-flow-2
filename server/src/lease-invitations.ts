@@ -1,3 +1,5 @@
+import { prepareAccount, saveAccount } from "./resident-accounts.js";
+import type { IdentityProvider } from "./identity-provider.js";
 import { acceptContactInvitation } from "./contact-invitations.js";
 import { linkedResidentContact } from "./resident-contacts.js";
 import { randomBytes } from "node:crypto";
@@ -22,12 +24,12 @@ async function residentLease(tx:Tx,companyId:string,userId:string,id:string){
   if(!record)throw new AccessError(404,"NOT_FOUND","An upcoming or current lease with approved leaseholder access is required.");
   return record;
 }
-async function invitationProfile(tx:Tx,companyId:string,name:string,email:string,createdById:string){
+async function invitationProfile(tx:Tx,companyId:string,name:string,email:string,createdById:string,accountId:string|null){
   await tx.$queryRaw`UPDATE "Company" SET "updatedAt"="updatedAt" WHERE id=${companyId} RETURNING id`;
   if(await tx.residentContact.findFirst({where:{companyId,email:{equals:email,mode:"insensitive"}},select:{id:true}}))throw new AccessError(409,"CONTACT_EXISTS","A tenant profile with this email already exists. Add that profile from Leaseholders & occupants, then invite it from the saved profile. No records were merged.");
-  return tx.residentContact.create({data:{companyId,name,email,createdById}});
+  return tx.residentContact.create({data:{companyId,name,email,createdById,userId:accountId}});
 }
-export function registerLeaseInvitations(server:FastifyInstance,db:PrismaClient,authenticate:preValidationHookHandler,origin:string){
+export function registerLeaseInvitations(server:FastifyInstance,db:PrismaClient,authenticate:preValidationHookHandler,origin:string,provider?:IdentityProvider){
   const auth={preValidation:authenticate};
   server.get("/api/resident/leases",auth,request=>{
     if(Object.keys(request.query as object).length)throw new AccessError(400,"INVALID_INPUT","Unknown resident lease filter.");
@@ -51,10 +53,15 @@ export function registerLeaseInvitations(server:FastifyInstance,db:PrismaClient,
         return items;
       });
     });
-    server.post<{Params:{leaseId:string}}>(root,auth,request=>{
+    server.post<{Params:{leaseId:string}}>(root,auth,async request=>{
       mutation(request,origin);
       const id=assignmentId(request.params.leaseId),b=input(request,["email","name","role","startsOn"]),email=boundedText(b.email,254,"Recipient email").toLowerCase(),name=boundedText(b.name,200,"Recipient name"),role=choice(b.role,["occupant","leaseholder"],"household role"),startsOn=date(b.startsOn,"resident start date"),token=randomBytes(32).toString("base64url");
       if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new AccessError(400,"INVALID_INPUT","Enter a complete recipient email.");
+      await scoped(db,request,resident?"resident.self":"lease.manage",async(tx,companyId)=>{
+        if(resident)throw new AccessError(403,"RESIDENT_READ_ONLY","Household records are view-only. Contact your property manager.");
+        await invitationTerm(tx,companyId,await householdLease(tx,companyId,id),startsOn);
+      });
+      const account=await prepareAccount(provider,email,name);
       return scoped(db,request,resident?"resident.self":"lease.manage",async(tx,companyId)=>{
         if(resident)throw new AccessError(403,"RESIDENT_READ_ONLY","Household records are view-only. Contact your property manager to request changes.");
         const record=resident?await residentLease(tx,companyId,request.principal!.id,id):await householdLease(tx,companyId,id,true);
@@ -65,8 +72,9 @@ export function registerLeaseInvitations(server:FastifyInstance,db:PrismaClient,
         if(await tx.invitation.count({where:{companyId,leaseId:id}})>=200)throw new AccessError(422,"INVITATION_SCOPE_TOO_LARGE","This lease already has 200 invitation records.");
         const actor=await tx.companyMembership.findFirstOrThrow({where:{companyId,userId:request.principal!.id}});
         const approved=actor.role==="owner";
-        const contact=approved?await invitationProfile(tx,companyId,name,email,request.principal!.id):null;
-        const row=await tx.invitation.create({data:{companyId,contactId:contact?.id,leaseId:id,propertyId:record.propertyId,email,role:"resident",participantName:name,participantRole:role,participantStartsOn:startsOn,tokenHash:digest(token),createdBy:request.principal!.id,expiresAt:new Date(Date.now()+72*3600000),approvedAt:approved?new Date():null,approvedBy:approved?request.principal!.id:null},select:invitationSelect});
+        const accountId=await saveAccount(tx,request,account,companyId);
+        const contact=approved?await invitationProfile(tx,companyId,name,email,request.principal!.id,accountId):null;
+        const row=await tx.invitation.create({data:{companyId,accountId,contactId:contact?.id,leaseId:id,propertyId:record.propertyId,email,role:"resident",participantName:name,participantRole:role,participantStartsOn:startsOn,tokenHash:digest(token),createdBy:request.principal!.id,expiresAt:new Date(Date.now()+72*3600000),approvedAt:approved?new Date():null,approvedBy:approved?request.principal!.id:null},select:invitationSelect});
         await audit(tx,request,companyId,id,"lease.invitation.created",{invitationId:row.id,role,approvalRequired:!approved});
         return {...row,acceptanceUrl:approved?`${origin}/invite?lease=1#${token}`:null};
       });
@@ -92,7 +100,7 @@ export function registerLeaseInvitations(server:FastifyInstance,db:PrismaClient,
       const record=await householdLease(tx,companyId,id,true);await invitationTerm(tx,companyId,record);
       const row=await tx.invitation.findFirst({where:{id:invitationId,companyId,leaseId:id,acceptedAt:null,revokedAt:null,approvedAt:null,participantRole:{in:["leaseholder","occupant"]},expiresAt:{gt:new Date()}}});
       if(!row)throw new AccessError(404,"NOT_FOUND","Resident approval request not found. Refresh the invitation status; revoke and recreate it if its one-time link was lost.");
-      const contact=await invitationProfile(tx,companyId,row.participantName!,row.email,request.principal!.id);
+      const contact=await invitationProfile(tx,companyId,row.participantName!,row.email,request.principal!.id,row.accountId);
       await tx.invitation.update({where:{id:row.id},data:{contactId:contact.id,approvedAt:new Date(),approvedBy:request.principal!.id,tokenHash:digest(token),expiresAt:new Date(Date.now()+72*3600000)}});
       await audit(tx,request,companyId,id,"lease.invitation.approved",{invitationId});return {acceptanceUrl:`${origin}/invite?lease=1#${token}`};
     });

@@ -1,3 +1,5 @@
+> October 17 account policy: new tenants and every leaseholder/occupant require a precreated or existing Auth0 account, including people who have not signed in. Portal access still needs the existing membership/property/role approvals. Earlier references below to recording new participants without an account are superseded. Historical records remain intact. See [resident accounts](resident-contacts.md).
+
 # Connected lease, household and invitation workflow
 
 Development increment, 2026-10-15, branch `codex/lease-households` based on the tested tenant/forms PR #33 (`7207bb9`). This implements PF-02 and the initial shared-household portion of PF-11 following the user's explicit request to bring household support and a coherent onboarding/renewal flow forward. Merge and dev deployment remain manual and user-approved.

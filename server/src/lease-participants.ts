@@ -1,3 +1,5 @@
+import { contactAccount, prepareAccount, saveAccount, requireContactAccount } from "./resident-accounts.js";
+import type { IdentityProvider } from "./identity-provider.js";
 import { leasePerson,leasePersonSelect } from "./lease-person.js";
 import { linkedResidentContact, participantContact } from "./resident-contacts.js";
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
@@ -38,7 +40,7 @@ export function sharedLeaseAccess(companyId:string,userId:string,today:Date,incl
   return { ...(!includeDraft?{status:{not:"draft"}}:{}), OR:[{residentId:userId,participants:{none:{userId,OR:[{removedAt:{not:null}},{endsOn:{lt:today}},{role:{not:"leaseholder"}},{portalApproved:false}]}}},{...(!includeDraft?{status:{not:"draft"}}:{}),participants:{some:{companyId,userId,role:"leaseholder",removedAt:null,portalApproved:true,OR:[{endsOn:null},{endsOn:{gte:today}}]}}}],
     property:{assignments:{some:{companyId,userId}}} };
 }
-export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient,authenticate:preValidationHookHandler,origin:string){
+export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient,authenticate:preValidationHookHandler,origin:string,provider?:IdentityProvider){
   const auth={preValidation:authenticate};
   server.get<{Params:{leaseId:string}}>("/api/company/leases/:leaseId/participants",auth,request=>{
     const id=assignmentId(request.params.leaseId);
@@ -49,17 +51,28 @@ export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient
       const candidates=await tx.companyMembership.findMany({where:{companyId,role:"resident",status:"active",user:{status:"active"},assignments:{some:{propertyId:record.propertyId}}},select:{userId:true,contactName:true,user:{select:{name:true,email:true,emailVerified:true}}},orderBy:{userId:"asc"},take:1001});
       if(items.length>200||candidates.length>1000)throw new AccessError(422,"HOUSEHOLD_SCOPE_TOO_LARGE","Too many household records or eligible residents to show a complete selection.");
       const company=await tx.company.findUniqueOrThrow({where:{id:companyId},select:{timezone:true}});
-      const contacts=await tx.residentContact.findMany({where:{companyId,status:"active",OR:[{userId:null},{userId:{in:candidates.map(c=>c.userId)}}]},select:{id:true,userId:true,name:true,email:true,phone:true},orderBy:{name:"asc"},take:1001});
+      const contacts=await tx.residentContact.findMany({where:{companyId,status:"active",OR:[{userId:null},{userId:{in:candidates.map(c=>c.userId)}},{user:{is:{status:"active",membership:null}}}]},select:{id:true,userId:true,name:true,email:true,phone:true},orderBy:{name:"asc"},take:1001});
       if(contacts.length>1000)throw new AccessError(422,"HOUSEHOLD_SCOPE_TOO_LARGE","Too many tenant profiles to show a complete selection.");
       return {lease:record,items,candidates,contacts,businessDate:companyDay(company.timezone)};
     });
   });
-  server.post<{Params:{leaseId:string}}>("/api/company/leases/:leaseId/participants",auth,request=>{
+  server.post<{Params:{leaseId:string}}>("/api/company/leases/:leaseId/participants",auth,async request=>{
     mutation(request,origin);
     const id=assignmentId(request.params.leaseId),b=input(request,[...fields,"userId","contactId","submissionKey"]),data=details(b),legacyUserId=b.userId===null||b.userId===undefined?null:opaqueUserId(b.userId);
     const contactId=b.contactId==null?null:assignmentId(b.contactId);
     if(contactId&&legacyUserId)throw new AccessError(400,"INVALID_INPUT","Choose one tenant profile.");
     const key=submission(b.submissionKey,contactId?[id,{contactId},data]:[id,legacyUserId,data]);
+    const readiness=await scoped(db,request,"members.manage",async(tx,companyId)=>{
+      const record=await householdLease(tx,companyId,id);
+      const old=await tx.leaseParticipant.findFirst({where:{companyId,createdById:request.principal!.id,submissionKey:key.submissionKey},select:{...select,submissionHash:true}});
+      if(old){sameSubmission(old.submissionHash,key.submissionHash);const{submissionHash:_hash,...row}=old;return {replay:row,contact:null};}
+      const selected=contactId?await tx.residentContact.findFirst({where:{id:contactId,companyId,status:"active"}}):legacyUserId?(await linked(tx,companyId,record.propertyId,legacyUserId,true),await linkedResidentContact(tx,companyId,legacyUserId)):null;
+      if(contactId&&!selected)throw new AccessError(404,"NOT_FOUND","Tenant not found.");
+      return {replay:null,contact:selected};
+    });
+    if(readiness.replay)return readiness.replay;
+    const prepared=readiness.contact ? null : await prepareAccount(provider,data.email,data.name);
+    if(readiness.contact)await contactAccount(db,request,"members.manage",provider,readiness.contact.id);
     return scoped(db,request,"members.manage",async(tx,companyId)=>{
       const record=await householdLease(tx,companyId,id,true);
       const old=await tx.leaseParticipant.findFirst({where:{companyId,createdById:request.principal!.id,submissionKey:key.submissionKey},select:{...select,submissionHash:true}});
@@ -69,12 +82,20 @@ export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient
       const userId=selected?.userId??legacyUserId;
       if(contactId&&(contactId===record.residentContactId||await tx.leaseParticipant.findFirst({where:{companyId,leaseId:id,contactId},select:{id:true}})))throw new AccessError(409,"HOUSEHOLD_DUPLICATE","This tenant is already recorded. Edit their existing household record.");
       if(userId&&userId===record.residentId)throw new AccessError(409,"HOUSEHOLD_DUPLICATE","This resident is already the lease's primary contact.");
-      if(userId){await linked(tx,companyId,record.propertyId,userId,true);if(await tx.leaseParticipant.findFirst({where:{companyId,leaseId:id,userId},select:{id:true}}))throw new AccessError(409,"HOUSEHOLD_DUPLICATE","This resident is already recorded. Edit their existing household record.");}
+      if(userId){const member=await tx.companyMembership.findUnique({where:{userId}});if(member)await linked(tx,companyId,record.propertyId,userId,true);if(await tx.leaseParticipant.findFirst({where:{companyId,leaseId:id,userId},select:{id:true}}))throw new AccessError(409,"HOUSEHOLD_DUPLICATE","This resident is already recorded. Edit their existing household record.");}
       if(await tx.leaseParticipant.count({where:{companyId,leaseId:id}})>=200)throw new AccessError(422,"HOUSEHOLD_SCOPE_TOO_LARGE","This lease already has 200 household records. No record was added.");
       const contact=selected??await participantContact(tx,companyId,{userId,...data});
-      const row=await tx.leaseParticipant.create({data:{companyId,propertyId:record.propertyId,leaseId:id,userId,contactId:contact.id,...data,createdById:request.principal!.id,...key},select});
+      let accountUserId=userId;
+      if(prepared){
+        const accountId=await saveAccount(tx,request,prepared,companyId);
+        accountUserId=accountId;
+        if(await tx.residentContact.findFirst({where:{companyId,id:{not:contact.id},userId:accountId},select:{id:true}}))throw new AccessError(409,"CONTACT_EXISTS","This sign-in account already has a tenant profile. Select that existing profile; no records were merged.");
+        await tx.residentContact.update({where:{id:contact.id},data:{userId:accountId}});
+        await audit(tx,request,companyId,contact.id,"resident.account.prepared");
+      }else await requireContactAccount(tx,await tx.residentContact.findFirstOrThrow({where:{id:contact.id,companyId}}));
+      const row=await tx.leaseParticipant.create({data:{companyId,propertyId:record.propertyId,leaseId:id,userId:accountUserId??contact.userId,contactId:contact.id,...data,createdById:request.principal!.id,...key},select});
       await tx.lease.update({where:{id},data:{version:{increment:1}}});
-      await audit(tx,request,companyId,id,"lease.participant.added",{participantId:row.id,role:row.role,userId,portalApproved:row.portalApproved,startsOn:row.startsOn.toISOString(),endsOn:row.endsOn?.toISOString()??null});
+      await audit(tx,request,companyId,id,"lease.participant.added",{participantId:row.id,role:row.role,userId:row.userId,portalApproved:row.portalApproved,startsOn:row.startsOn.toISOString(),endsOn:row.endsOn?.toISOString()??null});
       return row;
     });
   });
@@ -125,6 +146,7 @@ export function registerLeaseParticipants(server:FastifyInstance,db:PrismaClient
       }
       const contact=target.contactId?await tx.residentContact.findFirstOrThrow({where:{id:target.contactId,companyId}}):await participantContact(tx,companyId,target);
       if(contact.status!=="active")throw new AccessError(409,"TENANT_ARCHIVED","Restore this tenant before making them primary.");
+      await requireContactAccount(tx,contact);
       if(record.residentContactId===contact.id)return {success:true};
       await tx.lease.update({where:{id},data:{residentId:target.userId,residentContactId:contact.id,version:{increment:1}}});
       await audit(tx,request,companyId,id,"lease.primary.changed",{from:record.residentId,to:target.userId,participantId});return {success:true};

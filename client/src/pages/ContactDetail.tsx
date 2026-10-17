@@ -16,6 +16,7 @@ import { Form } from "./Workspace";
 import { tenantDirectorySearch } from "../tenant-links";
 import { formatDate } from "../dates";
 type Contact = TenantContact & {
+  user?: {id:string;email:string;emailVerified:boolean;firstSignedInAt:string|null}|null;
   canArchive?: boolean;
   invitations: ContactInvitationState[];
   portal: {
@@ -117,6 +118,7 @@ function ContactWorkspace({ id }: { id: string }) {
           Edit tenant details
         </button>
       </header>
+      {person.user && <p className="notice">Sign-in account ready · {person.user.email} · {person.user.firstSignedInAt ? "Has signed in" : "No sign-in recorded"}. {person.portal ? "Portal access is managed below." : "Send a portal invitation to activate access; password setup uses this same account."}</p>}
       {r.error && (
         <p role="alert" className="notice error">
           {r.error} <button onClick={r.reload}>Refresh tenant</button>
@@ -192,13 +194,14 @@ function ContactWorkspace({ id }: { id: string }) {
             </p>
           </section>
           <section className="panel">
-            <h2>Portal access</h2>
+            <h2>Account & portal access</h2>
+            {can("members.manage") && person.userId && <Form label="Send password reset email" operation="account.verification" submit={async()=>{await api(`/api/company/resident-contacts/${encodeURIComponent(id)}/password-reset`,{method:"POST",body:{}});}} feedbackText="Password reset email requested for the existing account."><p className="help">Auth0 sends the reset link. This uses the same account and does not change company or lease access.</p></Form>}
             {!person.portal ? (
               <>
                 <p>
                   {pending
                     ? "An invitation is pending. This tenant keeps the same profile when they verify their email and accept."
-                    : "This tenant has a profile for your records. Invite them when you want to offer portal login."}
+                    : "This Auth0 account is ready. Invite them when you want to offer portal access."}
                 </p>
                 {can("members.manage") && person.status === "active" && (
                   <button className="secondary" onClick={() => setInvite(true)}>

@@ -1,3 +1,4 @@
+import type { IdentityProvider } from "./identity-provider.js";
 import type {
   FastifyInstance,
   preValidationHookHandler,
@@ -213,6 +214,7 @@ export function registerAccountProfile(
   db: PrismaClient,
   authenticate: preValidationHookHandler,
   origin: string,
+  provider?: IdentityProvider,
 ) {
   const auth = { preValidation: authenticate };
   server.get("/api/account", auth, (request) =>
@@ -234,7 +236,7 @@ export function registerAccountProfile(
       };
     }),
   );
-  server.patch("/api/account", auth, (request) => {
+  server.patch("/api/account", auth, async (request) => {
     mutation(request, origin);
     const b = input(request, [
         "name",
@@ -271,6 +273,24 @@ export function registerAccountProfile(
           b.expectedContactVersion,
           b.expectedCompanyId,
         ]);
+    const preparation=await own(db,request,async(tx,user)=>{
+      if(!legacy){
+        const previous=await tx.accountProfileRevision.findUnique({where:{userId_submissionKey:{userId:user.id,submissionKey:key!.submissionKey}}});
+        if(previous){sameSubmission(previous.submissionHash,key!.submissionHash);return {replay:previous.version,subject:null};}
+        const c=await context(tx,user);
+        if((c.profile?.version??0)!==b.expectedVersion || user.updatedAt.toISOString()!==b.expectedNameVersion || (c.contact?.version??null)!==b.expectedContactVersion || (user.membership?.companyId??null)!==b.expectedCompanyId)throw conflict();
+        if(details!.preferredContact==="email"&&c.contact&&!c.contact.email)throw new AccessError(400,"INVALID_INPUT","Ask management to add your contact email, or choose another contact preference.");
+      }
+      if(user.name===name)return {replay:null,subject:null};
+      const identity=await tx.identity.findFirst({where:{userId:user.id,issuer:provider?.issuer??""}});
+      if(!provider?.rename||!identity)throw new AccessError(503,"IDENTITY_NOT_CONFIGURED","Account name changes require the Auth0 connection. Contact your platform administrator.");
+      return {replay:null,subject:identity.subject};
+    });
+    if(preparation.replay!==null)return {saved:true,version:preparation.replay};
+    if(preparation.subject){
+      const remote=await provider!.rename(preparation.subject,name);
+      if(remote.user_id!==preparation.subject||remote.name!==name)throw new AccessError(409,"IDENTITY_PROFILE_CONFLICT","Auth0 did not confirm this name. Refresh and retry.");
+    }
     return own(db, request, async (tx, user) => {
       if (legacy) {
         const result = await tx.user.update({

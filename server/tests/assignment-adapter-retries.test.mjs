@@ -34,9 +34,9 @@ for (const sqlstate of ['40001','40P01']) {
     const f=transport(sqlstate,2);t.after(()=>f.db.$disconnect());
     assert.deepEqual(await serializable(f.db,lock),[]);assert.equal(f.attempts(),3);
   });
-  test(`actual PrismaPg nested ${sqlstate} exhausts exactly three attempts with ACCESS_CONFLICT`, async t => {
+  test(`actual PrismaPg nested ${sqlstate} exhausts exactly five attempts with ACCESS_CONFLICT`, async t => {
     const f=transport(sqlstate,Infinity);t.after(()=>f.db.$disconnect());
-    await assert.rejects(serializable(f.db,lock),e=>e.statusCode===409&&e.code==='ACCESS_CONFLICT');assert.equal(f.attempts(),3);
+    await assert.rejects(serializable(f.db,lock),e=>e.statusCode===409&&e.code==='ACCESS_CONFLICT');assert.equal(f.attempts(),5);
   });
 }
 test('actual PrismaPg unrelated raw SQL errors propagate without retry', async t => {

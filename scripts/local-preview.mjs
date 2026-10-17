@@ -1,7 +1,7 @@
 // Local-only full application preview. This entry point is never imported by
 // the production server or Docker image. It cannot accept a database URL.
 import assert from "node:assert/strict";
-import { randomUUID, randomBytes } from "node:crypto";
+import { randomUUID, randomBytes, createHash } from "node:crypto";
 import { execFileSync, execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdtemp, writeFile, rename, rm } from "node:fs/promises";
@@ -334,6 +334,10 @@ try {
     assert.ok(marker.updates && !marker.costs, "Expected a maintenance-updates preview backup before paid cost links");
     await admin.query(readFileSync(root + "server/prisma/migrations/202610160028_maintenance_costs/migration.sql", "utf8"));
   }
+  // Restored previews retain every record; apply only the missing additive column.
+  if (restoreFile && !(await admin.query(`SELECT 1 FROM information_schema.columns WHERE table_name='Invitation' AND column_name='accountId'`)).rowCount) {
+    await admin.query(readFileSync(root + "server/prisma/migrations/202610170030_resident_identity_accounts/migration.sql", "utf8"));
+  }
   const runtimePassword = randomUUID();
   const statement = (
     await admin.query(
@@ -368,6 +372,7 @@ try {
         [`local-${role}`, role],
       );
     }
+  await admin.query(`INSERT INTO "Identity"(id,issuer,subject,"userId") SELECT 'preview-'||id,'https://local-preview.invalid/',id,id FROM "User" ON CONFLICT DO NOTHING`);
   app = Fastify();
   app.setErrorHandler((error, request, reply) => {
     const status =
@@ -403,12 +408,28 @@ try {
       "Email and external identity changes are disabled in the local preview.",
     );
   };
+  // Explicitly fictional identity adapter: never calls Auth0 or sends emails.
+  const previewAccounts = new Map();
+  const previewUser = row => ({user_id:row.id,email:row.email,name:row.name,email_verified:row.emailVerified,blocked:row.status !== "active",identities:[{connection:"local-only",provider:"auth0"}]});
+  const previewGet = async id => {
+    const row = await db.user.findUnique({where:{id}});
+    const user = row ? previewUser(row) : previewAccounts.get(id);
+    if (!user) throw new AccessError(404,"NOT_FOUND","Simulated preview account not found.");
+    return user;
+  };
   registerApplication(app, db, authenticate, origin, {
     issuer: "https://local-preview.invalid/",
     databaseConnection: "local-only",
     list: async () => ({ users: [], nextPage: null }),
-    get: unavailable,
-    create: unavailable,
+    rename: async (id,name) => ({...await previewGet(id),name}),
+    get: previewGet,
+    create: async (email,name) => {
+      const row = await db.user.findFirst({where:{email:{equals:email,mode:"insensitive"}}});
+      if (row) return previewUser(row);
+      const id="preview|"+createHash("sha256").update(email).digest("hex").slice(0,24);
+      if (!previewAccounts.has(id)) previewAccounts.set(id,previewUser({id,email,name,emailVerified:false,status:"active"}));
+      return previewAccounts.get(id);
+    },
     setup: unavailable,
     verify: unavailable,
   });
@@ -424,7 +445,7 @@ try {
   });
   app.get("/api/local-preview", async (request, reply) => {
     reply.header("Cache-Control", "no-store").type("text/html");
-    return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Property Flow local preview</title><style>body{font:16px system-ui;color:#18352c;background:#f3f7f5;max-width:580px;margin:10vh auto;padding:24px}section{background:white;padding:32px;border:1px solid #d4e1da;border-radius:16px}label{display:grid;gap:8px;margin:24px 0}select,button{font:inherit;padding:12px;border-radius:8px;border:1px solid #abc4b8}button{background:#146c5b;color:white;width:100%}p{line-height:1.6;color:#4d655b}</style><section><h1>Local preview</h1><p>Sample records in a disposable local database. Changes here do not affect your cloud application. Email and external identity changes are disabled.</p><form><label>Preview as<select id="role">${Object.entries(
+    return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Property Flow local preview</title><style>body{font:16px system-ui;color:#18352c;background:#f3f7f5;max-width:580px;margin:10vh auto;padding:24px}section{background:white;padding:32px;border:1px solid #d4e1da;border-radius:16px}label{display:grid;gap:8px;margin:24px 0}select,button{font:inherit;padding:12px;border-radius:8px;border:1px solid #abc4b8}button{background:#146c5b;color:white;width:100%}p{line-height:1.6;color:#4d655b}</style><section><h1>Local preview</h1><p>Sample records in a disposable local database. Changes here do not affect your cloud application. Accounts are simulated locally. Email delivery and live Auth0 changes are disabled.</p><form><label>Preview as<select id="role">${Object.entries(
       people,
     )
       .map(([role, name]) => `<option value="${role}">${name}</option>`)

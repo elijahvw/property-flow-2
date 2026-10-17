@@ -78,7 +78,7 @@ test('company and platform lifecycle mutations lock and clear assignments; react
 });
 test('serialization failures retry boundedly and expose actionable 409 after exhaustion',async()=>{
  let tries=0; const db={$transaction:async()=>{tries++;if(tries<3)throw {code:'P2034'};return 'ok';}};assert.equal(await serializable(db,()=>{}),'ok');assert.equal(tries,3);
- tries=0;await assert.rejects(serializable({$transaction:async()=>{tries++;throw {code:'P2034'};}},()=>{}),e=>e.statusCode===409);assert.equal(tries,3);
+ tries=0;await assert.rejects(serializable({$transaction:async()=>{tries++;throw {code:'P2034'};}},()=>{}),e=>e.statusCode===409);assert.equal(tries,5);
  for (const code of ['40001','40P01']) { let rawTries=0; assert.equal(await serializable({$transaction:async()=>{if (++rawTries===1) throw {code:'P2010',meta:{code}};return 'ok';}},()=>{}),'ok');assert.equal(rawTries,2); }
  await assert.rejects(serializable({$transaction:async()=>{throw new Error('other');}},()=>{}),/other/);
 });

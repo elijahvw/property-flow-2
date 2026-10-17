@@ -48,6 +48,7 @@ export async function synchronizeIdentity(
     where: { id: user.id },
     data: {
       email: claims.email as string,
+      ...(typeof claims.name === "string" ? {name:claims.name.slice(0,200)} : {}),
       emailVerified: claims.email_verified === true,
       firstSignedInAt: user.firstSignedInAt ?? new Date(),
       ...(upgradeOwner ? { platformRole: "owner" } : {}),

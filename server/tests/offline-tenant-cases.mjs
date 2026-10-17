@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { companyDay } from "../dist/reports.js";
 import { digest } from "../dist/sessions.js";
 export async function offlineTenantCases(t, admin, call, providerCalls) {
@@ -46,7 +46,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
   const token = (row) => new URL(row.acceptanceUrl).hash.slice(1);
   const addUser = async (id, email, verified = true) => {
     await admin.query(
-      `INSERT INTO "User"(id,email,name,"emailVerified","updatedAt") VALUES($1,$2,$1,$3,NOW())`,
+      `INSERT INTO "User"(id,email,name,"emailVerified","updatedAt") VALUES($1,$2,$1,$3,NOW()) ON CONFLICT(id) DO UPDATE SET "emailVerified"=EXCLUDED."emailVerified"`,
       [id, email, verified],
     );
     await admin.query(
@@ -74,7 +74,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
       ]);
       tenant = ok(responses[0]);
       assert.equal(ok(responses[1]).id, tenant.id);
-      assert.equal(tenant.userId, null);
+      assert.match(tenant.userId,/^auth0\|/);
       assert.equal(tenant.addressLine1, contactBody.addressLine1);
       assert.equal(tenant.emergencyRelationship, "Sibling");
       assert.equal(
@@ -84,7 +84,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
             [contactBody.email],
           )
         ).rows[0].n,
-        0,
+        1,
       );
       assert.equal(
         (
@@ -167,7 +167,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
       lease = ok(
         await call("offline-owner", "POST", "/api/company/leases", body),
       );
-      assert.equal(lease.residentId, null);
+      assert.equal(lease.residentId,tenant.userId);
       assert.equal(lease.residentContactId, tenant.id);
       assert.equal(lease.resident.name, contactBody.name);
       assert.equal(
@@ -285,11 +285,9 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
           token: secret,
         }),
       );
-      assert.deepEqual(providerCalls.slice(-3), [
-        ["create", contactBody.email, contactBody.name],
-        ["setup", contactBody.email],
-        ["verify", "auth0|offline-mock"],
-      ]);
+      assert.deepEqual(providerCalls.at(-1),["setup",contactBody.email]);
+      assert.ok(!providerCalls.slice(-2).some(row=>row[0] === "verify"),"Database password setup verifies email without a second email");
+      assert.ok(!providerCalls.slice(-3).some(row=>row[0] === "create"), "Password setup never creates a user");
       assert.equal(
         (
           await admin.query(
@@ -298,10 +296,10 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
         ).rows[0].n,
         1,
       );
-      await addUser("offline-login", contactBody.email, false);
+      await addUser("auth0|5b38ef5f152cc81032be116d", contactBody.email, false);
       assert.equal(
         (
-          await call("offline-login", "POST", "/api/invitations/accept", {
+          await call("auth0|5b38ef5f152cc81032be116d", "POST", "/api/invitations/accept", {
             token: secret,
           })
         ).statusCode,
@@ -316,10 +314,10 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
         403,
       );
       await admin.query(
-        `UPDATE "User" SET "emailVerified"=true WHERE id='offline-login'`,
+        `UPDATE "User" SET "emailVerified"=true WHERE id='auth0|5b38ef5f152cc81032be116d'`,
       );
       ok(
-        await call("offline-login", "POST", "/api/invitations/preview", {
+        await call("auth0|5b38ef5f152cc81032be116d", "POST", "/api/invitations/preview", {
           token: secret,
         }),
       );
@@ -330,19 +328,19 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
         )
       ).rows;
       ok(
-        await call("offline-login", "POST", "/api/invitations/accept", {
+        await call("auth0|5b38ef5f152cc81032be116d", "POST", "/api/invitations/accept", {
           token: secret,
         }),
       );
       ok(
-        await call("offline-login", "POST", "/api/invitations/accept", {
+        await call("auth0|5b38ef5f152cc81032be116d", "POST", "/api/invitations/accept", {
           token: secret,
         }),
       );
       const after = ok(
         await call("offline-owner", "GET", contactPath(tenant.id)),
       );
-      assert.equal(after.userId, "offline-login");
+      assert.equal(after.userId, "auth0|5b38ef5f152cc81032be116d");
       assert.equal(after.portal.state, "active");
       assert.equal(
         (
@@ -363,7 +361,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
       );
       const rent = ok(
         await call(
-          "offline-login",
+          "auth0|5b38ef5f152cc81032be116d",
           "GET",
           `/api/resident/rent?leaseId=${lease.id}`,
         ),
@@ -374,17 +372,17 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
         false,
       );
       await admin.query(
-        `DELETE FROM "ResidentPropertyAssignment" WHERE "userId"='offline-login'`,
+        `DELETE FROM "ResidentPropertyAssignment" WHERE "userId"='auth0|5b38ef5f152cc81032be116d'`,
       );
       ok(
-        await call("offline-login", "POST", "/api/invitations/accept", {
+        await call("auth0|5b38ef5f152cc81032be116d", "POST", "/api/invitations/accept", {
           token: secret,
         }),
       );
       assert.equal(
         (
           await call(
-            "offline-login",
+            "auth0|5b38ef5f152cc81032be116d",
             "GET",
             `/api/resident/rent?leaseId=${lease.id}`,
           )
@@ -443,16 +441,16 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
         409,
       );
       const pending = await invite(occupant.id);
-      await addUser("offline-occupant", occupant.email);
+      await addUser("auth0|75e664dafc63dca51acb8d3c", occupant.email);
       ok(
-        await call("offline-occupant", "POST", "/api/invitations/accept", {
+        await call("auth0|75e664dafc63dca51acb8d3c", "POST", "/api/invitations/accept", {
           token: token(pending),
         }),
       );
       assert.equal(
         (
           await call(
-            "offline-occupant",
+            "auth0|75e664dafc63dca51acb8d3c",
             "GET",
             `/api/resident/rent?leaseId=${lease.id}`,
           )
@@ -462,7 +460,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
       assert.equal(
         (
           await call(
-            "offline-occupant",
+            "auth0|75e664dafc63dca51acb8d3c",
             "GET",
             `/api/resident/deposits/${lease.id}`,
           )
@@ -499,7 +497,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
         ),
       );
       let pending = await invite(person.id);
-      await addUser("offline-pending", person.email);
+      await addUser("auth0|ee0d3c37a994888d406a2b9a", person.email);
       ok(
         await call(
           "offline-owner",
@@ -518,7 +516,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
       );
       assert.equal(
         (
-          await call("offline-pending", "POST", "/api/invitations/accept", {
+          await call("auth0|ee0d3c37a994888d406a2b9a", "POST", "/api/invitations/accept", {
             token: token(pending),
           })
         ).statusCode,
@@ -526,7 +524,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
       );
       assert.equal(
         ok(await call("offline-owner", "GET", contactPath(person.id))).userId,
-        null,
+        person.userId,
       );
       pending = await invite(person.id);
       ok(
@@ -538,7 +536,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
       );
       assert.equal(
         (
-          await call("offline-pending", "POST", "/api/invitations/accept", {
+          await call("auth0|ee0d3c37a994888d406a2b9a", "POST", "/api/invitations/accept", {
             token: token(pending),
           })
         ).statusCode,
@@ -594,6 +592,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
       const c = ok(
         await call("offline-owner", "POST", "/api/company/resident-contacts", {
           name: "Departed occupant",
+          email: "departed-occupant@test.invalid",
           submissionKey: randomUUID(),
         }),
       );
@@ -686,7 +685,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
         ),
       );
       let pending = await invite(c.id);
-      await addUser("offline-expiring", c.email);
+      await addUser("auth0|2bfd1f6832e0ccb3dc2dc8a7", c.email);
       const before = providerCalls.length;
       // Keep versions unchanged to model the passage of a business date.
       await admin.query(
@@ -695,7 +694,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
       );
       assert.equal(
         (
-          await call("offline-expiring", "POST", "/api/invitations/preview", {
+          await call("auth0|2bfd1f6832e0ccb3dc2dc8a7", "POST", "/api/invitations/preview", {
             token: token(pending),
           })
         ).statusCode,
@@ -722,7 +721,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
       try {
         assert.equal(
           (
-            await call("offline-expiring", "POST", "/api/invitations/preview", {
+            await call("auth0|2bfd1f6832e0ccb3dc2dc8a7", "POST", "/api/invitations/preview", {
               token: token(pending),
             })
           ).statusCode,
@@ -752,14 +751,14 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
       try {
         assert.equal(
           ok(
-            await call("offline-login", "POST", "/api/invitations/preview", {
+            await call("auth0|5b38ef5f152cc81032be116d", "POST", "/api/invitations/preview", {
               token: acceptedToken,
             }),
           ).accepted,
           true,
         );
         ok(
-          await call("offline-login", "POST", "/api/invitations/accept", {
+          await call("auth0|5b38ef5f152cc81032be116d", "POST", "/api/invitations/accept", {
             token: acceptedToken,
           }),
         );
@@ -771,7 +770,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
       assert.equal(
         (
           await admin.query(
-            `SELECT count(*)::int n FROM "ResidentPropertyAssignment" WHERE "userId"='offline-login'`,
+            `SELECT count(*)::int n FROM "ResidentPropertyAssignment" WHERE "userId"='auth0|5b38ef5f152cc81032be116d'`,
           )
         ).rows[0].n,
         0,
@@ -779,7 +778,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
       assert.equal(
         (
           await call(
-            "offline-login",
+            "auth0|5b38ef5f152cc81032be116d",
             "GET",
             `/api/resident/rent?leaseId=${lease.id}`,
           )
@@ -787,28 +786,28 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
         404,
       );
       await admin.query(
-        `UPDATE "User" SET email='new-verified-signin@test.invalid' WHERE id='offline-login'`,
+        `UPDATE "User" SET email='new-verified-signin@test.invalid' WHERE id='auth0|5b38ef5f152cc81032be116d'`,
       );
       assert.equal(
         ok(
-          await call("offline-login", "POST", "/api/invitations/preview", {
+          await call("auth0|5b38ef5f152cc81032be116d", "POST", "/api/invitations/preview", {
             token: acceptedToken,
           }),
         ).accepted,
         true,
       );
       ok(
-        await call("offline-login", "POST", "/api/invitations/accept", {
+        await call("auth0|5b38ef5f152cc81032be116d", "POST", "/api/invitations/accept", {
           token: acceptedToken,
         }),
       );
       await admin.query(
-        `UPDATE "CompanyMembership" SET status='disabled' WHERE "userId"='offline-login'`,
+        `UPDATE "CompanyMembership" SET status='disabled' WHERE "userId"='auth0|5b38ef5f152cc81032be116d'`,
       );
       try {
         assert.equal(
           (
-            await call("offline-login", "POST", "/api/invitations/accept", {
+            await call("auth0|5b38ef5f152cc81032be116d", "POST", "/api/invitations/accept", {
               token: acceptedToken,
             })
           ).statusCode,
@@ -816,7 +815,7 @@ export async function offlineTenantCases(t, admin, call, providerCalls) {
         );
       } finally {
         await admin.query(
-          `UPDATE "CompanyMembership" SET status='active' WHERE "userId"='offline-login'`,
+          `UPDATE "CompanyMembership" SET status='active' WHERE "userId"='auth0|5b38ef5f152cc81032be116d'`,
         );
       }
     },
