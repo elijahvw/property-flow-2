@@ -1,3 +1,4 @@
+import {readTermChanges,termInstallment} from "./lease-term-policy.js";
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { assignmentId } from "./application.js";
@@ -41,7 +42,7 @@ async function reviewed(
       "NOT_FOUND",
       "Processed installment not found for this schedule.",
     );
-  const item = installment(current, occurrence.periodOn),
+  const item = termInstallment({...current,paymentInstructions:lease.paymentInstructions},await readTermChanges(tx,companyId,[lease.id]),occurrence.periodOn),
     company = await tx.company.findUniqueOrThrow({
       where: { id: companyId },
       select: { timezone: true },
@@ -156,7 +157,7 @@ export function registerRentRecovery(
               dueOn: value.item.dueOn,
               postOn: value.item.postOn,
               amountCents: value.item.amountCents,
-              graceDays: value.schedule.graceDays,
+              graceDays: value.item.graceDays,
               businessDate: value.today,
             };
           if (
@@ -175,7 +176,7 @@ export function registerRentRecovery(
               periodOn: value.item.periodOn,
               dueOn: value.item.dueOn,
               amountCents: value.item.amountCents,
-              graceDays: value.schedule.graceDays,
+              graceDays: value.item.graceDays,
               memo: null,
             },
             select,

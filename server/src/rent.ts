@@ -1,3 +1,6 @@
+import {installment,monthStart} from "./billing-dates.js";
+import {currentLeaseTerms,readTermChanges,termsAt} from "./lease-term-policy.js";
+import { readLeaseMovements } from "./movement-sources.js";
 import { leasePerson, leasePersonSelect } from "./lease-person.js";
 import { chargeTiming } from "./payment-policy.js";
 import type {
@@ -41,7 +44,9 @@ const leaseSelect = {
   unit: { select: { label: true } },
   ...leasePersonSelect,
 } as const;
-const chargeSelect = {
+export const chargeSelect = {
+  termChangeId:true,termsSnapshot:true,
+  kind: true, category: true, effectiveOn: true,
   reference:true,
   scheduleId: true,
   graceDays: true,
@@ -99,6 +104,11 @@ export async function lockRentLease(
   if (!row) throw new AccessError(404, "NOT_FOUND", "Lease not found.");
   return row;
 }
+export const creditSelect = {
+  id:true, reference:true, leaseId:true, chargeId:true, kind:true,
+  effectiveOn:true, amountCents:true, reason:true, createdAt:true,
+  reversal:{select:{id:true,reference:true,effectiveOn:true,reason:true,createdAt:true}},
+} as const;
 async function sources(tx: Tx, companyId: string, leaseIds: string[]) {
   const where = { companyId, leaseId: { in: leaseIds } };
   const charges = bounded(
@@ -125,14 +135,15 @@ async function sources(tx: Tx, companyId: string, leaseIds: string[]) {
       orderBy: { id: "asc" },
     }),
   );
-  return { charges, payments, allocations };
+  const credits = bounded(await tx.leaseCredit.findMany({where,select:creditSelect,take:10001,orderBy:[{effectiveOn:"asc"},{id:"asc"}]}));
+  return { charges, payments, allocations, credits, movements: await readLeaseMovements(tx,companyId,leaseIds) };
 }
 // Connected workspaces use the same bounded sources and balance rules as rent.
 export { sources as readRentSources };
 // Persistent allocations retain their original source identity. A voided payment's
 // allocations stay in history but contribute zero to current balances.
 export function rentBalances(
-  data: Awaited<ReturnType<typeof sources>>,
+  data: Omit<Awaited<ReturnType<typeof sources>>, "credits"|"movements"> & Partial<Pick<Awaited<ReturnType<typeof sources>>,"credits"|"movements">>,
   today: string,
 ) {
   const activePayments = new Set(
@@ -182,9 +193,31 @@ export function rentBalances(
         (paymentApplied.get(a.entryId) || 0n) + BigInt(a.amountCents),
       );
     }
+  const creditedByCharge = new Map<string,bigint>();
+  let noncashCredit = 0n;
+  for(const credit of data.credits ?? []) if(!credit.reversal && activeCharges.has(credit.chargeId)) {
+    const amount=BigInt(credit.amountCents);
+    creditedByCharge.set(credit.chargeId,(creditedByCharge.get(credit.chargeId)??0n)+amount);
+    chargeApplied.set(credit.chargeId,(chargeApplied.get(credit.chargeId)??0n)+amount);
+    noncashCredit+=amount;
+  }
+  const refundedByPayment=new Map<string,bigint>(), depositByCharge=new Map<string,bigint>();
+  let depositApplied=0n, refunded=0n;
+  for(const movement of data.movements ?? []) if(!movement.reversal) {
+    const amount=BigInt(movement.amountCents);
+    if(movement.kind==="deposit_application" && movement.chargeId && activeCharges.has(movement.chargeId)) {
+      chargeApplied.set(movement.chargeId,(chargeApplied.get(movement.chargeId)??0n)+amount);
+      depositByCharge.set(movement.chargeId,(depositByCharge.get(movement.chargeId)??0n)+amount);
+      depositApplied+=amount;
+    }
+    if(movement.kind==="rent_refund" && movement.paymentId && activePayments.has(movement.paymentId)) {
+      refundedByPayment.set(movement.paymentId,(refundedByPayment.get(movement.paymentId)??0n)+amount);refunded+=amount;
+    }
+  }
+  let rentOutstanding=0n, otherOutstanding=0n;
   const chargePaymentHistory = new Map<
     string,
-    { paidAfterGraceCents: string; paidLate: boolean; settledOn: string | null }
+    { paidAfterGraceCents: string; paidLate: boolean; settledOn: string | null; creditedCents:string; depositAppliedCents:string }
   >();
   let paidAfterGrace = 0n,
     paidLateCharges = 0n;
@@ -209,15 +242,19 @@ export function rentBalances(
       const remaining = BigInt(c.amountCents) - (chargeApplied.get(c.id) || 0n);
       if (remaining < 0n) throw new Error("Rent charge overallocated");
       outstanding += remaining;
+      if(c.kind==="one_time")otherOutstanding+=remaining;else rentOutstanding+=remaining;
+      const credited=creditedByCharge.get(c.id)??0n, deposited=depositByCharge.get(c.id)??0n;
       const history = receiptHistory.get(c.id),
         late = history?.paidAfterGraceCents ?? 0n;
       paidAfterGrace += late;
-      if (remaining === 0n && late > 0n) paidLateCharges++;
+      if (remaining === 0n && late > 0n && credited + deposited === 0n) paidLateCharges++;
       chargePaymentHistory.set(c.id, {
         paidAfterGraceCents: String(late),
-        paidLate: remaining === 0n && late > 0n,
+        paidLate: remaining === 0n && late > 0n && credited + deposited === 0n,
+        creditedCents:String(credited),
+        depositAppliedCents:String(deposited),
         settledOn:
-          remaining === 0n ? (history?.latestReceivedOn ?? null) : null,
+          remaining === 0n && credited + deposited === 0n ? (history?.latestReceivedOn ?? null) : null,
       });
       const timing = chargeTiming(c.dueOn, c.graceDays, today, remaining);
       if (timing.daysPastDue > 0) {
@@ -241,13 +278,18 @@ export function rentBalances(
     if (!p.voidedAt) {
       paid += BigInt(p.amountCents);
       const remaining =
-        BigInt(p.amountCents) - (paymentApplied.get(p.id) || 0n);
+        BigInt(p.amountCents) - (paymentApplied.get(p.id) || 0n) - (refundedByPayment.get(p.id) || 0n);
       if (remaining < 0n) throw new Error("Rent payment overallocated");
       credit += remaining;
     }
   return {
     paidAfterGraceCents: String(paidAfterGrace),
     paidLateChargeCount: String(paidLateCharges),
+    rentOutstandingCents:String(rentOutstanding),
+    otherOutstandingCents:String(otherOutstanding),
+    noncashCreditCents:String(noncashCredit),
+    depositAppliedCents:String(depositApplied),
+    refundedCents:String(refunded),
     chargedCents: String(charged),
     paidCents: String(paid),
     outstandingCents: String(outstanding),
@@ -260,9 +302,10 @@ export function rentBalances(
       Object.entries(aging).map(([key, value]) => [key, String(value)]),
     ),
     creditCents: String(credit),
-    netCents: String(charged - paid),
+    netCents: String(charged - paid - noncashCredit - depositApplied + refunded),
     chargeApplied,
     paymentApplied,
+    refundedByPayment,
     chargePaymentHistory,
   };
 }
@@ -278,12 +321,12 @@ export async function allocateRentCredit(
     where: { id: leaseId, companyId },
     select: { propertyId: true },
   });
-  const charges = data.charges.filter((c) => !c.voidedAt);
+  const charges = data.charges.filter((c) => !c.voidedAt).sort((a,b)=>+a.dueOn-+b.dueOn || Number(a.kind==="one_time")-Number(b.kind==="one_time") || a.id.localeCompare(b.id));
   const pending: Prisma.RentAllocationCreateManyInput[] = [];
   let index = 0;
   for (const p of data.payments.filter((p) => !p.voidedAt)) {
     let available =
-      BigInt(p.amountCents) - (balance.paymentApplied.get(p.id) || 0n);
+      BigInt(p.amountCents) - (balance.paymentApplied.get(p.id) || 0n) - (balance.refundedByPayment.get(p.id) || 0n);
     while (available > 0n && index < charges.length) {
       const c = charges[index],
         remaining =
@@ -332,6 +375,17 @@ export function registerRent(
   origin: string,
 ) {
   const auth = { preValidation: authenticate };
+  server.get<{Params:{leaseId:string};Querystring:{periodOn?:string}}>("/api/company/rent/:leaseId/terms",auth,request=>{
+    if(Object.keys(request.query).some(k=>k!=="periodOn"))throw new AccessError(400,"INVALID_INPUT","Unknown rent terms filter.");
+    const period=date(request.query.periodOn,"rent month"),id=assignmentId(request.params.leaseId);
+    if(period.getUTCDate()!==1)throw new AccessError(400,"INVALID_INPUT","Choose a first-of-month rent period.");
+    return scoped(db,request,"finance.manage",async(tx,companyId)=>{
+      const lease=await tx.lease.findFirst({where:{id,companyId},select:leaseSelect});if(!lease)throw new AccessError(404,"NOT_FOUND","Lease not found.");
+      if(period<monthStart(lease.startsOn)||(lease.endsOn&&period>monthStart(lease.endsOn)))throw new AccessError(400,"INVALID_INPUT","Choose a rent month inside the recorded lease term.");
+      const terms=termsAt(lease,await readTermChanges(tx,companyId,[id]),period),item=installment({firstPeriodOn:period,firstDueOn:null,firstAmountCents:null,lastAmountCents:null,lastPeriodOn:null,amountCents:terms.rentCents,dueDay:terms.rentDueDay,leadDays:0},period);
+      return{...terms,periodOn:period,dueOn:item.dueOn,expectedLeaseVersion:lease.version};
+    });
+  });
   for (const resident of [false, true])
     server.get<{ Querystring: { propertyId?: string; leaseId?: string } }>(
       resident ? "/api/resident/rent" : "/api/company/rent",
@@ -369,7 +423,7 @@ export function registerRent(
               }))
             )
               throw new AccessError(404, "NOT_FOUND", "Property not found.");
-            const leases = bounded(
+            const leaseRows = bounded(
               await tx.lease.findMany({
                 where,
                 select: leaseSelect,
@@ -378,6 +432,7 @@ export function registerRent(
               }),
               1000,
             );
+            const leases=await currentLeaseTerms(tx,companyId,leaseRows,today);
             if (leaseId && !leases.length)
               throw new AccessError(404, "NOT_FOUND", "Lease not found.");
             const data = await sources(
@@ -387,6 +442,8 @@ export function registerRent(
               );
             const accounts = leases.map((lease) => {
               const scopedData = {
+                credits: data.credits.filter(c=>c.leaseId===lease.id),
+                movements: data.movements.filter(c=>c.leaseId===lease.id),
                 charges: data.charges.filter((c) => c.leaseId === lease.id),
                 payments: data.payments.filter((p) => p.leaseId === lease.id),
                 allocations: data.allocations.filter(
@@ -396,6 +453,7 @@ export function registerRent(
               const {
                 chargeApplied,
                 paymentApplied,
+                refundedByPayment,
                 chargePaymentHistory,
                 ...summary
               } = rentBalances(scopedData, today);
@@ -433,8 +491,11 @@ export function registerRent(
                         memo: resident ? undefined : p.memo,
                         voidReason: resident ? undefined : p.voidReason,
                         appliedCents: String(paymentApplied.get(p.id) || 0n),
+                        refundedCents: String(refundedByPayment.get(p.id) || 0n),
                       })),
                       allocations: scopedData.allocations,
+                      credits:scopedData.credits,
+                      movements:scopedData.movements,
                     }
                   : {}),
               };
@@ -515,7 +576,7 @@ export function registerRent(
           );
         if (
           await tx.rentCharge.findFirst({
-            where: { companyId, leaseId, periodOn, voidedAt: null },
+            where: { companyId, leaseId, periodOn, kind:"rent", voidedAt: null },
             select: { id: true },
           })
         )
@@ -524,6 +585,7 @@ export function registerRent(
             "RENT_ALREADY_POSTED",
             "Rent is already posted for this month. Review the existing charge before making a correction.",
           );
+        const effectiveTerms=termsAt(lease,await readTermChanges(tx,companyId,[leaseId]),periodOn);
         const row = await tx.rentCharge.create({
           data: {
             companyId,
@@ -533,7 +595,7 @@ export function registerRent(
             periodOn,
             dueOn,
             amountCents,
-            graceDays: lease.graceDays,
+            graceDays: effectiveTerms.graceDays,
             memo,
             ...key,
           },
@@ -667,6 +729,9 @@ export function registerRent(
             "CHARGE_HAS_PAYMENTS",
             "This charge has payments applied. Correct those payments before voiding the charge.",
           );
+        if(await tx.leaseMovement.findFirst({where:{companyId,chargeId,reversal:null},select:{id:true}}))throw new AccessError(409,"CHARGE_HAS_DEPOSIT_APPLICATION","Reverse deposit applications before correcting this charge.");
+        if(await tx.leaseCredit.findFirst({where:{companyId,chargeId,reversal:null},select:{id:true}}))
+          throw new AccessError(409,"CHARGE_HAS_CREDITS","Reverse the active credit notes before voiding this charge.");
         const row = await tx.rentCharge.update({
           where: { id: chargeId },
           data: {

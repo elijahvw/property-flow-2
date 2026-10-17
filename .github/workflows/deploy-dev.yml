@@ -198,6 +198,8 @@ jobs:
           cache-to: type=gha,mode=max,scope=propertyflow-server
       - name: Ensure database is available before starting backend
         run: bash scripts/dev-power.sh start-database
+      - name: Preserve a database restore point before migrations
+        run: python3 scripts/release-snapshot.py
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

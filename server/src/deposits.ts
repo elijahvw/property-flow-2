@@ -1,3 +1,4 @@
+import { depositMovementTotals, readLeaseMovements } from "./movement-sources.js";
 import { leasePerson, leasePersonSelect } from "./lease-person.js";
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import { Prisma, type PrismaClient } from "@prisma/client";
@@ -132,12 +133,18 @@ export function depositSummary(
   held: bigint,
   dueOn: Date,
   businessDate: string,
+  movements: {applied:bigint;returned:bigint} = {applied:0n,returned:0n},
+  corrected=0n,
 ) {
+  const received=held;
+  held=received-movements.applied-movements.returned;
+  if(held<0n)throw new AccessError(503,"DEPOSIT_SOURCE_UNAVAILABLE","Deposit movements exceed recorded funds. No partial balance is shown.");
   const required = BigInt(requiredCents),
-    outstanding = required > held ? required - held : 0n;
+    outstanding = required > received ? required - received : 0n;
   return {
     requiredCents: String(required),
     heldCents: String(held),
+    receivedCents: String(received), appliedCents: String(movements.applied), returnedCents: String(movements.returned), correctedCents:String(corrected),
     outstandingCents: String(outstanding),
     excessHeldCents: String(held > required ? held - required : 0n),
     pastDueCents: day(dueOn) < businessDate ? String(outstanding) : "0",
@@ -208,6 +215,7 @@ export async function readDepositDetail(
     (sum, r) => sum + (r.cashEntry.voidedAt ? 0n : BigInt(r.amountCents)),
     0n,
   );
+  const movements=await readLeaseMovements(tx,companyId,[leaseId]);
   const revisions = residentId
     ? undefined
     : await tx.depositRevision.findMany({
@@ -227,7 +235,10 @@ export async function readDepositDetail(
         held,
         current.dueOn,
         businessDate,
+        depositMovementTotals(movements,current.id),
+        receipts.reduce((sum,r)=>sum+(r.cashEntry.voidedAt?BigInt(r.amountCents):0n),0n),
       ),
+      movements:movements.filter(m=>m.accountId===current.id),
       receipts,
       revisions,
     },
@@ -337,6 +348,9 @@ export function registerDeposits(
                 (held.get(r.accountId) || 0n) + BigInt(r.amountCents),
               );
           }
+          const movements=await readLeaseMovements(tx,companyId,accounts.map(a=>a.leaseId));
+          const corrected=new Map<string,bigint>();
+          for(const r of receipts)if(r.cashEntries[0].voidedAt)corrected.set(r.accountId,(corrected.get(r.accountId)??0n)+BigInt(r.amountCents));
           const rows = accounts.map((a) => ({
             ...a,
             lease: resident ? { ...a.lease, resident: undefined, residentContact:undefined } : {...a.lease,resident:leasePerson(a.lease)},
@@ -345,11 +359,13 @@ export function registerDeposits(
               held.get(a.id) || 0n,
               a.dueOn,
               businessDate,
+              depositMovementTotals(movements,a.id),corrected.get(a.id)??0n,
             ),
           }));
           const total = {
             requiredCents: 0n,
             heldCents: 0n,
+            receivedCents:0n,appliedCents:0n,returnedCents:0n,correctedCents:0n,
             outstandingCents: 0n,
             excessHeldCents: 0n,
             pastDueCents: 0n,
@@ -702,6 +718,9 @@ export function registerDeposits(
           return publicReceipt(row, false);
         }
         if (cash.version !== expected) throw conflict();
+        const detail=await readDepositDetail(tx,companyId,first.leaseId);
+        if(BigInt(detail.account!.summary.heldCents)<BigInt(row.amountCents))
+          throw new AccessError(409,"DEPOSIT_MOVEMENTS_EXIST","Reverse or correct deposit applications/refunds before correcting this receipt; the remaining held funds are too low.");
         await tx.ledgerEntry.update({
           where: { id: cash.id },
           data: {

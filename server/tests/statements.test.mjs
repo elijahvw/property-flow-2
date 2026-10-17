@@ -89,6 +89,7 @@ test("a filtered statement bridges opening, closing and later activity, includin
     openingNetCents: "60001",
     chargedCents: "100001",
     receivedCents: "0",
+    noncashCreditCents:"0",depositAppliedCents:"0",refundedCents:"0",
     closingNetCents: "160002",
     laterNetCents: "-190004",
     currentNetCents: "-30002",

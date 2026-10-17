@@ -11,7 +11,7 @@ import { sharedLeaseAccess } from "./lease-participants.js";
 
 const day = (value: Date) => value.toISOString().slice(0, 10);
 export const statementBasis =
-  "Rent charges use their due date; receipts use the date received. Dates are inclusive calendar days. All amounts use current record status and current allocations at generation time, including corrections made later. Opening and closing net balances are charges less receipts by source date, not historical as-of balances. Allocations do not change net activity. Unpaid rent, unapplied receipt credit and refundable deposits are shown separately for the whole lease.";
+  "Monthly rent uses its due date; one-time charges, noncash credits and linked reversals use their effective date; cash receipts use the date received; deposit applications and manual refunds use their effective date. Dates are inclusive calendar days. All amounts use current record status and current allocations at generation time, including corrections made later. Opening and closing net balances are charges less cash receipts, net noncash credits and net deposit applications, plus active rent refunds by source date, not historical as-of balances. Allocations do not change net activity. Unpaid charges, unapplied receipt credit and refundable deposits are shown separately for the whole lease.";
 
 // One source snapshot and the rent ledger's exact-cent calculator. Never infer
 // historical allocations or turn a correction void into a cash refund.
@@ -21,7 +21,7 @@ export function buildRentStatement(
   dateFrom: string | null,
   dateTo: string | null,
 ) {
-  const { chargeApplied, paymentApplied, chargePaymentHistory, ...current } =
+  const { chargeApplied, paymentApplied, chargePaymentHistory, refundedByPayment, ...current } =
     rentBalances(sources, today);
   const charges = sources.charges.map((c) => {
     const applied = chargeApplied.get(c.id) ?? 0n;
@@ -38,15 +38,24 @@ export function buildRentStatement(
       type: "charge" as const,
       id: c.id,
       reference: c.reference,
-      date: day(c.dueOn),
-      periodOn: day(c.periodOn),
+      date: day(c.kind === "one_time" ? c.effectiveOn! : c.dueOn),
+      dueOn: day(c.dueOn),
+      category: c.category ?? "rent",
+      description: c.kind === "one_time" ? c.memo : null,
+      relatedId: null,
+      relatedReference: null,
+      periodOn: c.kind === "one_time" ? null : day(c.periodOn),
       amountCents: String(c.amountCents),
       appliedCents: String(applied),
       remainingCents: String(remaining),
       status:
         history?.paidLate && !c.voidedAt
           ? "paid_late"
-          : timing.collectionStatus,
+          : !c.voidedAt &&
+              remaining === 0n &&
+              BigInt(history?.creditedCents ?? "0") + BigInt(history?.depositAppliedCents ?? "0") > 0n
+            ? BigInt(history?.depositAppliedCents??"0")>0n ? "settled_deposit" : "settled"
+            : timing.collectionStatus,
       graceThrough: timing.graceThrough,
       settledOn: history?.settledOn ?? null,
       voidedAt: c.voidedAt?.toISOString() ?? null,
@@ -57,18 +66,24 @@ export function buildRentStatement(
   });
   const receipts = sources.payments.map((p) => {
     const applied = paymentApplied.get(p.id) ?? 0n;
-    const remaining = p.voidedAt ? 0n : BigInt(p.amountCents) - applied;
+    const remaining = p.voidedAt ? 0n : BigInt(p.amountCents) - applied - (refundedByPayment.get(p.id)??0n);
     return {
       type: "receipt" as const,
       id: p.id,
       reference: p.reference,
       date: day(p.occurredOn),
+      dueOn: null,
+      category: null,
+      description: null,
+      relatedId: null,
+      relatedReference: null,
       periodOn: null,
       amountCents: String(p.amountCents),
       appliedCents: String(applied),
       remainingCents: String(remaining),
       status: p.voidedAt
         ? "voided"
+        : (refundedByPayment.get(p.id)??0n)>0n ? remaining===0n && applied===0n ? "returned" : "partly_returned"
         : remaining === 0n
           ? "fully_applied"
           : applied > 0n
@@ -82,7 +97,63 @@ export function buildRentStatement(
       effectCents: p.voidedAt ? "0" : String(-BigInt(p.amountCents)),
     };
   });
-  const all = [...charges, ...receipts].sort(
+  const chargeReferences = new Map(charges.map(charge => [charge.id, charge.reference]));
+  const credits = (sources.credits ?? []).flatMap((c) => {
+    const base = {
+      id: c.id,
+      reference: c.reference,
+      date: day(c.effectiveOn),
+      dueOn: null,
+      category: c.kind,
+      description: c.reason,
+      relatedId: c.chargeId,
+      relatedReference:
+        chargeReferences.get(c.chargeId) ?? null,
+      type: "credit" as const,
+      periodOn: null,
+      amountCents: String(c.amountCents),
+      appliedCents: c.reversal ? "0" : String(c.amountCents),
+      remainingCents: "0",
+      status: c.reversal ? "credit_reversed" : "credit_applied",
+      graceThrough: null,
+      settledOn: null,
+      voidedAt: null,
+      createdAt: c.createdAt.toISOString(),
+      scheduleId: null,
+      effectCents: String(-BigInt(c.amountCents)),
+    };
+    return c.reversal
+      ? [
+          base,
+          {
+            ...base,
+            id: c.reversal.id,
+            reference: c.reversal.reference,
+            date: day(c.reversal.effectiveOn),
+            type: "credit_reversal" as const,
+            category: "credit_reversal",
+            description: c.reversal.reason,
+            relatedId: c.id,
+            relatedReference: c.reference,
+            appliedCents: "0",
+            status: "credit_reversal",
+            createdAt: c.reversal.createdAt.toISOString(),
+            effectCents: String(c.amountCents),
+          },
+        ]
+      : [base];
+  });
+  const movements = (sources.movements??[]).filter(m=>m.kind!=="deposit_refund").flatMap(m=>{
+    const refund=m.kind==="rent_refund", base={
+      type:refund?"refund" as const:"deposit_application" as const,id:m.id,reference:m.reference,date:day(m.effectiveOn),dueOn:null,category:m.kind,
+      description:m.reason,relatedId:m.chargeId??m.paymentId,relatedReference:refund?receipts.find(p=>p.id===m.paymentId)?.reference??null:chargeReferences.get(m.chargeId!)??null,
+      periodOn:null,amountCents:String(m.amountCents),appliedCents:m.reversal?"0":String(m.amountCents),remainingCents:"0",status:m.reversal?"movement_corrected":refund?"returned":"deposit_applied",graceThrough:null,settledOn:null,
+      voidedAt:refund&&m.reversal?m.reversal.createdAt.toISOString():null,createdAt:m.createdAt.toISOString(),scheduleId:null,
+      effectCents:refund?(m.reversal?"0":String(m.amountCents)):String(-BigInt(m.amountCents)),
+    };
+    return m.reversal?[base,{...base,type:"movement_reversal" as const,id:m.reversal.id,reference:m.reversal.reference,date:day(m.reversal.effectiveOn),description:m.reversal.reason,relatedId:m.id,relatedReference:m.reference,status:"movement_reversal",voidedAt:null,createdAt:m.reversal.createdAt.toISOString(),effectCents:refund?"0":String(m.amountCents)}]:[base];
+  });
+  const all = [...charges, ...receipts, ...credits, ...movements].sort(
     (a, b) =>
       a.date.localeCompare(b.date) ||
       a.type.localeCompare(b.type) ||
@@ -127,7 +198,7 @@ export function buildRentStatement(
         createdAt: a.createdAt.toISOString(),
         chargeId: charge.id,
         chargeReference: charge.reference,
-        chargeDate: charge.date,
+        chargeDate: charge.dueOn ?? charge.date,
         receiptId: receipt.id,
         receiptReference: receipt.reference,
         receiptDate: receipt.date,
@@ -148,6 +219,13 @@ export function buildRentStatement(
           .filter((r) => r.type === "receipt")
           .reduce((s, r) => s + BigInt(r.effectCents), 0n),
       ),
+      noncashCreditCents: String(
+        -period
+          .filter((r) => r.type === "credit" || r.type === "credit_reversal")
+          .reduce((s, r) => s + BigInt(r.effectCents), 0n),
+      ),
+      depositAppliedCents:String(-period.filter(r=>r.category==="deposit_application").reduce((s,r)=>s+BigInt(r.effectCents),0n)),
+      refundedCents:String(period.filter(r=>r.category==="rent_refund").reduce((s,r)=>s+BigInt(r.effectCents),0n)),
       closingNetCents: String(running),
       laterNetCents: String(net(after)),
       currentNetCents: current.netCents,
@@ -270,6 +348,7 @@ export function registerStatements(
                     reference: deposit.account.reference,
                     dueOn: day(deposit.account.dueOn),
                     ...deposit.account.summary,
+                    movements: deposit.account.movements,
                   }
                 : null,
             };

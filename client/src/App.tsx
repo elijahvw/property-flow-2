@@ -1,3 +1,5 @@
+import {ResidentLeaseTerms} from "./components/LeaseTermChanges";
+import {ResidentSettlement} from "./components/LeaseSettlement";
 import { InvitationEntry } from "./components/ContactInvitation";
 import { ContactDetail } from "./pages/ContactDetail";
 import { recordBrowserEvent } from "./browser-telemetry";
@@ -70,6 +72,8 @@ class ErrorBoundary extends Component<
 function Shell({ children }: { children: React.ReactNode }) {
   const { data, user, signIn, signOut, error } = useAuth();
   const location = useLocation();
+  const companyRoleLabel=({owner:"Company owner",manager:"Manager",staff:"Staff",resident:"Resident"} as Record<string,string>)[data?.membership?.role||""];
+  const platformWorkspace=location.pathname.startsWith("/platform")||!data?.membership;
   const [menuOpen, setMenuOpen] = useState(false);
   const main = useRef<HTMLElement>(null);
   const route =
@@ -95,7 +99,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           <span className="brand-mark">P</span>Property Flow
         </Link>
         <p className="workspace-label">
-          {user?.platformRole === "owner"
+          {platformWorkspace&&user?.platformRole === "owner"
             ? "Platform workspace"
             : data?.membership?.company.name || "Your workspace"}
         </p>
@@ -156,9 +160,9 @@ function Shell({ children }: { children: React.ReactNode }) {
             <>
               <strong>{user.name || user.email}</strong>
               <span>
-                {user.platformRole === "owner"
+                {platformWorkspace&&user.platformRole === "owner"
                   ? "Platform owner"
-                  : data?.membership?.role || "Access pending"}
+                  : companyRoleLabel || "Access pending"}
               </span>
               <button className="secondary" onClick={signOut}>
                 Sign out
@@ -282,6 +286,8 @@ function Pages() {
         element={<Shell><ProtectedRoute permission="lease.manage"><LeaseDetail /></ProtectedRoute></Shell>}
       />
       <Route path="/company/leases/:leaseId/statement" element={<Shell><ProtectedRoute permission="finance.manage"><Statement /></ProtectedRoute></Shell>} />
+      <Route path="/resident/leases/:leaseId/terms" element={<Shell><ProtectedRoute permission="resident.self"><ResidentLeaseTerms/></ProtectedRoute></Shell>}/>
+      <Route path="/resident/leases/:leaseId/settlement" element={<Shell><ProtectedRoute permission="resident.self"><ResidentSettlement /></ProtectedRoute></Shell>} />
       <Route path="/resident/leases/:leaseId/statement" element={<Shell><ProtectedRoute permission="resident.self"><Statement resident /></ProtectedRoute></Shell>} />
       <Route path="/company/tenants/:contactId" element={<Shell><ProtectedRoute permission="resident.assignment.manage"><ContactDetail /></ProtectedRoute></Shell>} />
       <Route

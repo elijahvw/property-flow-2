@@ -1,3 +1,4 @@
+import { recordReference } from "../record-reference";
 import { formatDate } from "../dates";
 import { DateField } from "../components/DateField";
 import { usePropertySearchParams } from "../usePropertySearchParams";
@@ -15,6 +16,7 @@ import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "./Workspace";
 type Entry = {
+  movementId?:string|null; movement?:{id:string;leaseId:string;reference:string;kind:string}|null;
   reference?: string;
   depositReceiptId?: string | null;
   depositReceipt?: { leaseId: string; reference: string } | null;
@@ -38,7 +40,7 @@ type Ledger = {
     incomeCents: string;
     expenseCents: string;
     netCents: string;
-    depositReceivedCents?: string;
+    depositReceivedCents?: string;rentRefundCents?:string;depositRefundCents?:string;
     cashMovementCents?: string;
   };
 };
@@ -311,7 +313,7 @@ function LedgerWorkspace() {
               </div>
             </div>
             <p className="help">
-              Operating net excludes refundable deposits. Dates are inclusive.
+              Rent refunds: {dollars(r.data.summary.rentRefundCents??"0")}. Deposit refunds: {dollars(r.data.summary.depositRefundCents??"0")}. Operating net subtracts rent refunds and excludes refundable deposits and deposit returns. Dates are inclusive.
               Totals exclude voided entries and include every matching page.
             </p>
             <p role="status">{r.data.items.length} transactions on this page</p>
@@ -332,6 +334,7 @@ function LedgerWorkspace() {
                       {formatDate(entry.occurredOn)} ·{" "}
                       {entry.category.replace("_", " ")}
                     </p>
+                    {entry.movement && <p><Link to={propertyLink(entry.movement.kind==="deposit_refund"?"/company/deposits":"/company/rent",entry.propertyId,{leaseId:entry.movement.leaseId})}>Linked {recordReference(entry.movement.reference)} · Review refund and correction history →</Link></p>}
                     {entry.depositReceipt && (
                       <p>
                         <Link
@@ -342,7 +345,7 @@ function LedgerWorkspace() {
                           )}
                         >
                           Linked deposit receipt{" "}
-                          {entry.depositReceipt.reference} · View deposit ledger
+                          {recordReference(entry.depositReceipt.reference)} · View deposit ledger
                           →
                         </Link>
                       </p>
@@ -365,7 +368,7 @@ function LedgerWorkspace() {
                     {entry.voidedAt ? (
                       <p>Voided: {entry.voidReason}</p>
                     ) : (
-                      !entry.depositReceiptId && (
+                      !entry.depositReceiptId && !entry.movementId && (
                         <button
                           className="secondary"
                           onClick={() => setSelected(entry)}

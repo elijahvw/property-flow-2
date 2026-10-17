@@ -1,0 +1,237 @@
+.lifecycle-workspace {
+  display: grid;
+  gap: 1.25rem;
+}
+.lifecycle-workspace > .panel {
+  margin: 0;
+}
+.lifecycle-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem 2rem;
+  margin: 1rem 0;
+}
+.lifecycle-facts div {
+  min-width: 0;
+}
+.lifecycle-facts dt {
+  color: #63766b;
+  font-size: 0.82rem;
+  margin-bottom: 0.4rem;
+}
+.lifecycle-facts dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.proration-calculation {
+  background: #f5f9f6;
+  border: 1px solid #dae6de;
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin: 1rem 0;
+}
+.proration-calculation .section-heading {
+  margin: 0;
+}
+.proration-calculation h3 {
+  font-size: 1rem;
+  margin: 0.25rem 0;
+}
+.proration-calculation .section-heading > strong {
+  font-size: 1.65rem;
+  color: #175b45;
+}
+.lifecycle-month {
+  max-width: 360px;
+}
+.lifecycle-override {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  border: 1px solid #dce6df;
+  border-radius: 8px;
+}
+.lifecycle-override summary,
+.lifecycle-history summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.lifecycle-override label {
+  margin-top: 1rem;
+}
+.lifecycle-history > article,
+.lifecycle-history > details {
+  border-top: 1px solid #dfe7e1;
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+.lifecycle-history > article h3 {
+  font-size: 1rem;
+}
+.lifecycle-history .proration-calculation {
+  margin: 0.75rem 0;
+}
+.transition-review-card {
+  margin: 1.25rem 0;
+  padding-top: 1rem;
+  border-top: 1px solid #dbe5de;
+}
+.transition-review-card > h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+.transition-review-card > p {
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+@media (max-width: 650px) {
+  .lifecycle-facts {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  .proration-calculation {
+    padding: 1rem;
+  }
+  .proration-calculation .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+}
+
+.renewal-review > section {
+  margin: 0 0 1.5rem;
+}
+.renewal-review h3 {
+  font-size: 1rem;
+  margin: 0 0 0.8rem;
+}
+.renewal-date-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+.renewal-date-cards > div {
+  padding: 1rem;
+  background: #f4f8f5;
+  border: 1px solid #dce7df;
+  border-radius: 8px;
+}
+.renewal-date-cards span {
+  display: block;
+  color: #62746a;
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
+}
+.renewal-date-cards strong {
+  font-size: 1rem;
+}
+.renewal-charges > ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.renewal-charges > ul > li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid #e1e8e3;
+}
+.renewal-charges li > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.renewal-charges li > strong {
+  white-space: nowrap;
+  font-size: 1.1rem;
+  color: #185c46;
+}
+.renewal-charges li > div > strong {
+  font-size: 0.9rem;
+}
+.renewal-charges li span {
+  color: #52685c;
+  font-size: 0.85rem;
+}
+.renewal-charges small {
+  color: #6b7b71;
+  font-size: 0.78rem;
+}
+.renewal-charge-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0;
+  font-weight: 650;
+}
+.renewal-billing {
+  background: #f7f9f7;
+  padding: 1.15rem;
+  border-radius: 8px;
+}
+.renewal-billing ul {
+  padding-left: 1.1rem;
+  margin: 0;
+  color: #4f6559;
+}
+.renewal-billing li {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  margin: 0.5rem 0;
+}
+.renewal-calculation-details {
+  border-top: 1px solid #dfe8e1;
+  padding: 1rem 0;
+}
+.renewal-calculation-details > summary {
+  color: #456858;
+  font-weight: 550;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.renewal-calculation-details > p {
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+.lease-review-confirmation .movement-confirm {
+  margin: 1rem 0 0;
+}
+.lease-review-confirmation .form-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+}
+@media (max-width: 650px) {
+  .renewal-date-cards {
+    grid-template-columns: 1fr;
+  }
+  .renewal-charges > ul > li {
+    gap: 0.8rem;
+  }
+  .renewal-charges li > strong {
+    font-size: 1rem;
+  }
+  .renewal-charges li span {
+    font-size: 0.78rem;
+  }
+  .lease-review-confirmation .form-actions {
+    gap: 0.65rem;
+  }
+}
+.lease-review-confirmation .workflow-form label.movement-confirm {
+  align-items: center;
+  min-height: 44px;
+}
+.lease-review-confirmation .movement-confirm input[type="checkbox"] {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
+  margin: 0;
+  flex: 0 0 20px;
+  accent-color: #166c55;
+}

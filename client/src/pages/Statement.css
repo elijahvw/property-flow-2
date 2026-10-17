@@ -165,7 +165,7 @@
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
-.statement-period dl > div:nth-child(4),
+.statement-period dl > div:nth-child(7),
 .statement-period dl > div:last-child {
   border-top: 1px solid #dce6e3;
   font-weight: 650;
@@ -397,3 +397,7 @@
     margin: 15mm;
   }
 }
+
+.statement-deposit-history li { margin: 1rem 0; break-inside: avoid; }
+.statement-deposit-history li p { margin: .3rem 0; }
+@media print { .statement-deposit-history:not([open]) > :not(summary) { display: block; } }

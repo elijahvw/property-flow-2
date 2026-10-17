@@ -115,3 +115,8 @@ jobs:
         
       - name: Terraform Validate
         run: cd infra/terraform/envs/dev && terraform validate
+
+      - name: Validate Grafana Cloud configuration (no credentials or backend)
+        run: |
+          terraform -chdir=infra/terraform/grafana-cloud init -backend=false -input=false
+          terraform -chdir=infra/terraform/grafana-cloud validate

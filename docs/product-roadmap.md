@@ -1,6 +1,6 @@
 # Property Flow product roadmap
 
-Updated 2026-10-16. Repository baseline: main `9945e69` (merged/deployed PR #36, confirmed by the user). This replaces the build order in historical handoffs. The [implementation backlog](product-backlog.md) contains dependencies and acceptance criteria; [workflow research](tenantcloud-workflows.md) records sources and limits.
+Updated 2026-10-16. Repository baseline: main `b539516` (merged/deployed PR #37, confirmed by the user). This replaces the build order in historical handoffs. The [implementation backlog](product-backlog.md) contains dependencies and acceptance criteria; [workflow research](tenantcloud-workflows.md) records sources and limits.
 
 ## Product direction
 
@@ -75,10 +75,17 @@ Deliver **PF-25** imports/reconciliation/integration contracts, then **PF-26** s
 1. **PF-01, merged in #33:** tenant detail route, linked leases/balances and return navigation, using existing data. Includes the requested shared form/date/UI improvements; see [scope](tenant-workspace.md).
 2. **PF-02, merged in #34:** exact lease workspace and working links to rent/deposits/terms/renewal, using existing data.
 3. **PF-03a, merged/deployed:** contact identity/backfill with compatibility. **PF-03b, merged/deployed in #36:** offline contact/directory/lease forms, connected optional invitations and verified linking, plus the requested form/address UI audit; see [contract and rollout](resident-contacts.md). The user explicitly brought invitation linking into this slice. Existing identity and financial source IDs remain intact.
-4. **PF-04, current implementation:** connected lease statements and traceable CSV from existing charges/receipts/allocations with separate credit/deposit summaries. Includes readable date filters, grouped postal addresses, mobile activity rows and complete print/export; see [statement contract](tenant-statements.md).
-5. **PF-05a:** reviewed one-time non-rent charges/noncash credits; then PF-06 money movements after their accounting contract is settled.
+4. **PF-04, merged/deployed in #37:** connected lease statements and traceable CSV from existing charges/receipts/allocations with separate credit/deposit summaries. Includes readable date filters, grouped postal addresses, mobile activity rows and complete print/export; see [statement contract](tenant-statements.md).
+5. **PF-05, implemented locally for review:** reviewed one-time non-rent charges, targeted noncash credits and linked reversals; tenant property/unit context and archive discovery; see [contract](lease-charges-credits.md). **PF-06 is also implemented locally for review:** deposit applications, actual manual deposit/payment refunds and immutable corrections; see [accounting and workflow contract](deposit-applications-refunds.md). Both remain undeployed.
+6. **PF-07, implemented locally for review:** guided itemized move-out review, versioned public financial snapshots, supported deposit applications, reviewed billing pause, reopen/correction history and explicit refund/lease-end follow-up; see [settlement contract](move-out-settlements.md). This batch also adds role-aware personal profiles, fuller sectioned company details and an authoritative permissions guide; see [profile and access scope](account-company-profiles.md). Resident profile editing cannot change unit, property, lease or access. All remain local and undeployed.
+7. **PF-08, implemented locally for review:** future-month lease payment terms with before/after installment preview, immutable changes/cancellations, worker/manual posting integration and current-term views. Includes a concise lease overview that only prompts for actual draft/approval work and compact detail-only tenant archive/restore; see [contract and validation](future-lease-terms.md). Local and undeployed.
+8. **PF-09 and PF-10, implemented together locally for review:** exact calendar-day partial rent with accepted overrides/history, plus reviewed end-date planning and atomic lease-ending/renewal/billing transitions. The simplified confirmation lists charges once and collapses calculation details; see [workflow and accounting contract](proration-renewal-transitions.md). Local and undeployed.
 
 If the contact migration needs longer review, PF-12/PF-13 provide the next independent feature slice. Keep one active implementation increment unless the user requests parallel work. Group UI improvements and optimizations requested during a feature increment with that feature, as the user authorized. Keep the resulting PR coherent and its validation proportional to the combined changes.
+
+## Local-first release batching
+
+The user requested an open local preview and continued feature/UI work without a deployment per feature. Validate each increment locally, preserve the reviewable batch, and wait for explicit user direction before a cloud deployment. Preview: `http://127.0.0.1:5090`; see [local workflow](dev-release-performance.md). Grafana AWS Terraform is prepared separately and has not been applied.
 
 ## Shared product and release requirements
 

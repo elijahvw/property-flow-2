@@ -85,7 +85,7 @@ export function registerOverview(
               OR: [{ endsOn: null }, { endsOn: { gte: date } }],
             };
           const [rent] = await tx.$queryRaw<{ amount: bigint }[]>(
-            Prisma.sql`SELECT COALESCE(SUM(l."rentCents"),0)::bigint amount FROM "Lease" l JOIN "Unit" u ON u.id=l."unitId" AND u."companyId"=l."companyId" WHERE l."companyId"=${companyId} AND l.status='active' AND u.status='active' AND l."startsOn"<=${date} AND (l."endsOn" IS NULL OR l."endsOn">=${date}) ${propertyId ? Prisma.sql`AND l."propertyId"=${propertyId}` : Prisma.empty}`,
+            Prisma.sql`SELECT COALESCE(SUM(COALESCE((SELECT t."rentCents" FROM "LeaseTermChange" t WHERE t."companyId"=l."companyId" AND t."leaseId"=l.id AND t."effectiveOn"<=${date} AND NOT EXISTS(SELECT 1 FROM "LeaseTermCancellation" x WHERE x."changeId"=t.id AND x."companyId"=l."companyId") ORDER BY t."effectiveOn" DESC,t.id DESC LIMIT 1),l."rentCents")),0)::bigint amount FROM "Lease" l JOIN "Unit" u ON u.id=l."unitId" AND u."companyId"=l."companyId" WHERE l."companyId"=${companyId} AND l.status='active' AND u.status='active' AND l."startsOn"<=${date} AND (l."endsOn" IS NULL OR l."endsOn">=${date}) ${propertyId ? Prisma.sql`AND l."propertyId"=${propertyId}` : Prisma.empty}`,
           );
           management.leases = {
             inEffectCount: await tx.lease.count({ where: inEffect }),
@@ -153,16 +153,17 @@ export function registerOverview(
           management.rentCollections = await rentCollections(tx,companyId,today,propertyId);
           const from = today.slice(0, 7) + "-01";
           const [totals] = await tx.$queryRaw<
-            { income: bigint; expense: bigint }[]
+            { income: bigint; expense: bigint; rentRefund:bigint }[]
           >(
-            Prisma.sql`SELECT COALESCE(SUM("amountCents") FILTER (WHERE kind='income'),0)::bigint income,COALESCE(SUM("amountCents") FILTER (WHERE kind='expense'),0)::bigint expense FROM "LedgerEntry" WHERE "companyId"=${companyId} AND "voidedAt" IS NULL AND "occurredOn">=${new Date(from + "T00:00:00Z")} AND "occurredOn"<=${date} ${propertyId ? Prisma.sql`AND "propertyId"=${propertyId}` : Prisma.empty}`,
+            Prisma.sql`SELECT COALESCE(SUM("amountCents") FILTER (WHERE kind='income'),0)::bigint income,COALESCE(SUM("amountCents") FILTER (WHERE kind='expense'),0)::bigint expense,COALESCE(SUM("amountCents") FILTER (WHERE kind='refund' AND category='rent'),0)::bigint "rentRefund" FROM "LedgerEntry" WHERE "companyId"=${companyId} AND "voidedAt" IS NULL AND "occurredOn">=${new Date(from + "T00:00:00Z")} AND "occurredOn"<=${date} ${propertyId ? Prisma.sql`AND "propertyId"=${propertyId}` : Prisma.empty}`,
           );
           management.cash = {
             dateFrom: from,
             dateTo: today,
             incomeCents: String(totals.income),
             expenseCents: String(totals.expense),
-            netCents: String(totals.income - totals.expense),
+            ...(totals.rentRefund>0n?{rentRefundCents:String(totals.rentRefund)}:{}),
+            netCents: String(totals.income - totals.expense - totals.rentRefund),
           };
         }
         return { ...result, ...management };

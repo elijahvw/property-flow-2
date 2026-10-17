@@ -1,3 +1,5 @@
+import {currentLeaseTerms} from "./lease-term-policy.js";
+import { depositMovementTotals } from "./movement-sources.js";
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { AccessError, companyScope } from "./access.js";
@@ -14,7 +16,7 @@ function complete<T>(rows: T[], limit: number) {
   return rows;
 }
 function summary(data: Awaited<ReturnType<typeof readRentSources>>, today: string) {
-  const { chargeApplied, paymentApplied, chargePaymentHistory, ...totals } = rentBalances(data, today);
+  const { chargeApplied, paymentApplied, chargePaymentHistory, refundedByPayment, ...totals } = rentBalances(data, today);
   return totals;
 }
 
@@ -46,7 +48,7 @@ export function registerResidentWorkspace(
         const businessDate = companyDay(company.timezone);
         // Include draft/future/ended history for management, independent of portal
         // assignment. This endpoint is never used as a tenant self-service API.
-        const leases = complete(await tx.lease.findMany({
+        const leaseRows = complete(await tx.lease.findMany({
           where: { companyId, OR: contactMode?[{residentContactId:userId},{participants:{some:{companyId,contactId:userId}}}]:[{ residentId: userId }, { participants: { some: { companyId, userId } } },{residentContact:{companyId,userId}},{participants:{some:{companyId,contact:{companyId,userId}}}}] },
           select: {
             id: true, propertyId: true, startsOn: true, endsOn: true,
@@ -55,12 +57,15 @@ export function registerResidentWorkspace(
           },
           orderBy: [{ startsOn: "desc" }, { id: "desc" }], take: 1001,
         }), 1000);
+        const leases=await currentLeaseTerms(tx,companyId,leaseRows,businessDate);
         const leaseIds = leases.map(l => l.id);
         const data = await readRentSources(tx, companyId, leaseIds);
         const grouped = new Map(leaseIds.map(id => [id, {
-          charges: [] as typeof data.charges, payments: [] as typeof data.payments,
+          credits: [] as typeof data.credits, movements: [] as typeof data.movements, charges: [] as typeof data.charges, payments: [] as typeof data.payments,
           allocations: [] as typeof data.allocations,
         }]));
+        for (const row of data.movements) grouped.get(row.leaseId)!.movements.push(row);
+        for (const row of data.credits) grouped.get(row.leaseId)!.credits.push(row);
         for (const row of data.charges) grouped.get(row.leaseId)!.charges.push(row);
         for (const row of data.payments) grouped.get(row.leaseId!)!.payments.push(row);
         for (const row of data.allocations) grouped.get(row.leaseId)!.allocations.push(row);
@@ -82,9 +87,9 @@ export function registerResidentWorkspace(
         }
         const byLease = new Map(deposits.map(d => [d.leaseId, {
           id: d.id, reference: d.reference, dueOn: d.dueOn,
-          ...depositSummary(d.requiredCents, held.get(d.id) ?? 0n, d.dueOn, businessDate),
+          ...depositSummary(d.requiredCents, held.get(d.id) ?? 0n, d.dueOn, businessDate,depositMovementTotals(data.movements,d.id),receipts.filter(r=>r.accountId===d.id && r.cashEntries[0].voidedAt).reduce((s,r)=>s+BigInt(r.amountCents),0n)),
         }]));
-        const depositTotals = { requiredCents: 0n, heldCents: 0n, outstandingCents: 0n, excessHeldCents: 0n, pastDueCents: 0n };
+        const depositTotals = { requiredCents: 0n, heldCents: 0n, receivedCents:0n,appliedCents:0n,returnedCents:0n,correctedCents:0n, outstandingCents: 0n, excessHeldCents: 0n, pastDueCents: 0n };
         for (const deposit of byLease.values())
           for (const key of Object.keys(depositTotals) as (keyof typeof depositTotals)[])
             depositTotals[key] += BigInt(deposit[key]);

@@ -107,3 +107,10 @@ export function defaultDestination(user: Principal) {
         ? "/resident"
         : "/access";
 }
+
+// The guide is derived from the same grants used by requirePermission().
+// Keeping the two together prevents UI descriptions from inventing authority.
+export function companyRoleGuide() {
+  const labels: Record<CompanyRole,string>={owner:"Company owner",manager:"Manager",staff:"Staff",resident:"Resident"};
+  return COMPANY_ROLES.map(role=>({role,label:labels[role],permissions:[...grants[role]]}));
+}

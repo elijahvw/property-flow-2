@@ -15,6 +15,7 @@ locals {
 }
 
 resource "aws_ecs_cluster" "main" {
+  tags = { Application = "propertyflow", Environment = var.vars.environment }
   name = "propertyflow-${var.vars.environment}-cluster"
 }
 
@@ -36,6 +37,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
 }
 
 resource "aws_lb" "main" {
+  tags               = { Application = "propertyflow", Environment = var.vars.environment }
   name               = "propertyflow-${var.vars.environment}-alb"
   internal           = false
   load_balancer_type = "application"
@@ -44,6 +46,7 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "app" {
+  tags        = { Application = "propertyflow", Environment = var.vars.environment }
   name        = "propertyflow-${var.vars.environment}-tg"
   port        = 5011
   protocol    = "HTTP"
@@ -126,6 +129,7 @@ resource "aws_ecs_task_definition" "app" {
 }
 
 resource "aws_ecs_service" "app" {
+  tags = { Application = "propertyflow", Environment = var.vars.environment }
   # ECS requires the target group to be attached to a listener first.
   depends_on = [aws_lb_listener.http, aws_iam_role_policy.grafana_ingestion]
 

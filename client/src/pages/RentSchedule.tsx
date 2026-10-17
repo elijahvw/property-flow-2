@@ -1,3 +1,4 @@
+import { recordReference } from "../record-reference";
 import { formatDate, formatMonth } from "../dates";
 import { DateField } from "../components/DateField";
 import {
@@ -324,7 +325,7 @@ export function RentSchedule({
                   row.currentCharge.id !== row.charge?.id && (
                     <p className="help">
                       Current replacement:{" "}
-                      {row.currentCharge.reference || "Rent charge"} ·{" "}
+                      {row.currentCharge.reference ? recordReference(row.currentCharge.reference) : "Rent charge"} ·{" "}
                       {dollars(row.currentCharge.amountCents)}
                     </p>
                   )}

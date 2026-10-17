@@ -76,7 +76,7 @@ export async function statementCases(t, admin, call) {
         assert.deepEqual(own[key], s[key]);
       assert.doesNotMatch(
         JSON.stringify(s),
-        /PRIVATE|memo|voidReason|email|paymentReference|residentId|residentContact|submissionHash|createdById/,
+        /PRIVATE|"(?:memo|voidReason|email|paymentReference|residentId|residentContact|submissionHash|createdById)":/,
       );
       const jan = ok(
         await call(

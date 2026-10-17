@@ -55,6 +55,7 @@ type OverviewData = {
     afterGraceLeaseCount: number;
   };
   cash?: {
+    rentRefundCents?:string;
     dateFrom: string;
     dateTo: string;
     incomeCents: string;
@@ -369,6 +370,7 @@ function OverviewWorkspace() {
                       <dt>Expenses paid</dt>
                       <dd>{dollars(d.cash.expenseCents)}</dd>
                     </div>
+                    {d.cash.rentRefundCents&&<div><dt>Rent refunds</dt><dd>{dollars(d.cash.rentRefundCents)}</dd></div>}
                     <div className="cash-total">
                       <dt>Net recorded</dt>
                       <dd>{dollars(d.cash.netCents)}</dd>

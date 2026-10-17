@@ -24,6 +24,7 @@ resource "aws_security_group" "rds" {
 }
 
 resource "aws_db_instance" "postgresql" {
+  tags                   = { Application = "propertyflow", Environment = var.environment }
   identifier             = "propertyflow-${var.environment}-db"
   engine                 = "postgres"
   engine_version         = "16.3"

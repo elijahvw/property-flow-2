@@ -1,3 +1,5 @@
+import {CompanyProfile} from "./CompanyProfile";
+import {AccountProfile} from "./AccountProfile";
 import { ContactInvitationReview } from "../components/ContactInvitation";
 import { PropertyAddressFields } from "../components/Address";
 import { RecordIdentity } from "../components/RecordIdentity";
@@ -887,6 +889,7 @@ function TeamDirectory() {
             Transfer ownership
           </button>
           <Link to="/company/residents">Manage tenants</Link>
+          <Link to="/company/settings?section=roles">Roles & permissions →</Link>
         </div>
       </header>
       <section className="panel">
@@ -1089,77 +1092,8 @@ export function Invitations({
     </section>
   );
 }
-export function CompanySettings() {
-  const { data, refreshUser } = useAuth();
-  return (
-    <>
-      <header className="page-heading">
-        <h1>Company settings</h1>
-      </header>
-      <section className="panel">
-        <Form
-          operation="company.update"
-          submit={async (form) => {
-            await api("/api/company", {
-              method: "PATCH",
-              body: { name: text(form, "name") },
-            });
-            await refreshUser();
-          }}
-        >
-          <Field
-            name="name"
-            label="Company name"
-            value={data?.membership?.company.name}
-          />
-        </Form>
-      </section>
-    </>
-  );
-}
-export function Account() {
-  const { user, data, refreshUser } = useAuth();
-  return (
-    <>
-      <header className="page-heading">
-        <p className="eyebrow">Account</p>
-        <h1>My profile</h1>
-        <p>Your identity and company access.</p>
-      </header>
-      <section className="panel">
-        <Form
-          submit={async (form) => {
-            await api("/api/account", {
-              method: "PATCH",
-              body: { name: text(form, "name") },
-            });
-            await refreshUser();
-          }}
-        >
-          <Field name="name" label="Display name" value={user?.name || ""} />
-          <p>
-            <strong>Sign-in email</strong>
-            <br />
-            {user?.email} · {user?.emailVerified ? "Verified" : "Not verified"}
-          </p>
-          <p className="help">
-            Your sign-in email is managed by your identity provider.
-          </p>
-        </Form>
-        <dl className="details">
-          <dt>Company</dt>
-          <dd>{data?.membership?.company.name || "Not assigned"}</dd>
-          <dt>Role</dt>
-          <dd>
-            {user?.platformRole === "owner"
-              ? "Platform owner"
-              : data?.membership?.role || "Not assigned"}
-          </dd>
-        </dl>
-      </section>
-    </>
-  );
-}
+export function CompanySettings() { return <CompanyProfile/>; }
+export function Account() { return <AccountProfile/>; }
 export function AccessStatus() {
   const { data, refreshUser } = useAuth();
   const suspended =

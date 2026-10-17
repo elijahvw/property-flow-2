@@ -29,7 +29,7 @@ type Cash = Base & {
     incomeCents: string;
     expenseCents: string;
     netCents: string;
-    depositReceivedCents?: string;
+    depositReceivedCents?: string;rentRefundCents?:string;depositRefundCents?:string;
     cashMovementCents?: string;
     includedCount: number;
     voidedCount: number;
@@ -44,6 +44,7 @@ type Cash = Base & {
     count: number;
   }[];
   items: {
+    movement?:{id:string;reference:string;leaseId:string;kind:string}|null;
     id: string;
     reference?: string;
     depositReceipt?: { id: string; reference: string; leaseId: string } | null;
@@ -159,6 +160,8 @@ function Builder({ today }: { today: string }) {
           ["Through date", report.filters.dateTo!],
           ["Income (USD)", moneyCell(report.summary.incomeCents)],
           ["Expenses (USD)", moneyCell(report.summary.expenseCents)],
+          ["Rent refunds (USD)",moneyCell(report.summary.rentRefundCents??"0")],
+          ["Deposit refunds (USD)",moneyCell(report.summary.depositRefundCents??"0")],
           ["Operating net (USD)", moneyCell(report.summary.netCents)],
           [
             "Deposits received (USD)",
@@ -183,7 +186,7 @@ function Builder({ today }: { today: string }) {
             "Amount (USD)",
             "Included in totals",
             "Memo",
-            "Void reason",
+            "Void reason", "Money movement reference", "Money movement source ID", "Lease ID",
           ],
           ...report.items.map((r) => [
             r.reference || r.id,
@@ -197,7 +200,7 @@ function Builder({ today }: { today: string }) {
             moneyCell(r.amountCents),
             r.voidedAt ? "No — voided" : "Yes",
             r.memo || "",
-            r.voidReason || "",
+            r.voidReason || "",r.movement?.reference||"",r.movement?.id||"",r.movement?.leaseId||"",
           ]),
         ],
       );
@@ -424,7 +427,7 @@ function Builder({ today }: { today: string }) {
                 </div>
               </div>
               <p className="help">
-                Operating net excludes refundable deposits. Net cash movement
+                Rent refunds: {dollars(report.summary.rentRefundCents??"0")}. Deposit refunds: {dollars(report.summary.depositRefundCents??"0")}. Operating net subtracts rent refunds and excludes refundable deposits/deposit returns. Net cash movement
                 including these receipts:{" "}
                 {dollars(
                   report.summary.cashMovementCents || report.summary.netCents,

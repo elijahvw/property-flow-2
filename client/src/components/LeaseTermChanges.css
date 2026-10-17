@@ -1,0 +1,158 @@
+.term-policy-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.2rem;
+  margin: 1.5rem 0;
+}
+.term-policy-facts dt {
+  font-size: 0.85rem;
+  color: #63766b;
+}
+.term-policy-facts dd {
+  margin: 0.5rem 0 0;
+  font-size: 1.3rem;
+  font-weight: 650;
+  color: #1e4538;
+  overflow-wrap: anywhere;
+}
+.term-instructions {
+  border-top: 1px solid #e1e8e3;
+  padding-top: 1rem;
+}
+.term-instructions > span {
+  font-size: 0.85rem;
+  color: #63766b;
+}
+.term-instructions p {
+  margin: 0.5rem 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.term-comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 1.25rem 0;
+}
+.term-comparison > section {
+  padding: 1.2rem;
+  border: 1px solid #dce6df;
+  border-radius: 10px;
+  min-width: 0;
+  background: #fafcfb;
+}
+.term-comparison > section + section {
+  background: #f0f7f3;
+  border-color: #c9dfd2;
+}
+.term-comparison h3 {
+  font-size: 0.9rem;
+  color: #526a5c;
+  margin: 0;
+}
+.term-comparison .term-policy-facts {
+  grid-template-columns: 1fr 1fr;
+  margin: 1rem 0;
+}
+.term-comparison .term-policy-facts > div:first-child {
+  grid-column: 1/-1;
+}
+.scheduled-term-card {
+  border-left: 3px solid #267960;
+}
+.term-guidance summary,
+.term-history > summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+.term-guidance p {
+  margin: 1rem 0;
+  max-width: 75ch;
+  color: #596e61;
+  font-size: 0.9rem;
+}
+.term-history article {
+  border-top: 1px solid #dfe7e1;
+  padding: 1.3rem 0;
+}
+.term-history article h3 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+.term-history article .section-heading {
+  margin-bottom: 0.75rem;
+}
+.term-cancelled {
+  background: #f5f7f6;
+  border-left: 3px solid #cbd6cf;
+  padding: 0.8rem 1rem;
+  font-size: 0.85rem;
+  margin-top: 1rem;
+}
+.term-form-step h3 {
+  margin: 0.4rem 0 1.5rem;
+}
+.term-form-step h3:focus {
+  outline: none;
+}
+.term-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1rem;
+}
+.term-form-grid > label:first-child {
+  grid-column: 1/-1;
+}
+.term-installments {
+  list-style: none;
+  padding: 0;
+}
+.term-installments > li {
+  padding: 1.1rem 0;
+  border-top: 1px solid #e0e7e2;
+}
+.term-installments h4 {
+  margin: 0 0 1rem;
+}
+.term-installment-values {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+.term-installment-values span {
+  display: block;
+  color: #64766a;
+  font-size: 0.8rem;
+}
+.term-installment-values strong {
+  display: block;
+  margin: 0.4rem 0;
+}
+.term-installment-values p {
+  margin: 0.35rem 0;
+  font-size: 0.85rem;
+  color: #536a5c;
+}
+.term-override {
+  background: #f3f6f4;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.8rem;
+  color: #596e61;
+}
+.term-installment-review {
+  margin: 1.5rem 0;
+}
+@media (max-width: 650px) {
+  .term-comparison {
+    grid-template-columns: 1fr;
+  }
+  .term-policy-facts {
+    grid-template-columns: 1fr 1fr;
+  }
+  .term-policy-facts > div:first-child {
+    grid-column: 1/-1;
+  }
+  .term-form-grid {
+    grid-template-columns: 1fr;
+  }
+}

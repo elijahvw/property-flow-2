@@ -9,7 +9,7 @@ export function useResource<T>(
   refreshWhenVisible = false,
 ) {
   const { data: auth } = useAuth();
-  const scope = `${auth?.user.id}:${auth?.user.status}:${auth?.membership?.companyId}:${auth?.membership?.version}:${auth?.permissions.join(",")}`;
+  const scope = `${auth?.user.id}:${auth?.user.status}:${auth?.user.emailVerified}:${auth?.membership?.companyId}:${auth?.membership?.version}:${auth?.permissions.join(",")}`;
   const key = `${scope}:${url}`;
   const [result, setResult] = useState<{
     key: string;

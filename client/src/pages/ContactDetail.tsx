@@ -16,6 +16,7 @@ import { Form } from "./Workspace";
 import { tenantDirectorySearch } from "../tenant-links";
 import { formatDate } from "../dates";
 type Contact = TenantContact & {
+  canArchive?: boolean;
   invitations: ContactInvitationState[];
   portal: {
     userId: string;
@@ -121,26 +122,9 @@ function ContactWorkspace({ id }: { id: string }) {
           {r.error} <button onClick={r.reload}>Refresh tenant</button>
         </p>
       )}
-      {person.status === "active" && (
-        <section className="panel tenant-next-step">
-          <div>
-            <h2>Keep this tenant's rental work connected</h2>
-            <p>
-              Record their lease, review the household, then set up rent and
-              deposits. No login is required.
-            </p>
-          </div>
-          <Link
-            className="button"
-            to={`/company/leases?new=lease&contactId=${encodeURIComponent(id)}`}
-          >
-            Record a lease for {person.preferredName || person.name}
-          </Link>
-        </section>
-      )}
       <div className="tenant-content-grid">
         <div className="tenant-primary">
-          <TenantFinancials id={id} contact />
+          {can("finance.manage") && can("lease.manage") ? <TenantFinancials id={id} contact setup={{ name: person.preferredName || person.name, active: person.status === "active" }} /> : <section className="panel"><h2>Lease and financial information</h2><p>Your current permissions do not include this information.</p></section>}
           <section className="panel">
             <h2>Recent activity</h2>
             {person.activity.length ? (
@@ -263,15 +247,16 @@ function ContactWorkspace({ id }: { id: string }) {
               {person.managementNotes || "No internal notes added."}
             </p>
           </section>
-          <section className="panel">
-            <h2>Record status</h2>
+          <details className="tenant-record-options">
+            <summary>More tenant actions</summary>
             <p>
-              Archive former tenants when their lease records are ended. History
-              and recorded money remain searchable.
+              {person.canArchive === false && person.status !== "archived"
+                ? "Review current, upcoming or draft lease relationships before archiving this tenant."
+                : "Archive former tenants when their lease relationships have ended. History and recorded money remain searchable."}
             </p>
             <button
-              className="secondary"
-              disabled={!!r.error}
+              className="text-button"
+              disabled={!!r.error || (person.status !== "archived" && person.canArchive === false)}
               onClick={() => {
                 setDraft(person);
                 setArchive(true);
@@ -281,7 +266,7 @@ function ContactWorkspace({ id }: { id: string }) {
                 ? "Restore tenant"
                 : "Archive tenant"}
             </button>
-          </section>
+          </details>
         </aside>
       </div>
       <EditorDialog

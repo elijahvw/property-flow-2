@@ -1,3 +1,6 @@
+import { LeaseAdjustments, chargeName, type LeaseCredit } from "../components/LeaseAdjustments";
+import { LeaseMovements, type MoneyMovement } from "../components/LeaseMovements";
+import { recordReference } from "../record-reference";
 import { formatDate, formatMonth } from "../dates";
 import { statementPath, statementContext } from "../statement";
 import { leasePath,leaseContext } from "../lease-links";
@@ -24,6 +27,7 @@ import { Form } from "./Workspace";
 import { dollars } from "./Finances";
 import { downloadReport, moneyCell } from "../report-export";
 type Summary = {
+  depositAppliedCents?:string; refundedCents?:string; rentOutstandingCents?:string; otherOutstandingCents?:string; noncashCreditCents?:string;
   paidAfterGraceCents?: string;
   paidLateChargeCount?: string;
   afterGraceCents: string;
@@ -41,7 +45,8 @@ type Summary = {
   creditCents: string;
   netCents: string;
 };
-type Entry = {
+export type Entry = {
+  depositAppliedCents?:string; refundedCents?:string; kind?:string; category?:string; effectiveOn?:string|null; creditedCents?:string;
   reference?: string;
   id: string;
   amountCents: number;
@@ -64,8 +69,11 @@ type Entry = {
   settledOn?: string | null;
   paidAfterGraceCents?: string;
 };
-type Account = {
+export type Account = {
+  movements?:MoneyMovement[];
+  credits?:LeaseCredit[];
   lease: {
+    hasTermHistory?:boolean;
     rentDueDay?: number;
     graceDays?: number;
     paymentInstructions?: string | null;
@@ -117,7 +125,7 @@ function Metrics({ summary }: { summary: Summary }) {
       <div>
         <span>Unpaid charges</span>
         <strong>{dollars(summary.outstandingCents)}</strong>
-        <small>{dollars(summary.overdueCents)} past due</small>
+        <small>{dollars(summary.overdueCents)} past due</small><small>Rent {dollars(summary.rentOutstandingCents??summary.outstandingCents)} · Other {dollars(summary.otherOutstandingCents??"0")}</small>
       </div>
       <div>
         <span>Past grace</span>
@@ -137,7 +145,7 @@ function PaymentStanding({ summary }: { summary: Summary }) {
     <p className="payment-standing">
       <strong>
         {BigInt(summary.overdueCents) > 0n
-          ? "Past-due rent remains"
+          ? "Past-due charges remain"
           : BigInt(summary.chargedCents) > 0n
             ? "Up to date — no past-due rent"
             : "No posted rent yet"}
@@ -235,7 +243,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
     outstandingCents: "0",
     overdueCents: "0",
     creditCents: "0",
-    netCents: "0",
+    netCents: "0", rentOutstandingCents:"0",otherOutstandingCents:"0",noncashCreditCents:"0",
   };
   for (const a of list)
     for (const k of Object.keys(totals) as (keyof Summary)[])
@@ -258,11 +266,11 @@ function RentWorkspace({ resident }: { resident: boolean }) {
           {resident ? "My rental" : "Money · Rent operations"}
         </p>
         <h1>
-          {leaseId ? "Rent ledger" : resident ? "My rent" : "Rent & balances"}
+          {leaseId ? "Rent ledger" : resident ? "My rent" : "Rent & charges"}
         </h1>
         <p>
           {resident
-            ? "Your posted rent, recorded payments, and remaining balance."
+            ? "Your rent and other charges, recorded payments, credits and remaining balance."
             : "Post monthly rent, record payments received, and follow each lease balance."}
         </p>
       </header>
@@ -689,6 +697,7 @@ function LeaseLedger({
           )}
         </div>
         <div className="actions">
+        <Link to={resident?`/resident/leases/${encodeURIComponent(lease.id)}/terms`:`/company/leases/${encodeURIComponent(lease.id)}?section=terms`}>Lease terms & changes →</Link>
         <Link className="button secondary" to={statementPath(lease.id, resident, { ...statementContext(linkParams), statementFrom: "rent" })}>View statement</Link>
         {!resident && (
           <div className="actions">
@@ -722,6 +731,8 @@ function LeaseLedger({
       <PaymentStanding summary={summary} />
       <Metrics summary={summary} />
       <Aging summary={summary} />
+      <LeaseMovements leaseId={lease.id} resident={resident} area="rent" changed={reload} stale={stale}/>
+      <LeaseAdjustments account={account} today={today} resident={resident} stale={stale} changed={reload} />
       {!resident && (
         <RentSchedule lease={lease} businessDate={today} changed={reload} />
       )}
@@ -751,7 +762,7 @@ function LeaseLedger({
                 ["Lease internal ID", lease.id, "Business date", today],
                 [
                   "Basis",
-                  "Current posted rent ledger in USD; voided entries excluded from totals",
+                  "Current posted lease charges and cash receipts less noncash credits in USD; voids excluded and credit reversals retained",
                 ],
                 [
                   "Charged USD",
@@ -759,6 +770,9 @@ function LeaseLedger({
                   "Received USD",
                   moneyCell(summary.paidCents),
                 ],
+                ["Noncash credit reductions USD",moneyCell(summary.noncashCreditCents??"0")],
+                ["Deposit applied to charges USD",moneyCell(summary.depositAppliedCents??"0")],
+                ["Manual payment refunds USD",moneyCell(summary.refundedCents??"0")],
                 [
                   "Unpaid USD",
                   moneyCell(summary.outstandingCents),
@@ -805,7 +819,7 @@ function LeaseLedger({
                       ? "Paid late"
                       : c.settledOn
                         ? "Paid within grace"
-                        : "Not settled",
+                        : BigInt(c.depositAppliedCents??"0")>0n && c.remainingCents==="0" ? "Settled from deposit" : BigInt(c.creditedCents??"0")>0n && c.remainingCents==="0" ? "Settled with credit" : "Not settled",
                   c.settledOn || "",
                   moneyCell(c.paidAfterGraceCents || "0"),
                 ]),
@@ -825,6 +839,10 @@ function LeaseLedger({
                   "",
                   "",
                 ]),
+                ["Movement reference","Source ID","Kind","Effective date","Amount USD","Reason","Charge ID","Payment ID","Cash ID","Cash reference","Correction reference","Correction date","Correction reason"],
+                ...(account.movements??[]).map(m=>[m.reference,m.id,m.kind,m.effectiveOn.slice(0,10),moneyCell(String(m.amountCents)),m.reason,m.chargeId??"",m.paymentId??"",m.cashEntries[0]?.id??"",m.cashEntries[0]?.reference??"",m.reversal?.reference??"",m.reversal?.effectiveOn.slice(0,10)??"",m.reversal?.reason??""]),
+                ["Credit reference","Credit internal ID","Charge internal ID","Effective date","Credit USD","Type","Reason","Reversal reference","Reversal effective date","Reversal reason"],
+                ...(account.credits??[]).map(c=>[c.reference,c.id,c.chargeId,c.effectiveOn.slice(0,10),moneyCell(String(c.amountCents)),c.kind,c.reason,c.reversal?.reference??"",c.reversal?.effectiveOn.slice(0,10)??"",c.reversal?.reason??""]),
                 [
                   "Allocation internal ID",
                   "Payment reference",
@@ -848,7 +866,7 @@ function LeaseLedger({
           </button>
           <p className="help">
             {dollars(summary.chargedCents)} charged ·{" "}
-            {dollars(summary.paidCents)} received
+            {dollars(summary.paidCents)} cash received · {dollars(summary.refundedCents??"0")} returned · {dollars(summary.depositAppliedCents??"0")} applied from deposit · {dollars(summary.noncashCreditCents??"0")} noncash reductions
           </p>
         </div>
         <div
@@ -901,7 +919,7 @@ function LeaseLedger({
                   <div>
                     <h3>
                       {tab === "charges"
-                        ? `Rent · ${formatMonth(row.periodOn)}`
+                        ? chargeName(row)
                         : "Payment received"}
                     </h3>
                     <p>
@@ -909,21 +927,22 @@ function LeaseLedger({
                         ? `Due ${formatDate(row.dueOn)}`
                         : formatDate(row.occurredOn)}
                     </p>
-                    {row.memo && <p>{row.memo}</p>}
+                    {row.memo && (tab !== "charges" || row.kind !== "one_time") && <p>{row.memo}</p>}
+                    {BigInt(row.refundedCents??"0")>0n && <p>{dollars(row.refundedCents!)} returned from this payment</p>}
                     {tab === "charges" && row.collectionStatus && (
                       <>
                         <span
                           className={`collection-badge ${row.paidLate ? "paid_late" : row.collectionStatus}`}
                         >
-                          {row.paidLate
-                            ? "paid late"
-                            : row.collectionStatus.replace(/_/g, " ")}
+                          {row.paidLate ? "paid late" : row.remainingCents==="0" && BigInt(row.depositAppliedCents??"0")>0n ? "Settled from deposit" : row.remainingCents==="0" && BigInt(row.creditedCents??"0")>0n ? "Settled with credit" : row.collectionStatus.replace(/_/g, " ")}
                         </span>
                         <p>
                           {row.settledOn
                             ? `Paid ${formatDate(row.settledOn)} · fully paid`
                             : `${dollars(row.remainingCents || "0")} unpaid · ${row.daysPastDue || 0} days past due`}
                         </p>
+                        {BigInt(row.depositAppliedCents??"0")>0n && <p>{dollars(row.depositAppliedCents!)} settled from the security deposit</p>}
+                        {BigInt(row.creditedCents??"0")>0n && <p>{dollars(row.creditedCents!)} reduced by noncash credit</p>}
                         {BigInt(row.paidAfterGraceCents ?? "0") > 0n && (
                           <p className="help">
                             {dollars(row.paidAfterGraceCents!)} received after
@@ -967,8 +986,8 @@ function LeaseLedger({
                   {!row.voidedAt && (
                     <small>
                       {tab === "charges"
-                        ? `${dollars(BigInt(row.amountCents).toString())} charged · ${dollars(row.appliedCents)} paid`
-                        : `${dollars(row.appliedCents)} applied · ${dollars(String(BigInt(row.amountCents) - BigInt(row.appliedCents)))} credit`}
+                        ? `${dollars(BigInt(row.amountCents).toString())} charged · ${dollars(String(BigInt(row.appliedCents)-BigInt(row.creditedCents??"0")-BigInt(row.depositAppliedCents??"0")))} cash applied${BigInt(row.creditedCents??"0")>0n?` · ${dollars(row.creditedCents!)} credited`:""}`
+                        : `${dollars(row.appliedCents)} applied · ${dollars(String(BigInt(row.amountCents) - BigInt(row.appliedCents) - BigInt(row.refundedCents??"0")))} credit`}
                     </small>
                   )}
                   {!row.voidedAt && !resident && (
@@ -1027,7 +1046,7 @@ function LeaseLedger({
               onClose={() => setCorrection(null)}
             >
               <p>
-                {dollars(correction.row.amountCents)} · {correction.row.id}
+                {dollars(correction.row.amountCents)} · {correction.row.reference ? recordReference(correction.row.reference) : "Selected record"}
               </p>
               <Form
                 label={`Confirm void ${correction.type}`}
@@ -1169,14 +1188,21 @@ function RentDraft({
       pending?.amount ||
         (mode === "charge" ? (account.lease.rentCents / 100).toFixed(2) : ""),
     );
-  const due = scheduledDueDate(month, lease.rentDueDay ?? 1);
+  const needsTerms=mode==="charge"&&lease.hasTermHistory&&!pending;
+  const [periodTerms,setPeriodTerms]=useState<{month:string;data?:{rentCents:number;rentDueDay:number;graceDays:number;dueOn:string;expectedLeaseVersion:number};error?:string}>({month:""});
+  const [amountOverride,setAmountOverride]=useState<{month:string;value:string}>();
+  useEffect(()=>{if(!needsTerms)return;let live=true;setPeriodTerms({month});api<NonNullable<typeof periodTerms.data>>(`/api/company/rent/${encodeURIComponent(lease.id)}/terms?periodOn=${encodeURIComponent(month+"-01")}`).then(data=>{if(live)setPeriodTerms({month,data});}).catch(error=>{if(live)setPeriodTerms({month,error:error instanceof Error?error.message:"Unable to load effective terms."});});return()=>{live=false;};},[needsTerms,month,lease.id]);
+  const policy=needsTerms&&periodTerms.month===month?periodTerms.data:undefined;
+  const ready=!needsTerms||!!policy;
+  const chargeAmount=pending?.amount||(amountOverride?.month===month?amountOverride.value:policy?(policy.rentCents/100).toFixed(2):amount);
+  const due = policy?.dueOn.slice(0,10)||scheduledDueDate(month, lease.rentDueDay ?? 1);
   const [dueOverride, setDueOverride] = useState<{
     month: string;
     value: string;
   }>();
   const actualDue =
     pending?.dueOn || (dueOverride?.month === month ? dueOverride.value : due);
-  const savedGrace = pending?.reviewedPolicy?.graceDays ?? lease.graceDays ?? 0;
+  const savedGrace = pending?.reviewedPolicy?.graceDays ?? policy?.graceDays ?? lease.graceDays ?? 0;
   const grace = graceDates(actualDue, savedGrace);
   return (
     <Form
@@ -1184,6 +1210,7 @@ function RentDraft({
       label={mode === "charge" ? "Post rent charge" : "Record payment received"}
       secondaryActions={<DraftReset reset={reset} />}
       submit={async (form) => {
+        if(!ready)throw new Error(periodTerms.error||"Wait for this rent month's effective terms before posting.");
         const body: PendingRent =
           pending ||
           (mode === "charge"
@@ -1192,10 +1219,10 @@ function RentDraft({
                 dueOn: String(form.get("dueOn")),
                 amount: String(form.get("amount")),
                 memo: String(form.get("memo") || "") || null,
-                expectedVersion: lease.version,
+                expectedVersion: policy?.expectedLeaseVersion??lease.version,
                 reviewedPolicy: {
-                  graceDays: lease.graceDays ?? 0,
-                  rentDueDay: lease.rentDueDay ?? 1,
+                  graceDays: savedGrace,
+                  rentDueDay: policy?.rentDueDay??lease.rentDueDay ?? 1,
                 },
                 submissionKey,
               }
@@ -1246,6 +1273,7 @@ function RentDraft({
           submission safely, or check the ledger before clearing this draft.
         </p>
       )}
+      {needsTerms&&!ready&&<p className={periodTerms.error?"notice error":"help"} role={periodTerms.error?"alert":"status"}>{periodTerms.error||"Loading the selected rent month's terms…"}</p>}
       <fieldset disabled={!!pending} className="rent-draft-fields">
         {mode === "charge" ? (
           <div className="field-grid">
@@ -1294,8 +1322,9 @@ function RentDraft({
             max="1000000"
             step="0.01"
             required
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            value={mode==="charge"?chargeAmount:amount}
+            disabled={!ready}
+            onChange={(e) => mode==="charge"?setAmountOverride({month,value:e.target.value}):setAmount(e.target.value)}
           />
         </label>
         <label>
@@ -1318,7 +1347,7 @@ function RentDraft({
       <p className="notice">
         {mode === "charge"
           ? `Review ${month}: the default is the full monthly rent. For a partial month, enter the agreed amount yourself. One active charge per lease month. The agreed due date can precede move-in; no automatic proration is performed.`
-          : "Record money you have already received. This creates one rent income entry in cash reports, applies it to unpaid rent, and keeps any excess as credit. Do not record it again in Finances."}
+          : "Record money you have already received. This creates one rent income entry in cash reports, applies it to unpaid lease charges, and keeps any excess as credit. Do not record it again in Finances."}
       </p>
     </Form>
   );

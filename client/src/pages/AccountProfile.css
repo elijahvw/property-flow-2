@@ -1,0 +1,278 @@
+.profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(260px, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+.profile-sidebar {
+  display: grid;
+  gap: 1.5rem;
+}
+.profile-layout .panel {
+  margin: 0;
+  min-width: 0;
+}
+.account-profile-details h2 {
+  font-size: 1.65rem;
+  margin: 0.5rem 0;
+}
+.profile-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+}
+.profile-facts dt {
+  color: #52685f;
+  font-size: 0.85rem;
+}
+.profile-facts dd {
+  margin: 0.4rem 0 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.profile-facts dd .section-caption {
+  display: block;
+  margin-top: 0.4rem;
+  font-weight: 400;
+}
+.profile-facts.single {
+  grid-template-columns: 1fr;
+}
+.profile-emergency {
+  border-top: 1px solid #e0e7e3;
+  padding-top: 1rem;
+}
+.profile-emergency p {
+  margin: 0.5rem 0;
+}
+.profile-home {
+  border-bottom: 1px solid #e0e7e3;
+  padding: 0.9rem 0;
+}
+.profile-home p {
+  margin: 0.45rem 0;
+}
+.profile-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1.2rem;
+}
+.profile-review {
+  background: #f5faf7;
+  padding: 1rem;
+  border-radius: 10px;
+}
+@media (max-width: 850px) {
+  .profile-layout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 550px) {
+  .profile-fields,
+  .profile-facts {
+    grid-template-columns: 1fr;
+  }
+}
+
+.account-identity-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1.8rem 0;
+  padding: 1.25rem 1.5rem;
+  background: #edf5f0;
+  border: 1px solid #d9e6dc;
+  border-radius: 12px;
+}
+.account-identity-card h2 {
+  margin: 0 0 0.3rem;
+  font-size: 1.3rem;
+  letter-spacing: -0.02em;
+}
+.account-identity-card p {
+  margin: 0;
+  color: #597065;
+  font-size: 0.9rem;
+}
+.account-identity-card > .tenant-status {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.account-monogram {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  background: #1b5f4e;
+  border-radius: 12px;
+  color: white;
+  font-size: 1.4rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.profile-tabs {
+  display: flex;
+  gap: 1.6rem;
+  border-bottom: 1px solid #d8e2dc;
+  margin-bottom: 1.5rem;
+  overflow-x: auto;
+}
+button.profile-tab {
+  min-height: 48px;
+  padding: 0.65rem 0.2rem;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: #53685e;
+  font-weight: 600;
+  white-space: nowrap;
+}
+button.profile-tab[aria-current="page"] {
+  border-bottom-color: #16725f;
+  color: #125b49;
+}
+button.profile-tab:hover {
+  background: #edf4ef;
+}
+.account-content-card {
+  max-width: 100%;
+}
+.account-content-card > .section-heading {
+  border-bottom: 1px solid #e4ebe6;
+  padding-bottom: 1.2rem;
+  align-items: start;
+  gap: 1.5rem;
+}
+.account-content-card > .section-heading p {
+  margin: 0.45rem 0 0;
+  color: #64766c;
+  font-size: 0.9rem;
+  max-width: 65ch;
+}
+.account-content-card > .section-heading button {
+  flex-shrink: 0;
+}
+.account-content-card .profile-facts {
+  max-width: 760px;
+  gap: 1.6rem 3rem;
+  padding: 0.5rem 0;
+}
+.profile-facts .wide {
+  grid-column: 1/-1;
+}
+.account-empty {
+  padding: 2rem 0;
+  max-width: 55ch;
+}
+.account-empty h3 {
+  font-size: 1rem;
+  margin: 0 0 0.6rem;
+}
+.account-empty p {
+  margin: 0;
+  color: #64766c;
+  line-height: 1.7;
+}
+.account-card-footer {
+  border-top: 1px solid #e4ebe6;
+  padding-top: 1rem;
+  margin-top: 1.8rem;
+  display: flex;
+  justify-content: space-between;
+  color: #738279;
+  font-size: 0.78rem;
+}
+.account-address-block {
+  padding: 1.5rem 0;
+}
+.account-address-block .postal-address {
+  font-size: 1.05rem;
+}
+.account-hint {
+  padding: 1rem 1.2rem;
+  background: #f5f8f6;
+  border-left: 3px solid #c7dacf;
+  max-width: 65ch;
+  color: #53685e;
+  font-size: 0.9rem;
+}
+.account-disclosure {
+  border-top: 1px solid #e3eae5;
+  margin-top: 1rem;
+  padding: 1rem 0;
+}
+.account-disclosure summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.account-disclosure summary span + span {
+  margin-left: 1rem;
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: #64766c;
+}
+.profile-review {
+  display: block;
+}
+.profile-review > div {
+  padding: 0.85rem 0;
+  border-bottom: 1px solid #dce6df;
+}
+.profile-review > div:last-child {
+  border-bottom: 0;
+}
+@media (max-width: 600px) {
+  .account-identity-card {
+    padding: 1rem;
+  }
+  .profile-tabs {
+    gap: 1.1rem;
+  }
+  .account-content-card > .section-heading {
+    flex-direction: column;
+  }
+  .account-identity-card h2 {
+    font-size: 1.1rem;
+  }
+  .account-disclosure summary span {
+    display: block;
+  }
+  .account-disclosure summary span + span {
+    margin: 0.5rem 0;
+  }
+}
+.role-guide-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.role-guide-cards article {
+  padding: 1.25rem;
+  border: 1px solid #dbe5de;
+  border-radius: 10px;
+}
+.role-guide-cards h3 {
+  margin: 0 0 0.4rem;
+}
+.role-guide-cards ul {
+  padding-left: 1.1rem;
+  line-height: 1.6;
+  font-size: 0.9rem;
+}
+.role-guide-cards li {
+  margin: 0.6rem 0;
+}
+.role-guide-cards li span {
+  display: block;
+  margin-top: 0.25rem;
+  color: #68796e;
+  font-size: 0.8rem;
+}
+@media (max-width: 650px) {
+  .role-guide-cards {
+    grid-template-columns: 1fr;
+  }
+}

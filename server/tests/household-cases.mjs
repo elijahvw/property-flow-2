@@ -227,7 +227,7 @@ export async function householdCases(t,admin,call,app){
    await page.getByRole('button',{name:'Add to household',exact:true}).click();
    await expect(page.getByRole('heading',{name:'New Household Occupant',exact:true})).toBeVisible();
    const dismiss=page.getByRole('button',{name:'Dismiss',exact:true});if(await dismiss.isVisible())await dismiss.click();await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/tmp/propertyflow-lease-household-desktop.png',fullPage:true});
-   await page.getByRole('button',{name:'Overview & next steps',exact:true}).click();
+   await page.getByRole('button',{name:'Overview',exact:true}).click();
    await page.getByRole('link',{name:'Open rent & billing',exact:true}).click();
    await page.getByRole('link',{name:'← Back to lease workspace',exact:true}).click();
    await expect(page).toHaveURL(new RegExp(`/company/leases/${lease.id}$`));

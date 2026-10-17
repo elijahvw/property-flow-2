@@ -13,6 +13,7 @@ import {
   statementStatuses,
   type Statement as StatementData,
 } from "../statement";
+import { recordReference } from "../record-reference";
 import { downloadReport } from "../report-export";
 import { dollars } from "./Finances";
 import "./Statement.css";
@@ -97,6 +98,8 @@ export function Statement({ resident = false }: { resident?: boolean }) {
               : "Back to rent ledger"}
           </Link>
           {!resident && <TenantReturnLink />}
+          <Link to={resident?`/resident/leases/${encodeURIComponent(leaseId)}/terms`:`/company/leases/${encodeURIComponent(leaseId)}?section=terms`}>Lease terms & changes →</Link>
+          <Link to={resident?`/resident/leases/${encodeURIComponent(leaseId)}/settlement`:`/company/leases/${encodeURIComponent(leaseId)}?section=settlement`}>Move-out settlement →</Link>
         </nav>
         <header className="page-heading">
           <p className="record-kicker">
@@ -250,9 +253,18 @@ export function Statement({ resident = false }: { resident?: boolean }) {
               className="statement-balances"
             >
               <div className="statement-primary-balance">
-                <span>Unpaid rent</span>
+                <span>Unpaid charges</span>
                 <strong>{dollars(statement.current.outstandingCents)}</strong>
-                <small>All posted charges, including future due dates</small>
+                <small>
+                  Rent{" "}
+                  {dollars(
+                    statement.current.rentOutstandingCents ??
+                      statement.current.outstandingCents,
+                  )}{" "}
+                  · Other charges{" "}
+                  {dollars(statement.current.otherOutstandingCents ?? "0")}.
+                  Includes future due dates.
+                </small>
               </div>
               <div>
                 <span>Unapplied receipt credit</span>
@@ -289,7 +301,7 @@ export function Statement({ resident = false }: { resident?: boolean }) {
                 {statement.current.paidLateChargeCount === "1"
                   ? "charge paid"
                   : "charges paid"}{" "}
-                late. Paid-late history is separate from unpaid rent.
+                late. Paid-late history is separate from unpaid charges.
               </p>
             </section>
             <section
@@ -299,19 +311,25 @@ export function Statement({ resident = false }: { resident?: boolean }) {
               <div>
                 <h3 id="period-heading">Period reconciliation</h3>
                 <p>
-                  Current-status charges less receipts, grouped by source date.
-                  A negative net amount is a receipt surplus; it is not a
-                  refund.
+                  Current-status charges less cash receipts and net noncash
+                  credits, grouped by source date. A negative net amount is a
+                  receipt surplus; it is not a refund.
                 </p>
               </div>
               <dl>
                 {[
                   ["Opening net balance", statement.period.openingNetCents],
-                  ["+ Rent charged in period", statement.period.chargedCents],
+                  ["+ Charges in period", statement.period.chargedCents],
                   [
                     "− Payments received in period",
                     statement.period.receivedCents,
                   ],
+                  [
+                    "− Noncash credits, net of reversals",
+                    statement.period.noncashCreditCents ?? "0",
+                  ],
+                  ["− Deposit applied, net of reversals", statement.period.depositAppliedCents??"0"],
+                  ["+ Manual payment refunds", statement.period.refundedCents??"0"],
                   ["Closing net balance", statement.period.closingNetCents],
                   [
                     "+ Later-dated net activity",
@@ -326,8 +344,9 @@ export function Statement({ resident = false }: { resident?: boolean }) {
                 ))}
               </dl>
               <p className="help">
-                Current whole-lease net = unpaid rent − unapplied receipt
-                credit. Deposits do not reduce rent owed.
+                Current whole-lease net = unpaid charges − unapplied receipt
+                credit. Noncash reductions already applied:{" "}
+                {dollars(statement.current.noncashCreditCents ?? "0")}. Held deposits stay separate until an authorized application is recorded; applied to charges: {dollars(statement.current.depositAppliedCents??"0")}. Returned payments: {dollars(statement.current.refundedCents??"0")}.
               </p>
             </section>
             <section
@@ -335,22 +354,24 @@ export function Statement({ resident = false }: { resident?: boolean }) {
               aria-labelledby="activity-heading"
             >
               <div className="section-heading">
-                <h3 id="activity-heading">Rent activity</h3>
+                <h3 id="activity-heading">Lease activity</h3>
                 <span className="section-caption">
                   {statement.period.recordCount} source records ·{" "}
                   {statement.period.voidedCount} voided
                 </span>
               </div>
               <p className="help">
-                Charges use their due date; receipts use the date received.
-                Status and applied amounts reflect all current activity,
-                including dates outside this period.
+                Monthly rent uses its due date; one-time charges and credit
+                changes use their effective date; cash receipts use the date
+                received. Status and applied amounts reflect all current
+                activity, including dates outside this period.
               </p>
               {statement.items.length ? (
                 <div className="table-wrap">
                   <table>
                     <caption>
-                      Rent charges and payment receipts in the selected period
+                      Charges, cash receipts and noncash credit changes in the
+                      selected period
                     </caption>
                     <thead>
                       <tr>
@@ -362,6 +383,9 @@ export function Statement({ resident = false }: { resident?: boolean }) {
                         </th>
                         <th scope="col" className="statement-money">
                           Receipt
+                        </th>
+                        <th scope="col" className="statement-money">
+                          Other balance change
                         </th>
                         <th scope="col" className="statement-money">
                           Running net
@@ -384,12 +408,37 @@ export function Statement({ resident = false }: { resident?: boolean }) {
                         >
                           <td>
                             <strong>{formatDate(item.date)}</strong>
-                            <small>{item.reference}</small>
+                            <small>{recordReference(item.reference)}</small>
                           </td>
                           <td>
                             {item.type === "charge"
-                              ? `Rent · ${formatMonth(item.periodOn!)}`
-                              : "Payment received"}
+                              ? item.periodOn
+                                ? `Rent · ${formatMonth(item.periodOn)}`
+                                : item.description || "One-time charge"
+                              : item.type === "receipt"
+                                ? "Payment received"
+                                : item.type === "refund" ? "Payment refund" : item.type === "deposit_application" ? "Deposit applied to charge" : item.type === "movement_reversal" ? "Movement correction"
+                                : item.type === "credit_reversal"
+                                  ? "Credit reversal"
+                                  : item.category === "concession"
+                                    ? "Concession"
+                                    : "Credit note"}
+                            {item.type !== "charge" && item.description && (
+                              <small>{item.description}</small>
+                            )}
+                            {item.relatedReference && (
+                              <small>
+                                For{" "}
+                                {recordReference(
+                                  item.relatedReference,
+                                ).toLowerCase()}
+                              </small>
+                            )}
+                            {item.type === "charge" &&
+                              !item.periodOn &&
+                              item.dueOn && (
+                                <small>Due {formatDate(item.dueOn)}</small>
+                              )}
                             {item.scheduleId && <small>Recurring rent</small>}
                             {item.voidedAt && (
                               <small>
@@ -407,7 +456,9 @@ export function Statement({ resident = false }: { resident?: boolean }) {
                             <small>
                               {item.type === "charge"
                                 ? `${dollars(item.remainingCents)} unpaid`
-                                : `${dollars(item.appliedCents)} applied · ${dollars(item.remainingCents)} credit`}
+                                : item.type === "receipt"
+                                  ? `${dollars(item.appliedCents)} applied · ${dollars(item.remainingCents)} cash credit`
+                                  : "Noncash adjustment"}
                             </small>
                             {item.type === "charge" &&
                               item.graceThrough &&
@@ -425,6 +476,14 @@ export function Statement({ resident = false }: { resident?: boolean }) {
                           <td className="statement-money" data-label="Receipt">
                             {item.type === "receipt"
                               ? dollars(item.amountCents)
+                              : "—"}
+                          </td>
+                          <td
+                            className="statement-money"
+                            data-label="Other balance change"
+                          >
+                            {item.type !== "charge" && item.type !== "receipt"
+                              ? dollars(item.effectCents)
                               : "—"}
                           </td>
                           <td
@@ -490,11 +549,11 @@ export function Statement({ resident = false }: { resident?: boolean }) {
                       ).map((a) => (
                         <tr key={a.id}>
                           <td data-label="Payment receipt">
-                            {a.receiptReference}
+                            {recordReference(a.receiptReference)}
                             <small>Received {formatDate(a.receiptDate)}</small>
                           </td>
                           <td data-label="Rent charge">
-                            {a.chargeReference}
+                            {recordReference(a.chargeReference)}
                             <small>Due {formatDate(a.chargeDate)}</small>
                           </td>
                           <td data-label="Allocated">
@@ -526,13 +585,17 @@ export function Statement({ resident = false }: { resident?: boolean }) {
               {statement.deposit ? (
                 <>
                   <p>
-                    {statement.deposit.reference} · Due{" "}
+                    {recordReference(statement.deposit.reference)} · Due{" "}
                     {formatDate(statement.deposit.dueOn)} · Current whole-lease
                     amounts
                   </p>
                   <dl>
                     {[
                       ["Required", statement.deposit.requiredCents],
+                      ["Valid receipts", statement.deposit.receivedCents??statement.deposit.heldCents],
+                      ["Applied to charges", statement.deposit.appliedCents??"0"],
+                      ["Money returned", statement.deposit.returnedCents??"0"],
+                      ["Corrected receipts", statement.deposit.correctedCents??"0"],
                       ["Recorded held", statement.deposit.heldCents],
                       ["Uncollected", statement.deposit.outstandingCents],
                       ["Excess held", statement.deposit.excessHeldCents],
@@ -543,6 +606,7 @@ export function Statement({ resident = false }: { resident?: boolean }) {
                       </div>
                     ))}
                   </dl>
+                  {!!statement.deposit.movements?.length && <details className="statement-deposit-history"><summary>Deposit applications, returns and corrections ({statement.deposit.movements.length})</summary><ol>{statement.deposit.movements.map(m=><li key={m.id}><strong>{m.kind==="deposit_application"?"Applied to charge":"Deposit refund"} · {dollars(m.amountCents)}</strong><p>{formatDate(m.effectiveOn)} · {recordReference(m.reference)} · {m.reversal?"Corrected / reversed":"Recorded"}</p><p>{m.reason}</p>{m.reversal&&<p>Correction: {formatDate(m.reversal.effectiveOn)} · {m.reversal.reason}</p>}</li>)}</ol></details>}
                 </>
               ) : (
                 <p>
@@ -550,8 +614,7 @@ export function Statement({ resident = false }: { resident?: boolean }) {
                 </p>
               )}
               <p className="help">
-                Recorded held is based on active deposit receipt sources. A void
-                corrects a record; it does not mean money was returned. This is
+                Recorded held equals valid receipts less active deposit applications and refunds. Applications and returns do not automatically create a new collection requirement. A void corrects a record; it does not mean money was returned. This is
                 not bank reconciliation.
               </p>
             </section>
@@ -572,7 +635,7 @@ export function Statement({ resident = false }: { resident?: boolean }) {
                   dateStyle: "long",
                   timeStyle: "short",
                 })}{" "}
-                ({statement.company.timezone}) · Lease ID: {statement.lease.id}
+                ({statement.company.timezone})
               </small>
             </footer>
           </article>

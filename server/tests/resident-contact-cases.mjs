@@ -52,7 +52,11 @@ export async function verifyContactMigration(admin, before) {
   for (const table of sources) {
     const key = table === 'CompanyMembership' ? 'userId' : 'id';
     const ids = new Set(before[table].map(r => r.row[key]));
-    after[table] = after[table].filter(r => ids.has(r.row[key]));
+    after[table] = after[table].filter(r => ids.has(r.row[key])).map(r=>{
+      // Later additive migrations may add columns; compare every original field.
+      const original=before[table].find(item=>item.row[key]===r.row[key]).row;
+      return {row:Object.fromEntries(Object.keys(original).map(field=>[field,r.row[field]]))};
+    });
   }
   assert.deepEqual(after, before, 'every original source field, ID and audit remains unchanged');
   const rows = (await admin.query(`SELECT * FROM "ResidentContact" ORDER BY id`)).rows;

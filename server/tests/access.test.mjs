@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import Fastify from 'fastify';
-import { permissions, companyScope, safeReturnTo, defaultDestination } from '../dist/access.js';
+import { companyRoleGuide, permissions, companyScope, safeReturnTo, defaultDestination } from '../dist/access.js';
 import { registerApplication } from '../dist/application.js';
 import { digest, sameSecret, validSession, readAuthConfig, registerSessions } from '../dist/sessions.js';
 const principal = (role, extra = {}) => ({ id: 'user-a', status: 'active', platformRole: null, membership: role ? { companyId: 'company-a', role, status: 'active', company: { status: 'active' } } : null, ...extra });
@@ -99,4 +99,10 @@ test('invalid callback binding expires locally without contacting the identity p
     assert.equal(response.headers.location, '/?authError=expired');
     assert.match(response.headers['set-cookie'], /Expires=Thu, 01 Jan 1970/);
   }
+});
+
+test('role guidance uses the enforced grants and distinguishes company ownership from platform authority',()=>{
+ for(const row of companyRoleGuide())assert.deepEqual(row.permissions,permissions(principal(row.role)));
+ assert.equal(companyRoleGuide()[0].label,'Company owner');
+ assert.ok(!companyRoleGuide().find(r=>r.role==='manager').permissions.includes('members.manage'));
 });

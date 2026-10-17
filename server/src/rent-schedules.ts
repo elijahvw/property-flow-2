@@ -1,3 +1,4 @@
+import {currentLeaseTerms,readTermChanges,termInstallment} from "./lease-term-policy.js";
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import { Prisma, type PrismaClient, type RentSchedule } from "@prisma/client";
@@ -95,7 +96,8 @@ async function terms(
   leaseId: string,
   data: ReturnType<typeof parse>,
 ) {
-  const lease = await lockRentLease(tx, companyId, leaseId);
+  const rawLease = await lockRentLease(tx, companyId, leaseId);
+  const [lease]=await currentLeaseTerms(tx,companyId,[rawLease]);
   if (lease.version !== data.expectedVersion) throw conflict();
   if (lease.status !== "active" || lease.rentCents < 1)
     throw new AccessError(
@@ -148,7 +150,7 @@ async function terms(
     );
   const secondPeriod = nextMonth(data.firstPeriodOn);
   if (data.firstDueOn && (!lastPeriodOn || secondPeriod <= lastPeriodOn)) {
-    const secondDue = installment(
+    const secondDue = termInstallment(
       {
         firstPeriodOn: data.firstPeriodOn,
         lastPeriodOn,
@@ -156,10 +158,11 @@ async function terms(
         dueDay: lease.rentDueDay,
         leadDays: data.leadDays,
         amountCents: lease.rentCents,
+        graceDays: lease.graceDays,
         firstAmountCents: data.firstAmountCents,
         lastAmountCents: data.lastAmountCents,
       },
-      secondPeriod,
+      await readTermChanges(tx,companyId,[leaseId]),secondPeriod,
     ).dueOn;
     if (data.firstDueOn > secondDue)
       throw new AccessError(
@@ -188,17 +191,18 @@ async function previews(
   tx: Tx,
   companyId: string,
   leaseId: string,
-  schedule: Parameters<typeof installment>[0],
+  schedule: Parameters<typeof installment>[0]&{graceDays:number},
   from: Date,
 ) {
   const rows = [];
+  const changes=await readTermChanges(tx,companyId,[leaseId]);
   let period = new Date(from);
   for (
     let i = 0;
     i < 3 && (!schedule.lastPeriodOn || period <= schedule.lastPeriodOn);
     i++, period = nextMonth(period)
   ) {
-    const item = installment(schedule, period),
+    const item = termInstallment(schedule,changes,period),
       previous = await tx.rentScheduleOccurrence.findUnique({
         where: {
           companyId_leaseId_periodOn: { companyId, leaseId, periodOn: period },
@@ -206,7 +210,7 @@ async function previews(
         select: { outcome: true },
       }),
       charge = await tx.rentCharge.findFirst({
-        where: { companyId, leaseId, periodOn: period },
+        where: { companyId, leaseId, periodOn: period, kind:"rent" },
         orderBy: [
           { voidedAt: { sort: "asc", nulls: "first" } },
           { createdAt: "desc" },
@@ -282,7 +286,7 @@ export async function generateRentOccurrence(
       "SCHEDULE_TERM_INVALID",
       "Schedule no longer overlaps its lease.",
     );
-  const item = installment(schedule, period);
+  const item = termInstallment({...schedule,paymentInstructions:lease.paymentInstructions},await readTermChanges(tx,companyId,[lease.id]),period);
   if (isoDay(item.postOn) > companyDay(company.timezone, now)) {
     await tx.rentSchedule.update({
       where: { id: schedule.id },
@@ -303,6 +307,7 @@ export async function generateRentOccurrence(
             companyId,
             leaseId: lease.id,
             periodOn: previousInstallment.periodOn,
+            kind:"rent",
             voidedAt: null,
           },
           select: { id: true },
@@ -338,7 +343,7 @@ export async function generateRentOccurrence(
   if (!occurrence) {
     // Any prior charge, even a voided one, reserves this month for manual review.
     const charges = await tx.rentCharge.findMany({
-        where: { companyId, leaseId: lease.id, periodOn: period },
+        where: { companyId, leaseId: lease.id, periodOn: period, kind:"rent" },
         orderBy: [
           { voidedAt: { sort: "asc", nulls: "first" } },
           { createdAt: "desc" },
@@ -362,7 +367,7 @@ export async function generateRentOccurrence(
           periodOn: period,
           dueOn: item.dueOn,
           amountCents: item.amountCents,
-          graceDays: schedule.graceDays,
+          graceDays: item.graceDays,
           memo: null,
         },
         select: { id: true },
@@ -458,6 +463,7 @@ export function registerRentSchedules(
             companyId,
             leaseId,
             voidedAt: null,
+            kind: "rent",
             periodOn: { in: rows.slice(0, 25).map((row) => row.periodOn) },
           },
           select: {
