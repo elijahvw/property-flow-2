@@ -1,3 +1,4 @@
+import { ResidentFinancialNotice } from "../components/ResidentFinancialNotice";
 import { LeaseMovements, type MoneyMovement } from "../components/LeaseMovements";
 import { recordReference } from "../record-reference";
 import { formatDate } from "../dates";
@@ -126,10 +127,10 @@ function DepositMetrics({ summary }: { summary: Summary }) {
       <div>
         <span>Recorded held balance</span>
         <strong>{dollars(summary.heldCents)}</strong>
-        <small>Separate from rent income</small>
+        <small>Separate from rent</small>
       </div>
       <div>
-        <span>Still to collect</span>
+        <span>Deposit outstanding</span>
         <strong>{dollars(summary.outstandingCents)}</strong>
         <small>{dollars(summary.pastDueCents)} past due</small>
       </div>
@@ -203,8 +204,9 @@ function DepositDirectory({ resident }: { resident: boolean }) {
         <p className="eyebrow">{resident ? "Your rental" : "Money"}</p>
         <h1>Security deposits</h1>
         <p>
-          Track the refundable deposit separately from rent. Receipts record
-          money already received; this platform does not collect or hold funds.
+          {resident
+            ? "View your deposit requirement, recorded receipts, held balance and activity. Your security deposit is separate from rent."
+            : "Track the refundable deposit separately from rent. Receipts record money already received; this platform does not collect or hold funds."}
         </p>
         {!resident && (
           <Link
@@ -215,6 +217,7 @@ function DepositDirectory({ resident }: { resident: boolean }) {
           </Link>
         )}
       </header>
+      {resident && !leaseId && <ResidentFinancialNotice />}
       {r.error && <Load error={r.error} retry={r.reload} />}{" "}
       {!r.data ? (
         !r.error && <Load retry={r.reload} />
@@ -248,7 +251,7 @@ function DepositDirectory({ resident }: { resident: boolean }) {
                   }}
                 >
                   <option value="all">All accounts</option>
-                  <option value="uncollected">Still to collect</option>
+                  <option value="uncollected">{resident ? "Amount outstanding" : "Still to collect"}</option>
                   <option value="past_due">Past due</option>
                 </select>
               </label>
@@ -295,7 +298,7 @@ function DepositDirectory({ resident }: { resident: boolean }) {
                         </p>
                         <p>
                           {dollars(a.summary.heldCents)} held ·{" "}
-                          {dollars(a.summary.outstandingCents)} still to collect
+                          {dollars(a.summary.outstandingCents)} {resident ? "outstanding" : "still to collect"}
                         </p>
                         <RecordIdentity
                           id={a.id}
@@ -344,6 +347,7 @@ function DepositDirectory({ resident }: { resident: boolean }) {
           title="Security deposit account"
           onClose={() => setParams(propertyId ? { propertyId } : {})}
         >
+          {resident && <ResidentFinancialNotice />}
           <DepositPanel
             leaseId={leaseId}
             resident={resident}

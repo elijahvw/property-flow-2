@@ -70,8 +70,8 @@ export function RoleGuide() {
                     <li>View approved rental information</li>
                     <li>Submit maintenance requests</li>
                     <li>
-                      Approved leaseholders can request resident invitations for
-                      owner review
+                      View lease and invitation history; contact the property
+                      manager for household changes
                     </li>
                   </>
                 )}

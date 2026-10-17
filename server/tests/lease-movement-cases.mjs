@@ -1,3 +1,4 @@
+import {residentPortalCases} from "./resident-portal-cases.mjs";
 import assert from "node:assert/strict";
 import {randomUUID} from "node:crypto";
 import {chromium,expect} from "@playwright/test";
@@ -43,6 +44,7 @@ export async function leaseMovementCases(t,admin,call,app,db){
   assert.equal((await call('owner','POST',`/api/company/finances/${rentRefund.paymentId}/void`,{expectedVersion:1,reason:'Wrong receipt'})).statusCode,409);
   const overview=ok(await call('owner','GET','/api/company/overview?propertyId=home'));const report=ok(await call('owner','GET',`/api/company/reports/cash?propertyId=home&dateFrom=${month}&dateTo=${today}`));assert.equal(overview.cash.netCents,report.summary.netCents);
  });
+ await residentPortalCases(t,admin,call,app,{lease,today});
  await t.test('simultaneous deposit refund/application reviews cannot spend the same held funds twice',async()=>{
   const c=ok(await call('owner','POST',rentRoot+'/one-time-charges',{category:'other',effectiveOn:today,dueOn:today,amount:'2000.00',description:'Second reviewed obligation',expectedLeaseVersion:1,submissionKey:randomUUID()}));
   const [a,b]=await Promise.all([body('deposit_refund','700.00'),body('deposit_application','700.00',{chargeId:c.id,expectedSourceVersion:1,expectedRemainingCents:(await ledger()).charges.find(x=>x.id===c.id).remainingCents})]);

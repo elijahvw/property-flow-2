@@ -1,3 +1,4 @@
+import { ResidentFinancialNotice } from "../components/ResidentFinancialNotice";
 import { LeaseAdjustments, chargeName, type LeaseCredit } from "../components/LeaseAdjustments";
 import { LeaseMovements, type MoneyMovement } from "../components/LeaseMovements";
 import { recordReference } from "../record-reference";
@@ -274,6 +275,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
             : "Post monthly rent, record payments received, and follow each lease balance."}
         </p>
       </header>
+      {resident && <ResidentFinancialNotice />}
       {!resident && !leaseId && !pathPropertyId && (
         <div className="rent-filters">
           <PropertyScope
@@ -724,8 +726,9 @@ function LeaseLedger({
       </section>
       {!active && (
         <p className="notice">
-          This lease is a draft. Activate it in Leases before posting rent or
-          recording a payment.
+          {resident
+            ? "This lease is a draft. Your property team must activate it before financial activity is available."
+            : "This lease is a draft. Activate it in Leases before posting rent or recording a payment."}
         </p>
       )}
       <PaymentStanding summary={summary} />

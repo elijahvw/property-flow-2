@@ -56,6 +56,7 @@ export function registerLeaseInvitations(server:FastifyInstance,db:PrismaClient,
       const id=assignmentId(request.params.leaseId),b=input(request,["email","name","role","startsOn"]),email=boundedText(b.email,254,"Recipient email").toLowerCase(),name=boundedText(b.name,200,"Recipient name"),role=choice(b.role,["occupant","leaseholder"],"household role"),startsOn=date(b.startsOn,"resident start date"),token=randomBytes(32).toString("base64url");
       if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new AccessError(400,"INVALID_INPUT","Enter a complete recipient email.");
       return scoped(db,request,resident?"resident.self":"lease.manage",async(tx,companyId)=>{
+        if(resident)throw new AccessError(403,"RESIDENT_READ_ONLY","Household records are view-only. Contact your property manager to request changes.");
         const record=resident?await residentLease(tx,companyId,request.principal!.id,id):await householdLease(tx,companyId,id,true);
         await invitationTerm(tx,companyId,record,startsOn);
         if(resident&&email===request.principal!.email.toLowerCase())throw new AccessError(409,"HOUSEHOLD_DUPLICATE","You are already on this lease.");
@@ -74,6 +75,7 @@ export function registerLeaseInvitations(server:FastifyInstance,db:PrismaClient,
       mutation(request,origin);input(request,[]);
       const id=assignmentId(request.params.leaseId),invitationId=assignmentId(request.params.invitationId);
       return scoped(db,request,resident?"resident.self":"lease.manage",async(tx,companyId)=>{
+        if(resident)throw new AccessError(403,"RESIDENT_READ_ONLY","Household records are view-only. Contact your property manager to request changes.");
         if(resident)await residentLease(tx,companyId,request.principal!.id,id);else await householdLease(tx,companyId,id,true);
         const actor=await tx.companyMembership.findFirstOrThrow({where:{companyId,userId:request.principal!.id}});
         const row=await tx.invitation.findFirst({where:{id:invitationId,companyId,leaseId:id,acceptedAt:null,revokedAt:null,...(actor.role!=="owner"?{createdBy:request.principal!.id,approvedAt:null}:{})},select:{id:true}});
