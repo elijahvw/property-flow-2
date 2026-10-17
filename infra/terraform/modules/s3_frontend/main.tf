@@ -62,6 +62,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
+  aliases             = var.custom_domain == null ? [] : [var.custom_domain.hostname]
 
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD"]
@@ -104,7 +105,10 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    cloudfront_default_certificate = var.custom_domain == null
+    acm_certificate_arn            = var.custom_domain == null ? null : var.custom_domain.certificate_arn
+    ssl_support_method             = var.custom_domain == null ? null : "sni-only"
+    minimum_protocol_version       = var.custom_domain == null ? "TLSv1" : "TLSv1.2_2021"
   }
 
 

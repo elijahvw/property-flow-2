@@ -16,6 +16,10 @@ terraform {
   }
 }
 
+locals {
+  public_app_url = var.frontend_custom_domain == null ? var.app_origin : "https://${var.frontend_custom_domain.hostname}"
+}
+
 provider "aws" {
   region = var.aws_region
 }
@@ -59,7 +63,7 @@ module "ecr" {
     public_subnets           = module.network.public_subnets
     alb_security_group_id    = module.network.alb_security_group_id
     ecs_security_group_id    = module.network.ecs_security_group_id
-    app_origin               = var.app_origin
+    app_origin               = local.public_app_url
     cloudfront_origin_secret = random_password.cloudfront_origin.result
     auth0_web_client_id      = var.auth0_web_client_id
     auth0_web_client_secret  = var.auth0_web_client_secret
@@ -77,7 +81,8 @@ module "ecr" {
 }
 
 module "s3_frontend" {
-  source = "../../modules/s3_frontend"
+  source        = "../../modules/s3_frontend"
+  custom_domain = var.frontend_custom_domain
   vars = {
     environment              = var.environment
     alb_dns_name             = module.ecr.alb_dns_name

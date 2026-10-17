@@ -27,3 +27,8 @@ output "frontend_bucket_name" {
 }
 
 output "grafana_secret_arn" { value = module.ecr.grafana_secret_arn }
+
+output "public_app_url" {
+  description = "Canonical public application URL used for login, CSRF and deployment checks."
+  value       = local.public_app_url
+}

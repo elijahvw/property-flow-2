@@ -38,6 +38,18 @@ jobs:
           python3 -m pip install unittest-xml-reporting==3.2.0
           python3 -m xmlrunner discover -s tests/operations -p 'test_*.py' -o test-results/python
 
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.12.1'
+          terraform_wrapper: false
+      - name: Validate custom-domain Terraform with mocked AWS
+        run: |
+          terraform fmt -check infra/terraform/envs/dev/main.tf infra/terraform/envs/dev/variables.tf infra/terraform/envs/dev/outputs.tf infra/terraform/modules/s3_frontend/main.tf infra/terraform/modules/s3_frontend/variables.tf infra/terraform/modules/s3_frontend/versions.tf infra/terraform/modules/s3_frontend/tests/custom-domain.tftest.hcl
+          terraform -chdir=infra/terraform/modules/s3_frontend init -backend=false -input=false
+          terraform -chdir=infra/terraform/modules/s3_frontend test -no-color
+          terraform -chdir=infra/terraform/envs/dev init -backend=false -input=false
+          terraform -chdir=infra/terraform/envs/dev validate -no-color
+
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
         
