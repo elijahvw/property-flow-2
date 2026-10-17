@@ -30,7 +30,7 @@ A status changes only with evidence. Passing CI does not authorize merging, depl
 
 PF-01–10 and the first shared-household portion of PF-11 are implemented on main. The live backend dashboard identified release `3a68657` on October 17; real owner/manager/resident acceptance is still outstanding. Source identity, tenancy permissions, immutable financial history and reviewed transitions remain the foundation.
 
-The current local batch extends directories and maintenance operations, with additive migrations 026–028. It includes safe RUM source and monitoring/release improvements. Existing preview data and prior edits are retained. Nothing in this status authorizes an application deployment or Terraform apply.
+The current batch in [PR #40](https://github.com/elijahvw/property-flow-2/pull/40) extends directories and maintenance operations, with additive migrations 026–028. It includes safe RUM source and monitoring/release improvements. Existing preview data and prior edits are retained. Nothing in this status authorizes an application deployment or Terraform apply.
 
 Grafana's existing dashboard now has 21 panels; all eight existing app alert rules are enabled and evaluated Normal. The user-selected email test succeeded and notification routing targets Property Flow dev. The RUM app exists, but deployed browser ingestion, infrastructure scraping, synthetic journeys and incident/recovery acceptance remain open. See PF-27 and the coverage register.
 
