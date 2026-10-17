@@ -10,6 +10,91 @@ export function registerOverview(
   db: PrismaClient,
   authenticate: preValidationHookHandler,
 ) {
+  server.get(
+    "/api/company/property-directory",
+    { preValidation: authenticate },
+    (request) => {
+      if (Object.keys(request.query as object).length)
+        throw new AccessError(
+          400,
+          "INVALID_INPUT",
+          "Unknown property directory filter.",
+        );
+      return scoped(db, request, "property.read", async (tx, companyId) => {
+        const company = await tx.company.findUniqueOrThrow({
+          where: { id: companyId },
+          select: { timezone: true },
+        });
+        const actor = await tx.user.findUniqueOrThrow({
+          where: { id: request.principal!.id },
+          include: { membership: { include: { company: true } } },
+        });
+        const grants = permissions(actor),
+          today = companyDay(company.timezone),
+          day = new Date(today + "T00:00:00Z");
+        const units = await tx.unit.groupBy({
+          by: ["propertyId"],
+          where: { companyId, status: "active" },
+          _count: true,
+        });
+        const properties = await tx.property.findMany({
+          where: { companyId },
+          select: { id: true },
+          orderBy: [{ name: "asc" }, { id: "asc" }],
+        });
+        const occupied = grants.includes("lease.manage")
+          ? await tx.unit.groupBy({
+              by: ["propertyId"],
+              where: {
+                companyId,
+                status: "active",
+                leases: {
+                  some: {
+                    companyId,
+                    status: "active",
+                    startsOn: { lte: day },
+                    OR: [{ endsOn: null }, { endsOn: { gte: day } }],
+                  },
+                },
+              },
+              _count: true,
+            })
+          : null;
+        const drafts = grants.includes("lease.manage")
+          ? await tx.lease.groupBy({
+              by: ["propertyId"],
+              where: { companyId, status: "draft" },
+              _count: true,
+            })
+          : null;
+        const maintenance = grants.includes("maintenance.manage")
+          ? await tx.maintenanceRequest.groupBy({
+              by: ["propertyId"],
+              where: { companyId, status: { in: ["open", "in_progress"] } },
+              _count: true,
+            })
+          : null;
+        const counts = (rows:{propertyId:string;_count:number}[]) => new Map(rows.map(row=>[row.propertyId,row._count]));
+        const unitCounts=counts(units),occupiedCounts=counts(occupied||[]),draftCounts=counts(drafts||[]),maintenanceCounts=counts(maintenance||[]);
+        return {
+          today,
+          items: properties.map((p) => ({
+            id: p.id,
+            activeUnits: unitCounts.get(p.id)||0,
+            ...(occupied && drafts
+              ? {
+                  occupiedUnits: occupiedCounts.get(p.id)||0,
+                  draftLeases: draftCounts.get(p.id)||0,
+                }
+              : {}),
+            ...(maintenance
+              ? { openMaintenance: maintenanceCounts.get(p.id)||0 }
+              : {}),
+          })),
+        };
+      });
+    },
+  );
   server.get<{ Querystring: { propertyId?: string } }>(
     "/api/company/overview",
     { preValidation: authenticate },

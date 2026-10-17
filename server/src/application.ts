@@ -41,6 +41,7 @@ import { registerLeasing } from "./leasing.js";
 import { registerLeaseParticipants } from "./lease-participants.js";
 import { registerLeaseInvitations, acceptLeaseInvitation, replayLeaseAcceptance, previewLeaseInvitation } from "./lease-invitations.js";
 import { registerMaintenance } from "./maintenance.js";
+import { registerMaintenanceCosts } from "./maintenance-costs.js";
 import { digest } from "./sessions.js";
 import { propertySelect, propertyData, propertyKeys } from "./property-fields.js";
 import { scoped, sameSubmission, submission } from "./operational.js";
@@ -219,6 +220,7 @@ export function registerApplication(
   identityProvider?: IdentityProvider,
 ) {
   registerMaintenance(server, db, authenticate, origin);
+  registerMaintenanceCosts(server, db, authenticate, origin);
   registerLeasing(server, db, authenticate, origin);
   registerLeaseParticipants(server, db, authenticate, origin);
   registerLeaseInvitations(server, db, authenticate, origin);

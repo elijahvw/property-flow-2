@@ -65,6 +65,14 @@ jobs:
           npx playwright install --with-deps --only-shell chromium
           npx playwright test -c playwright.onboarding.config.ts --reporter=line,junit
 
+      - name: Test enabled production RUM with intercepted network
+        env:
+          VITE_RUM_ENABLED: 'true'
+          VITE_FARO_COLLECTOR_URL: https://faro-collector-prod-us-east-3.grafana.net/collect/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        run: |
+          npm run build --workspace=@property-flow/client
+          node scripts/test-rum.mjs
+
       - name: Test actual Grafana provisioning and Prometheus alert expressions
         run: |
           docker pull --quiet grafana/grafana:13.2.2

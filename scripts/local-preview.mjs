@@ -30,6 +30,9 @@ assert.ok(
           "--upgrade-from-pf06-preview",
           "--upgrade-from-pf07-preview",
           "--upgrade-from-pf08-preview",
+          "--upgrade-from-pf10-preview",
+          "--upgrade-from-core-maintenance-preview",
+          "--upgrade-from-maintenance-updates-preview",
         ].includes(process.argv[4])) &&
       restoreFile &&
       /^\/(?:private\/)?tmp\/propertyflow-local-preview-backup-[a-z0-9-]+\.sql$/.test(
@@ -300,6 +303,36 @@ try {
         "utf8",
       ),
     );
+  }
+  if (restoreFile && process.argv[4] === "--upgrade-from-pf10-preview") {
+    const marker = (
+      await admin.query(
+        `SELECT to_regclass('public."LeaseTransition"') prior_schema, EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='MaintenanceRequest' AND column_name='version') work_orders`,
+      )
+    ).rows[0];
+    assert.ok(
+      marker.prior_schema && !marker.work_orders,
+      "Expected a PF-10 local preview backup",
+    );
+    await admin.query(
+      readFileSync(
+        root +
+          "server/prisma/migrations/202610160026_core_maintenance/migration.sql",
+        "utf8",
+      ),
+    );
+  }
+  if (restoreFile && process.argv[4] === "--upgrade-from-core-maintenance-preview") {
+    const marker = (await admin.query(
+      `SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='MaintenanceRequest' AND column_name='version') work_orders,to_regclass('public."MaintenanceUpdate"') updates`,
+    )).rows[0];
+    assert.ok(marker.work_orders && !marker.updates, "Expected a core-maintenance preview backup before progress updates");
+    await admin.query(readFileSync(root + "server/prisma/migrations/202610160027_maintenance_updates/migration.sql", "utf8"));
+  }
+  if (restoreFile && process.argv[4] === "--upgrade-from-maintenance-updates-preview") {
+    const marker = (await admin.query(`SELECT to_regclass('public."MaintenanceUpdate"') updates,to_regclass('public."MaintenanceCost"') costs`)).rows[0];
+    assert.ok(marker.updates && !marker.costs, "Expected a maintenance-updates preview backup before paid cost links");
+    await admin.query(readFileSync(root + "server/prisma/migrations/202610160028_maintenance_costs/migration.sql", "utf8"));
   }
   const runtimePassword = randomUUID();
   const statement = (

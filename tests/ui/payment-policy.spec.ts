@@ -229,6 +229,7 @@ test("lease create and edit use complete payment terms, preserve clear instructi
   });
   await expect(page).toHaveURL(/\/company\/leases\/new-lease\?onboarding=household/);
   await page.getByRole('link',{name:'← All leases',exact:true}).click();
+  await page.getByText("More actions",{exact:true}).first().click();
   await page.getByRole("button", { name: "Edit lease", exact: true }).click();
   await expect(
     page.getByLabel("Lease Apartment 1 grace period (days after due date)"),

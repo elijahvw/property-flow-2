@@ -143,3 +143,15 @@ test('active, unverified and disabled portal filters remain distinct and survive
  await expect(filter).toHaveValue('verification');
  await expect(page.getByRole('link',{name:/View tenant/})).toHaveCount(2);
 });
+
+test('property and rental filters match the same association and survive a tenant-ledger return',async({page})=>{
+ const state=await fixture(page);
+ const relationship={leaseId:'old',propertyId:'home',propertyName:'Maple House',unitLabel:'Former apartment',role:'leaseholder',status:'former',startsOn:'2025-01-01',endsOn:'2025-12-31'};
+ (state.profile as any).rentals=[relationship,{...relationship,leaseId:'current',propertyId:'garden',propertyName:'Garden Apartments',unitLabel:'Unit 2',status:'current',startsOn:'2026-01-01',endsOn:null}];
+ state.otherProfiles.push({...state.profile,userId:'tenant-2',contactName:'Taylor Smith',user:{...state.profile.user,name:'Taylor Smith',email:'taylor@test.invalid'},rentals:[{...relationship,leaseId:'home-current',status:'current',startsOn:'2026-01-01',endsOn:null}]} as any);
+ await page.goto('/company/residents');await page.getByLabel('Property',{exact:true}).selectOption('home');await page.getByLabel('Rental relationship',{exact:true}).selectOption('current');
+ await expect(page.getByRole('link',{name:'Jordan Rivera',exact:true})).toHaveCount(0);await expect(page.getByRole('link',{name:'Taylor Smith',exact:true})).toBeVisible();
+ await page.getByLabel('Property',{exact:true}).selectOption('garden');await expect(page.getByRole('link',{name:'Garden Apartments Unit 2',exact:true})).toHaveAttribute('href',/tenantProperty=garden.*tenantRental=current/);await page.getByRole('link',{name:'Jordan Rivera',exact:true}).click();await page.getByRole('link',{name:'Open rent ledger for Apartment 1'}).click();await page.getByRole('link',{name:'Back to tenant'}).click();await page.getByRole('link',{name:'All tenants',exact:true}).click();
+ await expect(page.getByLabel('Property',{exact:true})).toHaveValue('garden');await expect(page.getByLabel('Rental relationship',{exact:true})).toHaveValue('current');
+ await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+});

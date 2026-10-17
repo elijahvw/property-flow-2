@@ -8,11 +8,14 @@
     "from": "now-1h",
     "to": "now"
   },
-  "tags": ["propertyflow", "dev"],
+  "tags": [
+    "propertyflow",
+    "dev"
+  ],
   "panels": [
     {
       "id": 1,
-      "title": "Database readiness (1 = ready)",
+      "title": "Database readiness",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
@@ -21,21 +24,60 @@
       "gridPos": {
         "x": 0,
         "y": 0,
-        "w": 12,
-        "h": 8
+        "w": 6,
+        "h": 4
       },
       "targets": [
         {
-          "expr": "max(propertyflow_readiness)",
+          "expr": "max(propertyflow_readiness{service_name=\"propertyflow-server\",deployment_environment=\"dev\"})",
           "refId": "A",
-          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+          "legendFormat": "{{job_outcome}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Not ready",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "Ready",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
         },
         "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
       }
     },
     {
@@ -47,16 +89,16 @@
         "uid": "METRICS_UID"
       },
       "gridPos": {
-        "x": 12,
+        "x": 6,
         "y": 0,
-        "w": 12,
-        "h": 8
+        "w": 6,
+        "h": 4
       },
       "targets": [
         {
-          "expr": "max(propertyflow_process_uptime_seconds)",
+          "expr": "max(propertyflow_process_uptime_seconds{service_name=\"propertyflow-server\",deployment_environment=\"dev\"})",
           "refId": "A",
-          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+          "legendFormat": "{{job_outcome}}"
         }
       ],
       "fieldConfig": {
@@ -64,6 +106,92 @@
           "unit": "s"
         },
         "overrides": []
+      }
+    },
+    {
+      "id": 14,
+      "title": "API 5xx ratio",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum(rate(propertyflow_http_requests_total{service_name=\"propertyflow-server\",deployment_environment=\"dev\",http_response_status_code=~\"5..\",http_route!~\"/api/(ready|health|telemetry)\"}[5m])) or vector(0)) / clamp_min(sum(rate(propertyflow_http_requests_total{service_name=\"propertyflow-server\",deployment_environment=\"dev\",http_route!~\"/api/(ready|health|telemetry)\"}[5m])),0.001)",
+          "legendFormat": "5xx / requests"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "title": "Rent billing last successful run age",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - max(propertyflow_worker_last_success_seconds{service_name=\"propertyflow-server\",deployment_environment=\"dev\"})",
+          "legendFormat": "Age"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       }
     },
     {
@@ -76,22 +204,37 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 8,
+        "y": 4,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
-          "expr": "sum by(http_route)(rate(propertyflow_http_requests_total{http_route!~\"/api/(ready|health|telemetry)\"}[5m]))",
+          "expr": "sum by(http_route)(rate(propertyflow_http_requests_total{service_name=\"propertyflow-server\",deployment_environment=\"dev\",http_route!~\"/api/(ready|health|telemetry)\"}[5m]))",
           "refId": "A",
-          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+          "legendFormat": "{{http_route}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps"
+          "unit": "reqps",
+          "min": 0
         },
         "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
       }
     },
     {
@@ -104,22 +247,37 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 8,
+        "y": 4,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
-          "expr": "sum by(http_route)(rate(propertyflow_http_requests_total{http_response_status_code=~\"5..\"}[5m]))",
+          "expr": "sum by(http_route)(rate(propertyflow_http_requests_total{service_name=\"propertyflow-server\",deployment_environment=\"dev\",http_response_status_code=~\"5..\"}[5m]))",
           "refId": "A",
-          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+          "legendFormat": "{{http_route}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps"
+          "unit": "reqps",
+          "min": 0
         },
         "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
       }
     },
     {
@@ -132,22 +290,37 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 16,
+        "y": 12,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95,sum by(le,http_route)(rate(propertyflow_http_duration_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.95,sum by(le,http_route)(rate(propertyflow_http_duration_seconds_bucket{service_name=\"propertyflow-server\",deployment_environment=\"dev\"}[5m])))",
           "refId": "A",
-          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+          "legendFormat": "{{http_route}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s"
+          "unit": "s",
+          "min": 0
         },
         "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
       }
     },
     {
@@ -160,22 +333,37 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 16,
+        "y": 12,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95,sum by(le)(rate(propertyflow_database_duration_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.95,sum by(le)(rate(propertyflow_database_duration_seconds_bucket{service_name=\"propertyflow-server\",deployment_environment=\"dev\"}[5m])))",
           "refId": "A",
-          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+          "legendFormat": "{{job_outcome}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s"
+          "unit": "s",
+          "min": 0
         },
         "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
       }
     },
     {
@@ -188,22 +376,37 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 24,
+        "y": 20,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
-          "expr": "propertyflow_process_memory_bytes",
+          "expr": "propertyflow_process_memory_bytes{service_name=\"propertyflow-server\",deployment_environment=\"dev\"}",
           "refId": "A",
-          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+          "legendFormat": "{{type}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "bytes"
+          "unit": "bytes",
+          "min": 0
         },
         "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
       }
     },
     {
@@ -216,22 +419,55 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 24,
+        "y": 20,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
-          "expr": "propertyflow_process_cpu_ratio",
+          "expr": "propertyflow_process_cpu_ratio{service_name=\"propertyflow-server\",deployment_environment=\"dev\"}",
           "refId": "A",
-          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+          "legendFormat": "CPU / allocation"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit"
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.7
+              },
+              {
+                "color": "red",
+                "value": 0.85
+              }
+            ]
+          }
         },
         "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
       }
     },
     {
@@ -244,22 +480,252 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 32,
+        "y": 28,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
-          "expr": "sum by(operation_name)(increase(propertyflow_browser_operations_total{operation_outcome=\"error\"}[15m]))",
+          "expr": "sum by(operation_name)(increase(propertyflow_browser_operations_total{service_name=\"propertyflow-server\",deployment_environment=\"dev\",operation_outcome=\"error\"}[15m]))",
           "refId": "A",
-          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+          "legendFormat": "{{operation_name}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "short",
+          "min": 0
         },
         "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      }
+    },
+    {
+      "id": 17,
+      "title": "Browser workflow p95 duration",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 28,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95,sum by(le,operation_name)(rate(propertyflow_browser_duration_seconds_bucket{service_name=\"propertyflow-server\",deployment_environment=\"dev\"}[5m])))",
+          "legendFormat": "{{operation_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 16,
+      "title": "Browser workflow outcomes",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(operation_name,operation_outcome)(increase(propertyflow_browser_operations_total{service_name=\"propertyflow-server\",deployment_environment=\"dev\"}[$__range]))",
+          "legendFormat": "{{operation_name}} \u00b7 {{operation_outcome}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 18,
+      "title": "Authentication and access failures",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 36,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(http_route,http_response_status_code)(increase(propertyflow_http_requests_total{service_name=\"propertyflow-server\",deployment_environment=\"dev\",http_response_status_code=~\"401|403\"}[15m]))",
+          "legendFormat": "{{http_route}} \u00b7 {{http_response_status_code}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 19,
+      "title": "Rent billing run outcomes",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(job_outcome)(increase(propertyflow_worker_runs_total{service_name=\"propertyflow-server\",deployment_environment=\"dev\"}[15m]))",
+          "legendFormat": "{{job_outcome}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 20,
+      "title": "Rent billing p95 run duration",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 44,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95,sum by(le)(rate(propertyflow_worker_duration_seconds_bucket{service_name=\"propertyflow-server\",deployment_environment=\"dev\"}[5m])))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       }
     },
     {
@@ -271,23 +737,81 @@
         "uid": "METRICS_UID"
       },
       "gridPos": {
-        "x": 12,
-        "y": 32,
+        "x": 0,
+        "y": 52,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
-          "expr": "sum(increase(propertyflow_worker_runs_total{job_outcome=\"success\"}[15m]))",
+          "expr": "sum(increase(propertyflow_worker_runs_total{service_name=\"propertyflow-server\",deployment_environment=\"dev\",job_outcome=\"success\"}[15m]))",
           "refId": "A",
-          "legendFormat": "{{http_route}}{{operation_name}}{{type}}"
+          "legendFormat": "{{job_outcome}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "short",
+          "min": 0
         },
         "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      }
+    },
+    {
+      "id": 21,
+      "title": "Backend build / release",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "METRICS_UID"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 52,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by(build_version)(propertyflow_build_info{service_name=\"propertyflow-server\",deployment_environment=\"dev\"})",
+          "legendFormat": "{{build_version}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       }
     },
     {
@@ -300,16 +824,17 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 40,
+        "y": 60,
         "w": 12,
-        "h": 9
+        "h": 8
       },
       "targets": [
         {
           "refId": "A",
           "queryType": "traceql",
-          "query": "{resource.service.name=\"propertyflow-server\"}",
-          "limit": 20
+          "query": "{resource.service.name=\"propertyflow-server\" && resource.deployment.environment=\"dev\"}",
+          "limit": 20,
+          "legendFormat": "{{job_outcome}}"
         }
       ]
     },
@@ -323,17 +848,23 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 40,
+        "y": 60,
         "w": 12,
-        "h": 9
+        "h": 8
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "{service_name=\"propertyflow-server\"}",
-          "queryType": "range"
+          "expr": "{service_name=\"propertyflow-server\",deployment_environment=\"dev\"} | http_route != \"/api/ready\"",
+          "queryType": "range",
+          "legendFormat": "{{job_outcome}}"
         }
-      ]
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      }
     },
     {
       "id": 13,
@@ -341,14 +872,28 @@
       "type": "text",
       "gridPos": {
         "x": 0,
-        "y": 49,
+        "y": 68,
         "w": 24,
-        "h": 6
+        "h": 5
       },
       "options": {
         "mode": "markdown",
-        "content": "**APM:** use Observability \u2192 Application to inspect services, or Explore \u2192 Tempo to expand HTTP/PostgreSQL traces. Logs preserve trace links while excluding SQL, tokens and resident details.\n\n**Usage:** [Cost Management and Billing](/a/grafana-cmab-app/) shows actual free-tier allowances and ingestion. Free retention is 14 days. App records and audit history remain in PostgreSQL.\n\n**Alerts:** eight rules are provisioned in Property Flow \u00b7 Dev. New rules start paused; review your contact point and enable them after the first successful deployment/ingestion check. Existing enabled rules remain enabled when configuration is reapplied.\n\nECS/ALB/RDS infrastructure metrics remain available in AWS CloudWatch. No AWS read credentials or additional monitoring server are introduced."
+        "content": "Backend metrics, logs and traces are scoped to Property Flow dev. Browser operation metrics cover explicit product operations; full RUM is in [Frontend Observability](/a/grafana-kowalski-app/apps/1169). RUM data requires the next approved frontend release.\n\nReview [alert rules](/alerting/list?search=label%3Aservice%3Dpropertyflow), [notification routing](/alerting/routes), and [usage](/a/grafana-cmab-app/usage). AWS CloudWatch scraping is not active; infrastructure setup remains a separate reviewed change. See the repository monitoring coverage register for acceptance checks and remaining gaps."
       }
+    }
+  ],
+  "links": [
+    {
+      "title": "Browser RUM",
+      "type": "link",
+      "url": "/a/grafana-kowalski-app/apps/1169",
+      "targetBlank": true
+    },
+    {
+      "title": "Alerts",
+      "type": "link",
+      "url": "/alerting/list?search=label%3Aservice%3Dpropertyflow",
+      "targetBlank": true
     }
   ]
 }

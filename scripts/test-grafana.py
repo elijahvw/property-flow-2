@@ -112,7 +112,7 @@ try:
     with contextlib.redirect_stdout(io.StringIO()):
         m.provision(api)
     dashboard = request("GET", "/api/dashboards/uid/" + m.DASHBOARD)
-    assert len(dashboard["dashboard"]["panels"]) == 13
+    assert len(dashboard["dashboard"]["panels"]) == 21
     assert api.sources() == {
         "metrics": "grafanacloud-prom",
         "logs": "grafanacloud-logs",

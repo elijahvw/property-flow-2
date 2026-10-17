@@ -3,9 +3,15 @@ import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { PrivateSpanExporter, PrivateMetricExporter, DatabaseMetricsProcessor } from '../dist/tracing.js';
+import { PrivateSpanExporter, PrivateMetricExporter, DatabaseMetricsProcessor, browserParentContext } from '../dist/tracing.js';
+import { trace } from '@opentelemetry/api';
 
 const serverRoot = fileURLToPath(new URL('../', import.meta.url));
+test('browser trace identity is strict and cannot control backend sampling or baggage', () => {
+  const valid = '00-'+'a'.repeat(32)+'-'+'b'.repeat(16)+'-00';
+  assert.deepEqual(trace.getSpanContext(browserParentContext(valid)), { traceId:'a'.repeat(32),spanId:'b'.repeat(16),traceFlags:1,isRemote:true });
+  for(const value of [undefined,[valid],valid+'private',valid.replace('00-','ff-'),valid.replace('a'.repeat(32),'0'.repeat(32)),valid.replace('b'.repeat(16),'0'.repeat(16))]) assert.equal(trace.getSpanContext(browserParentContext(value)),undefined);
+});
 async function run(source, env = {}) {
   const child = spawn(process.execPath, ['--input-type=module', '-e', source], {
     cwd:serverRoot, env:{...process.env, OTEL_EXPORTER_OTLP_ENDPOINT:'', ...env}, stdio:['ignore','pipe','pipe'],
@@ -72,9 +78,10 @@ test('OTLP exports HTTP metrics, correlated safe logs and traces without raw URL
       const app=fastify();registerTelemetry(app);
       app.get('/api/example/:id',async(request,reply)=>{
         assert.ok(trace.getSpan(context.active()),'request context must propagate to database calls');
+        assert.equal(trace.getSpan(context.active()).spanContext().traceId,'a'.repeat(32));
         recordRequestError(request,'REQUEST_503','Error');return reply.code(503).send({error:'safe'});
       });
-      await app.inject('/api/example/private-person?token=secret-token');
+      await app.inject({url:'/api/example/private-person?token=secret-token',headers:{traceparent:'00-'+'a'.repeat(32)+'-'+'b'.repeat(16)+'-01',baggage:'email=private-person',tracestate:'private=secret-token'}});
       await app.close();await shutdownTelemetry();
     `,{OTEL_EXPORTER_OTLP_ENDPOINT:`http://127.0.0.1:${sink.address().port}`});
     for(const signal of ['traces','metrics','logs']) assert.ok(batches.some(row=>row.path===`/v1/${signal}`),signal);

@@ -4,7 +4,7 @@ import { lockRentLease, allocateRentCredit } from "./rent.js";
 import { AccessError } from "./access.js";
 import { assignmentId } from "./application.js";
 import { audit, boundedText, cents, choice, conflict, date, input, mutation, page, sameSubmission, scoped, submission, version } from "./operational.js";
-const select = { movementId:true,movement:{select:{id:true,leaseId:true,reference:true,kind:true}}, depositReceiptId:true,depositReceipt:{select:{leaseId:true,reference:true}},reference:true, leaseId:true, id:true, propertyId:true, occurredOn:true, amountCents:true, currency:true, kind:true, category:true, memo:true, version:true, voidedAt:true, voidReason:true, property:{select:{name:true}} } as const;
+const select = { maintenanceCosts:{where:{unlinkedAt:null},select:{requestId:true}}, movementId:true,movement:{select:{id:true,leaseId:true,reference:true,kind:true}}, depositReceiptId:true,depositReceipt:{select:{leaseId:true,reference:true}},reference:true, leaseId:true, id:true, propertyId:true, occurredOn:true, amountCents:true, currency:true, kind:true, category:true, memo:true, version:true, voidedAt:true, voidReason:true, property:{select:{name:true}} } as const;
 export function registerFinances(server: FastifyInstance, db: PrismaClient, authenticate: preValidationHookHandler, origin: string) {
  const auth = { preValidation: authenticate };
  server.post("/api/company/finances", auth, request => {
@@ -23,18 +23,20 @@ export function registerFinances(server: FastifyInstance, db: PrismaClient, auth
    await audit(tx,request,companyId,row.id,"finance.created",{propertyId,kind});return row;
   });
  });
- server.get<{Querystring:{propertyId?:string;dateFrom?:string;dateTo?:string;cursor?:string}}>("/api/company/finances",auth,request=>{
-  const q=request.query;if(Object.keys(q).some(k=>!["propertyId","dateFrom","dateTo","cursor"].includes(k)))throw new AccessError(400,"INVALID_INPUT","Unknown filter.");
+ server.get<{Querystring:{propertyId?:string;dateFrom?:string;dateTo?:string;cursor?:string;entryId?:string}}>("/api/company/finances",auth,request=>{
+  const q=request.query;if(Object.keys(q).some(k=>!["propertyId","dateFrom","dateTo","cursor","entryId"].includes(k)))throw new AccessError(400,"INVALID_INPUT","Unknown filter.");
+  const entryId=q.entryId===undefined?undefined:assignmentId(q.entryId);
   const propertyId=q.propertyId===undefined?undefined:assignmentId(q.propertyId),cursor=q.cursor===undefined?undefined:assignmentId(q.cursor);
   const from=q.dateFrom===undefined?undefined:date(q.dateFrom,"start date"),to=q.dateTo===undefined?undefined:date(q.dateTo,"end date");
   if(from&&to&&from>to)throw new AccessError(400,"INVALID_INPUT","End date cannot precede the start date.");
   return scoped(db,request,"finance.manage",async(tx,companyId)=>{
    if(propertyId&&!await tx.property.findFirst({where:{id:propertyId,companyId},select:{id:true}}))throw new AccessError(404,"NOT_FOUND","Property not found.");
-   const where={companyId,...(propertyId?{propertyId}:{}),...(from||to?{occurredOn:{gte:from,lte:to}}:{})};
+   if(entryId&&!await tx.ledgerEntry.findFirst({where:{id:entryId,companyId,...(propertyId?{propertyId}:{})},select:{id:true}}))throw new AccessError(404,"NOT_FOUND","Transaction not found.");
+   const where={companyId,...(entryId?{id:entryId}:{}),...(propertyId?{propertyId}:{}),...(from||to?{occurredOn:{gte:from,lte:to}}:{})};
    const rows=await tx.ledgerEntry.findMany({where:{...where,...(cursor?{id:{lt:cursor}}:{})},select,take:51,orderBy:{id:"desc"}});
    // SUM returns bigint. Serialize exact decimal cents and summarize the whole filter,
    // never the current page; voided entries stay in history but leave totals.
-   const [totals]=await tx.$queryRaw<{income:bigint;expense:bigint;deposit:bigint;rentRefund:bigint;depositRefund:bigint}[]>(Prisma.sql`SELECT COALESCE(SUM("amountCents") FILTER (WHERE kind='income'),0)::bigint income, COALESCE(SUM("amountCents") FILTER (WHERE kind='expense'),0)::bigint expense, COALESCE(SUM("amountCents") FILTER (WHERE kind='deposit'),0)::bigint deposit, COALESCE(SUM("amountCents") FILTER (WHERE kind='refund' AND category='rent'),0)::bigint "rentRefund", COALESCE(SUM("amountCents") FILTER (WHERE kind='refund' AND category='security_deposit'),0)::bigint "depositRefund" FROM "LedgerEntry" WHERE "companyId"=${companyId} AND "voidedAt" IS NULL ${propertyId?Prisma.sql`AND "propertyId"=${propertyId}`:Prisma.empty} ${from?Prisma.sql`AND "occurredOn">=${from}`:Prisma.empty} ${to?Prisma.sql`AND "occurredOn"<=${to}`:Prisma.empty}`);
+   const [totals]=await tx.$queryRaw<{income:bigint;expense:bigint;deposit:bigint;rentRefund:bigint;depositRefund:bigint}[]>(Prisma.sql`SELECT COALESCE(SUM("amountCents") FILTER (WHERE kind='income'),0)::bigint income, COALESCE(SUM("amountCents") FILTER (WHERE kind='expense'),0)::bigint expense, COALESCE(SUM("amountCents") FILTER (WHERE kind='deposit'),0)::bigint deposit, COALESCE(SUM("amountCents") FILTER (WHERE kind='refund' AND category='rent'),0)::bigint "rentRefund", COALESCE(SUM("amountCents") FILTER (WHERE kind='refund' AND category='security_deposit'),0)::bigint "depositRefund" FROM "LedgerEntry" WHERE "companyId"=${companyId} AND "voidedAt" IS NULL ${entryId?Prisma.sql`AND id=${entryId}`:Prisma.empty} ${propertyId?Prisma.sql`AND "propertyId"=${propertyId}`:Prisma.empty} ${from?Prisma.sql`AND "occurredOn">=${from}`:Prisma.empty} ${to?Prisma.sql`AND "occurredOn"<=${to}`:Prisma.empty}`);
    return {...page(rows),summary:{incomeCents:String(totals.income),expenseCents:String(totals.expense),netCents:String(totals.income-totals.expense-totals.rentRefund),depositReceivedCents:String(totals.deposit),rentRefundCents:String(totals.rentRefund),depositRefundCents:String(totals.depositRefund),cashMovementCents:String(totals.income-totals.expense-totals.rentRefund+totals.deposit-totals.depositRefund)}};
   });
  });

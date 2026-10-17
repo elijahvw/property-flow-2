@@ -1,5 +1,7 @@
 # Property Flow development
 
+Read [AGENTS.md](AGENTS.md) for shared product, implementation and delivery guidance.
+
 - Client: React + Vite. Backend: Fastify + Prisma/PostgreSQL. Identity: Auth0 OIDC; browser access uses server-managed cookies.
 - Build client: `npm run build --workspace=@property-flow/client`.
 - Build server: `DATABASE_URL=<isolated-build-url> npm run build --workspace=server`.

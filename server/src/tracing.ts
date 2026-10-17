@@ -278,6 +278,14 @@ const method = (value: string) =>
   ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS", "HEAD"].includes(value)
     ? value
     : "OTHER";
+// Accept only a W3C v00 trace identity. Never trust browser sampling decisions,
+// tracestate or baggage as server attributes or authorization information.
+export function browserParentContext(value: unknown) {
+  if (typeof value !== 'string') return ROOT_CONTEXT;
+  const match = /^00-([a-f0-9]{32})-([a-f0-9]{16})-(?:00|01)$/.exec(value);
+  if (!match || /^0+$/.test(match[1]) || /^0+$/.test(match[2])) return ROOT_CONTEXT;
+  return trace.setSpanContext(ROOT_CONTEXT, { traceId: match[1], spanId: match[2], traceFlags: 1, isRemote: true });
+}
 export function registerTelemetry(server: FastifyInstance) {
   server.addHook("onRequest", (request, _reply, done) => {
     const span = tracer.startSpan(
@@ -286,7 +294,7 @@ export function registerTelemetry(server: FastifyInstance) {
         kind: SpanKind.SERVER,
         attributes: { "http.request.method": method(request.method) },
       },
-      ROOT_CONTEXT,
+      browserParentContext(request.headers.traceparent),
     );
     pending.set(request, { span, started: performance.now() });
     context.with(trace.setSpan(ROOT_CONTEXT, span), done);

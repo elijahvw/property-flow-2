@@ -16,6 +16,11 @@ if (window.location.pathname === '/invite' && window.location.hash) {
 
 registerBrowserErrors();
 
+// Keep monitoring off the rendering path and out of local preview/fixture data.
+if (import.meta.env.VITE_RUM_ENABLED === 'true') {
+  void import('./rum').then(({ startRum }) => startRum()).catch(() => {});
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />

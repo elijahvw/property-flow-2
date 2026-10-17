@@ -29,9 +29,9 @@ async function fixture(page:Page,role='owner'){
    Object.assign(row,data,{version:row.version+1});return json(row);
   }
   if(path.endsWith('/units')||path==='/api/company/leases'){
-   const rows=path.endsWith('/units')?state.units:state.leases,cursor=url.searchParams.get('cursor');
-   const selected=rows.filter(r=>!cursor||r.id<cursor).sort((a,b)=>b.id.localeCompare(a.id));
-   return json({items:selected.slice(0,50),nextCursor:selected.length>50?selected[49].id:null});
+   const isUnit=path.endsWith('/units'),rows=isUnit?state.units:state.leases,cursor=url.searchParams.get('cursor'),q=(url.searchParams.get('q')||'').trim().toLowerCase(),status=url.searchParams.get('status'),unitId=url.searchParams.get('unitId');
+   const selected=rows.filter(r=>(!cursor||r.id<cursor)&&(!status||r.status===status)&&(!unitId||r.unitId===unitId)&&(!q||[r.label,r.floor,r.unit?.label,r.resident?.name].some(v=>v?.toLowerCase().includes(q)))).sort((a,b)=>b.id.localeCompare(a.id));
+   return json({items:selected.slice(0,50),nextCursor:selected.length>50?selected[49].id:null,...(unitId?{unit:state.units.find(r=>r.id===unitId)}:{})});
   }
   return json([]);
  });return state;
@@ -57,7 +57,7 @@ test('staff unit access is read-only and lease page is blocked; resident/platfor
  for(const role of ['resident','platform']){await page.unroute('**/api/**');await fixture(page,role);await page.goto('/company/properties/home/units');await expect(page.getByRole('heading',{name:'Access unavailable'})).toBeVisible();}
 });
 test('units pagination and lease assignment prerequisite remain truthful',async({page})=>{
- const state=await fixture(page);for(let i=1;i<=51;i++)state.units.push({id:'u'+String(i).padStart(3,'0'),label:'Unit '+i,propertyId:'home',status:'active',version:1});await page.goto('/company/properties/home/units');await expect(page.getByText('50 units on this page')).toBeVisible();await page.getByRole('button',{name:'Next page'}).click();await expect(page.getByText('1 units on this page')).toBeVisible();await page.getByRole('button',{name:'First page'}).click();await expect(page.getByText('50 units on this page')).toBeVisible();
+ const state=await fixture(page);for(let i=1;i<=51;i++)state.units.push({id:'u'+String(i).padStart(3,'0'),label:'Unit '+i,propertyId:'home',status:'active',version:1});await page.goto('/company/properties/home/units');await expect(page.getByText('50 units on this page')).toBeVisible();await page.getByRole('button',{name:'Next page'}).click();await expect(page.getByText('1 unit on this page')).toBeVisible();await page.getByRole('button',{name:'First page'}).click();await expect(page.getByText('50 units on this page')).toBeVisible();
  state.residents=[];await page.goto('/company/leases');await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await expect(page.getByText(/Choose an active unit, then add a tenant/)).toBeVisible();await expect(page.getByRole('button',{name:'Create lease record'})).toHaveCount(0);
 });
 test('company change clears unit drafts and inaccessible property never exposes creation',async({page})=>{
@@ -70,4 +70,28 @@ test('unit-picker pagination preserves an ambiguous committed lease draft and re
  await page.getByRole('button',{name:'Review lease',exact:true}).click();await page.getByRole('button',{name:'Create lease record'}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Next page'}).click();await expect(page.getByRole('button',{name:'First page'})).toBeVisible();
  await expect(page.getByLabel('New lease start date')).toHaveValue('2026-11-01');await expect(page.getByLabel('New lease monthly rent (USD)')).toHaveValue('1500.00');await expect(page.getByLabel('Unit for new lease')).toHaveValue('u051');
  await page.getByRole('button',{name:'First page'}).click();await expect(page.getByRole('button',{name:'Next page'})).toBeVisible();await page.getByRole('button',{name:'Create lease record'}).click();await expect(page.getByRole('dialog')).not.toBeVisible();expect(state.leases.length).toBe(1);expect(state.keys[0]).toBe(state.keys[1]);
+});
+
+test('unit directory searches all pages, resets pagination and keeps filters on refresh',async({page})=>{
+ const state=await fixture(page);for(let i=1;i<=51;i++)state.units.push({id:'u'+String(i).padStart(3,'0'),label:'Unit '+i,propertyId:'home',status:i===1?'archived':'active',version:1,floor:i===1?'Garden':'Upper'});
+ await page.goto('/company/properties/home/units');await page.getByRole('button',{name:'Next page',exact:true}).click();await expect(page.getByText('1 unit on this page')).toBeVisible();
+ await page.getByLabel('Find unit', {exact:true}).fill('Garden');await expect(page.getByRole('heading',{name:'Unit 1',exact:true})).toBeVisible();await expect(page).not.toHaveURL(/cursor=/);await expect(page.getByRole('heading',{name:'Unit 51',exact:true})).toHaveCount(0);
+ await page.getByLabel('Unit view',{exact:true}).selectOption('active');await expect(page.getByRole('heading',{name:'No matching units',exact:true})).toBeVisible();
+ await page.getByLabel('Unit view',{exact:true}).selectOption('archived');await page.reload();await expect(page.getByLabel('Find unit',{exact:true})).toHaveValue('Garden');await expect(page.getByLabel('Unit view',{exact:true})).toHaveValue('archived');await expect(page.getByRole('heading',{name:'Unit 1',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Clear filters',exact:true}).click();await expect(page.getByText('50 units on this page')).toBeVisible();
+});
+
+test('unit lease history retains exact scope through lease details and back to the unit directory',async({page})=>{
+ const state=await fixture(page);state.units.push({id:'u1',label:'Garden studio',propertyId:'home',status:'active',version:1,bedrooms:0,marketRentCents:0});
+ state.leases.push({id:'l1',unitId:'u1',propertyId:'home',residentId:'r',resident:{name:'Resident',email:'r@test.invalid'},unit:{label:'Garden studio'},property:{name:'Home'},startsOn:'2026-10-01',endsOn:null,rentCents:150000,currency:'USD',status:'active',version:1});
+ await page.goto('/company/properties/home/units?q=Garden&status=active');await expect(page.getByRole('cell',{name:'Studio · Bathrooms not recorded',exact:true})).toBeVisible();await expect(page.getByText('$0.00',{exact:true})).toBeVisible();
+ await page.getByRole('link',{name:'View leases for Garden studio',exact:true}).click();await expect(page).toHaveURL(/unitId=u1/);await expect(page.getByText(/Showing leases for Garden studio/)).toBeVisible();
+ await page.getByLabel('Lease view',{exact:true}).selectOption('active');await page.getByRole('link',{name:'Open lease workspace',exact:true}).click();await expect(page).toHaveURL(/leaseListUnit=u1/);
+ await page.getByRole('link',{name:'← All leases',exact:true}).click();await expect(page).toHaveURL(/unitId=u1/);await expect(page.getByLabel('Lease view',{exact:true})).toHaveValue('active');
+ await page.getByRole('link',{name:'← Back to units',exact:true}).click();await expect(page.getByLabel('Find unit',{exact:true})).toHaveValue('Garden');await expect(page.getByLabel('Unit view',{exact:true})).toHaveValue('active');
+});
+
+test('staff can search unit records without editing or lease links',async({page})=>{
+ const state=await fixture(page,'staff');state.units.push({id:'u1',label:'Read-only suite',propertyId:'home',status:'active',version:1});
+ await page.goto('/company/properties/home/units?q=Read-only&status=active');await expect(page.getByRole('heading',{name:'Read-only suite',exact:true})).toBeVisible();await expect(page.getByRole('link',{name:/View leases/})).toHaveCount(0);await expect(page.getByRole('button',{name:/Edit unit|Add a unit/})).toHaveCount(0);
 });

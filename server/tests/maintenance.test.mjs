@@ -10,6 +10,8 @@ import {PrismaPg} from '@prisma/adapter-pg';
 import {registerApplication} from '../dist/application.js';
 import {registerSessions,digest} from '../dist/sessions.js';
 import {permissions} from '../dist/access.js';
+import {maintenanceUpdateCases} from './maintenance-update-cases.mjs';
+import {maintenanceCostCases} from './maintenance-cost-cases.mjs';
 const url=process.env.TEST_MAINTENANCE_DATABASE_URL;
 test('maintenance grants only active company owners/managers',()=>{
  for(const role of ['owner','manager','staff','resident']) for(const status of ['active','disabled']) assert.equal(permissions({id:'u',status,platformRole:null,membership:{companyId:'a',role,status:'active',company:{status:'active'}}}).includes('maintenance.manage'),status==='active'&&['owner','manager'].includes(role));
@@ -32,6 +34,7 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  await admin.query('INSERT INTO "ResidentPropertyAssignment" ("companyId","propertyId","userId") VALUES (\'a\',\'home\',\'resident\'),(\'a\',\'home\',\'other\')');
  const app=Fastify();t.after(()=>app.close());const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(app,db,auth,'https://app.test');
  const call=async(user,method,path,payload,extra={})=>{
+ if(payload&&method==='PATCH'&&path.startsWith('/api/company/maintenance/')&&!Object.hasOwn(payload,'expectedVersion'))payload={...payload,expectedVersion:(await admin.query('SELECT version FROM "MaintenanceRequest" WHERE id=$1',[path.split('/').pop()])).rows[0]?.version||1};
  if(payload&&method==='PATCH'&&path.startsWith('/api/platform/companies/')&&!Object.hasOwn(payload,'expectedVersion'))payload={...payload,expectedVersion:(await db.company.findUnique({where:{id:path.split('/').pop()}}))?.version};
  return app.inject({method,url:path,headers:{...(user?{cookie:`__Host-pf-session=token-${user}`} : {}),origin:'https://app.test','x-csrf-token':'csrf',...extra},...(payload?{payload}:{})});};
  const valid={submissionKey:randomUUID(),propertyId:'home',title:'Leaking tap',description:'Kitchen tap leaks.',priority:'normal'};
@@ -44,7 +47,7 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  const first=results[0].json();
  assert.equal((await call('resident','POST','/api/resident/maintenance',{...payload,submissionKey:key.toUpperCase()})).json().id,first.id);
  assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='maintenance.created'`)).rows[0].n,1);
- await assert.rejects(admin.query(`INSERT INTO "MaintenanceRequest" SELECT 'duplicate-id', "companyId", "propertyId", "requesterId", title, description, priority, status, "createdAt", "updatedAt", "submissionKey", "submissionHash" FROM "MaintenanceRequest" WHERE id=$1`,[first.id]),/unique constraint/);
+ await assert.rejects(admin.query(`INSERT INTO "MaintenanceRequest" (id,"companyId","propertyId","requesterId",title,description,priority,status,"createdAt","updatedAt","submissionKey","submissionHash") SELECT 'duplicate-id', "companyId", "propertyId", "requesterId", title, description, priority, status, "createdAt", "updatedAt", "submissionKey", "submissionHash" FROM "MaintenanceRequest" WHERE id=$1`,[first.id]),/unique constraint/);
  await call('manager','PATCH',`/api/company/maintenance/${first.id}`,{status:'resolved'});
  assert.equal((await call('resident','POST','/api/resident/maintenance',payload)).json().status,'resolved');
  for(const patch of [{title:'Changed'},{description:'Changed'},{priority:'high'},{propertyId:'foreign-home'}])assert.equal((await call('resident','POST','/api/resident/maintenance',{...payload,...patch})).statusCode,409);
@@ -94,7 +97,7 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  for(const role of ['owner','manager','staff','foreign'])assert.equal((await call(role,'POST','/api/resident/maintenance',valid)).statusCode,403);
  assert.equal((await call(null,'GET','/api/resident/maintenance')).statusCode,401);
  const response=await call('resident','POST','/api/resident/maintenance',valid);assert.equal(response.statusCode,200);id=response.json().id;
- assert.deepEqual(Object.keys(response.json()).sort(),['id','propertyId','title','description','priority','status','createdAt','updatedAt','property'].sort());
+ assert.deepEqual(Object.keys(response.json()).sort(),['id','propertyId','unitId','unit','category','targetOn','version','title','description','priority','status','createdAt','updatedAt','property'].sort());
  assert.equal((await call('other','POST','/api/resident/maintenance',{...valid,title:'Other request',priority:'high'})).statusCode,200);
  });
  await t.test('same-company ownership, filters, status transitions and audits',async()=>{
@@ -115,6 +118,47 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  assert.equal((await admin.query('SELECT count(*)::int n FROM "AuditEvent" WHERE action=\'maintenance.created\'')).rows[0].n,2);
  assert.equal((await admin.query('SELECT count(*)::int n FROM "AuditEvent" WHERE action=\'maintenance.status.changed\'')).rows[0].n,4);
  });
+ await t.test('management work orders validate unit scope, preserve replay and reject stale edits atomically',async()=>{
+  for(const [unitId,property,company,creator] of [['unit-a','home','a','owner'],['foreign-unit','foreign-home','b','foreign']])await admin.query(`INSERT INTO "Unit" (id,"companyId","propertyId",label,"createdById","submissionKey","submissionHash","updatedAt") VALUES ($1,$2,$3,CASE $1 WHEN 'unit-a' THEN 'Apartment 1' ELSE 'Foreign suite' END,$4,$1,'fixture',NOW())`,[unitId,company,property,creator]);
+  const payload={...valid,submissionKey:randomUUID(),title:'Boiler inspection',unitId:'unit-a',category:'hvac',targetOn:'2026-11-20'};
+  for(const actor of ['staff','resident'])assert.equal((await call(actor,'POST','/api/company/maintenance',payload)).statusCode,403);
+  assert.equal((await call('owner','POST','/api/company/maintenance',{...payload,unitId:'foreign-unit'})).statusCode,404);
+  assert.equal((await call('owner','POST','/api/company/maintenance',{...payload,propertyId:'foreign-home'})).statusCode,404);
+  assert.equal((await call('owner','POST','/api/company/maintenance',{...payload,companyId:'b'})).statusCode,400);
+  assert.equal((await call('resident','POST','/api/resident/maintenance',{...valid,submissionKey:randomUUID(),unitId:'unit-a'})).statusCode,400);
+  const results=await Promise.all([call('owner','POST','/api/company/maintenance',payload),call('owner','POST','/api/company/maintenance',payload)]);
+  for(const result of results)assert.equal(result.statusCode,200,result.body);
+  const row=results[0].json();assert.equal(row.id,results[1].json().id);assert.equal(row.unit.label,'Apartment 1');assert.equal(row.version,1);assert.equal(row.category,'hvac');
+  assert.equal((await call('owner','POST','/api/company/maintenance',{...payload,title:'Different'})).statusCode,409);
+  const detail=(await call('owner','GET',`/api/company/maintenance/${row.id}`)).json();assert.equal(detail.activity.length,1);assert.equal(detail.activity[0].action,'maintenance.created');
+  assert.equal((await call('foreign','GET',`/api/company/maintenance/${row.id}`)).statusCode,404);
+  assert.equal((await call('resident','GET',`/api/resident/maintenance/${row.id}`)).statusCode,404);
+  const updates=await Promise.all(['in_progress','resolved'].map(status=>call('manager','PATCH',`/api/company/maintenance/${row.id}`,{status,expectedVersion:1,priority:'high'})));
+  assert.deepEqual(updates.map(r=>r.statusCode).sort(),[200,409]);
+  const updated=(await call('owner','GET',`/api/company/maintenance/${row.id}`)).json();assert.equal(updated.version,2);assert.equal(updated.activity.length,2);assert.ok(updated.activity[0].changes.priority);
+  assert.equal((await call('owner','PATCH',`/api/company/maintenance/${row.id}`,{status:'open',expectedVersion:1})).statusCode,409);
+  assert.equal((await call('manager','GET','/api/company/maintenance?q=boiler&priority=high')).json().length,1);
+  assert.equal((await call('manager','GET','/api/company/maintenance?q='+ 'x'.repeat(201))).statusCode,400);
+  const own=(await call('resident','GET',`/api/resident/maintenance/${id}`)).json();assert.equal(own.title,valid.title);assert.ok(own.activity.length);assert.ok(!('recordedBy' in own));assert.ok(!JSON.stringify(own).includes('actorId'));assert.ok(!JSON.stringify(own).includes('changes'));
+  assert.equal((await call('other','GET',`/api/resident/maintenance/${id}`)).statusCode,404);
+  // Existing resolved history is preserved; no-op saves add neither version nor event.
+  await assert.rejects(admin.query('UPDATE "MaintenanceRequest" SET "unitId"=$1 WHERE id=$2',['foreign-unit',row.id]),/foreign key/);
+  await admin.query(`CREATE FUNCTION reject_work_order_update() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='maintenance.updated' THEN RAISE EXCEPTION 'audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_work_order_update BEFORE INSERT ON "AuditEvent" FOR EACH ROW EXECUTE FUNCTION reject_work_order_update()`);
+  try{assert.equal((await call('owner','PATCH',`/api/company/maintenance/${row.id}`,{status:updated.status,expectedVersion:2,title:'Must roll back'})).statusCode,500);const after=(await call('owner','GET',`/api/company/maintenance/${row.id}`)).json();assert.equal(after.version,2);assert.equal(after.title,'Boiler inspection');assert.equal(after.activity.length,2);}finally{await admin.query(`DROP TRIGGER reject_work_order_update ON "AuditEvent"; DROP FUNCTION reject_work_order_update()`);}
+  const before=updated.activity.length;
+  const noOp=await call('owner','PATCH',`/api/company/maintenance/${row.id}`,{status:updated.status,expectedVersion:updated.version});assert.equal(noOp.json().version,2);
+  assert.equal((await call('owner','GET',`/api/company/maintenance/${row.id}`)).json().activity.length,before);
+  assert.equal((await call('owner','PATCH',`/api/company/maintenance/${row.id}`,{status:updated.status,expectedVersion:2,unitId:null})).statusCode,200);
+  const relocated=(await call('owner','GET',`/api/company/maintenance/${row.id}`)).json();assert.equal(relocated.version,3);assert.deepEqual(relocated.activity[0].changes.unitId,{from:'Apartment 1',to:'Property-wide'});
+ });
+ await t.test('maintenance progress updates',async updateTest=>maintenanceUpdateCases(updateTest,admin,db,call,app,id));
+ await t.test('maintenance paid expense sources',async costTest=>maintenanceCostCases(costTest,admin,db,call,app,id));
+ await t.test('portfolio counts use complete company records and respect role boundaries',async()=>{
+  const owner=(await call('owner','GET','/api/company/property-directory')).json();assert.equal(owner.items.length,1);assert.equal(owner.items[0].id,'home');assert.equal(owner.items[0].activeUnits,1);assert.equal(owner.items[0].occupiedUnits,0);assert.equal(owner.items[0].openMaintenance,(await admin.query(`SELECT count(*)::int n FROM "MaintenanceRequest" WHERE "companyId"='a' AND status IN ('open','in_progress')`)).rows[0].n);
+  const staff=(await call('staff','GET','/api/company/property-directory')).json();assert.deepEqual(staff.items,[{id:'home',activeUnits:1}]);
+  assert.equal((await call('resident','GET','/api/company/property-directory')).statusCode,403);
+  assert.equal((await call('owner','GET','/api/company/property-directory',null,{'x-company-id':'b'})).statusCode,403);
+ });
  await t.test('company suspension orders before and after maintenance create/replay/read/status',async()=>{
   await admin.query(`UPDATE "User" SET "platformRole"='owner' WHERE id='owner'`);
   const operations=[
@@ -123,6 +167,8 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
    ['resident read','resident','GET','/api/resident/maintenance',null],
    ['manager read','manager','GET','/api/company/maintenance',null],
    ['status','manager','PATCH',`/api/company/maintenance/${id}`,{status:'open'}],
+   ['resident updates','resident','GET',`/api/resident/maintenance/${id}/updates`,null],
+   ['management update','manager','POST',`/api/company/maintenance/${id}/updates`,{content:'Suspension update regression',visibility:'internal',submissionKey:randomUUID()}],
   ];
   const waitBlocked=async()=>{
    for(let attempt=0;attempt<200;attempt++){
@@ -162,7 +208,8 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
    const gatedApp=Fastify();const gatedAuth=await registerSessions(gatedApp,gatedDb,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(gatedApp,gatedDb,gatedAuth,'https://app.test');
    let maintenance,suspension;
    try{
-    maintenance=gatedApp.inject({method,url:path,headers:{cookie:`__Host-pf-session=token-${user}`,origin:'https://app.test','x-csrf-token':'csrf'},...(payload?{payload}:{})});
+    const reviewedPayload=method==='PATCH'&&path.startsWith('/api/company/maintenance/')?{...payload,expectedVersion:(await admin.query('SELECT version FROM "MaintenanceRequest" WHERE id=$1',[id])).rows[0].version}:payload;
+    maintenance=gatedApp.inject({method,url:path,headers:{cookie:`__Host-pf-session=token-${user}`,origin:'https://app.test','x-csrf-token':'csrf'},...(reviewedPayload?{payload:reviewedPayload}:{})});
     // inject is lazy unless its thenable is consumed.
     maintenance=Promise.resolve(maintenance);
     await Promise.race([reached,new Promise((_,reject)=>{const timer=setTimeout(()=>reject(new Error('maintenance gate timed out')),3000);timer.unref();})]);
@@ -189,11 +236,11 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  const leader=await admin.connect();try{
  await leader.query('BEGIN');await leader.query('UPDATE "User" SET "updatedAt"="updatedAt" WHERE id=\'resident\'');
  const pending=call('resident','POST','/api/resident/maintenance',valid); // injection begins immediately
- let blocked=false;for(let i=0;i<100;i++){const rows=(await admin.query("SELECT pid FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid)) > 0 AND query LIKE 'UPDATE%User%'" )).rows;if(rows.length){blocked=true;break;}await new Promise(r=>setTimeout(r,10));}assert.ok(blocked,'resident operation reached shared lock');
+ let blocked=false;for(let i=0;i<100;i++){const rows=(await admin.query("SELECT pid FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid)) > 0 AND query LIKE '%User%'" )).rows;if(rows.length){blocked=true;break;}await new Promise(r=>setTimeout(r,10));}assert.ok(blocked,'resident operation reached shared lock');
  await leader.query('DELETE FROM "ResidentPropertyAssignment" WHERE "userId"=\'resident\'');await leader.query('COMMIT');assert.equal((await pending).statusCode,404);
  }finally{await leader.query('ROLLBACK');leader.release();}
  assert.deepEqual((await call('resident','GET','/api/resident/maintenance')).json(),[]);
- assert.equal((await call('manager','GET','/api/company/maintenance')).json().length,2);
+ assert.equal((await call('manager','GET','/api/company/maintenance')).json().length,3);
  // Explicit reassignment restores own history, never another resident's requests.
  assert.equal((await call('manager','PUT','/api/company/properties/home/residents/resident')).statusCode,200);
  assert.equal((await call('resident','GET','/api/resident/maintenance')).json().length,1);
@@ -208,7 +255,7 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  const readerLeader=await admin.connect();try {
    await readerLeader.query('BEGIN');await readerLeader.query('UPDATE "User" SET "updatedAt"="updatedAt" WHERE id=\'resident\'');
    const pending=call('resident','GET','/api/resident/maintenance');
-   let blocked=false;for(let i=0;i<100;i++){if((await admin.query("SELECT pid FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid)) > 0 AND query LIKE 'UPDATE%User%'" )).rows.length){blocked=true;break;}await new Promise(r=>setTimeout(r,10));}assert.ok(blocked);
+   let blocked=false;for(let i=0;i<100;i++){if((await admin.query("SELECT pid FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid)) > 0 AND query LIKE '%User%'" )).rows.length){blocked=true;break;}await new Promise(r=>setTimeout(r,10));}assert.ok(blocked);
    await readerLeader.query('DELETE FROM "ResidentPropertyAssignment" WHERE "userId"=\'resident\'');await readerLeader.query('COMMIT');assert.deepEqual((await pending).json(),[]);
  } finally {await readerLeader.query('ROLLBACK');readerLeader.release();}
  await admin.query('UPDATE "CompanyMembership" SET "companyId"=\'b\' WHERE "userId"=\'resident\'');
@@ -222,7 +269,7 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  await admin.query('UPDATE "Company" SET status=\'suspended\' WHERE id=\'a\'');
  assert.equal((await call('manager','GET','/api/company/maintenance')).statusCode,403);
  await admin.query('UPDATE "Company" SET status=\'active\' WHERE id=\'a\'');
- assert.equal((await call('manager','GET','/api/company/maintenance')).json().length,2);
- assert.equal((await admin.query('SELECT count(*)::int n FROM "MaintenanceRequest"')).rows[0].n,2);
+ assert.equal((await call('manager','GET','/api/company/maintenance')).json().length,3);
+ assert.equal((await admin.query('SELECT count(*)::int n FROM "MaintenanceRequest"')).rows[0].n,3);
  });
 });

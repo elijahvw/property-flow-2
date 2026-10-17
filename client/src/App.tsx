@@ -37,7 +37,7 @@ import { Statement } from "./pages/Statement";
 import { NavigationIcon } from "./components/NavigationIcon";
 import { ResidentProfiles } from "./pages/ResidentProfiles";
 import { ResidentDetail } from "./pages/ResidentDetail";
-import { Maintenance } from "./pages/Maintenance";
+import { Maintenance, MaintenanceRequestDetail } from "./pages/Maintenance";
 import { Deposits } from "./pages/Deposits";
 import { Rent } from "./pages/Rent";
 import { Finances } from "./pages/Finances";
@@ -56,6 +56,9 @@ class ErrorBoundary extends Component<
   }
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     recordBrowserEvent('browser.render');
+    if (import.meta.env.VITE_RUM_ENABLED === 'true') {
+      void import('./rum').then(({ recordRumRenderError }) => recordRumRenderError()).catch(() => {});
+    }
   }
   render() {
     return this.state.failed ? (
@@ -84,6 +87,8 @@ function Shell({ children }: { children: React.ReactNode }) {
         ? routes.find((r) => r.path === "/company/residents")
         : location.pathname.startsWith("/company/leases/")
           ? routes.find((r) => r.path === "/company/leases")
+          : location.pathname.startsWith("/company/maintenance/") ? routes.find(r=>r.path==="/company/maintenance")
+          : location.pathname.startsWith("/resident/maintenance/") ? routes.find(r=>r.path==="/resident/maintenance")
       : undefined);
   useEffect(() => {
     document.title = `${route?.title || "Property Flow"} · Property Flow`;
@@ -244,6 +249,12 @@ function Home() {
   );
 }
 function Pages() {
+  const rumLocation = useLocation();
+  useEffect(() => {
+    if (import.meta.env.VITE_RUM_ENABLED === 'true') {
+      void import('./rum').then(({ recordRumView }) => recordRumView(rumLocation.pathname)).catch(() => {});
+    }
+  }, [rumLocation.pathname]);
   const pages: Record<string, React.ReactNode> = {
     "/platform/companies": <Companies />,
     "/platform/users": <People />,
@@ -281,6 +292,26 @@ function Pages() {
           }
         />
       ))}
+      <Route
+        path="/company/maintenance/:requestId"
+        element={
+          <Shell>
+            <ProtectedRoute permission="maintenance.manage">
+              <MaintenanceRequestDetail />
+            </ProtectedRoute>
+          </Shell>
+        }
+      />
+      <Route
+        path="/resident/maintenance/:requestId"
+        element={
+          <Shell>
+            <ProtectedRoute permission="resident.self">
+              <MaintenanceRequestDetail resident />
+            </ProtectedRoute>
+          </Shell>
+        }
+      />
       <Route
         path="/company/leases/:leaseId"
         element={<Shell><ProtectedRoute permission="lease.manage"><LeaseDetail /></ProtectedRoute></Shell>}

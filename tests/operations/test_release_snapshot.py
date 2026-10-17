@@ -73,3 +73,22 @@ class SnapshotTests(unittest.TestCase):
             with self.subTest(account=account, env=env), self.assertRaises(ValueError):
                 snapshot.preserve(call, env)
             self.assertEqual([args[1] for args in calls], ["get-caller-identity"])
+
+    def test_start_does_not_wait_or_prune_and_verify_never_creates_again(self):
+        call, calls = self.client([])
+        self.assertEqual(snapshot.start(call, self.env), self.current)
+        self.assertEqual([args[1] for args in calls], ["get-caller-identity", "create-db-snapshot"])
+        calls.clear()
+        self.assertEqual(snapshot.verify(call, self.env), self.current)
+        self.assertNotIn("create-db-snapshot", [args[1] for args in calls])
+        self.assertIn("wait", [args[1] for args in calls])
+
+    def test_workflow_overlaps_snapshot_and_build_but_fences_rollout(self):
+        path = Path(__file__).resolve().parents[2] / ".github/workflows/deploy-dev.yml"
+        backend = path.read_text().split("  deploy-backend:\n", 1)[1].split("\n  deploy-frontend:", 1)[0]
+        self.assertLess(backend.index("run: bash scripts/dev-power.sh start-database"), backend.index("run: python3 scripts/release-snapshot.py start"))
+        self.assertLess(backend.index("run: python3 scripts/release-snapshot.py start"), backend.index("name: Build and push backend image"))
+        self.assertLess(backend.index("name: Build and push backend image"), backend.index("run: python3 scripts/release-snapshot.py verify"))
+        self.assertLess(backend.index("run: python3 scripts/release-snapshot.py verify"), backend.index("name: Roll out and verify immutable ECS release"))
+        for action in ["start", "verify"]:
+            self.assertIn("if: needs.terraform-changes.outputs.migration_snapshot == 'true'\n        run: python3 scripts/release-snapshot.py " + action, backend)

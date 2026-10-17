@@ -22,7 +22,7 @@ def relevant(component, path):
     if path in ("package.json", "package-lock.json", ".github/workflows/deploy-dev.yml", "scripts/plan-dev-release.py"):
         return True
     if component == "backend":
-        return path.startswith(("server/", "monitoring/")) or path in ("scripts/dev-power.sh", "scripts/grafana-monitoring.py", "scripts/deploy-backend.py")
+        return path.startswith(("server/", "monitoring/")) or path in ("scripts/dev-power.sh", "scripts/grafana-monitoring.py", "scripts/deploy-backend.py", "scripts/release-snapshot.py")
     return path.startswith("client/") or path == "scripts/verify-dev-public.sh"
 
 def changed_files(base, head):
@@ -53,6 +53,11 @@ def completed_state(previous, head, results, infrastructure_applied):
         if results.get(name) == "success" and (name != "infrastructure" or infrastructure_applied):
             versions[name] = head
     return {"account": ACCOUNT, "versions": versions}
+
+def migration_snapshot_required(versions, head, diff=changed_files):
+    files = diff(versions.get("backend"), head)
+    # An unknown release baseline cannot prove the schema is unchanged.
+    return files is None or any(path.startswith("server/prisma/migrations/") for path in files)
 
 class SafeRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, request, file_pointer, code, message, headers, new_url):
@@ -101,12 +106,15 @@ def main():
     previous = previous_state(os.environ["GITHUB_REPOSITORY"])
     wanted = plan(previous, head, force=os.environ.get("FORCE_ALL") == "true",
                   terraform=os.environ.get("RUN_TERRAFORM", "auto"))
+    snapshot_needed = wanted['backend'] and migration_snapshot_required(previous, head)
     with open(os.environ["GITHUB_OUTPUT"], "a") as output:
         for component, enabled in wanted.items():
             output.write(f"{component}={str(enabled).lower()}\n")
+        output.write(f"migration_snapshot={str(snapshot_needed).lower()}\n")
         output.write("previous_versions=" + json.dumps(previous, separators=(",", ":")) + "\n")
         output.write("reason=changes since each component's last successful deployment\n")
     summary = "\n".join(f"- {name}: {'deploy' if enabled else 'unchanged; skip'}" for name, enabled in wanted.items())
+    summary += "\n- Database restore point: " + ("required before migrations" if snapshot_needed else "no migration changes; skip")
     print(summary)
     with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as output:
         output.write("### Development release plan\n" + summary + "\n")

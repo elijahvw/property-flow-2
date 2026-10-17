@@ -1,6 +1,6 @@
 import { TenantForm,type TenantContact } from "../components/TenantForm";
 import { formatDate } from "../dates";
-import { leasePath } from "../lease-links";
+import { leasePath, unitDirectoryPath, unitListContext } from "../lease-links";
 import { DateField } from "../components/DateField";
 import {
   LeaseReview,
@@ -114,21 +114,33 @@ function UnitList({
   propertyId: string;
   editable: boolean;
 }) {
+  const { can } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const cursor = params.get("cursor") || "",
+    query = params.get("q") || "",
+    status = params.get("status") || "";
   const [adding, setAdding] = useState(false),
     [selected, setSelected] = useState<Unit | null>(null);
-  const [cursor, setCursor] = useState(""),
-    [key, setKey] = useState(() => crypto.randomUUID()),
-    [error, setError] = useState("");
+  const [key, setKey] = useState(() => crypto.randomUUID()),
+    [error, setError] = useState(""),
+    [success, setSuccess] = useState("");
+  const change = (field: string, value: string) => {
+    const next = new URLSearchParams(params);
+    next.delete("cursor");
+    if (value) next.set(field, value);
+    else next.delete(field);
+    setParams(next, { replace: true });
+  };
   const property = useResource<{ id: string; name: string }>(
     `/api/company/properties/${encodeURIComponent(propertyId)}`,
   );
   const r = useResource<Records<Unit>>(
-    `/api/company/properties/${encodeURIComponent(propertyId)}/units?${new URLSearchParams(cursor ? { cursor } : {})}`,
+    `/api/company/properties/${encodeURIComponent(propertyId)}/units?${new URLSearchParams(Object.entries({ cursor, q: query.trim(), status }).filter(([, value]) => value))}`,
     true,
     true,
   );
   const reload = () => {
-    setCursor("");
+    change("cursor", "");
     r.reload();
     setError("");
   };
@@ -143,11 +155,10 @@ function UnitList({
         / Units
       </nav>
       <header className="page-heading">
-        <p className="eyebrow">Property operations</p>
+        <p className="eyebrow">{property.data?.name || "Property"} / Units</p>
         <h1>Units</h1>
         <p>
-          Unit records are separate from resident property access. Archive a
-          unit to retain its history; end its active lease first.
+          Find a space, review its details and follow its lease history.
         </p>
         {editable && (
           <button disabled={!property.data} onClick={() => setAdding(true)}>
@@ -156,6 +167,7 @@ function UnitList({
         )}
       </header>
       {error && <p role="alert">{error}</p>}
+      {success && <p role="status" className="notice">{success}</p>}
       {!property.data ? (
         <Load error={property.error} retry={property.reload} label="property" />
       ) : (
@@ -184,6 +196,7 @@ function UnitList({
                   reload();
                   setAdding(false);
                   setKey(crypto.randomUUID());
+                  setSuccess(`Unit created.${query || status ? " Adjust the filters if it is not shown below." : ""}`);
                 }}
               >
                 <label>
@@ -202,8 +215,23 @@ function UnitList({
               </Form>
             </EditorDialog>
           )}
-          <section className="panel">
+          <section className="panel directory-panel" aria-label="Unit directory">
             <h2>Unit records</h2>
+            <div className="directory-toolbar">
+              <label className="directory-search">
+                Find unit
+                <input type="search" maxLength={200} placeholder="Unit name or floor" value={query} onChange={e => change("q", e.target.value)} />
+              </label>
+              <label>
+                Unit view
+                <select aria-label="Unit view" value={status} onChange={e => change("status", e.target.value)}>
+                  <option value="">All units</option>
+                  <option value="active">Active</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </label>
+              {(query || status) && <button className="text-button" onClick={() => setParams({}, { replace: true })}>Clear filters</button>}
+            </div>
             {r.data && r.error && (
               <Load error={r.error} retry={r.reload} label="units" />
             )}
@@ -212,23 +240,29 @@ function UnitList({
               <Load error={r.error} retry={r.reload} label="units" />
             ) : (
               <>
-                <p role="status">{r.data.items.length} units on this page</p>
+                <p role="status" className="directory-results">{r.data.items.length} {r.data.items.length === 1 ? "unit" : "units"} on this page</p>
                 {!r.data.items.length ? (
-                  <p>
-                    No units yet. Add a unit for each apartment, or one unit for
-                    a single-family property.
-                  </p>
+                  <div className="empty-state">
+                    <h3>{query || status || cursor ? "No matching units" : "No units yet"}</h3>
+                    <p>{query || status || cursor ? "Try a different search or unit view." : "Add a unit for each apartment, or one unit for a single-family property."}</p>
+                  </div>
                 ) : (
-                  <ul className="record-list">
+                  <div className="table-wrap">
+                  <table className="core-table unit-directory">
+                    <thead><tr><th>Unit</th><th>Space</th><th>Market rent</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead>
+                    <tbody>
                     {r.data.items.map((unit) => (
-                      <li key={unit.id}>
-                        <div>
+                      <tr key={unit.id}>
+                        <td>
                           <h3>{unit.label}</h3>
-                          <p>{unit.status}</p>
-                          <p>
+                          <span className="cell-detail">{unit.floor ? `Floor ${unit.floor}` : "Floor not recorded"}</span>
+                          {unit.notes && <details className="row-more"><summary>Unit notes</summary><p className="preserve-lines">{unit.notes}</p></details>}
+                        </td>
+                        <td data-label="Space">
+                          <span className="cell-detail">
                             {unit.bedrooms == null
                               ? "Bedrooms not recorded"
-                              : `${unit.bedrooms} bed`}{" "}
+                              : unit.bedrooms === 0 ? "Studio" : `${unit.bedrooms} bed`}{" "}
                             ·{" "}
                             {unit.bathroomsHundredths == null
                               ? "Bathrooms not recorded"
@@ -236,24 +270,32 @@ function UnitList({
                             {unit.squareFeet != null
                               ? ` · ${unit.squareFeet.toLocaleString()} sq ft`
                               : ""}
-                          </p>
-                        </div>
+                          </span>
+                        </td>
+                        <td data-label="Market rent">{unit.marketRentCents == null ? "Not recorded" : <><strong>{usd(unit.marketRentCents)}</strong><span className="cell-detail">Asking amount / month</span></>}</td>
+                        <td data-label="Status"><span className={`status-pill ${unit.status}`}>{unit.status === "active" ? "Active" : "Archived"}</span></td>
+                        <td><div className="row-actions">
+                        {can("lease.manage") && <Link aria-label={`View leases for ${unit.label}`} to={`/company/properties/${encodeURIComponent(propertyId)}/leases?${new URLSearchParams(Object.entries({ unitId: unit.id, unitListQ: query, unitListStatus: status, unitListCursor: cursor }).filter(([, value]) => value))}`}>View leases →</Link>}
                         {editable && (
                           <button
-                            className="secondary"
+                            className="text-button"
+                            aria-label={`Edit unit ${unit.label}`}
                             onClick={() => setSelected(unit)}
                           >
                             Edit unit
                           </button>
                         )}
-                      </li>
+                        </div></td>
+                      </tr>
                     ))}
-                  </ul>
+                    </tbody>
+                  </table>
+                  </div>
                 )}
                 <Pager
                   next={r.data.nextCursor}
                   cursor={cursor}
-                  change={setCursor}
+                  change={value => change("cursor", value)}
                 />
               </>
             )}
@@ -290,6 +332,7 @@ function UnitList({
                 );
                 reload();
                 setSelected(null);
+                setSuccess("Unit updated.");
               } catch (e) {
                 setError(
                   e instanceof Error ? e.message : "Unable to update selected.",
@@ -315,6 +358,7 @@ function UnitList({
                 <option value="archived">Archived</option>
               </select>
             </label>
+            <p className="help">Archiving retains the unit and its history. End its active lease before archiving.</p>
           </Form>
         </EditorDialog>
       )}
@@ -330,32 +374,51 @@ export function Leases() {
   return <LeaseList key={scope} />;
 }
 function LeaseList() {
-  const navigate=useNavigate();
-  const {data:auth,can} = useAuth();
+  const navigate = useNavigate();
+  const { data: auth, can } = useAuth();
   const { propertyId: pathPropertyId } = useParams();
   const [params, setParams] = useSearchParams();
   const [adding, setAdding] = useState(params.get("new") === "lease"),
     [selected, setSelected] = useState<Lease | null>(null),
     [renewing, setRenewing] = useState<Lease | null>(null);
   const contextId = pathPropertyId || params.get("propertyId") || "",
+    unitId = params.get("unitId") || "",
     status = params.get("status") || "",
     attention = params.get("attention") || "",
-    approvals = params.get("approvals") || "";
+    approvals = params.get("approvals") || "",
+    query = params.get("q") || "";
   const [visitedProperties, setVisitedProperties] = useState<string[]>(() =>
     contextId ? [contextId] : [],
   );
   const [cursor, setCursor] = useState(""),
     [propertyId, setPropertyId] = useState(contextId);
+  useEffect(()=>setCursor(""),[contextId,unitId,status,attention,approvals,query]);
   const properties = useResource<{ id: string; name: string }[]>(
     "/api/company/properties",
   );
-  const r = useResource<Records<Lease>>(
-    `/api/company/leases?${new URLSearchParams(Object.entries({ cursor, propertyId: contextId, status, attention, approvals }).filter(([, value]) => value))}`,
+  const r = useResource<Records<Lease> & { unit?: { id: string; label: string; propertyId: string } }>(
+    `/api/company/leases?${new URLSearchParams(Object.entries({ cursor, propertyId: contextId, unitId, status, attention, approvals, q: query }).filter(([, value]) => value))}`,
     true,
     true,
   );
   const propertyName = properties.data?.find((p) => p.id === contextId)?.name;
-  const detailPath=(id:string)=>leasePath(id,Object.fromEntries(Object.entries({leaseListProperty:contextId,leaseListStatus:status,leaseListAttention:attention,leaseListNested:pathPropertyId?"true":"",leaseListApprovals:approvals,...(approvals?{section:"invitations"}:{})}).filter(([,value])=>value)));
+  const detailPath = (id: string) =>
+    leasePath(
+      id,
+      Object.fromEntries(
+        Object.entries({
+          leaseListProperty: contextId,
+          leaseListStatus: status,
+          leaseListAttention: attention,
+          leaseListNested: pathPropertyId ? "true" : "",
+          leaseListApprovals: approvals,
+          leaseListQ: query,
+          leaseListUnit: unitId,
+          ...unitListContext(params),
+          ...(approvals ? { section: "invitations" } : {}),
+        }).filter(([, value]) => value),
+      ),
+    );
   const reload = () => {
     setCursor("");
     r.reload();
@@ -363,7 +426,7 @@ function LeaseList() {
   return (
     <>
       {contextId && <PropertyNavigation id={contextId} />}
-      <header className="page-heading">
+      <header className="page-heading page-heading-row"><div>
         <p className="eyebrow">Leasing</p>
         <h1>
           {contextId
@@ -371,15 +434,19 @@ function LeaseList() {
             : "Lease records"}
         </h1>
         <p>
-          Manage lease terms, residents, and monthly rent. These records track
-          your leases; signed agreements and balances are managed separately.
+          Lease terms, households, renewals and linked billing records.
         </p>
+        {unitId && <p className="notice">
+          Showing leases for {r.data?.unit?.label || "the selected unit"}.{" "}
+          {r.data?.unit && <Link to={unitDirectoryPath(r.data.unit.propertyId, params)}>← Back to units</Link>}{" "}
+          <button className="text-button" onClick={() => { const next = new URLSearchParams(params); for (const key of ["unitId", "unitListQ", "unitListStatus", "unitListCursor"]) next.delete(key); setParams(next); }}>Show all units</button>
+        </p>}
         {contextId && (
           <p>
             <Link to="/company/leases">View all company leases</Link>
           </p>
         )}
-        <button onClick={() => setAdding(true)}>Record a lease</button>
+        </div><div className="actions"><button onClick={() => setAdding(true)}>Record a lease</button>
         {properties.data
           ?.filter(
             (p) =>
@@ -403,6 +470,7 @@ function LeaseList() {
               Resume lease review · {p.name}
             </button>
           ))}
+        </div>
       </header>
       <EditorDialog
         open={adding}
@@ -451,7 +519,7 @@ function LeaseList() {
               >
                 <LeaseCreate
                   propertyId={id}
-                  initialContactId={params.get("contactId")||undefined}
+                  initialContactId={params.get("contactId") || undefined}
                   propertyName={
                     properties.data!.find((p) => p.id === id)?.name ||
                     "Property"
@@ -459,7 +527,9 @@ function LeaseList() {
                   saved={(row) => {
                     reload();
                     setAdding(false);
-                    navigate(`/company/leases/${encodeURIComponent(row.id)}?onboarding=household`);
+                    navigate(
+                      `/company/leases/${encodeURIComponent(row.id)}?onboarding=household`,
+                    );
                   }}
                 />
               </div>
@@ -472,28 +542,78 @@ function LeaseList() {
           <h2>
             {contextId ? "Property lease history" : "Company lease history"}
           </h2>
+
+        </div>
+        <div className="directory-toolbar">
+          <label className="directory-search">
+            Find lease
+            <input
+              type="search"
+              placeholder="Tenant, property or unit"
+              value={query}
+              maxLength={200}
+              onChange={(e) => {
+                setCursor("");
+                const next = new URLSearchParams(params);
+                if (e.target.value) next.set("q", e.target.value);
+                else next.delete("q");
+                setParams(next, { replace: true });
+              }}
+            />
+          </label>
+          {!pathPropertyId && (
+            <label>
+              Filter property
+              <select
+                value={contextId}
+                onChange={(e) => {
+                  setCursor("");
+                  const next = new URLSearchParams(params);
+                  for (const key of ["unitId", "unitListQ", "unitListStatus", "unitListCursor"]) next.delete(key);
+                  if (e.target.value) next.set("propertyId", e.target.value);
+                  else next.delete("propertyId");
+                  setParams(next);
+                }}
+              >
+                <option value="">All properties</option>
+                {properties.data?.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="compact-filter">
             Lease view
             <select
               aria-label="Lease view"
-              value={approvals?"resident_approvals":attention || status}
+              value={approvals ? "resident_approvals" : attention || status}
               onChange={(e) => {
                 const value = e.target.value;
                 setCursor("");
                 setParams({
+                  ...(unitId ? { unitId, ...unitListContext(params) } : {}),
+                  ...(query ? { q: query } : {}),
                   ...(!pathPropertyId && contextId
                     ? { propertyId: contextId }
                     : {}),
-                  ...(value==="resident_approvals"?{approvals:"pending"}:["ending_soon", "past_end", "in_effect"].includes(value)
-                    ? { attention: value }
-                    : value
-                      ? { status: value }
-                      : {}),
+                  ...(value === "resident_approvals"
+                    ? { approvals: "pending" }
+                    : ["ending_soon", "past_end", "in_effect"].includes(value)
+                      ? { attention: value }
+                      : value
+                        ? { status: value }
+                        : {}),
                 });
               }}
             >
               <option value="">All leases</option>
-              {can("members.manage")&&<option value="resident_approvals">Resident approvals needed</option>}
+              {can("members.manage") && (
+                <option value="resident_approvals">
+                  Resident approvals needed
+                </option>
+              )}
               <option value="draft">Draft</option>
               <option value="active">Active</option>
               <option value="ended">Ended</option>
@@ -513,80 +633,138 @@ function LeaseList() {
           <>
             <p role="status">{r.data.items.length} leases on this page</p>
             {!r.data.items.length ? (
-              <p>No lease records yet.</p>
+              <div className="empty-state">
+                <h3>
+                  {unitId && !(query || status || attention || approvals)
+                    ? "No leases for this unit"
+                    : query || status || attention || approvals
+                    ? "No matching leases"
+                    : "No lease records yet"}
+                </h3>
+                <p>
+                  {unitId && !(query || status || attention || approvals)
+                    ? "No lease records have been recorded for this unit."
+                    : query || status || attention || approvals
+                    ? "Try a different search or lease view."
+                    : "Record an existing lease or prepare a new term to connect the unit, household and billing."}
+                </p>
+              </div>
             ) : (
-              <ul className="record-list">
-                {r.data.items.map((lease) => (
-                  <li key={lease.id}>
-                    <div>
-                      <h3>
-                        <span className="eyebrow">Property</span>{" "}
-                        <Link
-                          to={`/company/properties/${encodeURIComponent(lease.propertyId)}/leases`}
-                        >
-                          {lease.property.name}
-                        </Link>{" "}
-                        · Unit {lease.unit.label}
-                      </h3>
-                      <p>
-                        <Link to={detailPath(lease.id)}>{lease.resident.name || lease.resident.email}</Link> ·{" "}
-                        {lease.status}
-                      </p>
-                      <p>
-                        {formatDate(lease.startsOn)} to{" "}
-                        {formatDate(lease.endsOn, "Open ended")} ·{" "}
-                        {usd(lease.rentCents)} monthly
-                      </p>
-                      {lease.previousLeaseId && (
-                        <p className="help">
-                          Renewal · previous term ended{" "}
-                          {formatDate(lease.previousLease?.endsOn, "on record")}
-                        </p>
-                      )}
-                    </div>
-                    <div className="actions">
-                      <Link className="button secondary" to={detailPath(lease.id)}>Open lease workspace</Link>
-                      <Link
-                        to={`/company/rent?leaseId=${encodeURIComponent(lease.id)}`}
-                      >
-                        Rent ledger →
-                      </Link>
-                      {leasePending(
-                        `pf:lease-renewal:${auth?.user.id}:${auth?.membership?.companyId}:${lease.id}`,
-                      ) && (
-                        <button
-                          className="secondary"
-                          onClick={() => setRenewing(lease)}
-                        >
-                          Resume renewal review
-                        </button>
-                      )}
-                      {lease.status !== "draft" &&
-                        lease.endsOn &&
-                        !lease.renewals?.length && (
-                          <button
-                            className="secondary"
-                            onClick={() => setRenewing(lease)}
+              <div className="table-wrap">
+                <table className="core-table lease-directory">
+                  <thead>
+                    <tr>
+                      <th>Property &amp; unit</th>
+                      <th>Primary tenant</th>
+                      <th>Lease term</th>
+                      <th>Status</th>
+                      <th>
+                        <span className="sr-only">Actions</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {r.data.items.map((lease) => (
+                      <tr key={lease.id}>
+                        <td>
+                          <Link
+                            className="table-primary"
+                            to={`/company/properties/${encodeURIComponent(lease.propertyId)}/leases`}
                           >
-                            Prepare renewal
-                          </button>
-                        )}
-                      {lease.renewals?.length ? (
-                        <span className="help">
-                          {lease.renewals[0].status} renewal starts{" "}
-                          {formatDate(lease.renewals[0].startsOn)}
-                        </span>
-                      ) : null}
-                      <button
-                        className="secondary"
-                        onClick={() => setSelected(lease)}
-                      >
-                        Edit lease
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                            {lease.property.name}
+                          </Link>
+                          <span className="cell-detail">
+                            {lease.unit.label}
+                          </span>
+                        </td>
+                        <td>
+                          <Link to={detailPath(lease.id)}>
+                            {lease.resident.name || lease.resident.email}
+                          </Link>
+                          {lease.resident.name && lease.resident.email && (
+                            <span className="cell-detail">
+                              {lease.resident.email}
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <span>{formatDate(lease.startsOn)}</span>
+                          <span className="cell-detail">
+                            through {formatDate(lease.endsOn, "Open ended")}
+                          </span>
+                          <strong className="lease-rent">
+                            {usd(lease.rentCents)} <span>/ month</span>
+                          </strong>
+                          {lease.previousLeaseId && (
+                            <span className="cell-detail">Renewal · previous term ended {formatDate(lease.previousLease?.endsOn,"on record")}</span>
+                          )}
+                        </td>
+                        <td>
+                          <span className={`status-pill ${lease.status}`}>
+                            {lease.status === "active"
+                              ? "Active"
+                              : lease.status === "draft"
+                                ? "Draft"
+                                : "Ended"}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="row-actions">
+                            <Link
+                              className="tenant-row-action"
+                              to={detailPath(lease.id)}
+                            >
+                              Open lease workspace
+                            </Link>
+                            <details className="row-more" open={!!leasePending(`pf:lease-renewal:${auth?.user.id}:${auth?.membership?.companyId}:${lease.id}`)}>
+                              <summary>More actions</summary>
+                              <div className="row-more-actions">
+                                <Link
+                                  to={`/company/rent?leaseId=${encodeURIComponent(lease.id)}`}
+                                >
+                                  Rent ledger →
+                                </Link>
+                                {leasePending(
+                                  `pf:lease-renewal:${auth?.user.id}:${auth?.membership?.companyId}:${lease.id}`,
+                                ) && (
+                                  <button
+                                    className="secondary"
+                                    onClick={() => setRenewing(lease)}
+                                  >
+                                    Resume renewal review
+                                  </button>
+                                )}
+                                {lease.status !== "draft" &&
+                                  lease.endsOn &&
+                                  !lease.renewals?.length && (
+                                    <button
+                                      className="secondary"
+                                      onClick={() => setRenewing(lease)}
+                                    >
+                                      Prepare renewal
+                                    </button>
+                                  )}
+                                {lease.renewals?.length ? (
+                                  <span className="help">
+                                    {lease.renewals[0].status} renewal starts{" "}
+                                    {formatDate(lease.renewals[0].startsOn)}
+                                  </span>
+                                ) : null}
+                                <button
+                                  className="secondary"
+                                  onClick={() => setSelected(lease)}
+                                >
+                                  Edit lease
+                                </button>
+                              </div>
+                            </details>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
             <Pager
               next={r.data.nextCursor}
