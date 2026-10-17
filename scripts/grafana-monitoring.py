@@ -59,15 +59,19 @@ def validate_headers(value):
     return value
 
 
-def store_ingestion(env=os.environ, client=None):
-    validate_endpoint(env.get("GRAFANA_OTLP_ENDPOINT"))
-    headers = validate_headers(env.get("GRAFANA_OTLP_HEADERS"))
-    arn = env.get("GRAFANA_SECRET_ARN", "")
+def validate_secret_arn(arn):
     if not re.fullmatch(
         r"arn:aws:secretsmanager:us-east-1:800754316001:secret:propertyflow-dev-grafana-otlp-[A-Za-z0-9]{6}",
         arn,
     ):
         raise SafeFailure("Unexpected development ingestion-secret ARN.")
+    return arn
+
+
+def store_ingestion(env=os.environ, client=None):
+    validate_endpoint(env.get("GRAFANA_OTLP_ENDPOINT"))
+    headers = validate_headers(env.get("GRAFANA_OTLP_HEADERS"))
+    arn = validate_secret_arn(env.get("GRAFANA_SECRET_ARN", ""))
     if client is None:
         import boto3
 
@@ -126,6 +130,24 @@ def bootstrap_ingestion(env=os.environ, runner=subprocess.run, client=None):
                 "Ingestion-secret bootstrap failed; inspect Terraform permissions/state. No app update was attempted."
             )
         return result.stdout
+
+    # Existing installations do not need a targeted infrastructure apply.
+    # Module input dependencies can bring unrelated tag/database changes into
+    # that plan. Keep those changes behind the ordinary full-plan review.
+    outputs = json.loads(terraform("output", "-json"))
+    existing = outputs.get("grafana_secret_arn", {}).get("value")
+    if existing:
+        arn = validate_secret_arn(existing)
+        if client is None:
+            import boto3
+
+            client = boto3.client("secretsmanager", region_name="us-east-1")
+        metadata = client.describe_secret(SecretId=arn)
+        if metadata.get("ARN") != arn or metadata.get("Name") != "propertyflow-dev-grafana-otlp" or metadata.get("DeletedDate"):
+            raise SafeFailure("Existing ingestion-secret metadata is unavailable or unexpected.")
+        store_ingestion({**env, "GRAFANA_SECRET_ARN": arn}, client)
+        print("Existing ingestion secret is populated before the full infrastructure plan/apply.")
+        return
 
     terraform(
         "plan",

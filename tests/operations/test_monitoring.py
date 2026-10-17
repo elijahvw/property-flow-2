@@ -185,7 +185,7 @@ class MonitoringTests(unittest.TestCase):
             calls.append(args[1])
             self.assertTrue(kwargs["capture_output"])
             return SimpleNamespace(
-                returncode=0, stdout=json.dumps(plan) if args[1] == "show" else arn
+                returncode=0, stdout=json.dumps(plan) if args[1] == "show" else "{}" if args[1:] == ["output", "-json"] else arn
             )
 
         class Client:
@@ -199,7 +199,7 @@ class MonitoringTests(unittest.TestCase):
         }
         with contextlib.redirect_stdout(io.StringIO()):
             m.bootstrap_ingestion(env, runner, Client())
-        self.assertEqual(calls, ["plan", "show", "apply", "output", "put-secret"])
+        self.assertEqual(calls, ["output", "plan", "show", "apply", "output", "put-secret"])
         calls.clear()
         plan["resource_changes"].append(
             {
@@ -209,7 +209,39 @@ class MonitoringTests(unittest.TestCase):
         )
         with self.assertRaises(m.SafeFailure):
             m.bootstrap_ingestion(env, runner, Client())
-        self.assertEqual(calls, ["plan", "show"])
+        self.assertEqual(calls, ["output", "plan", "show"])
+
+    def test_existing_secret_is_verified_and_populated_without_terraform_apply(self):
+        calls = []
+        arn = "arn:aws:secretsmanager:us-east-1:800754316001:secret:propertyflow-dev-grafana-otlp-ABC123"
+        metadata = {"ARN": arn, "Name": "propertyflow-dev-grafana-otlp"}
+        def runner(args, **kwargs):
+            self.assertEqual(args[1:], ["output", "-json"])
+            self.assertTrue(kwargs["capture_output"])
+            calls.append("output")
+            return SimpleNamespace(returncode=0, stdout=json.dumps({"grafana_secret_arn": {"value": arn}}))
+        class Client:
+            def describe_secret(self, **kwargs):
+                calls.append("metadata")
+                return metadata
+            def put_secret_value(self, **kwargs):
+                calls.append("put-secret")
+        env = {"GRAFANA_OTLP_ENDPOINT": "https://otlp-gateway-prod-us-east-2.grafana.net/otlp", "GRAFANA_OTLP_HEADERS": "Authorization=Basic " + base64.b64encode(b"fixture:ingestion-fixture").decode()}
+        with contextlib.redirect_stdout(io.StringIO()):
+            m.bootstrap_ingestion(env, runner, Client())
+        self.assertEqual(calls, ["output", "metadata", "put-secret"])
+        for invalid in ({**metadata, "DeletedDate": "today"}, {**metadata, "Name": "another-secret"}, {**metadata, "ARN": "another-arn"}):
+            metadata = invalid
+            calls.clear()
+            with self.subTest(metadata=invalid), self.assertRaises(m.SafeFailure):
+                m.bootstrap_ingestion(env, runner, Client())
+            self.assertEqual(calls, ["output", "metadata"])
+
+    def test_existing_secret_with_foreign_arn_never_calls_aws_or_applies(self):
+        def runner(args, **kwargs):
+            return SimpleNamespace(returncode=0, stdout=json.dumps({"grafana_secret_arn": {"value": "arn:aws:secretsmanager:us-east-1:000000000000:secret:other-ABC123"}}))
+        with self.assertRaises(m.SafeFailure):
+            m.bootstrap_ingestion({"GRAFANA_OTLP_ENDPOINT": "https://otlp-gateway-prod-us-east-2.grafana.net/otlp", "GRAFANA_OTLP_HEADERS": "Authorization=Basic " + base64.b64encode(b"fixture:ingestion-fixture").decode()}, runner, object())
 
     def test_bootstrap_failure_does_not_print_captured_state_or_credentials(self):
         def runner(*args, **kwargs):
