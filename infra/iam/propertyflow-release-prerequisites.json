@@ -1,0 +1,73 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ManageReviewedGrafanaCloudWatchRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:GetRole",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:UpdateRole",
+        "iam:DeleteRole",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:ListRoleTags",
+        "iam:ListRolePolicies",
+        "iam:GetRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListInstanceProfilesForRole"
+      ],
+      "Resource": "arn:aws:iam::800754316001:role/propertyflow-dev-grafana-cloudwatch"
+    },
+    {
+      "Sid": "SnapshotSource",
+      "Effect": "Allow",
+      "Action": [
+        "rds:CreateDBSnapshot"
+      ],
+      "Resource": "arn:aws:rds:us-east-1:800754316001:db:propertyflow-dev-db"
+    },
+    {
+      "Sid": "CreateTaggedReleaseSnapshot",
+      "Effect": "Allow",
+      "Action": [
+        "rds:CreateDBSnapshot",
+        "rds:AddTagsToResource"
+      ],
+      "Resource": "arn:aws:rds:us-east-1:800754316001:snapshot:propertyflow-dev-pre-*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/Application": "propertyflow",
+          "aws:RequestTag/Environment": "dev",
+          "aws:RequestTag/BackupPurpose": "pre-migration"
+        }
+      }
+    },
+    {
+      "Sid": "InspectReleaseSnapshotTags",
+      "Effect": "Allow",
+      "Action": [
+        "rds:ListTagsForResource"
+      ],
+      "Resource": "arn:aws:rds:us-east-1:800754316001:snapshot:propertyflow-dev-pre-*"
+    },
+    {
+      "Sid": "RetainOnlyWorkflowSnapshots",
+      "Effect": "Allow",
+      "Action": [
+        "rds:DeleteDBSnapshot"
+      ],
+      "Resource": "arn:aws:rds:us-east-1:800754316001:snapshot:propertyflow-dev-pre-*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Application": "propertyflow",
+          "aws:ResourceTag/Environment": "dev",
+          "aws:ResourceTag/BackupPurpose": "pre-migration"
+        }
+      }
+    }
+  ]
+}
