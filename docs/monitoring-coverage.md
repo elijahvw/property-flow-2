@@ -11,6 +11,8 @@ Reviewed October 17, 2026. Scope: Property Flow dev, Grafana stack `slimpillar20
 
 ## RUM source prepared locally
 
+**Custom-domain activation pending:** before deploying the frontend at `https://propertyflow.saasapps.cloud`, manually add that exact origin to app 1169's collector allowed origins, retaining the old CloudFront origin during transition. This document records the previously verified allowlist; no live Grafana change is made by the domain PR. Follow [the domain activation procedure](custom-domain.md#manual-activation-order), including temporary `VITE_RUM_ENABLED=false` if the allowlist cannot be updated yet. Confirm real ingestion from the new hostname before marking this coverage active. Keep wildcard/localhost origins, replay and geolocation disabled.
+
 The pinned Faro 2.12.1 SDK is loaded asynchronously only when `VITE_RUM_ENABLED=true` and a valid public `VITE_FARO_COLLECTOR_URL` is supplied. Loopback previews remain disabled. The dev deployment workflow defaults these public values to enabled and the verified app-1169 collector on the next user-approved release; repository variables override them, including `VITE_RUM_ENABLED=false` to disable. Neither value is a secret. Local builds/previews stay disabled by default.
 
 Public collector for app 1169:

@@ -10,7 +10,7 @@ Build complete workflows from real sources: property → unit → tenant/househo
 
 Keep the UI clean: readable labels and dates, grouped forms, focused reviews, accessible mobile/keyboard use and progressive detail. Do not add decorative dashboards, empty navigation, nonfunctional controls, unsupported integrations or dummy features. Clearly labeled fictional preview fixtures never establish production readiness.
 
-Stripe subscriptions and tenant collection remain last. Domain setup is on hold. No plan names, prices, provider activations, delivery dates or parity percentages are established here.
+Stripe subscriptions and tenant collection remain last. Custom-domain setup for `propertyflow.saasapps.cloud` is in progress: versioned Terraform/deployment configuration is prepared, including the public URL when apply is skipped. DNS, certificate issuance, CloudFront/Auth0 setup, the Grafana collector's exact allowed origin and live acceptance remain manual. See [domain setup](custom-domain.md). No plan names, prices, provider activations, delivery dates or parity percentages are established here.
 
 ## Status and maintenance rules
 

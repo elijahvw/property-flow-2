@@ -25,7 +25,12 @@ test('staff cannot mount assignment UI or load resident directory',async({page})
 });
 test('resident shows own property cards, empty state, and recoverable failure',async({page})=>{
  const state=await fixture(page,'resident');await page.goto('/resident');await expect(page.getByRole('heading',{name:'No properties assigned'})).toBeVisible();
- state.assigned=true;await page.reload();await expect(page.getByRole('heading',{name:'Home',exact:true})).toBeVisible();await expect(page.getByText('1 Main',{exact:true})).toBeVisible();await expect(page.getByText(/not leases or proof of occupancy/)).toBeVisible();
+ state.assigned=true;await page.reload();await expect(page.getByRole('heading',{name:'Home',exact:true})).toBeVisible();await expect(page.getByText('1 Main',{exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'My rental',exact:true})).toBeVisible();
+ const services=page.getByRole('navigation',{name:'Resident services'});
+ for (const [name,href] of [['View rent & payments','/resident/rent'],['View security deposit','/resident/deposits'],['Maintenance requests','/resident/maintenance'],['My profile','/account']]) {
+  await expect(services.getByRole('link',{name,exact:true})).toHaveAttribute('href',href);
+ }
  state.fail=true;await page.reload();await expect(page.getByRole('alert')).toContainText('Temporarily unavailable');state.fail=false;await page.getByRole('button',{name:'Try again'}).click();await expect(page.getByRole('heading',{name:'Home',exact:true})).toBeVisible();
 });
 test('assignment controls stay pending until eligible and assigned records load',async({page})=>{

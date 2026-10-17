@@ -74,3 +74,12 @@ variable "grafana_otlp_endpoint" {
     error_message = "Use the HTTPS Grafana Cloud OTLP gateway URL from Send data > OpenTelemetry (no credentials, query or fragment)."
   }
 }
+
+variable "frontend_custom_domain" {
+  description = "Optional public hostname and issued us-east-1 ACM certificate. Configured in custom-domain.auto.tfvars.json; null explicitly restores the original app origin and CloudFront URL."
+  type = object({
+    hostname        = string
+    certificate_arn = string
+  })
+  default = null
+}

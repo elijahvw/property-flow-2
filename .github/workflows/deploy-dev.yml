@@ -64,6 +64,7 @@ jobs:
     outputs:
       cloudfront_distribution_id: ${{ steps.outputs.outputs.cloudfront_distribution_id }}
       cloudfront_url: ${{ steps.outputs.outputs.cloudfront_url }}
+      public_app_url: ${{ steps.outputs.outputs.public_app_url }}
       repository_url: ${{ steps.outputs.outputs.repository_url }}
       ecs_cluster_name: ${{ steps.outputs.outputs.ecs_cluster_name }}
       ecs_service_name: ${{ steps.outputs.outputs.ecs_service_name }}
@@ -101,6 +102,9 @@ jobs:
         run: |
           account_id=$(aws sts get-caller-identity --query Account --output text)
           test "$account_id" = "800754316001" || { echo "Unexpected AWS account: $account_id"; exit 1; }
+      - name: Verify custom-domain HTTPS before changing infrastructure or services
+        if: github.event_name == 'workflow_dispatch' && !inputs.plan_only
+        run: python3 scripts/verify-dev-domain.py
       - name: Install pinned AWS SDK for ingestion setup
         if: github.event_name == 'workflow_dispatch' && !inputs.plan_only && needs.terraform-changes.outputs.backend == 'true'
         run: python3 -m pip install boto3==1.43.114
@@ -160,15 +164,15 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && !inputs.plan_only
         id: outputs
         run: |
+          public_app_url=$(python3 scripts/verify-dev-domain.py --url)
+          test -n "$public_app_url"
+          printf 'public_app_url=%s\n' "$public_app_url" >> "$GITHUB_OUTPUT"
           cd infra/terraform/envs/dev
-          echo "cloudfront_distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
-          echo "cloudfront_url=$(terraform output -raw cloudfront_url)" >> $GITHUB_OUTPUT
-          echo "repository_url=$(terraform output -raw repository_url)" >> $GITHUB_OUTPUT
-          echo "ecs_cluster_name=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_OUTPUT
-          echo "ecs_service_name=$(terraform output -raw ecs_service_name)" >> $GITHUB_OUTPUT
-          echo "alb_dns_name=$(terraform output -raw alb_dns_name)" >> $GITHUB_OUTPUT
-          echo "frontend_bucket_name=$(terraform output -raw frontend_bucket_name)" >> $GITHUB_OUTPUT
-          echo "grafana_secret_arn=$(terraform output -raw grafana_secret_arn)" >> $GITHUB_OUTPUT
+          for output in cloudfront_distribution_id cloudfront_url repository_url ecs_cluster_name ecs_service_name alb_dns_name frontend_bucket_name grafana_secret_arn; do
+            value=$(terraform output -raw "$output")
+            test -n "$value"
+            printf '%s=%s\n' "$output" "$value" >> "$GITHUB_OUTPUT"
+          done
 
   deploy-backend:
     if: github.event_name == 'workflow_dispatch' && !inputs.plan_only && needs.terraform-changes.outputs.backend == 'true'
@@ -335,7 +339,7 @@ jobs:
           aws cloudfront create-invalidation --distribution-id ${{ needs.terraform.outputs.cloudfront_distribution_id }} --paths "/*"
       - name: Verify public application and authentication
         env:
-          PUBLIC_URL: https://${{ needs.terraform.outputs.cloudfront_url }}
+          PUBLIC_URL: ${{ needs.terraform.outputs.public_app_url }}
         run: |
           bash scripts/verify-dev-public.sh "$PUBLIC_URL"
           echo "Deployed commit: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
