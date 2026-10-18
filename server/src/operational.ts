@@ -51,7 +51,7 @@ export function mutation(request: FastifyRequest, origin: string) {
   if (request.headers.origin !== origin || !request.appSession || request.headers["x-csrf-token"] !== request.appSession.csrfToken)
     throw new AccessError(403, "CSRF_INVALID", "Refresh and try again.");
 }
-export function scoped<T>(db: PrismaClient, request: FastifyRequest, permission: Permission, run: (tx: Tx, companyId: string) => Promise<T>) {
+export function scoped<T>(db: PrismaClient, request: FastifyRequest, permission: Permission, run: (tx: Tx, companyId: string, propertyIds: string[] | null) => Promise<T>) {
   const companyId = companyScope(request.principal!, permission, request.headers["x-company-id"]);
   return serializable(db, async tx => {
     // Reads share the authorization fence; concurrent panels must not write-conflict
@@ -64,7 +64,10 @@ export function scoped<T>(db: PrismaClient, request: FastifyRequest, permission:
     if (!current) throw new AccessError(403, "ACCESS_DENIED", "Access is unavailable.");
     companyScope(current, permission, companyId);
     await tx.$queryRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
-    return run(tx, companyId);
+    const propertyIds = current.membership?.role === "staff" && current.membership.staffPropertyScope === "selected"
+      ? (await tx.staffPropertyAccess.findMany({ where: { companyId, userId: current.id }, select: { propertyId: true } })).map(g => g.propertyId)
+      : null;
+    return run(tx, companyId, propertyIds);
   });
 }
 export type AuditRequest = { id: string; principal?: { id: string } };

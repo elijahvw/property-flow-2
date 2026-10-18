@@ -14,6 +14,7 @@ import { api } from "../api";
 import { formatDate } from "../dates";
 import { LeaseTerms, LeaseRenewal, type Lease } from "./Leasing";
 import { LeaseHousehold } from "../components/LeaseHousehold";
+import { PrivateDocuments } from "../components/PrivateDocuments";
 import { LeaseInvitations } from "../components/LeaseInvitations";
 import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "../components/Form";
@@ -48,6 +49,7 @@ function LeaseWorkspace({ id }: { id: string }) {
     [visited, setVisited] = useState<string[]>([]);
   const section = [
     "overview",
+    "documents",
     "household",
     "invitations",
     "renewal",
@@ -130,6 +132,7 @@ function LeaseWorkspace({ id }: { id: string }) {
       <nav className="lease-section-nav" aria-label="Lease sections">
         {[
           ["overview", "Overview"],
+          ["documents", "Documents"],
           ["terms", "Terms & changes"],
           ...(can("finance.manage") ? [["proration", "Partial rent"]] : []),
           ["household", "Leaseholders & occupants"],
@@ -399,6 +402,7 @@ function LeaseWorkspace({ id }: { id: string }) {
             <LeaseSettlement leaseId={id} />
           </div>
         )}
+      {section === "documents" && <PrivateDocuments source="leases" sourceId={id} />}
       <EditorDialog
         open={editing}
         title="Review lease terms"

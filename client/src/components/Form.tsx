@@ -43,7 +43,7 @@ export function Form({
         setSaved(false);
         notify("");
         try {
-          await monitorOperation(operation, () => submit(data));
+          await monitorOperation(operation, () => submit(data), operation.startsWith("document.") ? 60000 : undefined);
           setSaved(true);
           if (
             operation !== "page.data.load" &&

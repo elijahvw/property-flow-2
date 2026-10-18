@@ -9,14 +9,14 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { serializable } from '../dist/application.js';
 
-function transport(sqlstate, failures) {
+function transport(sqlstate, failures, failAt = 'UPDATE') {
   let attempts = 0;
   class FakePool extends pg.Pool {
     async connect() {
       const connection = new EventEmitter();
       connection.release = () => {};
       connection.query = async query => {
-        if (query.text.startsWith('UPDATE')) {
+        if (query.text.startsWith(failAt)) {
           if (++attempts <= failures)
             throw Object.assign(new Error('injected transport failure'), {code:sqlstate,severity:'ERROR'});
         }
@@ -42,6 +42,20 @@ for (const sqlstate of ['40001','40P01']) {
 test('actual PrismaPg unrelated raw SQL errors propagate without retry', async t => {
   const f=transport('23503',Infinity);t.after(()=>f.db.$disconnect());
   await assert.rejects(serializable(f.db,lock),e=>e.code==='P2010'&&e.meta.driverAdapterError.cause.originalCode==='23503');assert.equal(f.attempts(),1);
+});
+for (const sqlstate of ['40001','40P01']) {
+  test(`actual PrismaPg COMMIT ${sqlstate} retries the entire transaction`, async t => {
+    const f=transport(sqlstate,2,'COMMIT');t.after(()=>f.db.$disconnect());
+    assert.deepEqual(await serializable(f.db,lock),[]);assert.equal(f.attempts(),3);
+  });
+  test(`actual PrismaPg COMMIT ${sqlstate} exhausts with a recoverable conflict`, async t => {
+    const f=transport(sqlstate,Infinity,'COMMIT');t.after(()=>f.db.$disconnect());
+    await assert.rejects(serializable(f.db,lock),e=>e.statusCode===409&&e.code==='ACCESS_CONFLICT');assert.equal(f.attempts(),5);
+  });
+}
+test('actual PrismaPg unrelated COMMIT failures are never retried', async t => {
+  const f=transport('23503',Infinity,'COMMIT');t.after(()=>f.db.$disconnect());
+  await assert.rejects(serializable(f.db,lock),e=>e.name==='DriverAdapterError'&&e.cause.kind==='ForeignKeyConstraintViolation');assert.equal(f.attempts(),1);
 });
 test('unapplied assignment migration sorts after runtime role creation without baseline edits',()=>{
   const root=new URL('../prisma/migrations/',import.meta.url);

@@ -68,7 +68,8 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
     if (Object.keys(q).some(k => !["cursor", "status", "q"].includes(k))) throw new AccessError(400, "INVALID_INPUT", "Unknown unit filter.");
     if (q.q !== undefined && (typeof q.q !== "string" || q.q.length > 200 || q.q.includes("\0"))) throw new AccessError(400, "INVALID_INPUT", "Search must be at most 200 characters.");
     const propertyId = assignmentId(request.params.propertyId), cursor = q.cursor === undefined ? undefined : assignmentId(q.cursor), status = q.status === undefined ? undefined : choice(q.status, ["active", "archived"], "unit status"), search = q.q?.trim();
-    return scoped(db, request, "property.read", async (tx, companyId) => {
+    return scoped(db, request, "property.read", async (tx, companyId, propertyIds) => {
+      if (propertyIds && !propertyIds.includes(propertyId)) throw new AccessError(404, "NOT_FOUND", "Property not found.");
       await property(tx, companyId, propertyId);
       return page(await tx.unit.findMany({ where: { companyId, propertyId, status, ...(search ? { OR: [{ label: { contains: search, mode: "insensitive" } }, { floor: { contains: search, mode: "insensitive" } }] } : {}), ...(cursor ? { id: { lt: cursor } } : {}) }, select: unitSelect, take: 51, orderBy: { id: "desc" } }));
     });

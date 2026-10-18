@@ -35,7 +35,7 @@ export function NavigationIcon({ path }: { path: string }) {
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7v5l3 2" />
     </>
-  ) : path.includes("maintenance") ? (
+  ) : /maintenance|work-orders/.test(path) ? (
     <>
       <path d="m14 5 5 5M3 21l9-9m-2-7 3-3 8 8-3 3-4-1-3-3z" />
     </>

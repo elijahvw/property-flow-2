@@ -28,6 +28,7 @@ import {
   requirePermission,
 } from "./access.js";
 import { membershipAccessSelect } from "./membership-view.js";
+import { registerStaffPropertyAccess } from "./staff-property-access.js";
 import { registerResidentProfiles } from "./resident-profiles.js";
 import { input, mutation, boundedText } from "./operational.js";
 import { registerCompanyAdministration } from "./company-administration.js";
@@ -43,6 +44,9 @@ import { registerLeasing } from "./leasing.js";
 import { registerLeaseParticipants } from "./lease-participants.js";
 import { registerLeaseInvitations, acceptLeaseInvitation, replayLeaseAcceptance, previewLeaseInvitation } from "./lease-invitations.js";
 import { registerMaintenance } from "./maintenance.js";
+import { registerPrivateDocuments } from "./private-documents.js";
+import { registerWorkOrders } from "./work-orders.js";
+import type { DocumentScanner } from "./document-scanner.js";
 import { registerMaintenanceCosts } from "./maintenance-costs.js";
 import { digest } from "./sessions.js";
 import { propertySelect, propertyData, propertyKeys } from "./property-fields.js";
@@ -119,6 +123,8 @@ async function clearAssignments(tx: Tx, userId: string, companyId?: string) {
   if (!companyId) return;
   await tx.$queryRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
   await tx.residentPropertyAssignment.deleteMany({ where: { companyId, userId } });
+  await tx.staffPropertyAccess.deleteMany({ where: { companyId, userId } });
+  await tx.companyMembership.updateMany({ where: { companyId, userId }, data: { maintenanceExecution: false } });
 }
 export function assignmentId(value: unknown): string {
   if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_|:@.\-]{0,199}$/.test(value))
@@ -138,9 +144,11 @@ export async function serializable<T>(db: PrismaClient, run: (tx: Tx) => Promise
   for (let attempt = 0; ; attempt++) {
     try { return await db.$transaction(run, { isolationLevel: "Serializable" }); }
     catch (error) {
-      const failure = error as { code?: string; meta?: { code?: string; driverAdapterError?: { cause?: { originalCode?: string } } } };
-      // Raw lock queries can report PostgreSQL SQLSTATE through P2010.
+      const failure = error as { name?: string; code?: string; cause?: { kind?: string; originalCode?: string }; meta?: { code?: string; driverAdapterError?: { cause?: { originalCode?: string } } } };
+      // Raw queries wrap SQLSTATE in P2010; COMMIT may expose the adapter's
+      // structured conflict directly. Do not classify private error text.
       const retryable = failure.code === "P2034" ||
+        (failure.name === "DriverAdapterError" && (failure.cause?.kind === "TransactionWriteConflict" || ["40001", "40P01"].includes(failure.cause?.originalCode ?? ""))) ||
         ["40001", "40P01"].includes(failure.code ?? "") ||
         (failure.code === "P2010" && [
           failure.meta?.code,
@@ -223,7 +231,10 @@ export function registerApplication(
   authenticate: preValidationHookHandler,
   origin: string,
   identityProvider?: IdentityProvider,
+  options: { documentScanner?: DocumentScanner } = {},
 ) {
+  registerPrivateDocuments(server, db, authenticate, origin, options.documentScanner);
+  registerWorkOrders(server, db, authenticate, origin);
   registerAccountPasswords(server, db, authenticate, origin, identityProvider);
   registerMaintenance(server, db, authenticate, origin);
   registerMaintenanceCosts(server, db, authenticate, origin);
@@ -252,6 +263,7 @@ export function registerApplication(
   registerOverview(server, db, authenticate);
   const auth = { preValidation: authenticate };
   registerPropertyDetail(server, db, authenticate, origin);
+  registerStaffPropertyAccess(server, db, authenticate, origin);
   const serial = <T>(request: FastifyRequest, run: (tx: Tx) => Promise<T>) =>
     serializable(db,
       async (tx) => {
@@ -647,17 +659,12 @@ export function registerApplication(
   });
 
   server.get("/api/company/properties", auth, async (request) => {
-    const companyId = scope(request, "property.read");
-    return tenantTransaction(
-      db,
-      companyId,
-      (tx) =>
+    return scoped(db, request, "property.read", (tx, companyId, propertyIds) =>
         tx.property.findMany({
-          where: { companyId },
+          where: { companyId, ...(propertyIds ? { id: { in: propertyIds } } : {}) },
           orderBy: [{ name: "asc" }, { id: "asc" }],
           select: propertySelect,
         }),
-      { id: request.principal!.id, permission: "property.read" },
     );
   });
   server.post("/api/company/properties", auth, request => {

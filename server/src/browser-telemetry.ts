@@ -2,6 +2,7 @@ import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import { recordBrowserOperation } from "./tracing.js";
 // Closed vocabulary: names are product operations, never page paths or user input.
 export const browserOperations = [
+  "document.upload", "document.scan", "document.download", "document.archive",
   "deposit.setup",
   "deposit.update",
   "deposit.receipt",
@@ -17,6 +18,7 @@ export const browserOperations = [
   "unit.update",
   "lease.create",
   "lease.update",
+  "maintenance.work",
   "maintenance.create",
   "maintenance.status",
   "maintenance.update",

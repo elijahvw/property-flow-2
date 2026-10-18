@@ -138,3 +138,8 @@ strong {
   white-space: nowrap;
   border: 0;
 }
+/* Keep long portfolios usable in the staff-access dialog. */
+.staff-property-options { max-height: 19rem; overflow-y: auto; display: grid; gap: .5rem; }
+.staff-property-option { display: flex; align-items: center; gap: .75rem; padding: .65rem; border: 1px solid var(--border, #d8dfe7); border-radius: .5rem; }
+.staff-property-option input { width: auto; flex: 0 0 auto; }
+.staff-property-option small { display: block; font-weight: normal; }

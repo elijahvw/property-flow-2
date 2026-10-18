@@ -9,6 +9,7 @@ export type Permission =
   | "resident.self"
   | "resident.assignment.manage"
   | "maintenance.manage"
+  | "maintenance.execute"
   | "lease.manage"
   | "finance.manage";
 export type Principal = {
@@ -21,6 +22,7 @@ export type Principal = {
     role: string;
     status: string;
     company: { status: string };
+    maintenanceExecution?: boolean;
   } | null;
 };
 const grants: Record<CompanyRole, Permission[]> = {
@@ -49,6 +51,7 @@ export function permissions(user: Principal): Permission[] {
     COMPANY_ROLES.includes(m.role as CompanyRole)
   ) {
     result.push(...grants[m.role as CompanyRole]);
+    if (m.role === "staff" && m.maintenanceExecution === true) result.push("maintenance.execute");
   }
   return result;
 }

@@ -1,10 +1,11 @@
 export type OperationName =
+  | 'document.upload' | 'document.scan' | 'document.download' | 'document.archive'
   | 'deposit.setup' | 'deposit.update' | 'deposit.receipt' | 'deposit.void'
   | 'rent.charge' | 'rent.payment' | 'rent.void'
   | 'user.provision' | 'account.verification'
   | 'finance.create' | 'finance.void'
   | 'unit.create' | 'unit.update' | 'lease.create' | 'lease.update'
-  | 'maintenance.create' | 'maintenance.status' | 'maintenance.update'
+  | 'maintenance.work' | 'maintenance.create' | 'maintenance.status' | 'maintenance.update'
   | 'maintenance.cost.link' | 'maintenance.cost.unlink'
   | 'page.data.load'
   | 'auth.session.restore' | 'auth.profile.load'

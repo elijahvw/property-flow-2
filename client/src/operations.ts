@@ -36,8 +36,9 @@ export const startOperation = (name: OperationName, timeoutMs?: number) =>
 export async function monitorOperation<T>(
   name: OperationName,
   run: () => Promise<T>,
+  timeoutMs?: number,
 ): Promise<T> {
-  const operation = startOperation(name);
+  const operation = startOperation(name, timeoutMs);
   try {
     const value = await run();
     operation.succeed();

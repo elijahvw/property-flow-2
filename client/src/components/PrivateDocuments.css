@@ -1,0 +1,34 @@
+.private-document-list,
+.private-version-list,
+.assigned-work-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+.private-document-list > li,
+.assigned-work-list > li {
+  border-top: 1px solid #dce5e0;
+  padding: 1.25rem 0;
+  overflow-wrap: anywhere;
+}
+.private-document-list h3 { margin: 0 0 1rem; }
+.private-document-list > li > .actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 1.5rem;
+}
+.private-document-list details { margin-top: 1.25rem; }
+.private-version-list > li {
+  padding: 1rem;
+  margin-top: .75rem;
+  border-left: 3px solid #cfe1d6;
+  background: #f5f8f6;
+  overflow-wrap: anywhere;
+}
+.private-version-list p { margin: .5rem 0; }
+.private-documents .section-heading { flex-wrap: wrap; gap: 1rem; }
+@media (max-width: 650px) {
+  .private-document-list > li > .actions { grid-template-columns: 1fr; gap: .75rem; }
+  .private-documents button { white-space: normal; }
+}

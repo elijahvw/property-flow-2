@@ -35,6 +35,8 @@ const Statement = lazy(() => import("./pages/Statement").then(module => ({ defau
 const ResidentProfiles = lazy(() => import("./pages/ResidentProfiles").then(module => ({ default: module.ResidentProfiles })));
 const ResidentDetail = lazy(() => import("./pages/ResidentDetail").then(module => ({ default: module.ResidentDetail })));
 const ContactDetail = lazy(() => import("./pages/ContactDetail").then(module => ({ default: module.ContactDetail })));
+const WorkOrders = lazy(() => import("./pages/WorkOrders").then(module => ({default:module.WorkOrders})));
+const AssignedWorkDetail = lazy(() => import("./pages/WorkOrders").then(module => ({default:module.AssignedWorkDetail})));
 const Maintenance = lazy(() => import("./pages/Maintenance").then(module => ({ default: module.Maintenance })));
 const MaintenanceRequestDetail = lazy(() => import("./pages/Maintenance").then(module => ({ default: module.MaintenanceRequestDetail })));
 const Deposits = lazy(() => import("./pages/Deposits").then(module => ({ default: module.Deposits })));
@@ -90,6 +92,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         : location.pathname.startsWith("/company/leases/")
           ? routes.find((r) => r.path === "/company/leases")
           : location.pathname.startsWith("/company/maintenance/") ? routes.find(r=>r.path==="/company/maintenance")
+          : location.pathname.startsWith("/company/work-orders/") ? routes.find(r=>r.path==="/company/work-orders")
           : location.pathname.startsWith("/resident/maintenance/") ? routes.find(r=>r.path==="/resident/maintenance")
       : undefined);
   useEffect(() => {
@@ -139,7 +142,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                     ? "Account"
                     : /finances|reports|rent|deposits/.test(r.path)
                       ? "Money"
-                      : /leases|maintenance/.test(r.path)
+                      : /leases|maintenance|work-orders/.test(r.path)
                         ? "Operations"
                         : "Workspace";
               return section === group;
@@ -269,6 +272,7 @@ function Pages() {
     "/resident": <Resident />,
     "/resident/maintenance": <Maintenance resident />,
     "/company/maintenance": <Maintenance />,
+    "/company/work-orders": <WorkOrders />,
     "/company/leases": <Leases />,
     "/company/finances": <Finances />,
     "/company/rent": <Rent />,
@@ -318,6 +322,7 @@ function Pages() {
         path="/company/leases/:leaseId"
         element={<Shell><ProtectedRoute permission="lease.manage"><LeaseDetail /></ProtectedRoute></Shell>}
       />
+      <Route path="/company/work-orders/:requestId" element={<Shell><ProtectedRoute permission="maintenance.execute"><AssignedWorkDetail /></ProtectedRoute></Shell>} />
       <Route path="/company/leases/:leaseId/statement" element={<Shell><ProtectedRoute permission="finance.manage"><Statement /></ProtectedRoute></Shell>} />
       <Route path="/resident/leases/:leaseId/terms" element={<Shell><ProtectedRoute permission="resident.self"><ResidentLeaseTerms/></ProtectedRoute></Shell>}/>
       <Route path="/resident/leases/:leaseId/settlement" element={<Shell><ProtectedRoute permission="resident.self"><ResidentSettlement /></ProtectedRoute></Shell>} />

@@ -1,3 +1,4 @@
+import {staffPropertyAccessCases} from "./staff-property-access-cases.mjs";
 import {fixtureIdentities} from "./fixture-identities.mjs";
 import {renewalCases} from "./renewal-cases.mjs";
 import test from 'node:test';
@@ -205,5 +206,6 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
    assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='lease.created' AND "targetId" IN (SELECT id FROM "Lease" WHERE "unitId"=$1)`,[browserUnit[0].id])).rows[0].n,1);
   }finally{await browser.close();}
  });
+ await t.test('staff property access',async scopeTest=>staffPropertyAccessCases(scopeTest,admin,call,db,app));
  await t.test('linked lease renewals',async renewalTest=>renewalCases(renewalTest,admin,call,db));
 });

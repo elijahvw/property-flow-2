@@ -18,6 +18,7 @@ async function fixture(t, actor = person('owner','owner')) {
       update:async({where,data})=>Object.assign(contacts.find(c=>c.id===where.id),data),
     },
     companyMembership: {
+      updateMany:async({where,data})=>{const member=users.get(where.userId)?.membership;if(member?.companyId!==where.companyId)return {count:0};Object.assign(member,data);return {count:1};},
       findFirst:async({where})=>{const u=users.get(where.userId);return u?.membership?.companyId===where.companyId&&(!where.role||u.membership.role===where.role)?{...u.membership,user:u}:null;},
       findUnique:async({where})=>{const u=users.get(where.userId); return u?.membership ? {...u.membership,user:u}:null;},
       findMany:async({where})=>[...users.values()].filter(u=>u.membership?.companyId===where.companyId && u.membership.role==='resident' && u.membership.status==='active' && u.status==='active').map(u=>({userId:u.id,user:{name:u.name,email:u.email}})),
@@ -25,6 +26,7 @@ async function fixture(t, actor = person('owner','owner')) {
       upsert:async({where,update})=>Object.assign(users.get(where.userId).membership,{companyId:update.companyId,role:update.role,status:update.status}),
     },
     property:{findFirst:async({where})=>properties.find(p=>p.id===where.id&&p.companyId===where.companyId&&company===p.companyId)},
+    staffPropertyAccess:{deleteMany:async({where})=>{assert.equal(company,where.companyId);return {count:0};}},
     residentPropertyAssignment:{
       upsert:async({create})=>{ assert.equal(company,create.companyId); if(!rows.some(r=>r.propertyId===create.propertyId&&r.userId===create.userId)) rows.push(create); return create; },
       deleteMany:async({where})=>{assert.equal(company,where.companyId); for(let i=rows.length-1;i>=0;i--) if(rows[i].companyId===where.companyId&&rows[i].userId===where.userId&&(!where.propertyId||rows[i].propertyId===where.propertyId)) rows.splice(i,1); return {count:1};},
