@@ -45,8 +45,10 @@ resource "aws_iam_role_policy" "invitations" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect    = "Allow", Action = ["ses:SendEmail"]
-      Resource  = "arn:aws:ses:${var.vars.aws_region}:${data.aws_caller_identity.current.account_id}:identity/${local.invitation_sender_domain}"
+      Effect = "Allow", Action = ["ses:SendEmail"]
+      # SES also authorizes verified recipient identities while in its sandbox.
+      # The exact From condition keeps sender authority on our branded address.
+      Resource  = "arn:aws:ses:${var.vars.aws_region}:${data.aws_caller_identity.current.account_id}:identity/*"
       Condition = { StringEquals = { "ses:FromAddress" = local.invitation_sender } }
     }]
   })
@@ -170,11 +172,17 @@ resource "aws_ecs_task_definition" "app" {
       }
     },
     {
-      name      = "document-scanner"
-      image     = local.scanner_image
-      essential = true
+      name  = "document-scanner"
+      image = local.scanner_image
+      # Scanning failures quarantine files without stopping unrelated app work.
+      essential = false
       cpu       = 256
       memory    = 3072
+      # Finish the first signature update before clamd loads its database.
+      # Concurrent first startup can otherwise load old data before freshclam's
+      # notification socket exists; periodic SelfCheck cannot detect that race.
+      entryPoint = ["/bin/sh", "-c"]
+      command    = ["for attempt in 1 2 3; do freshclam --foreground --stdout && break; [ \"$attempt\" = 3 ] || sleep 5; done; exec /init"]
       # No port mapping. ECS containers share loopback; the daemon binds only it.
       environment = [
         { name = "CLAMD_CONF_TCPAddr", value = "127.0.0.1" },
@@ -190,7 +198,7 @@ resource "aws_ecs_task_definition" "app" {
         { name = "FRESHCLAM_CHECKS", value = "12" }
       ]
       healthCheck = {
-        command  = ["CMD-SHELL", "clamdcheck.sh"]
+        command  = ["CMD-SHELL", "test \"$(echo PING | nc 127.0.0.1 3310)\" = PONG"]
         interval = 30, timeout = 5, retries = 3, startPeriod = 300
       }
       logConfiguration = {
