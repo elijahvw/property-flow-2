@@ -172,16 +172,17 @@ resource "aws_ecs_task_definition" "app" {
       }
     },
     {
-      name      = "document-scanner"
-      image     = local.scanner_image
-      essential = true
+      name  = "document-scanner"
+      image = local.scanner_image
+      # Scanning failures quarantine files without stopping unrelated app work.
+      essential = false
       cpu       = 256
       memory    = 3072
       # Finish the first signature update before clamd loads its database.
       # Concurrent first startup can otherwise load old data before freshclam's
       # notification socket exists; periodic SelfCheck cannot detect that race.
       entryPoint = ["/bin/sh", "-c"]
-      command    = ["freshclam --foreground --stdout && exec /init"]
+      command    = ["for attempt in 1 2 3; do freshclam --foreground --stdout && break; [ \"$attempt\" = 3 ] || sleep 5; done; exec /init"]
       # No port mapping. ECS containers share loopback; the daemon binds only it.
       environment = [
         { name = "CLAMD_CONF_TCPAddr", value = "127.0.0.1" },
