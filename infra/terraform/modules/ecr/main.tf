@@ -23,7 +23,9 @@ data "aws_caller_identity" "current" {}
 # Generated with IAM Policy Autopilot from invitation-email.ts; narrowed to
 # this verified identity and exact From address. No sending as Gmail/other domains.
 resource "aws_iam_role" "app" {
-  name = "propertyflow-${var.vars.environment}-app"
+  name                 = "propertyflow-${var.vars.environment}-app"
+  permissions_boundary = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/PropertyFlowInvitationBoundary"
+  tags                 = { Application = "propertyflow", Environment = var.vars.environment }
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
