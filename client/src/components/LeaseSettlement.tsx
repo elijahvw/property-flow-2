@@ -620,6 +620,7 @@ function SettlementWorkspace({
                   recorded after money is actually returned.
                 </p>
                 <Form
+                  recovering={!!review.attempted}
                   label="Save settlement"
                   operation="finance.create"
                   feedbackText="Move-out settlement saved. Review the remaining follow-up steps."

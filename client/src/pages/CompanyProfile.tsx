@@ -431,6 +431,7 @@ function CompanyDetails() {
               ))}
             </dl>
             <Form
+              recovering={!!review.attempted}
               label="Save company details"
               operation="company.update"
               feedbackText="Company details saved with change history."

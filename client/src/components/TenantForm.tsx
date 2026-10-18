@@ -166,6 +166,7 @@ export function TenantForm({
       </ol>
       {review && (
         <Form
+          recovering={pending}
           label={value ? "Save tenant details" : "Save tenant"}
           operation="membership.update"
           feedbackText={

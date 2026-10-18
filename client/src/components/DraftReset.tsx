@@ -3,6 +3,7 @@ import { useEditorBusy } from "./EditorDialog";
 export function DraftReset({ reset }: { reset: () => void }) {
   const [confirm, setConfirm] = useState(false);
   const editor = useEditorBusy();
+  if (editor.uncertain) return <p className="help">Recover the interrupted request before starting another record.</p>;
   return confirm ? (
     <div className="draft-confirm" role="group" aria-label="Discard this draft">
       <p>

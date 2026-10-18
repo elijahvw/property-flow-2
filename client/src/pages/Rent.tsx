@@ -1216,6 +1216,7 @@ function RentDraft({
   const grace = graceDates(actualDue, savedGrace);
   return (
     <Form
+      recovering={!!pending}
       operation={mode === "charge" ? "rent.charge" : "rent.payment"}
       label={mode === "charge" ? "Post rent charge" : "Record payment received"}
       secondaryActions={<DraftReset reset={reset} />}

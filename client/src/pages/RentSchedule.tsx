@@ -495,6 +495,7 @@ function ScheduleSetup({
     return (
       <Form
         key="review"
+        recovering={pending}
         label={
           pending ? "Retry enabling this schedule" : "Enable recurring rent"
         }

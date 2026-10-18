@@ -437,6 +437,7 @@ export function LeaseAdjustments({
                 </form>
               ) : (
                 <Form
+                  recovering={!!draft.attempted}
                   operation="finance.create"
                   label={
                     draft.mode === "charge"

@@ -71,6 +71,7 @@ test('submitted adjustment recovery preserves the exact payload and source versi
  await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();await expect(page.getByRole('button',{name:'Back to details',exact:true})).toHaveCount(0);
  state.accounts[0].lease.version=2;await page.reload();await page.getByRole('button',{name:'Resume review',exact:true}).click();
  await expect(page.getByText('Synthetic parking charge',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Back to details',exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Close',exact:true}).click();await expect(page.getByRole('alertdialog',{name:'Recover the submitted request'})).toBeVisible();await expect(page.getByRole('button',{name:'Close without saving',exact:true})).toHaveCount(0);await page.getByRole('button',{name:'Keep editing',exact:true}).click();
  await page.getByRole('button',{name:'Post one-time charge',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();
  expect(state.posted).toHaveLength(2);expect(state.posted[1]).toEqual(state.posted[0]);expect(state.posted[1].expectedLeaseVersion).toBe(1);
  expect(await page.evaluate(()=>Object.keys(sessionStorage).filter(key=>key.startsWith('pf-lease-adjustment:')))).toEqual([]);

@@ -16,7 +16,9 @@ const EditorContext = createContext<{
   busy: boolean;
   register: (id: string, busy: boolean) => void;
   completed: (form?: HTMLFormElement) => void;
-}>({ busy: false, register: () => {}, completed: () => {} });
+  uncertain: boolean;
+  recovery: (id: string, active: boolean) => void;
+}>({ busy: false, register: () => {}, completed: () => {}, uncertain: false, recovery: () => {} });
 export const useEditorBusy = () => useContext(EditorContext);
 
 // Only an explicit draft save keeps an editor mounted after closing. Its state,
@@ -38,7 +40,7 @@ export function EditorDialog({
   description?: string;
   onClose: () => void;
   onDiscard?: () => void;
-  onSaveDraft?: () => void;
+  onSaveDraft?: (recovery?: boolean) => void;
   draftable?: boolean;
   hasChanges?: boolean;
   children: ReactNode;
@@ -49,6 +51,16 @@ export function EditorDialog({
     descriptionId = useId();
   const [visited, setVisited] = useState(open),
     [busyForms, setBusyForms] = useState<Set<string>>(() => new Set());
+  const [recoveries, setRecoveries] = useState<Set<string>>(() => new Set());
+  const uncertain = recoveries.size > 0;
+  const recovery = useCallback((id: string, active: boolean) => {
+    setRecoveries(previous => {
+      if (previous.has(id) === active) return previous;
+      const next = new Set(previous);
+      if (active) next.add(id); else next.delete(id);
+      return next;
+    });
+  }, []);
   const [dirty, setDirty] = useState(false),
     [confirming, setConfirming] = useState(false),
     [savedDraft, setSavedDraft] = useState(false);
@@ -97,12 +109,21 @@ export function EditorDialog({
     }
   }, []);
   const discard = () => {
+    if (uncertain) return;
     completed();
     setConfirming(false);
     setVisited(false);
     (onDiscard || onClose)();
   };
+  const keepRecovery = () => {
+    retained.current = true;
+    setSavedDraft(false);
+    setConfirming(false);
+    (onSaveDraft || onClose)(true);
+    notify("Interrupted request kept for recovery. Retry the original request before starting another.");
+  };
   const saveDraft = () => {
+    if (uncertain) { keepRecovery(); return; }
     retained.current = true;
     baseline.current.clear();
     capture();
@@ -115,7 +136,7 @@ export function EditorDialog({
   };
   const requestClose = () => {
     if (blocked) return;
-    if (draftable && (dirty || (hasChanges && !retained.current))) setConfirming(true);
+    if (uncertain || (draftable && (dirty || (hasChanges && !retained.current)))) setConfirming(true);
     else if (retained.current) (onSaveDraft || onClose)();
     else discard();
   };
@@ -135,7 +156,7 @@ export function EditorDialog({
   }, [open]);
   useLayoutEffect(() => { if (!open || !visited) return; capture(); const observer = new MutationObserver(capture); if (dialog.current) observer.observe(dialog.current,{childList:true,subtree:true}); return () => observer.disconnect(); }, [open,visited]);
   useLayoutEffect(() => { if (confirming) keepEditing.current?.focus(); }, [confirming]);
-  useEffect(() => { if (!open || !(dirty || hasChanges)) return; const warn = (event:BeforeUnloadEvent) => { event.preventDefault(); }; window.addEventListener('beforeunload',warn); return () => window.removeEventListener('beforeunload',warn); }, [open,dirty,hasChanges]);
+  useEffect(() => { if (!uncertain && (!open || !(dirty || hasChanges))) return; const warn = (event:BeforeUnloadEvent) => { event.preventDefault(); }; window.addEventListener('beforeunload',warn); return () => window.removeEventListener('beforeunload',warn); }, [open,dirty,hasChanges,uncertain]);
   useEffect(() => {
     const node = dialog.current;
     if (!node || !visited) return;
@@ -197,10 +218,10 @@ export function EditorDialog({
           Close
         </button>}
       </div>
-      {confirming && <section className="editor-body" role="alertdialog" aria-label="Close without saving changes?" aria-describedby={`${titleId}-close-help`}>
-        <h3>Close without saving changes?</h3>
-        <p id={`${titleId}-close-help`}>Keep editing, discard this form’s unfinished changes, or explicitly save a draft for this page. Closing does not undo a request that was already submitted.</p>
-        <div className="actions"><button ref={keepEditing} type="button" onClick={() => setConfirming(false)}>Keep editing</button><button type="button" className="secondary" onClick={discard}>Close without saving</button><button type="button" className="secondary" onClick={saveDraft}>Save draft &amp; close</button></div>
+      {confirming && <section className="editor-body" role="alertdialog" aria-label={uncertain ? "Recover the submitted request" : "Close without saving changes?"} aria-describedby={`${titleId}-close-help`}>
+        <h3>{uncertain ? "Recover the submitted request" : "Close without saving changes?"}</h3>
+        <p id={`${titleId}-close-help`}>{uncertain ? "The response was interrupted and the request may already be saved. Keep its original details and retry identity to avoid creating it twice. Closing keeps recovery available on this page; it does not create a new draft." : "Keep editing, discard this form’s unfinished changes, or explicitly save a draft for this page. Closing does not undo a request that was already submitted."}</p>
+        <div className="actions"><button ref={keepEditing} type="button" onClick={() => setConfirming(false)}>Keep editing</button>{uncertain ? <button type="button" className="secondary" onClick={keepRecovery}>Close &amp; keep recovery</button> : <><button type="button" className="secondary" onClick={discard}>Close without saving</button><button type="button" className="secondary" onClick={saveDraft}>Save draft &amp; close</button></>}</div>
       </section>}
       <div className="editor-body" hidden={confirming}
         onFocusCapture={capture} onInputCapture={changed} onChangeCapture={changed}
@@ -211,12 +232,12 @@ export function EditorDialog({
             {description}
           </p>
         )}
-        <EditorContext.Provider value={{ busy: blocked, register, completed }}>
+        <EditorContext.Provider value={{ busy: blocked, register, completed, uncertain, recovery }}>
           <fieldset disabled={blocked} className="editor-contents">
             {children}
           </fieldset>
         </EditorContext.Provider>
-        {draftable && (dirty || (hasChanges && !retained.current)) && <div className="actions"><button type="button" className="secondary" disabled={blocked} onClick={saveDraft}>Save as draft</button></div>}
+        {uncertain ? <div className="actions"><button type="button" className="secondary" disabled={blocked} onClick={keepRecovery}>Close &amp; keep recovery</button></div> : draftable && (dirty || (hasChanges && !retained.current)) && <div className="actions"><button type="button" className="secondary" disabled={blocked} onClick={saveDraft}>Save as draft</button></div>}
       </div>
     </dialog>,
     document.body,

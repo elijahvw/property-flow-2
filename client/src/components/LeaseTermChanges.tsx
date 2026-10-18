@@ -495,6 +495,7 @@ function TermsWorkspace({
               />
               <InstallmentReview preview={review.preview} />
               <Form
+                recovering={!!review.attempted}
                 label={
                   review.kind === "cancel"
                     ? "Confirm cancellation"

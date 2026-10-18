@@ -1,4 +1,5 @@
-import React, { useEffect, useId, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
+import { ApiError } from "../api";
 import { useFeedback } from "./Feedback";
 import { useEditorBusy } from "./EditorDialog";
 import { monitorOperation } from "../operations";
@@ -13,6 +14,7 @@ export function Form({
   feedbackText,
   secondaryActions,
   reviewOnly = false,
+  recovering = false,
 }: {
   children: React.ReactNode;
   submit: (data: FormData) => Promise<void>;
@@ -22,6 +24,7 @@ export function Form({
   feedbackText?: string;
   secondaryActions?: React.ReactNode;
   reviewOnly?: boolean;
+  recovering?: boolean;
 }) {
   const notify = useFeedback();
   const editor = useEditorBusy(),
@@ -29,6 +32,14 @@ export function Form({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [saved, setSaved] = useState(false);
+  // Recovery is initialized from a feature's submitted journal, never from an
+  // unsubmitted draft. After a lost response, freeze exactly the attempted data.
+  const [uncertain, setUncertain] = useState(recovering);
+  const retryData = useRef<FormData | null>(null);
+  useEffect(() => {
+    editor.recovery(formId, uncertain);
+    return () => editor.recovery(formId, false);
+  }, [uncertain, editor.recovery, formId]);
   useEffect(() => {
     editor.register(formId, busy);
     return () => editor.register(formId, false);
@@ -40,7 +51,7 @@ export function Form({
         event.preventDefault();
         if (busy || editor.busy) return;
         const form = event.currentTarget;
-        const data = new FormData(form);
+        const data = retryData.current || new FormData(form);
         setBusy(true);
         setError("");
         setSaved(false);
@@ -48,6 +59,8 @@ export function Form({
         try {
           await monitorOperation(operation, () => submit(data), operation.startsWith("document.") ? 60000 : undefined);
           if (!reviewOnly) editor.completed(form);
+          retryData.current = null;
+          setUncertain(false);
           setSaved(true);
           if (
             operation !== "page.data.load" &&
@@ -82,6 +95,10 @@ export function Form({
               )[operation] || "Changes saved.",
             );
         } catch (e) {
+          if (!reviewOnly && e instanceof ApiError && e.submissionUncertain) {
+            retryData.current = data;
+            setUncertain(true);
+          }
           setError(e instanceof Error ? e.message : "Unable to save changes.");
         } finally {
           setBusy(false);
@@ -89,14 +106,15 @@ export function Form({
       }}
     >
       <fieldset disabled={busy || editor.busy}>
-        {children}
+        <fieldset disabled={uncertain && !!retryData.current}>{children}</fieldset>
         <div className="actions form-actions">
-          {secondaryActions}
+          <fieldset disabled={uncertain}>{secondaryActions}</fieldset>
           <span className="action-spacer" />
           <button type="submit">{busy ? "Saving…" : label}</button>
           {saved && <span role="status">{successText}</span>}
         </div>
       </fieldset>
+      {uncertain && <p className="notice">This request may already be saved. Retry with the original details before starting another record.</p>}
       {error && (
         <p className="notice error" role="alert">
           {error}

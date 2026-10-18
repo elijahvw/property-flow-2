@@ -428,6 +428,7 @@ function PersonalProfile() {
               ))}
             </dl>
             <Form
+              recovering={!!review.attempted}
               label="Save my profile"
               feedbackText="Your profile was saved."
               secondaryActions={

@@ -728,6 +728,7 @@ function DepositEditor({
                   ? "Void this deposit receipt"
                   : "Save deposit requirement"
           }
+          recovering={uncertain}
           operation={
             kind === "receipt"
               ? "deposit.receipt"

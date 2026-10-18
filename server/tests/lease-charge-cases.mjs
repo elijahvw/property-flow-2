@@ -128,8 +128,8 @@ export async function leaseChargeCases(t, admin, call, app, db) {
       await expect(page.getByRole("alert")).toBeVisible(); await page.reload();
       await page.getByRole("button", { name: "Resume review", exact: true }).click();
       await expect(page.getByRole("heading", { name: "Review before saving" })).toBeVisible();
-      await expect(page.getByText("$19.99", { exact: true })).toBeVisible();
-      await expect(page.getByText("Reviewed browser parking charge", { exact: true })).toBeVisible();
+      await expect(page.getByRole("dialog").getByText("$19.99", { exact: true })).toBeVisible();
+      await expect(page.getByRole("dialog").getByText("Reviewed browser parking charge", { exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: "Back to details", exact: true })).toHaveCount(0);
       await page.getByRole("button", { name: "Post one-time charge", exact: true }).click();
       await expect(page.getByRole("dialog")).not.toBeVisible(); assert.equal(keys[0], keys[1]);

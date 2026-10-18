@@ -362,6 +362,7 @@ function ProrationWorkspace({
           <>
             <ProrationMath value={review.value.preview.snapshot} />
             <Form
+              recovering={!!review.value.attempted}
               label="Confirm partial rent charge"
               operation="rent.charge"
               feedbackText="Reviewed partial rent posted once."
@@ -760,6 +761,7 @@ function TransitionWorkspace({
               <div className="lease-review-confirmation">
                 <Form
                   label={transitionAction(review.value.preview.kind)}
+                  recovering={!!review.value.attempted}
                   operation="lease.update"
                   feedbackText="Reviewed lease transition saved. Prior money and history retained."
                   secondaryActions={
