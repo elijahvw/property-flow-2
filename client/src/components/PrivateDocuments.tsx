@@ -7,6 +7,7 @@ import { Form } from './Form';
 import { EditorDialog } from './EditorDialog';
 type Version={id:string;number:number;filename:string;byteLength:number;scanStatus:string;createdAt:string};
 type Document={id:string;title:string;version:number;archivedAt:string|null;versions:Version[]};
+const scanLabel=(status:string)=>status==='clean'?'Cleared by scanning':status==='rejected'?'Rejected by scanning. Download blocked.':'Quarantined. Download blocked until scanning clears this version.';
 export function PrivateDocuments({source,sourceId}:{source:'leases'|'maintenance';sourceId:string}) {
   const endpoint=`/api/company/${source}/${encodeURIComponent(sourceId)}/documents`;
   const r=useResource<{items:Document[];scanningConfigured?:boolean}>(endpoint,true,true), [notice,setNotice]=useState(''), [open,setOpen]=useState(false), [draft,setDraft]=useState<{document:Document|null;key:string}|null>(null);
@@ -19,11 +20,12 @@ export function PrivateDocuments({source,sourceId}:{source:'leases'|'maintenance
     {r.error&&<p role="alert">{r.error} <button onClick={r.reload}>Reload documents</button></p>}
     {!r.data?<p role="status">Loading documents…</p>:!(r.data.items||[]).length?<p>No documents uploaded for this record.</p>:<ul className="private-document-list">{r.data.items.map(doc=><li key={doc.id}>
       <h3>{doc.title}{doc.archivedAt?' · Archived':''}</h3>
+      {doc.versions[0]&&<p className="help">Latest version: {scanLabel(doc.versions[0].scanStatus)}</p>}
       <div className="actions">{!doc.archivedAt&&<button className="secondary" onClick={()=>begin(doc)}>Upload new version · {doc.title}</button>}
       <Form operation="document.archive" feedbackText={doc.archivedAt?"Document restored.":"Document archived; originals retained."} label={doc.archivedAt?'Restore document':'Archive document'} submit={async()=>{await api(`${endpoint}/${doc.id}`,{method:'PATCH',body:{expectedVersion:doc.version,archived:!doc.archivedAt}});r.reload();}}><p className="help">{doc.archivedAt?'Restore to allow new versions.':'Archiving keeps every original available to management.'}</p></Form></div>
       <details><summary>{doc.versions.length} retained {doc.versions.length===1?'version':'versions'}</summary><ul className="private-version-list">{doc.versions.map((v,index)=><li key={v.id}>
         <strong>Version {v.number}{index===0?' · Latest uploaded':''}</strong><p>{v.filename} · {Math.ceil(v.byteLength/1024)} KB · {formatActivityTime(v.createdAt)}</p>
-        <p>{v.scanStatus==='clean'?'Cleared by scanning':v.scanStatus==='rejected'?'Rejected by scanning. Download blocked.':'Quarantined. Download blocked until scanning clears this version.'}</p>
+        <p>{scanLabel(v.scanStatus)}</p>
         {v.scanStatus==='pending'&&!doc.archivedAt&&<Form operation="document.scan" feedbackText="Scan finished. Review the recorded result." label="Scan file" submit={async()=>{await api(`${endpoint}/${doc.id}/versions/${v.id}/scan`,{method:'POST',body:{},timeoutMs:45000});r.reload();}}><span className="help">Scanning may take up to 30 seconds.</span></Form>}
         {v.scanStatus==='clean'&&<Form operation="document.download" feedbackText="Download prepared." label={`Download version ${v.number}`} submit={async()=>{
           const file=await api<{contentBase64:string;filename:string;mediaType:string}>(`${endpoint}/${doc.id}/versions/${v.id}/download`);

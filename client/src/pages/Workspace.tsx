@@ -209,15 +209,17 @@ export function InvitationForm({
   owner = false,
   reload,
   audience,
+  done,
 }: {
   companyId?: string;
   owner?: boolean;
   reload?: () => void;
   audience?: "team" | "tenants";
+  done?: () => void;
 }) {
   const [result, setResult] = useState<InvitationResult | null>(null);
   const [key, setKey] = useState(() => crypto.randomUUID());
-  if (result) return <InvitationDelivery initial={result} changed={reload} done={() => { setResult(null); setKey(crypto.randomUUID()); reload?.(); }} />;
+  if (result) return <InvitationDelivery initial={result} changed={reload} done={() => { setResult(null); setKey(crypto.randomUUID()); reload?.(); done?.(); }} />;
   return <Form label="Create invitation" operation="invitation.create" successText="Invitation ready." submit={async data => {
     const row = await api<InvitationResult>("/api/invitations", { method:"POST", body: { email:text(data,"email"), name:text(data,"name"), role:text(data,"role"), submissionKey:key, ...(companyId ? {companyId} : {}) } });
     setResult(row); reload?.();
@@ -1052,6 +1054,7 @@ function TeamDirectory() {
         <InvitationForm
           companyId={data?.membership?.companyId}
           audience="team"
+          done={() => setInviting(false)}
           reload={() => setInvitationRevision((v) => v + 1)}
         />
       </EditorDialog>
@@ -1116,8 +1119,9 @@ export function AccessStatus() {
       <p>
         {suspended
           ? "Contact your administrator to restore access."
-          : "Your administrator will create your company and assign its initial owner. Your account is waiting for an active company assignment. If you received an invitation, open its link to accept it."}
+          : "Your account is waiting for an active company assignment. If you received an invitation, review and accept it to join your workspace."}
       </p>
+      {!suspended && sessionStorage.getItem("pf-invitation") && <Link className="button" to="/invite">Review your invitation</Link>}
       <button onClick={() => void refreshUser()}>Check access again</button>
       <Link to="/account">View my profile</Link>
     </section>
