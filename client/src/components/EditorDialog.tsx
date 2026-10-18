@@ -87,8 +87,9 @@ export function EditorDialog({
     for (const field of fields())
       if (!baseline.current.has(field)) baseline.current.set(field, fieldValue(field));
   };
-  const changed = () => {
-    if (draftable) setDirty(reviewed.current || fields().some(field =>
+  const changed = (event: { target: EventTarget | null }) => {
+    if (event.target instanceof HTMLInputElement && event.target.type === "search") return;
+    if (draftable) setDirty(previous => previous || reviewed.current || fields().some(field =>
       baseline.current.has(field) && baseline.current.get(field) !== fieldValue(field)));
   };
   const completed = useCallback((form?: HTMLFormElement) => {
@@ -125,8 +126,8 @@ export function EditorDialog({
   const saveDraft = () => {
     if (uncertain) { keepRecovery(); return; }
     retained.current = true;
-    baseline.current.clear();
-    capture();
+    // Keep the original baseline: submitting one section later must still
+    // recognize unfinished values in the other sections of a saved draft.
     reviewed.current = false;
     setDirty(false);
     setConfirming(false);

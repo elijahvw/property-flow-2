@@ -438,7 +438,9 @@ test('saving one user-management form preserves close protection for another unf
  await fixture(page);await page.goto('/platform/users');await page.getByRole('button',{name:'Manage',exact:true}).click();
  await page.getByRole('combobox',{name:'Company',exact:true}).selectOption('a');
  await page.getByLabel('Company role',{exact:true}).selectOption('manager');
- await page.getByLabel('Display name',{exact:true}).fill('Updated Person');await page.getByRole('button',{name:'Save display name',exact:true}).click();
+ await page.getByLabel('Display name',{exact:true}).fill('Updated Person');await page.getByRole('button',{name:'Save as draft',exact:true}).click();
+ await page.getByRole('button',{name:'Manage',exact:true}).click();await expect(page.getByLabel('Company role',{exact:true})).toHaveValue('manager');
+ await page.getByRole('button',{name:'Save display name',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Manage Updated Person',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Close',exact:true}).click();await expect(page.getByRole('alertdialog',{name:'Close without saving changes?'})).toBeVisible();
  await page.getByRole('button',{name:'Keep editing',exact:true}).click();await expect(page.getByLabel('Company role',{exact:true})).toHaveValue('manager');
