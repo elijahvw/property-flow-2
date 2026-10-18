@@ -45,8 +45,10 @@ resource "aws_iam_role_policy" "invitations" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect    = "Allow", Action = ["ses:SendEmail"]
-      Resource  = "arn:aws:ses:${var.vars.aws_region}:${data.aws_caller_identity.current.account_id}:identity/${local.invitation_sender_domain}"
+      Effect = "Allow", Action = ["ses:SendEmail"]
+      # SES also authorizes verified recipient identities while in its sandbox.
+      # The exact From condition keeps sender authority on our branded address.
+      Resource  = "arn:aws:ses:${var.vars.aws_region}:${data.aws_caller_identity.current.account_id}:identity/*"
       Condition = { StringEquals = { "ses:FromAddress" = local.invitation_sender } }
     }]
   })
