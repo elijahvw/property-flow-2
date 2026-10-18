@@ -40,7 +40,7 @@ export function InvitationEntry() {
         <p className="record-kicker">Your Property Flow account</p>
         <h1>Welcome to Property Flow</h1>
         <p>
-          {entry?.company ? `${entry.company} has invited you as a ${entry.role}.` : "You have been invited to Property Flow."} Sign in to review the invitation. If you need a password, use the setup option below.
+          {entry?.company ? `${entry.company} has invited you with ${entry.role} access.` : "You have been invited to Property Flow."} Sign in to review the invitation. If you need a password, use the setup option below.
         </p>
         <div className="actions"><button onClick={signIn}>Sign in to review invitation</button><Link to="/help/invitations">Invitation help</Link></div>
         <details className="editor-section"><summary>First time signing in or need a password?</summary>

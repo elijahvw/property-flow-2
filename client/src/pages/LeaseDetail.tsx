@@ -92,8 +92,8 @@ function LeaseWorkspace({ id }: { id: string }) {
   const lease = r.data;
   const context = leaseContext(params),
     directory = leaseDirectoryPath(params);
-  const editTerms = () => {
-    setDraftLease((previous) => previous || lease);
+  const editTerms = (activate = false) => {
+    setDraftLease((previous) => activate ? { ...(previous || lease), status: "active" } : previous || lease);
     setEditing(true);
   };
   const tab = (value: string) => setParams({ ...context, section: value });
@@ -170,7 +170,7 @@ function LeaseWorkspace({ id }: { id: string }) {
               <button
                 className="secondary"
                 disabled={!!r.error}
-                onClick={editTerms}
+                onClick={() => editTerms(true)}
               >
                 Review draft & activate
               </button>
@@ -202,7 +202,7 @@ function LeaseWorkspace({ id }: { id: string }) {
               <button
                 className="secondary"
                 disabled={!!r.error}
-                onClick={editTerms}
+                onClick={() => editTerms()}
               >
                 Edit lease record
               </button>
@@ -394,7 +394,7 @@ function LeaseWorkspace({ id }: { id: string }) {
       {(section === "terms" || visited.includes("terms")) && (
         <div hidden={section !== "terms"}>
           <LeaseTermChanges leaseId={id} changed={r.reload} />
-          <button className="text-button" onClick={editTerms}>
+          <button className="text-button" onClick={() => editTerms()}>
             Review lease dates & recorded setup
           </button>
         </div>

@@ -279,8 +279,8 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
       if (outsideTerm || draftWithPayment) throw new AccessError(409, "LEASE_RENT_CONFLICT", "These lease changes conflict with posted rent. Correct affected charges before changing their term; a lease with active charges or payments cannot become a draft. Posted amounts are never recalculated by a lease edit.");
       // Historical ended records remain editable after resident revocation/transfer.
       if (data.status !== "ended") {
-        if(previous.residentId)await eligible(tx, companyId, previous.residentId, previous.propertyId);
-        else if(previous.residentContactId)await contactEligible(tx,companyId,previous.residentContactId,previous.propertyId);
+        if(previous.residentContactId)await contactEligible(tx,companyId,previous.residentContactId,previous.propertyId);
+        else if(previous.residentId)await eligible(tx, companyId, previous.residentId, previous.propertyId);
       }
       const unit = await lockUnit(tx, companyId, previous.unitId);
       if (data.status !== "ended" && unit.status !== "active") throw new AccessError(409, "UNIT_ARCHIVED", "Restore this unit before reopening a lease.");
