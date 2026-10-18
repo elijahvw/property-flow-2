@@ -1,4 +1,4 @@
-import { teamInvitationAuthority } from "./invitation-access.js";
+import { assertInvitationNotSending, INVITATION_SEND_WINDOW_MS, teamInvitationAuthority } from "./invitation-access.js";
 import { contactAccount } from "./resident-accounts.js";
 import { residentCompatibilityProfile } from "./resident-contacts.js";
 import { previewLeaseInvitation } from "./lease-invitations.js";
@@ -393,6 +393,8 @@ export function registerContactInvitations(
           );
         // Replacing a lost/expired link revokes every older contact link, so an
         // earlier message cannot silently remain usable after an owner's review.
+        const sending = await tx.invitation.findFirst({ where: { companyId, contactId: id, acceptedAt: null, revokedAt: null, deliveryStatus: "requesting", deliveryRequestedAt: { gt: new Date(Date.now() - INVITATION_SEND_WINDOW_MS) } } });
+        if (sending) assertInvitationNotSending(sending);
         await tx.invitation.updateMany({
           where: {
             companyId,

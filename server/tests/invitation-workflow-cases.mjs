@@ -67,6 +67,51 @@ export async function invitationWorkflowCases(t,db,admin,call,deliveries,setSend
     assert.equal((await call('invite-owner','POST',`/api/invitations/${row.id}/replace`,{expectedVersion:row.version,submissionKey:randomUUID(),delivery:'email'})).statusCode,429);
    }finally{setSendHook(async()=>{});}
  });
+ await t.test('in-flight sending reserves team, tenant and household links against concurrent replacement or revocation',{timeout:30000},async()=>{
+   const primary=ok(await call('owner','POST','/api/company/resident-contacts',{name:'Send race primary',email:'send-race-primary@test.invalid',submissionKey:randomUUID()}));
+   const unit=ok(await call('owner','POST','/api/company/properties/home/units',{label:'Send race unit',submissionKey:randomUUID()}));
+   const lease=ok(await call('owner','POST','/api/company/leases',{propertyId:'home',unitId:unit.id,residentContactId:primary.id,startsOn:'2026-10-01',endsOn:'2027-09-30',monthlyRent:'1000',status:'draft',submissionKey:randomUUID()}));
+   for(const kind of ['team','tenant','household']){
+     const email=`send-race-${kind}@test.invalid`;let initial,contact;
+     if(kind==='team')initial=ok(await call('owner','POST','/api/invitations',{name:'Send race teammate',email,role:'staff',submissionKey:randomUUID()}));
+     if(kind==='tenant'){
+       contact=ok(await call('owner','POST','/api/company/resident-contacts',{name:'Send race tenant',email,submissionKey:randomUUID()}));
+       initial=ok(await call('owner','POST',`/api/company/resident-contacts/${contact.id}/invitations`,{expectedVersion:contact.version,approvals:[],submissionKey:randomUUID()}));
+     }
+     if(kind==='household')initial=ok(await call('owner','POST',`/api/company/leases/${lease.id}/invitations`,{name:'Send race occupant',email,role:'occupant',startsOn:'2026-10-18',submissionKey:randomUUID()}));
+     let enter,release;const entered=new Promise(resolve=>{enter=resolve;}),gate=new Promise(resolve=>{release=resolve;});
+     setSendHook(async()=>{enter();await gate;});
+     const sending=Promise.resolve(call('owner','POST',`/api/invitations/${initial.id}/replace`,{expectedVersion:initial.version,submissionKey:randomUUID(),delivery:'email'}));
+     try{
+       await Promise.race([entered,sending.then(response=>{throw new Error('Send did not enter provider: '+response.body);})]);
+       const reserved=await db.invitation.findFirstOrThrow({where:{email,revokedAt:null}});
+       const revoke=await call('owner','POST',`/api/invitations/${reserved.id}/revoke`,{expectedVersion:reserved.version});
+       assert.equal(revoke.statusCode,409,revoke.body);assert.equal(revoke.json().code,'INVITATION_SENDING');
+       const replace=await call('owner','POST',`/api/invitations/${reserved.id}/replace`,{expectedVersion:reserved.version,submissionKey:randomUUID(),delivery:'link'});
+       assert.equal(replace.statusCode,409,replace.body);assert.equal(replace.json().code,'INVITATION_SENDING');
+       if(contact){const legacy=await call('owner','POST',`/api/company/resident-contacts/${contact.id}/invitations`,{expectedVersion:contact.version,approvals:[],submissionKey:randomUUID()});assert.equal(legacy.statusCode,409,legacy.body);assert.equal(legacy.json().code,'INVITATION_SENDING');}
+       if(kind==='household'){const legacy=await call('owner','POST',`/api/company/leases/${lease.id}/invitations/${reserved.id}/revoke`,{expectedVersion:reserved.version});assert.equal(legacy.statusCode,409,legacy.body);assert.equal(legacy.json().code,'INVITATION_SENDING');}
+       assert.equal((await db.invitation.findUniqueOrThrow({where:{id:reserved.id}})).revokedAt,null);
+     }finally{release();setSendHook(async()=>{});}
+     const sent=ok(await sending);assert.equal(sent.deliveryStatus,'accepted');
+     ok(await call('owner','POST',`/api/invitations/${sent.id}/revoke`,{expectedVersion:sent.version}));
+   }
+ });
+ await t.test('interrupted send reservations expire and late provider results cannot overwrite revocation',{timeout:15000},async()=>{
+   const initial=await create('expired-send-reservation@test.invalid');let enter,release;
+   const entered=new Promise(resolve=>{enter=resolve;}),gate=new Promise(resolve=>{release=resolve;});
+   setSendHook(async()=>{enter();await gate;});
+   const sending=Promise.resolve(call('invite-owner','POST',`/api/invitations/${initial.id}/replace`,{expectedVersion:initial.version,submissionKey:randomUUID(),delivery:'email'}));
+   let reserved;
+   try{
+     await Promise.race([entered,sending.then(response=>{throw new Error('Send did not enter provider: '+response.body);})]);
+     reserved=await db.invitation.findFirstOrThrow({where:{email:'expired-send-reservation@test.invalid',revokedAt:null}});
+     await db.invitation.update({where:{id:reserved.id},data:{deliveryRequestedAt:new Date(Date.now()-61000)}});
+     ok(await call('invite-successor','POST',`/api/invitations/${reserved.id}/revoke`,{expectedVersion:reserved.version}));
+   }finally{release();setSendHook(async()=>{});}
+   const result=ok(await sending);assert.ok(result.revokedAt);assert.notEqual(result.deliveryStatus,'accepted');assert.equal(result.acceptanceUrl,null);
+   assert.equal(await db.auditEvent.count({where:{targetId:reserved.id,action:'invitation.email.accepted'}}),0);
+ });
  await t.test('invitation history is complete and filtered, and other companies/residents cannot administer it',async()=>{
    const rows=Array.from({length:31},(_,i)=>({id:'history-invitation-'+i,companyId:'invite-company',email:`history${i}@test.invalid`,role:'staff',tokenHash:digest('history-'+i),createdBy:'invite-owner',expiresAt:new Date(Date.now()+3600000)}));await db.invitation.createMany({data:rows});
    const first=ok(await call('invite-owner','GET','/api/invitations?audience=team&page=1&q=history'));const second=ok(await call('invite-owner','GET','/api/invitations?audience=team&page=2&q=history'));

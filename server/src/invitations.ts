@@ -7,7 +7,7 @@ import { prepareAccount, saveAccount } from "./resident-accounts.js";
 import type { IdentityProvider } from "./identity-provider.js";
 import { audit, boundedText, choice, input, mutation, sameSubmission, submission, version, type Tx } from "./operational.js";
 import { digest } from "./sessions.js";
-import { teamInvitationAuthority } from "./invitation-access.js";
+import { assertInvitationNotSending, invitationSending, teamInvitationAuthority } from "./invitation-access.js";
 import { previewContactInvitation } from "./contact-invitations.js";
 import { previewLeaseInvitation } from "./lease-invitations.js";
 import { InvitationEmailError, type InvitationMailer } from "./invitation-email.js";
@@ -105,6 +105,7 @@ export function registerInvitations(server: FastifyInstance, db: PrismaClient, a
       const row = await tx.invitation.findFirst({ where: { id, companyId: initial.companyId, acceptedAt: null } });
       if (!row) throw new AccessError(404, "NOT_FOUND", "Pending invitation not found.");
       if (row.revokedAt) return { success: true };
+      assertInvitationNotSending(row);
       if (body.expectedVersion !== undefined && version(body.expectedVersion) !== row.version) throw new AccessError(409, "RECORD_CHANGED", "This invitation changed. Refresh its status before revoking it.");
       await tx.invitation.update({ where: { id }, data: { revokedAt: new Date(), version: { increment: 1 } } });
       await audit(tx, request, row.companyId, id, "invitation.revoked");
@@ -126,6 +127,7 @@ export function registerInvitations(server: FastifyInstance, db: PrismaClient, a
       if (replay) { sameSubmission(replay.submissionHash!, key.submissionHash); return { row: replay, replay: true }; }
       const source = await tx.invitation.findFirst({ where: { id, companyId: initial.companyId, acceptedAt: null, revokedAt: null } });
       if (!source || source.version !== expectedVersion) throw new AccessError(409, "RECORD_CHANGED", "This invitation changed. Refresh its status before sending or replacing it.");
+      assertInvitationNotSending(source);
       if (source.role === "owner" && !permissions(request.principal!).includes("platform.manage")) throw new AccessError(403,"OWNER_PROTECTED","Only the platform owner can replace a company-owner invitation.");
       if (!source.accountId) throw new AccessError(409, "ACCOUNT_SETUP_REQUIRED", "Create a new invitation from the person's record so it uses their current sign-in account.");
       if (source.leaseId || source.contactId) await invitationSource(tx, source);
@@ -144,18 +146,22 @@ export function registerInvitations(server: FastifyInstance, db: PrismaClient, a
     try {
       await admin(db, request, initial.companyId, async tx => {
         const current = await tx.invitation.findUniqueOrThrow({ where: { id: result.row.id } });
-        if (current.revokedAt || current.acceptedAt || current.tokenHash !== digest(token)) throw invalid();
+        if (current.revokedAt || current.acceptedAt || current.tokenHash !== digest(token) || !invitationSending(current)) throw invalid();
         await invitationSource(tx, current);
       });
+      if (!invitationSending(result.row)) throw invalid();
       await mailer!({ to: result.row.email, company: result.row.company.name, role: result.row.participantRole || result.row.role, acceptanceUrl, expiresAt: result.row.expiresAt });
       outcome = "accepted";
     } catch (error) { outcome = error instanceof InvitationEmailError ? error.outcome : error instanceof AccessError ? "failed" : "unknown"; }
     const row = await admin(db, request, initial.companyId, async tx => {
-      const current = await tx.invitation.update({ where: { id: result.row.id }, data: { deliveryStatus: outcome, deliveryUpdatedAt: new Date(), version: { increment: 1 } }, select });
-      await audit(tx, request, current.companyId, current.id, `invitation.email.${outcome}`);
+      // Fence late provider results after an expired reservation was revoked or
+      // replaced. Recipient acceptance may finish first and does not cancel mail.
+      const changed = await tx.invitation.updateMany({ where: { id: result.row.id, companyId: initial.companyId, revokedAt: null, tokenHash: digest(token), deliveryStatus: "requesting", deliveryRequestedAt: result.row.deliveryRequestedAt }, data: { deliveryStatus: outcome, deliveryUpdatedAt: new Date(), version: { increment: 1 } } });
+      const current = await tx.invitation.findUniqueOrThrow({ where: { id: result.row.id }, select });
+      if (changed.count) await audit(tx, request, current.companyId, current.id, `invitation.email.${outcome}`);
       return current;
     });
-    return { ...row, acceptanceUrl };
+    return { ...row, acceptanceUrl: row.revokedAt ? null : acceptanceUrl };
   });
 
   // A private link may reveal its purpose before sign-in, never a full profile.

@@ -100,7 +100,7 @@ function PropertyTabs({ id, name }: { id: string; name?: string }) {
           ) : null;
         })()}
       </div>
-      <label className="context-select">Property section<select aria-label="Property section" value={tabs.some(([,path])=>path.split("?")[0]===location.pathname)?location.pathname:root} onChange={event=>navigate(event.target.value)}>{tabs.filter(([, ,p])=>can(p as Parameters<typeof can>[0])).map(([title,path])=><option key={path} value={path.split("?")[0]}>{title}</option>)}</select></label>
+      <label className="context-select">Property section<select aria-label="Property section" value={tabs.find(([,path])=>path.split("?")[0]===location.pathname)?.[1] || root} onChange={event=>navigate(event.target.value)}>{tabs.filter(([, ,p])=>can(p as Parameters<typeof can>[0])).map(([title,path])=><option key={path} value={path}>{title}</option>)}</select></label>
       <nav className="context-tabs" aria-label="Property navigation">
         {tabs
           .filter(([, , p]) => can(p as Parameters<typeof can>[0]))

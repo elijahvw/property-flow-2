@@ -3,6 +3,14 @@ import type { FastifyRequest } from "fastify";
 import { AccessError } from "./access.js";
 import type { Tx } from "./operational.js";
 
+export const INVITATION_SEND_WINDOW_MS = 60000;
+export function invitationSending(row: Pick<Invitation, "deliveryStatus" | "deliveryRequestedAt">) {
+  return row.deliveryStatus === "requesting" && !!row.deliveryRequestedAt && row.deliveryRequestedAt.getTime() > Date.now() - INVITATION_SEND_WINDOW_MS;
+}
+export function assertInvitationNotSending(row: Pick<Invitation, "deliveryStatus" | "deliveryRequestedAt">) {
+  if (invitationSending(row)) throw new AccessError(409, "INVITATION_SENDING", "This invitation email is still being sent. Wait a moment and refresh its status before replacing or revoking it.");
+}
+
 export async function teamInvitationAuthority(tx: Tx, invitation: Invitation) {
   await tx.$queryRaw`SELECT id FROM "Company" WHERE id=${invitation.companyId} FOR SHARE`;
   await tx.$queryRaw`SELECT id FROM "User" WHERE id=${invitation.createdBy} FOR SHARE`;

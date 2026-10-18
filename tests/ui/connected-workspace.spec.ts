@@ -74,6 +74,17 @@ test('property tabs carry context through lease history, residents, finances, an
  await page.getByRole('navigation',{name:'Property navigation'}).getByRole('link',{name:'Tenant access',exact:true}).click();await expect(page.getByRole('heading',{name:'Tenant access'})).toBeVisible();await expect(page.getByText('Jordan Resident',{exact:true})).toBeVisible();
  await page.getByRole('navigation',{name:'Property navigation'}).getByRole('link',{name:'Cash activity',exact:true}).click();await expect(page.getByLabel('Filter property')).toHaveValue('home');await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await expect(page.getByLabel('Transaction property')).toHaveValue('home');await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('navigation',{name:'Property navigation'}).getByRole('link',{name:'Reports',exact:true}).click();await expect(page.getByLabel('Report property')).toHaveValue('home');
 });
+test('mobile property sections retain the selected property across operating workflows',async({page})=>{
+ const state=await fixture(page);await page.setViewportSize({width:390,height:844});await page.goto('/company/properties/home/units');
+ for(const module of ['leases','maintenance','rent','deposits','finances','reports']){
+  const target='/company/properties/home/'+module;
+  await page.getByRole('combobox',{name:'Property section',exact:true}).selectOption(target);
+  await expect(page).toHaveURL(new RegExp(target+'$'));
+  await expect(page.getByRole('combobox',{name:'Property section',exact:true})).toHaveValue(target);
+  await expect(page.getByRole('region',{name:'Property workspace'})).toContainText('Maple House');
+ }
+ expect(state.requests.some(url=>url.startsWith('/api/company/leases?')&&url.includes('propertyId=home'))).toBe(true);
+});
 test('saving is primary; draft discard is quiet and confirmed, and property switching retains ambiguous saves',async({page})=>{
  const state=await fixture(page);state.lose=true;await page.goto('/company/leases?propertyId=home&new=lease');await page.getByLabel('New lease start date').fill('2026-10-01');await page.getByLabel('New lease monthly rent (USD)').fill('1200.00');
  const save=page.getByRole('button',{name:'Review lease',exact:true}),reset=page.getByRole('button',{name:'Clear draft',exact:true});await expect(save).toBeInViewport({ratio:1});const a=await save.boundingBox(),b=await reset.boundingBox();expect(b!.width).toBeLessThan(a!.width);expect(Math.abs(b!.y-a!.y)).toBeLessThan(12);await page.screenshot({path:'/tmp/pf-connected-lease-desktop.png',fullPage:true});

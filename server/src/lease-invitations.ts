@@ -1,4 +1,5 @@
 import { prepareAccount, saveAccount } from "./resident-accounts.js";
+import { assertInvitationNotSending } from "./invitation-access.js";
 import type { IdentityProvider } from "./identity-provider.js";
 import { acceptContactInvitation } from "./contact-invitations.js";
 import { linkedResidentContact } from "./resident-contacts.js";
@@ -89,9 +90,10 @@ export function registerLeaseInvitations(server:FastifyInstance,db:PrismaClient,
         if(resident)throw new AccessError(403,"RESIDENT_READ_ONLY","Household records are view-only. Contact your property manager to request changes.");
         if(resident)await residentLease(tx,companyId,request.principal!.id,id);else await householdLease(tx,companyId,id,true);
         const actor=await tx.companyMembership.findFirstOrThrow({where:{companyId,userId:request.principal!.id}});
-        const row=await tx.invitation.findFirst({where:{id:invitationId,companyId,leaseId:id,acceptedAt:null,...(actor.role!=="owner"?{createdBy:request.principal!.id,approvedAt:null}:{})},select:{id:true,version:true,revokedAt:true}});
+        const row=await tx.invitation.findFirst({where:{id:invitationId,companyId,leaseId:id,acceptedAt:null,...(actor.role!=="owner"?{createdBy:request.principal!.id,approvedAt:null}:{})},select:{id:true,version:true,revokedAt:true,deliveryStatus:true,deliveryRequestedAt:true}});
         if(!row)throw new AccessError(404,"NOT_FOUND","Pending invitation not found.");
         if(row.revokedAt)return {success:true};
+        assertInvitationNotSending(row);
         if(expectedVersion!==undefined&&row.version!==expectedVersion)throw conflict();
         await tx.invitation.update({where:{id:row.id},data:{revokedAt:new Date(),version:{increment:1}}});
         await audit(tx,request,companyId,id,"lease.invitation.revoked",{invitationId});return {success:true};
