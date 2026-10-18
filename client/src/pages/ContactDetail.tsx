@@ -381,7 +381,7 @@ function ContactWorkspace({ id }: { id: string }) {
           </Form>
         )}
       </EditorDialog>
-      {delivery&&<EditorDialog open title={`Invitation for ${person.name}`} onClose={()=>{setDelivery(null);r.reload();}}><InvitationDelivery key={delivery.id} initial={delivery} changed={r.reload} done={()=>{setDelivery(null);r.reload();}}/></EditorDialog>}
+      {delivery&&<EditorDialog open title={`Invitation for ${person.name}`} onClose={()=>{setDelivery(null);r.reload();}}><InvitationDelivery key={delivery.id} initial={delivery} changed={r.reload} done={()=>{setDelivery(null);r.reload();}} reviewAccess={!delivery.leaseId?()=>{setDelivery(null);setInvite(true);}:undefined}/></EditorDialog>}
       {access && person.userId && (
         <ResidentEditor
           id={person.userId}

@@ -48,7 +48,7 @@ export function TenantInvitation({
   );
   const [submissionKey,setSubmissionKey] = useState(() => crypto.randomUUID());
   const [link, setLink] = useState<InvitationResult | null>(null);
-  if (link) return <InvitationDelivery initial={link} done={()=>{setLink(null);setSubmissionKey(crypto.randomUUID());r.reload();done?.();}}/>;
+  if (link) return <InvitationDelivery initial={link} reviewAccess={()=>{setLink(null);setSubmissionKey(crypto.randomUUID());r.reload();}} done={()=>{setLink(null);setSubmissionKey(crypto.randomUUID());r.reload();done?.();}}/>;
   if (!r.data)
     return (
       <div>

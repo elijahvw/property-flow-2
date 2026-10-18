@@ -11,6 +11,7 @@ async function setup(page:Page,{signedIn=true,newGuide=false}={}){
   }
   if(path==='/api/invitations/delivery')return json({emailAvailable:true});
   if(path==='/api/invitations'){
+   if(req.method()==='POST')return json({id:'created-invite',version:1,expiresAt:'2099-01-01',acceptanceUrl:'https://app.test/invite#fictional-created-link'});
    const page=Number(url.searchParams.get('page'));state.invitationPage.push(page);
    return json({items:[{id:'invite-'+page,email:`teammate${page}@test.invalid`,role:'staff',company:{name:'Fictional company'},expiresAt:'2099-01-01',version:1,acceptedAt:null,revokedAt:null}],total:state.historyTotal,pageSize:25,page});
   }
@@ -55,4 +56,17 @@ test('a new private invitation opened in the same tab replaces the earlier token
 
 test('revoking the last filtered invitation on a later page returns to an available page',async({page})=>{
  await setup(page);await page.goto('/company/members');await page.getByRole('button',{name:'Next invitations'}).click();await expect(page.getByText('teammate2@test.invalid',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Revoke',exact:true}).click();await expect(page.getByText('teammate1@test.invalid',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Previous invitations'})).toBeDisabled();
+});
+
+test('finishing team invitation delivery returns to the team list with a fresh next-invite form',async({page})=>{
+ await setup(page);await page.goto('/company/members');await page.getByRole('button',{name:'Invite team member',exact:true}).click();
+ const dialog=page.getByRole('dialog',{name:'Invite team member',exact:true});await dialog.getByLabel('Email address',{exact:true}).fill('next-teammate@test.invalid');await dialog.getByRole('button',{name:'Create invitation',exact:true}).click();
+ await expect(dialog.getByRole('heading',{name:'Invitation link ready',exact:true})).toBeVisible();await dialog.getByRole('button',{name:'Done',exact:true}).click();await expect(dialog).not.toBeVisible();
+ await page.getByRole('button',{name:'Invite team member',exact:true}).click();await expect(dialog.getByLabel('Email address',{exact:true})).toHaveValue('');
+});
+
+test('an unassigned account can resume its saved invitation without requesting a new grant',async({page})=>{
+ await setup(page);await page.route('**/api/bootstrap',route=>route.fulfill({json:{...owner(),membership:null,permissions:[],destination:'/access'}}));
+ await page.goto('/invite#fictional-saved-invitation');await expect(page.getByRole('alert')).toContainText('Sign in with the invited account');await page.goto('/access');
+ await expect(page.getByRole('heading',{name:'Account access pending',exact:true})).toBeVisible();await page.getByRole('link',{name:'Review your invitation',exact:true}).click();await expect(page).toHaveURL(/\/invite$/);await expect(page.getByRole('alert')).toContainText('Sign in with the invited account');
 });

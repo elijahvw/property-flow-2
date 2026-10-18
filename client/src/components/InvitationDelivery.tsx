@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import { formatDate } from "../dates";
 import { useResource } from "../useResource";
 import { Form } from "./Form";
@@ -13,8 +13,9 @@ export function invitationDeliveryLabel(row: Pick<InvitationResult, "deliverySta
   return row.deliveryStatus === "requesting" ? "Email request in progress" : "Private link";
 }
 
-export function InvitationDelivery({ initial, changed = () => {}, done }: { initial: InvitationResult; changed?: () => void; done?: () => void }) {
+export function InvitationDelivery({ initial, changed = () => {}, done, reviewAccess }: { initial: InvitationResult; changed?: () => void; done?: () => void; reviewAccess?: () => void }) {
   const [row, setRow] = useState(initial), [copied, setCopied] = useState(false), [copyError, setCopyError] = useState(false);
+  const [reviewRequired, setReviewRequired] = useState(false);
   const availability = useResource<{ emailAvailable: boolean }>("/api/invitations/delivery");
   // Freeze the exact payload on a failed/ambiguous request. Explicit completion
   // creates a fresh key; clicking Retry cannot rotate another private link.
@@ -23,9 +24,21 @@ export function InvitationDelivery({ initial, changed = () => {}, done }: { init
     if (attempt && attempt.delivery !== delivery) throw new Error("Retry the pending action first. Refresh invitation history before starting a different action.");
     const body = attempt || { submissionKey: crypto.randomUUID(), expectedVersion: row.version || 1, delivery };
     setAttempt(body);
-    const result = await api<InvitationResult>(`/api/invitations/${encodeURIComponent(row.id)}/replace`, { method: "POST", body, timeoutMs: 20000 });
+    let result: InvitationResult;
+    try {
+      result = await api<InvitationResult>(`/api/invitations/${encodeURIComponent(row.id)}/replace`, { method: "POST", body, timeoutMs: 20000 });
+    } catch (error) {
+      if (reviewAccess && error instanceof ApiError && error.code === "INVITATION_CHANGED") setReviewRequired(true);
+      throw error;
+    }
     setAttempt(null); setRow(result); setCopied(false); changed();
   };
+  if (reviewRequired) return <section className="invitation-result" aria-label="Invitation delivery">
+    <h3>Review updated portal access</h3>
+    <p role="alert">The household or lease changed after this invitation was approved. Review the current access before sending a new invitation. Saving that review replaces the older link.</p>
+    <button type="button" onClick={reviewAccess}>Review current access</button>
+    {done && <button type="button" className="secondary" onClick={done}>Done</button>}
+  </section>;
   return <section className="invitation-result" aria-label="Invitation delivery">
     <h3>{row.acceptanceUrl ? "Invitation link ready" : "Invitation saved"}</h3>
     <p>{row.acceptanceUrl ? "Send the invitation by email or share this private link. The recipient reviews their access before accepting." : "The invitation is saved. Generate a replacement link or send it by email to continue. Older links will stop working."}</p>
