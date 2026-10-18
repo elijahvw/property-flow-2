@@ -433,6 +433,7 @@ function PeopleWorkspace() {
       </section>
       {person && (
         <EditorDialog
+          key={selected}
           open={selectedOpen}
           onSaveDraft={saveSelectedDraft}
           title={`Manage ${person.name || person.email}`}
@@ -1016,11 +1017,12 @@ function TeamDirectory() {
         {r.data && !filteredTeam?.length && <p>No team members match these filters.</p>}
         {!!filteredTeam?.length && <nav className="actions" aria-label="Team pages"><button className="secondary" disabled={!teamPage} onClick={()=>setTeamPage(p=>p-1)}>Previous team members</button><span>{filteredTeam.length} matching members · Page {teamPage+1}</span><button className="secondary" disabled={(teamPage+1)*25>=filteredTeam.length} onClick={()=>setTeamPage(p=>p+1)}>Next team members</button></nav>}
       </section>
-      {team?.find(m => m.userId === propertyMember) && <EditorDialog open={propertyMemberOpen} onSaveDraft={savePropertyDraft} title={`Staff access for ${team.find(m => m.userId === propertyMember)!.user.name || team.find(m => m.userId === propertyMember)!.user.email}`} onClose={() => setPropertyMember("")}>
+      {team?.find(m => m.userId === propertyMember) && <EditorDialog key={propertyMember} open={propertyMemberOpen} onSaveDraft={savePropertyDraft} title={`Staff access for ${team.find(m => m.userId === propertyMember)!.user.name || team.find(m => m.userId === propertyMember)!.user.email}`} onClose={() => setPropertyMember("")}>
         <StaffPropertyEditor key={propertyMember} member={team.find(m => m.userId === propertyMember)!} saved={() => { setPropertyMember(""); r.reload(); }} />
       </EditorDialog>}
       {member && (
         <EditorDialog
+          key={selected}
           open={selectedOpen}
           onSaveDraft={saveSelectedDraft}
           title={`Access for ${member.user.name || member.user.email}`}

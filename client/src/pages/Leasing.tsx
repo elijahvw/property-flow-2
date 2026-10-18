@@ -308,6 +308,7 @@ function UnitList({
       )}
       {selected && (
         <EditorDialog
+          key={selected.id}
           open={selectedOpen}
           onSaveDraft={saveSelectedDraft}
           title={`Edit unit ${selected.label}`}
@@ -792,6 +793,7 @@ function LeaseList() {
         )}
       </section>
       <EditorDialog
+        key={renewing?.id}
         open={renewingOpen} onSaveDraft={saveRenewingDraft}
         title="Prepare lease renewal"
         onClose={() => {
@@ -816,6 +818,7 @@ function LeaseList() {
       </EditorDialog>
       {selected && (
         <EditorDialog
+          key={selected.id}
           open={selectedOpen}
           onSaveDraft={saveSelectedDraft}
           title={`Edit lease · ${selected.property.name} · ${selected.unit.label}`}

@@ -53,7 +53,7 @@ export function MaintenanceCosts({ requestId, propertyId }: { requestId: string;
     <EditorDialog open={adding} title="Link a paid maintenance expense" onClose={() => setAdding(false)}>
       <ExpensePicker endpoint={endpoint} saved={() => { setAdding(false); refresh("Expense linked. Financial records are unchanged."); }} />
     </EditorDialog>
-    {unlinking && <EditorDialog open={unlinkOpen} onSaveDraft={saveUnlinkDraft} title="Unlink maintenance expense" onClose={() => setUnlinking(null)}>
+    {unlinking && <EditorDialog key={unlinking.id} open={unlinkOpen} onSaveDraft={saveUnlinkDraft} title="Unlink maintenance expense" onClose={() => setUnlinking(null)}>
       <p>{unlinking.entry.reference} · {dollars(unlinking.entry.amountCents)} · {formatDate(unlinking.entry.occurredOn)}</p>
       <p>This removes the expense from this request's cost total. The paid transaction stays in Cash activity; unlinking does not refund or void it.</p>
       <Form key={`${unlinking.id}:${unlinking.version}`} operation="maintenance.cost.unlink" label="Unlink expense" feedbackText="Maintenance expense unlinked."

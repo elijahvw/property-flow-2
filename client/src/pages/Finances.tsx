@@ -397,6 +397,7 @@ function LedgerWorkspace() {
       </section>
       {selected && (
         <EditorDialog
+          key={selected.id}
           open={selectedOpen}
           onSaveDraft={saveSelectedDraft}
           title="Void transaction"

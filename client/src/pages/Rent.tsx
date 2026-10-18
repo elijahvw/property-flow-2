@@ -1048,6 +1048,7 @@ function LeaseLedger({
           />
           {correction && (
             <EditorDialog
+              key={`${correction.row.id}:${correction.type}`}
               open={correctionOpen}
               onSaveDraft={saveCorrectionDraft}
               title={`Void ${correction.type}`}

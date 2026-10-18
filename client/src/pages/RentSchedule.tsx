@@ -405,6 +405,7 @@ export function RentSchedule({
         />
       </EditorDialog>
       <EditorDialog
+        key={manage?.id}
         open={manageOpen} onSaveDraft={saveManageDraft}
         title="Manage billing schedule"
         onClose={() => setManage(null)}

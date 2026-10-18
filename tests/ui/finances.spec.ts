@@ -70,3 +70,16 @@ test('explicit drafts remain on this page but disappear on refresh without creat
  await page.reload();await page.getByRole('button',{name:'Record a transaction',exact:true}).click();
  await expect(page.getByLabel('Amount (USD)')).toHaveValue('');await expect(page.getByLabel('Memo (optional)')).toHaveValue('');expect(state.entries).toHaveLength(0);expect(state.keys).toHaveLength(0);
 });
+
+test('a saved correction stays bound to its original source and never carries input into another transaction',async({page})=>{
+ const state=await fixture(page);
+ for(const [id,name] of [['first','First property'],['second','Second property']])state.entries.push({id,propertyId:id,property:{name},kind:'expense',category:'repairs',occurredOn:'2026-10-14',amountCents:1000,version:1,voidedAt:null});
+ await page.goto('/company/finances');
+ const first=page.locator('.record-list > li').filter({has:page.getByRole('heading',{name:'First property · expense · $10.00',exact:true})});
+ const second=page.locator('.record-list > li').filter({has:page.getByRole('heading',{name:'Second property · expense · $10.00',exact:true})});
+ await first.getByRole('button',{name:'Void transaction',exact:true}).click();await page.getByLabel('Correction reason').fill('Original source correction');await page.getByRole('button',{name:'Save as draft',exact:true}).click();
+ state.entries[0].version=2;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await first.getByRole('button',{name:'Void transaction',exact:true}).click();
+ await expect(page.getByLabel('Correction reason')).toHaveValue('Original source correction');await page.getByRole('dialog').getByRole('button',{name:'Void transaction',exact:true}).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('This record changed');
+ await page.getByRole('button',{name:'Save as draft',exact:true}).click();await second.getByRole('button',{name:'Void transaction',exact:true}).click();
+ await expect(page.getByLabel('Correction reason')).toHaveValue('');await expect(page.getByText('Saved draft · available only while this page stays open.')).toHaveCount(0);expect(state.entries.every(row=>!row.voidedAt)).toBe(true);
+});
