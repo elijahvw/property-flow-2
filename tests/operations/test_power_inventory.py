@@ -36,3 +36,16 @@ class PowerInventoryTests(unittest.TestCase):
             (root / "config/dev-power.json").write_text((ROOT / "config/dev-power.json").read_text())
             with self.assertRaisesRegex(ValueError, "removed infrastructure"):
                 inventory.validate(root)
+
+    def test_compiled_plan_covers_nested_modules_and_blocks_database_replacement(self):
+        config, _ = inventory.validate()
+        resources = [{"address": config[key]["address"], "type": kind, "mode": "managed"} for key, kind in [("database", "aws_db_instance"), ("application", "aws_ecs_service")]]
+        plan = {"planned_values": {"root_module": {"child_modules": [{"resources": resources}]}}}
+        inventory.validate_plan(config, plan)
+        resources.append({"address": "module.new_worker.aws_ecs_service.app", "type": "aws_ecs_service", "mode": "managed"})
+        with self.assertRaisesRegex(ValueError, "power sequence"):
+            inventory.validate_plan(config, plan)
+        resources.pop()
+        plan["resource_changes"] = [{"type": "aws_db_instance", "change": {"actions": ["delete", "create"]}}]
+        with self.assertRaisesRegex(ValueError, "delete or replace"):
+            inventory.validate_plan(config, plan)

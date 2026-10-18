@@ -145,6 +145,8 @@ jobs:
           cd infra/terraform/envs/dev
           # The saved plan contains secrets; keep it on this ephemeral runner.
           terraform plan -input=false -out=dev.tfplan
+          # Inspect compiled modules/counts without emitting private plan values.
+          python3 ../../../../scripts/validate-dev-power.py --plan dev.tfplan
       - name: Start existing database before deployment
         if: github.event_name == 'workflow_dispatch' && !inputs.plan_only && needs.terraform-changes.outputs.backend == 'true'
         env:
