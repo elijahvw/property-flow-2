@@ -98,7 +98,7 @@ export async function maintenanceUpdateCases(t, admin, db, call, app, requestId)
       await expect(page.getByLabel('Update audience')).toHaveValue('internal');
       await page.getByLabel('Update audience').selectOption('resident'); await page.getByLabel('Update text').fill('Browser shared update regression');
       await page.getByRole('button', { name: 'Record update', exact: true }).click(); await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
-      await page.getByRole('button', { name: 'Close', exact: true }).click(); await page.getByRole('button', { name: 'Add update', exact: true }).click();
+      await page.getByRole('button', { name: 'Close', exact: true }).click();await page.getByRole('button',{name:'Save draft & close',exact:true}).click(); await page.getByRole('button', { name: 'Add update', exact: true }).click();
       await expect(page.getByLabel('Update text')).toHaveValue('Browser shared update regression'); await expect(page.getByLabel('Update audience')).toHaveValue('resident');
       await page.getByRole('button', { name: 'Record update', exact: true }).click(); await expect(page.getByText('Update recorded.', { exact: true })).toBeVisible();
       assert.equal(attempts.length, 2); assert.deepEqual(attempts[0], attempts[1]);
