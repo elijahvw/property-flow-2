@@ -49,6 +49,8 @@ model Company {
 }
 
 model User {
+  guideState Json?
+  guideVersion Int @default(1)
   accountProfile AccountProfile?
   id         String   @id // This will be the Auth0 ID
   email      String   @unique
@@ -126,9 +128,21 @@ model CompanyMembership {
 }
 
 model Invitation {
+  @@unique([id, companyId])
+  version Int @default(1)
+  submissionKey String?
+  submissionHash String?
+  replacesId String?
+  replaces Invitation? @relation("InvitationReplacement", fields:[replacesId,companyId], references:[id,companyId], onDelete:Restrict, onUpdate:Restrict, map:"Invitation_replacement_company_fkey")
+  replacements Invitation[] @relation("InvitationReplacement")
+  deliveryStatus String @default("not_requested")
+  deliveryRequestedAt DateTime?
+  deliveryUpdatedAt DateTime?
+  @@unique([companyId, createdBy, submissionKey])
+  @@index([companyId, createdAt, id])
+  @@index([accountId])
   accountId String?
   account User? @relation("InvitationAccount", fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  @@index([accountId])
   contactLeaseApprovals Json?
   contactId String?
   contact ResidentContact? @relation(fields:[contactId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)

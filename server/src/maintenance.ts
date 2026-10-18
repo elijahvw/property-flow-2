@@ -1,3 +1,4 @@
+import { companyDay } from "./reports.js";
 import { createHash } from "node:crypto";
 import type {
   FastifyInstance,
@@ -328,11 +329,13 @@ export function registerMaintenance(
         priority?: string;
         q?: string;
         workStatus?: string;
+        due?: string;
+        assignee?: string;
       };
     }>(base, auth, async (request) => {
       if (
         Object.keys(request.query).some(
-          (k) => !["status", "propertyId", "priority", "q", ...(!resident ? ["workStatus"] : [])].includes(k),
+          (k) => !["status", "propertyId", "priority", "q", ...(!resident ? ["workStatus", "due", "assignee"] : [])].includes(k),
         )
       )
         throw new AccessError(400, "INVALID_INPUT", "Unknown filter.");
@@ -356,6 +359,8 @@ export function registerMaintenance(
         request.query.q === undefined
           ? undefined
           : text(request.query.q, 200, "Search");
+      const due = request.query.due === undefined ? undefined : choice(request.query.due,["overdue","today","upcoming","unscheduled"],"target date view");
+      const assignee = request.query.assignee === undefined ? undefined : text(request.query.assignee,200,"Assignee");
       const workStatus = request.query.workStatus === undefined ? undefined : choice(request.query.workStatus, ["unassigned", "assigned", "accepted", "pending_review", "complete"], "work status");
       return scoped(request, resident, async (tx, companyId) => {
         if (
@@ -365,7 +370,9 @@ export function registerMaintenance(
           }))
         )
           throw new AccessError(404, "NOT_FOUND", "Property not found.");
-        return tx.maintenanceRequest.findMany({
+        const company=await tx.company.findUniqueOrThrow({where:{id:companyId},select:{timezone:true}});
+        const today=new Date(companyDay(company.timezone)+"T00:00:00Z");
+        const rows=await tx.maintenanceRequest.findMany({
           where: {
             companyId,
             status:
@@ -375,6 +382,8 @@ export function registerMaintenance(
             propertyId,
             priority,
             executionStatus: workStatus,
+            ...(due?{AND:[...(due==="unscheduled"?[{targetOn:null}]:[{targetOn:due==="overdue"?{lt:today}:due==="today"?today:{gt:today}}]),{status:{not:"resolved"}}]}:{}),
+            ...(assignee?assignee==="unassigned"?{assigneeId:null}:{assignee:{is:{OR:[{name:{contains:assignee,mode:"insensitive"}},{email:{contains:assignee,mode:"insensitive"}}]}}}:{}),
             ...(q
               ? {
                   OR: [
@@ -398,9 +407,10 @@ export function registerMaintenance(
                 }
               : {}),
           },
-          select: { ...select, ...(!resident ? { executionStatus: true } : {}) },
+          select: { ...select, ...(!resident ? { executionStatus: true,assigneeId:true,assignee:{select:{name:true}} } : {}) },
           orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         });
+        return rows.map(row=>{const {assignee,...result}=row as typeof row & {assignee?:{name:string|null}|null};return {...result,...(!resident?{assigneeName:assignee?.name||null}:{})};});
       });
     });
     server.get<{ Params: { requestId: string } }>(

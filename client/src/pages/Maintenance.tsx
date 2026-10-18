@@ -26,6 +26,7 @@ type Row = {
   executionStatus?: string;
   version: number;
   targetOn: string | null;
+  assigneeName?:string|null;
   createdAt: string;
   updatedAt: string;
   property: { name: string };
@@ -74,7 +75,7 @@ function Loading({ error, retry }: { error?: string; retry: () => void }) {
 }
 function directoryQuery(params: URLSearchParams) {
   const q = new URLSearchParams();
-  for (const key of ["propertyId", "status", "priority", "q", "nested", "workStatus"])
+  for (const key of ["propertyId", "status", "priority", "q", "nested", "workStatus", "due", "assignee"])
     if (params.get(key)) q.set(key, params.get(key)!);
   return q;
 }
@@ -216,8 +217,9 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
     propertyId = params.get("propertyId") || "",
     query = params.get("q") || "",
     priority = params.get("priority") || "",
+    due=params.get("due")||"",assignee=params.get("assignee")||"",
     workStatus = params.get("workStatus") || "";
-  const search = useDebouncedValue(query.trim());
+  const search = useDebouncedValue(query.trim()), assigneeSearch=useDebouncedValue(assignee.trim());
   const [newProperty, setNewProperty] = useState("");
   const [createdId, setCreatedId] = useState("");
   const base = resident
@@ -229,7 +231,7 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
     true,
   );
   const r = useResource<Row[]>(
-    `${base}?${new URLSearchParams(Object.entries({ status, propertyId, q: search, priority, ...(!resident ? {workStatus} : {}) }).filter(([, v]) => v))}`,
+    `${base}?${new URLSearchParams(Object.entries({ status, propertyId, q: search, priority, ...(!resident ? {workStatus,due,assignee:assigneeSearch} : {}) }).filter(([, v]) => v))}`,
     true,
     true,
   );
@@ -461,6 +463,7 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
                 ))}
             </select>
           </label>
+          {!resident&&<><label>Target date<select value={due} onChange={e=>change("due",e.target.value)}><option value="">All target dates</option><option value="overdue">Overdue</option><option value="today">Due today</option><option value="upcoming">Upcoming</option><option value="unscheduled">No target date</option></select></label><label>Assignee<input type="search" maxLength={200} placeholder="Name or email; unassigned" value={assignee} onChange={e=>change("assignee",e.target.value)}/></label></>}
           <label>
             Filter priority
             <select
@@ -497,7 +500,7 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
               <div className="empty-state">
                 <h3>No requests match these filters.</h3>
                 <p>
-                  {status || propertyId || query || priority
+                  {status || propertyId || query || priority || due || assignee
                     ? "Try a different search or filter."
                     : "Requests will appear here as maintenance is recorded."}
                 </p>
@@ -564,6 +567,7 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
                           <span className={`status-pill ${row.status}`}>
                             {label(row.status)}
                           </span>
+                          {!resident&&row.assigneeName&&<span className="cell-detail">Assigned to {row.assigneeName}</span>}
                           {!resident && row.executionStatus && row.executionStatus !== "unassigned" && <span className="cell-detail">{({assigned:"Awaiting acceptance",accepted:"Work accepted",pending_review:"Completion awaiting review",complete:"Completion approved"} as Record<string,string>)[row.executionStatus]}</span>}
                         </td>
                         <td>

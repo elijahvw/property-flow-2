@@ -237,6 +237,7 @@ export async function registerSessions(
         redirect_uri: callback,
         response_type: "code",
         scope: "openid profile email",
+        ...((request.query as Record<string,unknown>).switchAccount === "1" ? {prompt:"login"} : {}),
         state,
         nonce,
         code_challenge_method: "S256",

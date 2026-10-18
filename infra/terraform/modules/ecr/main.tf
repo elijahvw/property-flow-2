@@ -4,6 +4,10 @@ resource "aws_ecr_repository" "app" {
 }
 
 locals {
+  invitation_sender_domain = "propertyflow.saasapps.cloud"
+  invitation_sender        = "invitations@${local.invitation_sender_domain}"
+  # Official stable Linux/amd64 image, inspected and pinned before rollout.
+  scanner_image        = "clamav/clamav@sha256:705e0723f02fc13bf6e5e8a8e13a8c44420acf5e7ed06dfa2197081da00c7a73"
   runtime_database_url = format("postgresql://propertyflow_runtime:%s@%s:5432/%s", urlencode(var.vars.runtime_db_password), var.vars.db_endpoint, urlencode(var.vars.db_name))
   database_url = format(
     "postgresql://%s:%s@%s:5432/%s?schema=public&sslmode=verify-full",
@@ -12,6 +16,40 @@ locals {
     var.vars.db_endpoint,
     urlencode(var.vars.db_name)
   )
+}
+
+data "aws_caller_identity" "current" {}
+
+# Generated with IAM Policy Autopilot from invitation-email.ts; narrowed to
+# this verified identity and exact From address. No sending as Gmail/other domains.
+resource "aws_iam_role" "app" {
+  name                 = "propertyflow-${var.vars.environment}-app"
+  permissions_boundary = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/PropertyFlowInvitationBoundary"
+  tags                 = { Application = "propertyflow", Environment = var.vars.environment }
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow", Action = "sts:AssumeRole"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+      Condition = {
+        StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id }
+        ArnLike      = { "aws:SourceArn" = "arn:aws:ecs:${var.vars.aws_region}:${data.aws_caller_identity.current.account_id}:*" }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "invitations" {
+  name = "send-propertyflow-invitations"
+  role = aws_iam_role.app.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow", Action = ["ses:SendEmail"]
+      Resource  = "arn:aws:ses:${var.vars.aws_region}:${data.aws_caller_identity.current.account_id}:identity/${local.invitation_sender_domain}"
+      Condition = { StringEquals = { "ses:FromAddress" = local.invitation_sender } }
+    }]
+  })
 }
 
 resource "aws_ecs_cluster" "main" {
@@ -82,15 +120,18 @@ resource "aws_ecs_task_definition" "app" {
   family                   = "propertyflow-${var.vars.environment}"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "256"
-  memory                   = "512"
+  cpu                      = "512"
+  memory                   = "4096"
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
-  # Execution-role privileges are not granted to application code.
+  task_role_arn            = aws_iam_role.app.arn
 
   container_definitions = jsonencode([
     {
-      name  = "app"
-      image = "${aws_ecr_repository.app.repository_url}:latest"
+      name      = "app"
+      image     = "${aws_ecr_repository.app.repository_url}:latest"
+      essential = true
+      cpu       = 256
+      memory    = 1024
       portMappings = [{
         containerPort = 5011
         hostPort      = 5011
@@ -110,7 +151,10 @@ resource "aws_ecs_task_definition" "app" {
         { name = "DATABASE_URL", value = local.database_url },
         { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = var.vars.grafana_otlp_endpoint },
         { name = "APP_ENV", value = var.vars.environment },
-        { name = "APP_CPU_CORES", value = "0.25" }
+        { name = "APP_CPU_CORES", value = "0.5" },
+        { name = "INVITATION_EMAIL_FROM", value = local.invitation_sender },
+        { name = "INVITATION_EMAIL_REGION", value = var.vars.aws_region },
+        { name = "DOCUMENT_SCANNER_PORT", value = "3310" }
       ]
       secrets = var.vars.grafana_otlp_endpoint == "" ? [] : [{
         name      = "OTEL_EXPORTER_OTLP_HEADERS"
@@ -124,6 +168,39 @@ resource "aws_ecs_task_definition" "app" {
           "awslogs-stream-prefix" = "ecs"
         }
       }
+    },
+    {
+      name      = "document-scanner"
+      image     = local.scanner_image
+      essential = true
+      cpu       = 256
+      memory    = 3072
+      # No port mapping. ECS containers share loopback; the daemon binds only it.
+      environment = [
+        { name = "CLAMD_CONF_TCPAddr", value = "127.0.0.1" },
+        { name = "CLAMD_CONF_MaxThreads", value = "2" },
+        { name = "CLAMD_CONF_MaxQueue", value = "4" },
+        { name = "CLAMD_CONF_StreamMaxLength", value = "6M" },
+        { name = "CLAMD_CONF_MaxFileSize", value = "10M" },
+        { name = "CLAMD_CONF_MaxScanSize", value = "50M" },
+        { name = "CLAMD_CONF_AlertExceedsMax", value = "yes" },
+        { name = "CLAMD_CONF_ConcurrentDatabaseReload", value = "no" },
+        { name = "CLAMD_CONF_SelfCheck", value = "60" },
+        { name = "CLAMD_STARTUP_TIMEOUT", value = "240" },
+        { name = "FRESHCLAM_CHECKS", value = "12" }
+      ]
+      healthCheck = {
+        command  = ["CMD-SHELL", "clamdcheck.sh"]
+        interval = 30, timeout = 5, retries = 3, startPeriod = 300
+      }
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
+          "awslogs-region"        = var.vars.aws_region
+          "awslogs-stream-prefix" = "scanner"
+        }
+      }
     }
   ])
 }
@@ -131,7 +208,7 @@ resource "aws_ecs_task_definition" "app" {
 resource "aws_ecs_service" "app" {
   tags = { Application = "propertyflow", Environment = var.vars.environment }
   # ECS requires the target group to be attached to a listener first.
-  depends_on = [aws_lb_listener.http, aws_iam_role_policy.grafana_ingestion]
+  depends_on = [aws_lb_listener.http, aws_iam_role_policy.grafana_ingestion, aws_iam_role_policy.invitations]
 
   name                              = "propertyflow-${var.vars.environment}"
   cluster                           = aws_ecs_cluster.main.id

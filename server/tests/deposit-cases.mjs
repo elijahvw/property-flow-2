@@ -1,3 +1,4 @@
+import { newFixturePage } from "./browser-fixture.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { chromium, expect } from "@playwright/test";
@@ -633,7 +634,7 @@ export async function depositCases(t, admin, call, db) {
     async () => {
       const fresh = await createLease("Browser deposit unit"),
         browser = await chromium.launch({ headless: true });
-      const page = await browser.newPage();
+      const page = await newFixturePage(browser);
       try {
         const posts = [],
           lost = new Set();

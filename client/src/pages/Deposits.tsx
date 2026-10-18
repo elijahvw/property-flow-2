@@ -1,3 +1,4 @@
+import { useDebouncedValue } from "../useDebouncedValue";
 import { ResidentFinancialNotice } from "../components/ResidentFinancialNotice";
 import { LeaseMovements, type MoneyMovement } from "../components/LeaseMovements";
 import { recordReference } from "../record-reference";
@@ -180,6 +181,7 @@ function DepositDirectory({ resident }: { resident: boolean }) {
     true,
     true,
   );
+  const [choosingLease,setChoosingLease]=useState(false);
   const [query, setQuery] = useState(""),
     [view, setView] = useState("all"),
     [page, setPage] = useState(0);
@@ -209,14 +211,10 @@ function DepositDirectory({ resident }: { resident: boolean }) {
             : "Track the refundable deposit separately from rent. Receipts record money already received; this platform does not collect or hold funds."}
         </p>
         {!resident && (
-          <Link
-            className="button"
-            to={propertyLink("/company/rent", propertyId)}
-          >
-            Choose a lease to set up a deposit
-          </Link>
+          <button onClick={()=>setChoosingLease(true)}>Set up a security deposit</button>
         )}
       </header>
+      {!resident&&choosingLease&&<EditorDialog open title="Choose a lease for this deposit" onClose={()=>setChoosingLease(false)}><DepositLeasePicker propertyId={propertyId} selected={id=>{setChoosingLease(false);setParams(previous=>{const next=new URLSearchParams(previous);next.set("leaseId",id);return next;});}}/></EditorDialog>}
       {resident && !leaseId && <ResidentFinancialNotice />}
       {r.error && <Load error={r.error} retry={r.reload} />}{" "}
       {!r.data ? (
@@ -1023,4 +1021,11 @@ function DepositEditor({
       </div>
     </>
   );
+}
+
+function DepositLeasePicker({propertyId,selected}:{propertyId:string;selected:(id:string)=>void}) {
+ const [query,setQuery]=useState(""),[cursor,setCursor]=useState("");
+ const search=useDebouncedValue(query.trim());
+ const r=useResource<{items:Lease[];nextCursor:string|null}>(`/api/company/leases?${new URLSearchParams({...(propertyId?{propertyId}:{}),...(search?{q:search}:{}),...(cursor?{cursor}:{})})}`);
+ return <><p>Select the exact lease term. Requirements and receipts stay with that lease.</p><label>Find lease for deposit<input type="search" value={query} maxLength={200} onChange={event=>{setQuery(event.target.value);setCursor("");}}/></label>{r.error?<Load error={r.error} retry={r.reload}/>:!r.data?<p role="status">Loading leases…</p>:!r.data.items.length?<p>No leases match. <Link to={propertyLink("/company/leases",propertyId,{new:"lease"})}>Record a lease</Link> first, then return to set up the deposit.</p>:<ul className="record-list">{r.data.items.map(lease=><li key={lease.id}><div><strong>{lease.property.name} · {lease.unit.label}</strong><p>{lease.resident?.name||lease.resident?.email} · {formatDate(lease.startsOn)} through {formatDate(lease.endsOn,"Open ended")} · {lease.status}</p></div><button className="secondary" onClick={()=>selected(lease.id)}>Choose this lease</button></li>)}</ul>}{cursor&&<button className="secondary" onClick={()=>setCursor("")}>First page of leases</button>}{r.data?.nextCursor&&<button className="secondary" onClick={()=>setCursor(r.data!.nextCursor!)}>More leases</button>}</>;
 }

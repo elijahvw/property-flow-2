@@ -106,3 +106,11 @@ test('role guidance uses the enforced grants and distinguishes company ownership
  assert.equal(companyRoleGuide()[0].label,'Company owner');
  assert.ok(!companyRoleGuide().find(r=>r.role==='manager').permissions.includes('members.manage'));
 });
+
+test('sign-in retains allowlisted task context and rejects redirect tricks or private invitation material',()=>{
+ assert.equal(safeReturnTo('/company/leases/record?section=renewal&propertyId=home'),'/company/leases/record?section=renewal&propertyId=home');
+ assert.equal(safeReturnTo('/company/residents/auth0%7Cperson?access=active'),'/company/residents/auth0%7Cperson?access=active');
+ assert.equal(safeReturnTo('/invite?token=private-test-only&lease=1'),'/invite');
+ for(const path of ['/company/a/../platform/users','/company/%2e%2e/platform','/company/a%2fb','/company/%252f','/company/record%0a'])assert.equal(safeReturnTo(path),'/dashboard');
+ assert.equal(safeReturnTo('/company/leases?redirect=https://evil.test&section=overview'),'/company/leases?section=overview');
+});

@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 export AWS_PAGER=""
-export AWS_REGION="us-east-1"
-export AWS_DEFAULT_REGION="$AWS_REGION"
-
 ACTION="${1:-}"
-DB="propertyflow-dev-db"
-CLUSTER="propertyflow-dev-cluster"
-SERVICE="propertyflow-dev"
-
 case "$ACTION" in start|stop|start-database) ;; *) echo "Usage: bash scripts/dev-power.sh start|stop|start-database" >&2; exit 2 ;; esac
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# Validate before any cloud call. Never silently omit a new service/database.
+targets=$(python3 "$script_dir/validate-dev-power.py" --runtime)
+IFS=$'\t' read -r EXPECTED_ACCOUNT AWS_REGION DB CLUSTER SERVICE <<< "$targets"
+export AWS_REGION
+export AWS_DEFAULT_REGION="$AWS_REGION"
 account=$(aws sts get-caller-identity --query Account --output text)
-[[ "$account" == "800754316001" ]] || { echo "Unexpected AWS account: $account" >&2; exit 1; }
+[[ "$account" == "$EXPECTED_ACCOUNT" ]] || { echo "Unexpected AWS account: $account" >&2; exit 1; }
 if [[ "$ACTION" != "start-database" ]]; then
 service_status=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --query 'services[0].status' --output text)
 [[ "$service_status" == "ACTIVE" ]] || { echo "Development service is missing or inactive. Deploy it first." >&2; exit 1; }

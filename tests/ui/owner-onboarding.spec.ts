@@ -95,5 +95,5 @@ test('dual platform/company owner can still create a tenant and optional invitat
  const records=await fixture(page,bootstrap('owner','active',true));await page.goto('/company/residents');
  await page.getByRole('button',{name:'Invite tenant',exact:true}).click();await page.getByLabel('Full name *',{exact:true}).fill('New Resident');await page.getByLabel('Contact email',{exact:true}).fill('resident@example.test');
  await page.getByRole('button',{name:'Review tenant',exact:true}).click();await page.getByRole('button',{name:'Save tenant',exact:true}).click();await page.getByRole('checkbox',{name:/I approve this person/}).check();await page.getByRole('button',{name:'Create invitation link',exact:true}).click();
- await expect(page.getByLabel('Private invitation link')).toBeVisible();expect(records.invitationPosts).toEqual([{expectedVersion:1,approvals:[]}]);
+ await expect(page.getByLabel('Private invitation link')).toBeVisible();expect(records.invitationPosts).toEqual([{expectedVersion:1,approvals:[],submissionKey:expect.any(String)}]);
 });

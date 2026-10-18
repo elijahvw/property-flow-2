@@ -247,7 +247,7 @@ test("invitation follows durable profile creation and requires an explicit owner
   await expect(page.getByLabel("Private invitation link")).toHaveValue(
     "https://app.test/invite?contact=1#private-token",
   );
-  expect(state.invites).toEqual([{ expectedVersion: 1, approvals: [] }]);
+  expect(state.invites).toEqual([{ expectedVersion: 1, approvals: [], submissionKey: expect.any(String) }]);
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await expect(
     page.getByRole("link", { name: "View tenant Jordan Rivera", exact: true }),
@@ -322,6 +322,7 @@ test("an invited tenant can start account setup before sign-in and the private t
     page.getByRole("heading", { name: "Welcome to Property Flow" }),
   ).toBeVisible();
   await expect(page).toHaveURL(/\/invite$/);
+  await page.getByText("First time signing in or need a password?",{exact:true}).click();
   await page
     .getByRole("button", { name: "Email me a setup link" })
     .click();
@@ -461,4 +462,19 @@ test("archive and restore live in tenant details and retain profile/history disc
   await page.getByLabel("Tenant records",{exact:true}).selectOption("active");
   await expect(page.getByRole("link",{name:"View tenant Jordan Rivera"})).toBeVisible();
   expect(state.updates[1]).toMatchObject({expectedVersion:4,status:"active",managementNotes:"Preserve these internal details"});
+});
+
+test('tenant invitation replacement keeps its new private link visible after the source record refreshes',async({page})=>{
+ const state=await fixture(page);
+ const original={id:'pending-invite',version:1,expiresAt:'2099-01-01',acceptedAt:null,revokedAt:null};
+ state.contact={id:'jordan-profile',name:'Fictional tenant',email:'tenant@test.invalid',phone:null,status:'active',version:1,userId:'fictional-account',user:{id:'fictional-account',email:'tenant@test.invalid',emailVerified:false,firstSignedInAt:null},portal:null,leases:[],invitations:[original],activity:[]};
+ await page.route('**/api/invitations/delivery',route=>route.fulfill({json:{emailAvailable:false}}));
+ await page.route('**/api/invitations/pending-invite/replace',async route=>{
+  expect(route.request().postDataJSON()).toMatchObject({expectedVersion:1,delivery:'link',submissionKey:expect.any(String)});
+  const replacement={...original,id:'replacement-invite'};state.contact.invitations=[{...original,revokedAt:'2026-10-18'},replacement];
+  return route.fulfill({json:{...replacement,acceptanceUrl:'https://example.test/invite?contact=1#fictional-replacement'}});
+ });
+ await page.goto('/company/tenants/jordan-profile');await page.getByRole('button',{name:'Send or replace invitation',exact:true}).click();await page.getByRole('button',{name:'Create replacement link',exact:true}).click();
+ await expect(page.getByLabel('Private invitation link',{exact:true})).toHaveValue('https://example.test/invite?contact=1#fictional-replacement');
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(page.getByLabel('Private invitation link',{exact:true})).toHaveValue('https://example.test/invite?contact=1#fictional-replacement');
 });

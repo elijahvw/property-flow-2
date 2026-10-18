@@ -1,3 +1,4 @@
+import { newFixturePage } from "./browser-fixture.mjs";
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { chromium, expect } from '@playwright/test';
@@ -64,7 +65,7 @@ export async function reportCases(t, admin, call, app, db) {
   const rollback={...payload,submissionKey:randomUUID()};assert.equal((await call('owner','POST',path,rollback)).statusCode,500);assert.equal((await admin.query(`SELECT count(*)::int n FROM "Property" WHERE "submissionKey"=$1`,[rollback.submissionKey])).rows[0].n,0);await admin.query(`DROP TRIGGER reject_property_audit ON "AuditEvent";DROP FUNCTION reject_property_audit()`);assert.equal((await call('owner','POST',path,rollback)).statusCode,200);
  });
  await t.test('real browser property commit-response loss retains complete draft and one creation identity',{skip:!process.env.TEST_FINANCES_BROWSER_URL},async()=>{
-  const browser=await chromium.launch({headless:true});try{const page=await browser.newPage();let lose=true;const keys=[];
+  const browser=await chromium.launch({headless:true});try{const page=await newFixturePage(browser);let lose=true;const keys=[];
    await page.route('**/api/**',async route=>{const req=route.request(),u=new URL(req.url()),r=await app.inject({method:req.method(),url:u.pathname+u.search,headers:{...req.headers(),origin:'https://app.test',cookie:'__Host-pf-session=token-owner'},...(req.postData()?{payload:req.postData()}:{})});if(req.method()==='POST'&&u.pathname==='/api/company/properties'){keys.push(req.postDataJSON().submissionKey);assert.equal(r.statusCode,200,r.body);if(lose){lose=false;return route.abort('failed');}}await route.fulfill({status:r.statusCode,contentType:'application/json',body:r.body});});
    await page.goto(process.env.TEST_FINANCES_BROWSER_URL+'/company/properties');await page.getByRole('button',{name:'Add property',exact:true}).first().click();
    for(const [label,value] of [['Property name','Browser house'],['Street address','1 Browser St'],['City','Town'],['State / region','CA'],['Postal code','12345'],['Year built','2001'],['Country code','US'],['Property notes','Retained after response loss']])await page.getByLabel(label,{exact:true}).fill(value);

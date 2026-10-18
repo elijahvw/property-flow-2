@@ -1,0 +1,44 @@
+{
+  "account": "800754316001",
+  "region": "us-east-1",
+  "publicUrl": "https://propertyflow.saasapps.cloud",
+  "database": {
+    "identifier": "propertyflow-dev-db",
+    "address": "module.rds.aws_db_instance.postgresql",
+    "terraform": "modules/rds/main.tf#aws_db_instance.postgresql"
+  },
+  "application": {
+    "cluster": "propertyflow-dev-cluster",
+    "service": "propertyflow-dev",
+    "address": "module.ecr.aws_ecs_service.app",
+    "terraform": "modules/ecr/main.tf#aws_ecs_service.app",
+    "includes": "All containers in the service task, including document-scanner"
+  },
+  "retainedResourceTypes": {
+    "random_password": "Keep existing credentials across power cycles.",
+    "aws_vpc": "Retain networking; no hourly VPC fee.",
+    "aws_internet_gateway": "Retain routing for restart.",
+    "aws_subnet": "Retain addresses and database placement.",
+    "aws_route_table": "Retain network routes.",
+    "aws_route_table_association": "Retain network routes.",
+    "aws_security_group": "Retain network isolation.",
+    "aws_iam_role": "Retain existing service authorization.",
+    "aws_iam_role_policy": "Retain existing service authorization.",
+    "aws_iam_role_policy_attachment": "Retain existing service authorization.",
+    "aws_db_subnet_group": "Retain database placement.",
+    "aws_ecr_repository": "Keep deployable images; storage charges continue.",
+    "aws_ecs_cluster": "Keep cluster metadata; tasks are stopped through the service.",
+    "aws_ecs_task_definition": "Keep launch configuration; all task containers stop with the service.",
+    "aws_lb": "Keep public routing stable; load balancer and public IPv4 charges continue.",
+    "aws_lb_target_group": "Keep application routing stable.",
+    "aws_lb_listener": "Keep application routing stable.",
+    "aws_cloudwatch_log_group": "Retain diagnostic history; storage charges continue.",
+    "aws_secretsmanager_secret": "Retain ingestion credentials; secret storage charges continue.",
+    "aws_s3_bucket": "Keep website/assets and data; storage/request charges continue.",
+    "aws_s3_bucket_public_access_block": "Keep private origin protection.",
+    "aws_s3_bucket_policy": "Keep private origin protection.",
+    "aws_cloudfront_origin_access_control": "Keep private origin authorization.",
+    "aws_cloudfront_function": "Keep frontend routing; usage charges may continue.",
+    "aws_cloudfront_distribution": "Keep the website and Help online; traffic charges may continue."
+  }
+}

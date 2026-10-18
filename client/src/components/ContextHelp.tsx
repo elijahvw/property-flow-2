@@ -1,0 +1,3 @@
+import { Link, useLocation } from "react-router-dom";
+const topics: [RegExp,string][] = [[/^\/platform/,"administration"],[/^\/invite/,"invitations"],[/\/members/,"people"],[/\/(residents|tenants)/,"people"],[/\/maintenance|\/work-orders/,"maintenance"],[/\/deposits/,"deposits"],[/\/finances/,"cash-activity"],[/\/reports|\/statement/,"reports"],[/\/rent/,"rent"],[/\/leases/,"leases"],[/^\/resident/,"resident-portal"],[/\/properties/,"properties"],[/^\/account/,"account"]];
+export function ContextHelp(){const {pathname}=useLocation();if(pathname.startsWith("/help"))return null;const topic=topics.find(([test])=>test.test(pathname))?.[1]||"getting-started";return <Link className="context-help" to={`/help/${topic}`} aria-label="Help with this page">Help</Link>;}

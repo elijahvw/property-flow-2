@@ -1,3 +1,4 @@
+import { InvitationDelivery, type InvitationResult } from "./InvitationDelivery";
 import { useState } from "react";
 import { api } from "../api";
 import { useResource } from "../useResource";
@@ -5,6 +6,11 @@ import { Form } from "./Form";
 import { formatDate } from "../dates";
 export type ContactInvitationState = {
   id: string;
+  version?: number;
+  leaseId?: string | null;
+  approvedAt?: string | null;
+  deliveryStatus?: string;
+  deliveryRequestedAt?: string | null;
   expiresAt: string;
   acceptedAt: string | null;
   revokedAt: string | null;
@@ -40,56 +46,9 @@ export function TenantInvitation({
   const r = useResource<InviteContact>(
     `/api/company/resident-contacts/${encodeURIComponent(contactId)}`,
   );
-  const [link, setLink] = useState<{
-      acceptanceUrl: string;
-      expiresAt: string;
-    } | null>(null),
-    [copied, setCopied] = useState(false),
-    [copyError, setCopyError] = useState(false);
-  if (link)
-    return (
-      <div className="invitation-result">
-        <h3>Invitation link ready</h3>
-        <p>
-          The Auth0 sign-in account is ready. Share this private link with the tenant. They can request password
-          setup emails, verify their email, then sign in and accept. It connects
-          to the profile you already saved.
-        </p>
-        <label>
-          Private invitation link
-          <input
-            readOnly
-            value={link.acceptanceUrl}
-            onFocus={(e) => e.currentTarget.select()}
-          />
-        </label>
-        <p className="help">
-          Expires {formatDate(link.expiresAt)}. Replacing the invitation revokes
-          older links.
-        </p>
-        {copyError && (
-          <p role="status">Select the link above and copy it manually.</p>
-        )}
-        <div className="actions">
-          <button
-            type="button"
-            onClick={() => {
-              void navigator.clipboard
-                .writeText(link.acceptanceUrl)
-                .then(() => setCopied(true))
-                .catch(() => setCopyError(true));
-            }}
-          >
-            {copied ? "Copied" : "Copy invitation link"}
-          </button>
-          {done && (
-            <button type="button" className="secondary" onClick={done}>
-              Done
-            </button>
-          )}
-        </div>
-      </div>
-    );
+  const [submissionKey,setSubmissionKey] = useState(() => crypto.randomUUID());
+  const [link, setLink] = useState<InvitationResult | null>(null);
+  if (link) return <InvitationDelivery initial={link} done={()=>{setLink(null);setSubmissionKey(crypto.randomUUID());r.reload();done?.();}}/>;
   if (!r.data)
     return (
       <div>
@@ -129,6 +88,7 @@ export function TenantInvitation({
               method: "POST",
               body: {
                 expectedVersion: person.version,
+                submissionKey,
                 approvals: person.leases.map((p) => ({
                   id: p.id,
                   leaseId: p.leaseId,
@@ -181,9 +141,7 @@ export function TenantInvitation({
         shown above.
       </label>
       <p className="help">
-        You’ll get a private link to share. This invitation uses their existing Auth0 account. It does not create another user, send an
-        email or activate portal access. The tenant completes setup and verified
-        acceptance first.
+        Review this access first. You can then send an email invitation or share a private link. Portal access starts only after the tenant signs in and accepts.
       </p>
     </Form>
   );

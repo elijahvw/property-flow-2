@@ -1,5 +1,8 @@
+import { registerWorkspaceGuide } from "./workspace-guide.js";
 import { registerAccountPasswords } from "./account-passwords.js";
-import { prepareAccount, saveAccount } from "./resident-accounts.js";
+import { registerInvitations } from "./invitations.js";
+import { teamInvitationAuthority, replayTeamAcceptance } from "./invitation-access.js";
+import type { InvitationMailer } from "./invitation-email.js";
 import {registerLeaseProration} from "./lease-proration.js";
 import {registerLeaseTransitions} from "./lease-transitions.js";
 import {registerLeaseTermChanges} from "./lease-term-changes.js";
@@ -231,8 +234,10 @@ export function registerApplication(
   authenticate: preValidationHookHandler,
   origin: string,
   identityProvider?: IdentityProvider,
-  options: { documentScanner?: DocumentScanner } = {},
+  options: { documentScanner?: DocumentScanner; invitationMailer?: InvitationMailer } = {},
 ) {
+  registerWorkspaceGuide(server, db, authenticate, origin);
+  registerInvitations(server, db, authenticate, origin, identityProvider, options.invitationMailer);
   registerPrivateDocuments(server, db, authenticate, origin, options.documentScanner);
   registerWorkOrders(server, db, authenticate, origin);
   registerAccountPasswords(server, db, authenticate, origin, identityProvider);
@@ -264,7 +269,7 @@ export function registerApplication(
   const auth = { preValidation: authenticate };
   registerPropertyDetail(server, db, authenticate, origin);
   registerStaffPropertyAccess(server, db, authenticate, origin);
-  const serial = <T>(request: FastifyRequest, run: (tx: Tx) => Promise<T>) =>
+  const serial = <T>(request: FastifyRequest, run: (tx: Tx) => Promise<T>, membershipMayBeEstablished = false) =>
     serializable(db,
       async (tx) => {
         const current = await tx.user.findUnique({
@@ -276,10 +281,10 @@ export function registerApplication(
           current.status !== request.principal!.status ||
           current.email !== request.principal!.email ||
           current.emailVerified !== request.principal!.emailVerified ||
-          current.membership?.companyId !==
+          (!membershipMayBeEstablished && (current.membership?.companyId !==
             request.principal!.membership?.companyId ||
           JSON.stringify(permissions(current)) !==
-            JSON.stringify(permissions(request.principal!))
+            JSON.stringify(permissions(request.principal!))))
         )
           throw new AccessError(
             403,
@@ -480,13 +485,20 @@ export function registerApplication(
   server.get("/api/platform/audit", auth, async (request) => {
     platform(request);
     const query = request.query as Record<string, unknown>;
-    if (Object.keys(query).some(key => key !== "targetId")) throw new AccessError(400, "INVALID_INPUT", "Unknown activity filter.");
+    if (Object.keys(query).some(key => !["targetId","page","q","companyId"].includes(key))) throw new AccessError(400, "INVALID_INPUT", "Unknown activity filter.");
     const targetId = query.targetId === undefined ? undefined : opaqueUserId(query.targetId);
-    return auditLabels(db, await db.auditEvent.findMany({
-      where: targetId ? { OR: [{targetId}, {actorId:targetId}] } : undefined,
-      orderBy: [{ createdAt: "desc" }, {id:"desc"}],
-      take: 100,
-    }));
+    const page = query.page === undefined ? null : Number(query.page);
+    if (page !== null && (!Number.isInteger(page) || page < 1 || page > 100000)) throw new AccessError(400,"INVALID_INPUT","Choose a valid activity page.");
+    const q = query.q === undefined ? '' : typeof query.q === 'string' ? query.q.trim() : null;
+    if (q === null || q.length > 100) throw new AccessError(400,"INVALID_INPUT","Use a shorter event filter.");
+    const companyId = query.companyId === undefined ? undefined : assignmentId(query.companyId);
+    return serial(request, async tx => {
+      platform(request);
+      const where = { ...(targetId ? { OR: [{targetId}, {actorId:targetId}] } : {}), ...(companyId ? {companyId} : {}), ...(q ? {action:{contains:q,mode:'insensitive' as const}} : {}) };
+      const events = await tx.auditEvent.findMany({where,orderBy:[{createdAt:"desc"},{id:"desc"}],skip:page === null ? 0 : (page-1)*25,take:page === null ? 100 : 25});
+      const items = await auditLabels(tx, events);
+      return page === null ? items : {items,total:await tx.auditEvent.count({where}),page,pageSize:25};
+    });
   });
 
   registerCompanyProfile(server,db,authenticate,origin);
@@ -690,129 +702,21 @@ export function registerApplication(
     });
   });
 
-  // Invitations are acceptance links, never fabricated users or shared passwords.
-  const invitationCompany = (request: FastifyRequest) => {
-    if (permissions(request.principal!).includes("platform.manage"))
-      return requiredString(bodyOf(request).companyId, "Company");
-    return scope(request, "members.manage");
-  };
-  server.post("/api/invitations", auth, async (request) => {
-    const companyId = invitationCompany(request),
-      body = bodyOf(request),
-      role = roleValue(body.role),
-      email = requiredString(body.email, "Email", 254).toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-      throw new AccessError(
-        400,
-        "INVALID_EMAIL",
-        "Enter a valid email address.",
-      );
-    if (
-      role === "owner" &&
-      !permissions(request.principal!).includes("platform.manage")
-    )
-      throw new AccessError(
-        403,
-        "OWNER_PROTECTED",
-        "Only the platform owner can invite a company owner.",
-      );
-    await serial(request, tx => activeCompany(tx, companyId));
-    const account = await prepareAccount(identityProvider, email, email);
-    const token = randomBytes(32).toString("base64url");
-    return serial(request, async (tx) => {
-      await activeCompany(tx, companyId);
-      const accountId = await saveAccount(tx, request, account, companyId);
-      const invitation = await tx.invitation.create({
-        data: {
-          companyId,
-          accountId,
-          email,
-          role,
-          tokenHash: digest(token),
-          createdBy: request.principal!.id,
-          expiresAt: new Date(Date.now() + 72 * 3600000),
-        },
-      });
-      await audit(tx, request, "invitation.created", companyId, invitation.id, {
-        role,
-      });
-      return {
-        id: invitation.id,
-        expiresAt: invitation.expiresAt,
-        acceptanceUrl: `${origin}/invite#${token}`,
-      };
-    });
-  });
-  server.get("/api/invitations", auth, async (request) => {
-    const isPlatform = permissions(request.principal!).includes(
-      "platform.manage",
-    );
-    const audience = (request.query as Record<string, unknown>).audience;
-    if (audience !== undefined && audience !== "team" && audience !== "tenants")
-      throw new AccessError(400, "INVALID_AUDIENCE", "Choose team or tenant invitations.");
-    const companyId = audience || !isPlatform ? scope(request, "members.manage") : undefined;
-    return db.invitation.findMany({
-      where: { companyId, ...(audience === "team" ? { role: { not: "resident" as const } } : audience === "tenants" ? { role: "resident" as const } : {}) },
-      select: {
-        id: true,
-        companyId: true,
-        email: true,
-        role: true,
-        expiresAt: true,
-        acceptedAt: true,
-        revokedAt: true,
-      },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    });
-  });
-  server.post<{ Params: { invitationId: string } }>(
-    "/api/invitations/:invitationId/revoke",
-    auth,
-    async (request) => {
-      const isPlatform = permissions(request.principal!).includes(
-        "platform.manage",
-      );
-      const companyId = isPlatform
-        ? undefined
-        : scope(request, "members.manage");
-      return serial(request, async (tx) => {
-        const invitation = await tx.invitation.findFirst({
-          where: {
-            id: request.params.invitationId,
-            companyId,
-            acceptedAt: null,
-            revokedAt: null,
-          },
-        });
-        if (!invitation)
-          throw new AccessError(404, "NOT_FOUND", "Invitation not found.");
-        await tx.invitation.update({
-          where: { id: invitation.id },
-          data: { revokedAt: new Date() },
-        });
-        await audit(
-          tx,
-          request,
-          "invitation.revoked",
-          invitation.companyId,
-          invitation.id,
-        );
-        return { success: true };
-      });
-    },
-  );
   server.post("/api/invitations/preview", auth, async (request) => {
     const token=requiredString(input(request,["token"]).token,"Invitation token"),user=request.principal!;
     if(user.status!=="active"||!user.emailVerified)throw new AccessError(403,"VERIFIED_EMAIL_REQUIRED","Verify your sign-in email before reviewing this invitation.");
     return serial(request,async tx=>{
       const invitation=await tx.invitation.findUnique({where:{tokenHash:digest(token)}});
-      if(!invitation||(!invitation.leaseId&&!invitation.contactId)||invitation.revokedAt||(!invitation.acceptedAt&&invitation.expiresAt.getTime()<=Date.now())||(invitation.email!==user.email.toLowerCase()&&!(invitation.contactId&&!invitation.leaseId&&invitation.acceptedAt)))throw new AccessError(403,"INVITATION_INVALID","This invitation is unavailable for your account.");
+      if(!invitation||invitation.revokedAt||(!invitation.acceptedAt&&invitation.expiresAt.getTime()<=Date.now())||(invitation.email!==user.email.toLowerCase()&&!(invitation.contactId&&!invitation.leaseId&&invitation.acceptedAt)))throw new AccessError(403,"INVITATION_INVALID","This invitation is unavailable for your account.");
       if(invitation.accountId && invitation.accountId !== user.id) throw new AccessError(403,"INVITATION_IDENTITY_MISMATCH","Sign in with the account this invitation was created for.");
       await activeCompany(tx,invitation.companyId);
       if(invitation.contactId&&!invitation.leaseId){if(invitation.acceptedAt){const {company,contact}=await replayContactAcceptance(tx,request,invitation);return {company:company.name,name:contact.name,contact:true,accepted:true,leaseApprovals:[],leases:[]};}return previewContactInvitation(tx,invitation);}
-      if(invitation.acceptedAt)await replayLeaseAcceptance(tx,request,invitation);
-      return previewLeaseInvitation(tx,invitation);
+      if (invitation.leaseId) {
+        if(invitation.acceptedAt)await replayLeaseAcceptance(tx,request,invitation);
+        return previewLeaseInvitation(tx,invitation);
+      }
+      const company = invitation.acceptedAt ? (await replayTeamAcceptance(tx, request, invitation)).company : await teamInvitationAuthority(tx, invitation);
+      return { company: company.name, role: invitation.role, team: true, accepted: !!invitation.acceptedAt };
     });
   });
   server.post("/api/invitations/accept", auth, async (request) => {
@@ -825,6 +729,7 @@ export function registerApplication(
         "Verify your sign-in email before accepting an invitation.",
       );
     return serial(request, async (tx) => {
+      await tx.$queryRaw`UPDATE "Invitation" SET version=version WHERE "tokenHash"=${digest(token)} RETURNING id`;
       const invitation = await tx.invitation.findUnique({
         where: { tokenHash: digest(token) },
       });
@@ -835,6 +740,10 @@ export function registerApplication(
       if(invitation?.leaseId&&invitation.acceptedAt&&!invitation.revokedAt&&invitation.email===user.email.toLowerCase()){
         await activeCompany(tx,invitation.companyId);
         return replayLeaseAcceptance(tx,request,invitation);
+      }
+      if (invitation?.acceptedAt && !invitation.contactId && !invitation.leaseId && !invitation.revokedAt) {
+        await replayTeamAcceptance(tx, request, invitation);
+        return { success: true, alreadyAccepted: true };
       }
       if (
         !invitation ||
@@ -855,6 +764,9 @@ export function registerApplication(
       if(invitation.contactId&&!invitation.leaseId)await acceptContactInvitation(tx,request,invitation);
       else if (invitation.leaseId) await acceptLeaseInvitation(tx,request,invitation);
       else {
+      await teamInvitationAuthority(tx, invitation);
+      await tx.$queryRaw`UPDATE "User" SET "updatedAt"="updatedAt" WHERE id=${user.id} RETURNING id`;
+      if (!invitation.accountId) throw new AccessError(409, "ACCOUNT_SETUP_REQUIRED", "Ask the owner to replace this older invitation with one linked to your sign-in account.");
       if (await tx.companyMembership.findUnique({ where: { userId: user.id } }))
         throw new AccessError(
           409,
@@ -872,7 +784,7 @@ export function registerApplication(
       }
       await tx.invitation.update({
         where: { id: invitation.id },
-        data: { acceptedAt: new Date() },
+        data: { acceptedAt: new Date(), version: { increment: 1 } },
       });
       await audit(
         tx,
@@ -882,6 +794,6 @@ export function registerApplication(
         invitation.id,
       );
       return { success: true };
-    });
+    }, true);
   });
 }

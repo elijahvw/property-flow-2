@@ -89,16 +89,18 @@ export function companyScope(
   return companyId;
 }
 export function safeReturnTo(value: unknown): string {
-  // Do not allow authority URLs, backslashes, encoded separators or OAuth URLs.
-  if (
-    typeof value !== "string" ||
-    !/^\/(?:platform|company|resident|account|access|invite|dashboard)(?:\/|$)/.test(
-      value,
-    ) ||
-    /[\\%?#\s]/.test(value)
-  )
-    return "/dashboard";
-  return value.slice(0, 512);
+  if (typeof value !== "string" || value.length > 2048 || /[\\\s#]/.test(value) || !/^\/(?:platform|company|resident|account|access|invite|dashboard|help)(?:\/|\?|$)/.test(value)) return "/dashboard";
+  try {
+    const url = new URL(value, "https://internal.invalid");
+    if (url.origin !== "https://internal.invalid") return "/dashboard";
+    // Decode once and reject encoded separators/control characters, double
+    // encoding and dot traversal rather than trusting URL normalization.
+    if (url.pathname.split("/").some(segment => /[\\/%?#\s]/.test(decodeURIComponent(segment)) || [".",".."].includes(decodeURIComponent(segment))) || /(?:^|\/)(?:\.|%2e){1,2}(?:\/|$)/i.test(value.split("?")[0])) return "/dashboard";
+    const allowed = new Set(["propertyId","unitId","leaseId","residentId","contactId","tenantId","tenantContact","tenantProperty","tenantAccess","tenantRental","tenantRecords","leaseReturn","section","status","access","rental","records","attention","approvals","view","age","kind","dateFrom","dateTo","statementFrom","new"]);
+    const query = new URLSearchParams();
+    for (const [key,item] of url.searchParams) if (allowed.has(key) && item.length <= 200 && !/[\\\x00-\x1f\x7f]/.test(item)) query.set(key,item);
+    return url.pathname + (query.size ? `?${query}` : "");
+  } catch { return "/dashboard"; }
 }
 export function defaultDestination(user: Principal) {
   const p = permissions(user);

@@ -35,7 +35,7 @@ function Residents({ id }: { id: string }) {
       <header className="page-heading page-heading-row">
         <div>
           <p className="eyebrow">Property workspace</p>
-          <h1>Residents</h1>
+          <h1>Tenant access</h1>
           <p>
             People with access to this property. Assignments and leases are
             managed separately.

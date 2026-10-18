@@ -46,3 +46,9 @@ test('date range fields show month names, preserve ISO submissions and reject an
  expect(state.requests[0]).toContain('dateFrom=2026-10-01');expect(state.requests[0]).toContain('dateTo=2026-10-31');
  await page.screenshot({path:'/tmp/propertyflow-readable-date-range.png',fullPage:true});
 });
+
+test('report date presets prepare a range without regenerating the saved snapshot',async({page})=>{
+ const state=await fixture(page);await page.goto('/company/reports');await page.getByLabel('Report period',{exact:true}).selectOption('last_month');await expect(page.getByLabel('From date',{exact:true})).toHaveValue('2026-09-01');await expect(page.getByLabel('Through date',{exact:true})).toHaveValue('2026-09-30');await expect(page.getByLabel('Report period',{exact:true})).toHaveValue('last_month');expect(state.requests).toHaveLength(0);
+ await page.getByRole('button',{name:'Generate report'}).click();await expect(page.getByRole('button',{name:'Download CSV'})).toBeVisible();expect(state.requests[0]).toContain('dateFrom=2026-09-01');
+ await page.getByLabel('Report period',{exact:true}).selectOption('month');await expect(page.getByLabel('Through date',{exact:true})).toHaveValue('2026-10-15');expect(state.requests).toHaveLength(1);
+});

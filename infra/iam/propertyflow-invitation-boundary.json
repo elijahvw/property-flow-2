@@ -1,0 +1,14 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "OnlyBrandedInvitationSending",
+      "Effect": "Allow",
+      "Action": ["ses:SendEmail"],
+      "Resource": "arn:aws:ses:us-east-1:800754316001:identity/propertyflow.saasapps.cloud",
+      "Condition": {
+        "StringEquals": {"ses:FromAddress": "invitations@propertyflow.saasapps.cloud"}
+      }
+    }
+  ]
+}

@@ -442,6 +442,24 @@ class MonitoringTests(unittest.TestCase):
         self.assertNotIn("revision", result)
         self.assertEqual(result["containerDefinitions"][0]["image"], "immutable-sha")
 
+    def test_private_scanner_survives_backend_rollout_without_public_ports(self):
+        task = {
+            "family": "propertyflow-dev",
+            "containerDefinitions": [
+                {"name": "app", "image": "old", "environment": [{"name": "OTEL_EXPORTER_OTLP_ENDPOINT", "value": "https://expected"}], "secrets": [{"name": "OTEL_EXPORTER_OTLP_HEADERS", "valueFrom": "secret-ref"}]},
+                {"name": "document-scanner", "image": "clamav/clamav@sha256:" + "a" * 64, "environment": [{"name": "CLAMD_CONF_TCPAddr", "value": "127.0.0.1"}]},
+            ],
+        }
+        result = d.candidate(task, "immutable-sha", "https://expected")
+        self.assertEqual(result["containerDefinitions"][1]["image"], "clamav/clamav@sha256:" + "a" * 64)
+        task["containerDefinitions"][1]["portMappings"] = [{"containerPort": 3310}]
+        with self.assertRaises(ValueError):
+            d.candidate(task, "new", "https://expected")
+        del task["containerDefinitions"][1]["portMappings"]
+        task["containerDefinitions"][1]["environment"][0]["value"] = "0.0.0.0"
+        with self.assertRaises(ValueError):
+            d.candidate(task, "new", "https://expected")
+
     def test_rollout_does_not_accept_circuit_breaker_rollback(self):
         class STS:
             def get_caller_identity(self):

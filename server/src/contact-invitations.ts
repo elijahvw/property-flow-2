@@ -1,3 +1,4 @@
+import { assertInvitationNotSending, INVITATION_SEND_WINDOW_MS, teamInvitationAuthority } from "./invitation-access.js";
 import { contactAccount } from "./resident-accounts.js";
 import { residentCompatibilityProfile } from "./resident-contacts.js";
 import { previewLeaseInvitation } from "./lease-invitations.js";
@@ -18,6 +19,8 @@ import {
   mutation,
   scoped,
   version,
+  submission,
+  sameSubmission,
   type Tx,
 } from "./operational.js";
 import { companyDay } from "./reports.js";
@@ -363,13 +366,19 @@ export function registerContactInvitations(
     auth,
     async (request) => {
       mutation(request, origin);
-      const body = input(request, ["expectedVersion", "approvals"]),
+      const body = input(request, ["expectedVersion", "approvals", "submissionKey"]),
         expectedVersion = version(body.expectedVersion);
       const id = assignmentId(request.params.contactId),
         token = randomBytes(32).toString("base64url");
+      const key = body.submissionKey === undefined ? undefined : submission(body.submissionKey,{id,expectedVersion,approvals:body.approvals});
+      if(key){const replay=await scoped(db,request,"members.manage",async(tx,companyId)=>{
+        const row=await tx.invitation.findFirst({where:{companyId,createdBy:request.principal!.id,submissionKey:key.submissionKey}});
+        if(row)sameSubmission(row.submissionHash!,key.submissionHash);return row;
+      });if(replay)return {id:replay.id,version:replay.version,expiresAt:replay.expiresAt,acceptanceUrl:null,recovered:true,deliveryStatus:replay.deliveryStatus};}
       const accountId = await contactAccount(db, request, "members.manage", provider, id, expectedVersion);
       return scoped(db, request, "members.manage", async (tx, companyId) => {
         await tx.$queryRaw`UPDATE "ResidentContact" SET "updatedAt"="updatedAt" WHERE id=${id} AND "companyId"=${companyId} RETURNING id`;
+        if(key){const replay=await tx.invitation.findFirst({where:{companyId,createdBy:request.principal!.id,submissionKey:key.submissionKey}});if(replay){sameSubmission(replay.submissionHash!,key.submissionHash);return {id:replay.id,version:replay.version,expiresAt:replay.expiresAt,acceptanceUrl:null,recovered:true,deliveryStatus:replay.deliveryStatus};}}
         const contact = await tx.residentContact.findFirst({
           where: { id, companyId, status: "active" },
         });
@@ -384,6 +393,8 @@ export function registerContactInvitations(
           );
         // Replacing a lost/expired link revokes every older contact link, so an
         // earlier message cannot silently remain usable after an owner's review.
+        const sending = await tx.invitation.findFirst({ where: { companyId, contactId: id, acceptedAt: null, revokedAt: null, deliveryStatus: "requesting", deliveryRequestedAt: { gt: new Date(Date.now() - INVITATION_SEND_WINDOW_MS) } } });
+        if (sending) assertInvitationNotSending(sending);
         await tx.invitation.updateMany({
           where: {
             companyId,
@@ -448,6 +459,7 @@ export function registerContactInvitations(
             contactId: id,
             accountId,
             contactLeaseApprovals,
+            ...key,
             email: targetAccount.email.toLowerCase(),
             role: "resident",
             createdBy: request.principal!.id,
@@ -462,6 +474,7 @@ export function registerContactInvitations(
           id: row.id,
           acceptanceUrl: `${origin}/invite?contact=1#${token}`,
           expiresAt: row.expiresAt,
+          version: row.version,
         };
       });
     },
@@ -502,11 +515,7 @@ export function registerContactInvitations(
               "This invitation is expired or unavailable.",
             );
           if (!invitation.contactId && !invitation.leaseId) {
-            await tx.$queryRaw`SELECT set_config('app.company_id',${invitation.companyId},true)`;
-            const company = await tx.company.findFirst({where:{id:invitation.companyId,status:"active"}});
-            const inviter = await tx.user.findUnique({where:{id:invitation.createdBy},include:{membership:true}});
-            if (!company || !inviter || inviter.status !== "active" || !inviter.emailVerified || (inviter.platformRole !== "owner" && (inviter.membership?.companyId !== invitation.companyId || inviter.membership.status !== "active" || inviter.membership.role !== "owner")))
-              throw new AccessError(403,"INVITATION_INVALID","This invitation is no longer available.");
+            await teamInvitationAuthority(tx, invitation);
             return {invitation, contact: null};
           }
           if (invitation.leaseId) {

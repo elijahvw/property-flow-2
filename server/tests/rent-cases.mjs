@@ -1,3 +1,4 @@
+import { newFixturePage } from "./browser-fixture.mjs";
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { chromium, expect } from '@playwright/test';
@@ -120,7 +121,7 @@ export async function rentCases(t, admin, call, app, db) {
  });
  await t.test('real browser committed charge and payment response loss retry once with preserved draft',{skip:!process.env.TEST_FINANCES_BROWSER_URL},async()=>{
   const browser=await chromium.launch({headless:true});try{
-   const page=await browser.newPage(),lost=new Set(),keys={};
+   const page=await newFixturePage(browser),lost=new Set(),keys={};
    await page.route('**/api/**',async route=>{const req=route.request(),u=new URL(req.url());const response=await app.inject({method:req.method(),url:u.pathname+u.search,headers:{...req.headers(),origin:'https://app.test',cookie:'__Host-pf-session=token-owner'},...(req.postData()?{payload:req.postData()}:{})});
     if(req.method()==='POST'&&u.pathname.startsWith(`${root}/${lease.id}/`)){const type=u.pathname.split('/').at(-1);(keys[type]??=[]).push(req.postDataJSON().submissionKey);assert.equal(response.statusCode,200,response.body);if(!lost.has(type)){lost.add(type);return route.abort('failed');}}
     await route.fulfill({status:response.statusCode,contentType:'application/json',body:response.body});

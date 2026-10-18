@@ -1,7 +1,7 @@
 import type { PrismaClient, AuditEvent } from "@prisma/client";
 // Platform-only enrichment. Resolve directory/company names without crossing RLS
 // to read property, lease or financial records on behalf of platform authority.
-export async function auditLabels(db: PrismaClient, events: AuditEvent[]) {
+export async function auditLabels(db: Pick<PrismaClient, "user" | "company">, events: AuditEvent[]) {
   const ids = [
       ...new Set(
         events.flatMap((e) => [e.actorId, ...(e.targetId ? [e.targetId] : [])]),

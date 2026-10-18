@@ -72,7 +72,7 @@ test('stale expense selection stays frozen through background updates until deli
 
 test('empty phone cost view leads to a property-scoped paid expense form and back to maintenance', async ({ page }) => {
   const state = await fixture(page); state.entries = []; await page.setViewportSize({ width: 390, height: 844 }); await page.goto('/company/maintenance/request'); await expect(page.getByText('No expenses linked to this request.', { exact: true })).toBeVisible();
-  await page.getByRole('link', { name: 'Record a paid expense in Finances →', exact: true }).click(); await expect(page.getByRole('dialog', { name: 'Record a transaction', exact: true })).toBeVisible(); await expect(page.getByLabel('Transaction type')).toHaveValue('expense'); await expect(page.getByLabel('Transaction property')).toHaveValue('home'); expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.getByRole('link', { name: 'Record a paid expense in Cash activity →', exact: true }).click(); await expect(page.getByRole('dialog', { name: 'Record a transaction', exact: true })).toBeVisible(); await expect(page.getByLabel('What are you recording?',{exact:true})).toHaveValue('expense'); await expect(page.getByLabel('Transaction property')).toHaveValue('home'); expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await page.getByRole('button', { name: 'Close', exact: true }).click(); await page.getByRole('link', { name: '← Back to maintenance request', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Kitchen tap leak', exact: true })).toBeVisible();
 });
 

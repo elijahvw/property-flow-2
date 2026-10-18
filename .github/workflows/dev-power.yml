@@ -2,10 +2,15 @@ name: Dev Start or Stop
 run-name: Dev ${{ inputs.action }}
 
 on:
+  workflow_call:
+    inputs:
+      action:
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       action:
-        description: Start or stop the development backend and database
+        description: Start or stop the app, document scanner and database
         required: true
         type: choice
         default: stop
@@ -29,6 +34,8 @@ jobs:
     timeout-minutes: 100
     steps:
       - uses: actions/checkout@v4
+      - name: Validate complete power inventory
+        run: python3 scripts/validate-dev-power.py
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -38,11 +45,17 @@ jobs:
         env:
           DEV_POWER_ACTION: ${{ inputs.action }}
         run: bash scripts/dev-power.sh "$DEV_POWER_ACTION"
+      - name: Verify public application after startup
+        if: inputs.action == 'start'
+        run: |
+          public_url=$(python3 -c 'import json; print(json.load(open("config/dev-power.json"))["publicUrl"])')
+          bash scripts/verify-dev-public.sh "$public_url"
+          echo "Application, scanner task and database are running; public readiness checks passed." >> "$GITHUB_STEP_SUMMARY"
       - name: Explain stopped-state costs
         if: success() && inputs.action == 'stop'
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
-          Development backend and database are stopped. Data is retained.
+          Development app, document scanner and database are stopped. Data is retained.
           Storage, load balancer and some networking charges continue.
           AWS automatically restarts a stopped RDS database after seven days.
           Run **Dev Start or Stop** with **start** to bring the environment back up.

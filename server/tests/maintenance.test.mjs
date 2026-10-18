@@ -1,3 +1,4 @@
+import { newFixturePage } from "./browser-fixture.mjs";
 import test from 'node:test';
 import {randomUUID} from 'node:crypto';
 import {chromium, expect} from '@playwright/test';
@@ -77,7 +78,7 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  });
  await t.test('real browser committed response loss replays one row and audit', {skip:!process.env.TEST_MAINTENANCE_BROWSER_URL},async()=>{
  const browser=await chromium.launch({headless:true});try{
- const page=await browser.newPage();let lose=true;const keys=[];
+ const page=await newFixturePage(browser);let lose=true;const keys=[];
  await page.route('**/api/**',async route=>{const req=route.request(),path=new URL(req.url());
  const response=await app.inject({method:req.method(),url:path.pathname+path.search,headers:{...req.headers(),origin:'https://app.test',cookie:'__Host-pf-session=token-resident'},...(req.postData()?{payload:req.postData()}:{})});
  if(req.method()==='POST'){keys.push(req.postDataJSON().submissionKey);assert.equal(response.statusCode,200,response.body);if(lose){lose=false;return route.abort('failed');}}
@@ -162,6 +163,18 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
   const staff=(await call('staff','GET','/api/company/property-directory')).json();assert.deepEqual(staff.items,[{id:'home',activeUnits:1}]);
   assert.equal((await call('resident','GET','/api/company/property-directory')).statusCode,403);
   assert.equal((await call('owner','GET','/api/company/property-directory',null,{'x-company-id':'b'})).statusCode,403);
+ });
+ await t.test('overdue and assignee views match their company attention counts and stay management-only',async()=>{
+  const original=(await admin.query(`SELECT status,"targetOn","assigneeId" FROM "MaintenanceRequest" WHERE id=$1`,[id])).rows[0];
+  try {
+   await admin.query(`UPDATE "MaintenanceRequest" SET status='open',"targetOn"='2000-01-01',"assigneeId"=NULL WHERE id=$1`,[id]);
+   const overdue=await call('manager','GET','/api/company/maintenance?due=overdue&assignee=unassigned');assert.equal(overdue.statusCode,200,overdue.body);assert.ok(overdue.json().some(row=>row.id===id));
+   assert.equal((await call('manager','GET','/api/company/maintenance?due=upcoming')).json().some(row=>row.id===id),false);
+   const overview=(await call('owner','GET','/api/company/overview')).json();assert.ok(overview.maintenance.overdueCount>=1);
+   assert.equal((await call('resident','GET','/api/resident/maintenance?due=overdue')).statusCode,400);
+   assert.equal((await call('manager','GET','/api/company/maintenance?due=invalid')).statusCode,400);
+   assert.equal((await call('foreign','GET','/api/company/maintenance?due=overdue')).json().some(row=>row.id===id),false);
+  } finally {await admin.query(`UPDATE "MaintenanceRequest" SET status=$2,"targetOn"=$3,"assigneeId"=$4 WHERE id=$1`,[id,original.status,original.targetOn,original.assigneeId]);}
  });
  await t.test('company suspension orders before and after maintenance create/replay/read/status',async()=>{
   await admin.query(`UPDATE "User" SET "platformRole"='owner' WHERE id='owner'`);

@@ -159,8 +159,10 @@ test("team and tenants have distinct people, roles, invitations and focused acce
   await page
     .getByRole("button", { name: "Create invitation", exact: true })
     .click();
-  await expect(page.getByLabel("Invitation acceptance link")).toBeVisible();
+  await expect(page.getByLabel("Private invitation link")).toBeVisible();
   expect(state.invites[0]).toEqual({
+    submissionKey: expect.any(String),
+    name: "",
     email: "new-staff@test.invalid",
     role: "staff",
     companyId: "a",

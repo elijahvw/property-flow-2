@@ -1,0 +1,32 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CreateOnlyBoundedInvitationRole",
+      "Effect": "Allow",
+      "Action": ["iam:CreateRole", "iam:PutRolePermissionsBoundary"],
+      "Resource": "arn:aws:iam::800754316001:role/propertyflow-dev-app",
+      "Condition": {
+        "ArnEquals": {"iam:PermissionsBoundary": "arn:aws:iam::800754316001:policy/PropertyFlowInvitationBoundary"}
+      }
+    },
+    {
+      "Sid": "ManageOnlyInvitationRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole", "iam:UpdateAssumeRolePolicy", "iam:UpdateRole", "iam:DeleteRole",
+        "iam:TagRole", "iam:UntagRole", "iam:ListRoleTags", "iam:ListRolePolicies",
+        "iam:GetRolePolicy", "iam:PutRolePolicy", "iam:DeleteRolePolicy",
+        "iam:ListAttachedRolePolicies", "iam:ListInstanceProfilesForRole"
+      ],
+      "Resource": "arn:aws:iam::800754316001:role/propertyflow-dev-app"
+    },
+    {
+      "Sid": "PassInvitationRoleOnlyToTasks",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::800754316001:role/propertyflow-dev-app",
+      "Condition": {"StringEquals": {"iam:PassedToService": "ecs-tasks.amazonaws.com"}}
+    }
+  ]
+}

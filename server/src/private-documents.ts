@@ -39,7 +39,7 @@ export function registerPrivateDocuments(server:FastifyInstance,db:PrismaClient,
       await sourceRecord(tx,companyId,assignmentId(request.params.sourceId));
       const items=await tx.privateDocument.findMany({where:{companyId,...sourceWhere(request.params.sourceId)},select:{id:true,title:true,version:true,archivedAt:true,createdAt:true,versions:{select:metadata,orderBy:{number:'desc'}}},orderBy:[{createdAt:'desc'},{id:'desc'}],take:201});
       if(items.length>200)throw new AccessError(409,'DOCUMENT_LIMIT','This source exceeds the document limit. Ask your administrator to review retention.');
-      return {items};
+      return {items, scanningConfigured: scan.available ? await scan.available() : true};
     }));
     server.post<{Params:Params}>(base,{preValidation:authenticate,bodyLimit:Math.ceil(MAX_DOCUMENT_BYTES/3)*4+8192},request=>{
       mutation(request,origin);

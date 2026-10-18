@@ -359,3 +359,7 @@ test("saving from the deposit directory refreshes its balances immediately", asy
     page.getByText("$1,500.00 held · $0.00 still to collect", { exact: true }),
   ).toBeVisible();
 });
+
+test('deposit setup chooses its lease directly and keeps property context',async({page})=>{
+ const {state,lease}=await fixture(page);await page.route('**/api/company/leases?*',route=>route.fulfill({json:{items:[lease],nextCursor:null}}));await page.goto('/company/deposits?propertyId=home');await page.getByRole('button',{name:'Set up a security deposit',exact:true}).click();await expect(page.getByRole('dialog',{name:'Choose a lease for this deposit'})).toContainText('Maple House');await page.getByRole('button',{name:'Choose this lease',exact:true}).click();await expect(page).toHaveURL(new RegExp('propertyId=home&leaseId='+lease.id));await expect(page.getByRole('heading',{name:'Refundable security deposit',exact:true})).toBeVisible();expect(state.requests.some(path=>path.startsWith('/api/company/rent'))).toBe(false);
+});

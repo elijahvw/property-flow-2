@@ -1,10 +1,10 @@
 # Delegated maintenance — local increment (PF-12/PF-13)
 
-Proposed in [PR #46](https://github.com/elijahvw/property-flow-2/pull/46), stacked after #45/#44. CI and deployment are separate from local validation.
+Foundation merged in [PR #46](https://github.com/elijahvw/property-flow-2/pull/46). Deployment and real-role acceptance remain separately evidenced.
 
-October 17, 2026: implemented locally; no merge, deployment, live provider change or user acceptance. Builds on the existing migration029 staff property scope; migration032 adds default-off execution and immutable work events.
+October 18, 2026: foundation merged; the consolidated staff-access editor and focused due/assignee filters are local refinements. No new deployment, live provider change or user acceptance. Builds on the existing migration029 staff property scope; migration032 adds default-off execution and immutable work events.
 
-An owner opens Team → staff member → Property access and may separately enable maintenance execution. Staff defaults remain read-only. The grant supplies only `maintenance.execute`: no finance, leases, tenant profiles, team administration, maintenance intake, management notes or documents. Changing role/disabling membership or transferring company clears execution authority. Property selections remain an independent requirement; assignment itself grants nothing.
+An owner opens Team → staff member → Staff access and may separately enable maintenance execution. Staff defaults remain read-only. The grant supplies only `maintenance.execute`: no finance, leases, tenant profiles, team administration, maintenance intake, management notes or documents. Changing role/disabling membership or transferring company clears execution authority. Property selections remain an independent requirement; assignment itself grants nothing.
 
 Management opens an existing maintenance request → Assigned work, selects currently active/verified staff with execution and property authority, and records an assignment note. Management may unassign/reassign while unresolved. Reassignment requires acceptance again and immediately removes the previous teammate's read/write/replay access. Disabled/transferred/revoked assignees remain historical references; management can explicitly reassign.
 

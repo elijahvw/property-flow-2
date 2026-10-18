@@ -96,7 +96,8 @@ export function registerResidentProfiles(
             orderBy: [{ createdAt: "desc" }, { id: "desc" }],
             take: 100,
           });
-          return { ...member, assignments, activity };
+          const contact = await tx.residentContact.findFirst({ where:{companyId,userId}, select:{id:true} });
+          return { ...member, contactId:contact?.id || null, assignments, activity };
         },
       );
     },

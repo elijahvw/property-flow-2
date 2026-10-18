@@ -411,13 +411,13 @@ test("plain transaction references and audit names have no internal-ID menus", a
   await fixture(page, true);
   await page.goto("/platform/audit");
   await expect(
-    page.getByRole("cell", { name: "Elijah Ward", exact: false }),
+    page.getByText("Actor: Elijah Ward", { exact: false }),
   ).toBeVisible();
   await expect(
-    page.getByRole("cell", { name: "Automatic rent billing", exact: false }),
+    page.getByText("Actor: Automatic rent billing", { exact: false }),
   ).toBeVisible();
   await expect(
-    page.getByRole("cell").filter({ hasText: "FAP" }).first(),
+    page.getByText("Actor: Elijah Ward · FAP", { exact: false }).first(),
   ).toBeVisible();
   await expect(page.getByText(actorId, { exact: true })).not.toBeVisible();
   await expect(page.getByText("Actor details", { exact: true })).toHaveCount(0);

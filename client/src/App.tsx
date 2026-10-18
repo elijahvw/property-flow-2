@@ -1,3 +1,5 @@
+import { ContextHelp } from "./components/ContextHelp";
+import { WorkspaceGuide } from "./components/WorkspaceGuide";
 import { recordBrowserEvent } from "./browser-telemetry";
 import React, { Component, lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
@@ -18,6 +20,7 @@ import { NavigationIcon } from "./components/NavigationIcon";
 import { EmailVerification } from "./components/EmailVerification";
 import "./App.css";
 
+const Help = lazy(() => import("./pages/Help").then(module=>({default:module.Help})));
 const Companies = lazy(() => import("./pages/Workspace").then(module => ({ default: module.Companies })));
 const CompanyDetail = lazy(() => import("./pages/Workspace").then(module => ({ default: module.CompanyDetail })));
 const People = lazy(() => import("./pages/Workspace").then(module => ({ default: module.People })));
@@ -84,6 +87,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const main = useRef<HTMLElement>(null);
   const route =
+    (location.pathname.startsWith("/help/") ? routes.find(r=>r.path==="/help") : undefined) ||
     routes.find((r) => r.path === location.pathname) ||
     (location.pathname.startsWith("/company/properties/")
       ? routes.find((r) => r.path === "/company/properties")
@@ -138,7 +142,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                 r.path.startsWith("/platform/") ||
                 /members|settings/.test(r.path)
                   ? "Administration"
-                  : r.path === "/account"
+                  : ["/account","/help"].includes(r.path)
                     ? "Account"
                     : /finances|reports|rent|deposits/.test(r.path)
                       ? "Money"
@@ -165,7 +169,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             ) : null;
           })}
         </nav>
-        <div className="sidebar-footer">
+        <div className={`sidebar-footer ${menuOpen ? "expanded" : ""}`}>
           {user ? (
             <>
               <strong>{user.name || user.email}</strong>
@@ -195,6 +199,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             <span>{route?.title || route?.section || "Workspace"}</span>
           </div>
           {data?.permissions.includes("property.read") && <PropertySearch />}
+          <ContextHelp/>
           <span className="badge">Development</span>
         </header>
         <main ref={main} id="main" tabIndex={-1}>
@@ -218,7 +223,7 @@ function Destination() {
   return <Navigate to={data?.destination || "/access"} replace />;
 }
 function Home() {
-  const { user, signIn } = useAuth();
+  const { user, signIn, switchAccount } = useAuth();
   const failed = new URLSearchParams(window.location.search).has("authError");
   return (
     <div className="landing">
@@ -238,8 +243,8 @@ function Home() {
         </p>
         {failed && (
           <p className="notice error" role="alert">
-            Sign-in could not be completed. Try again, or contact your
-            administrator.
+            Sign-in could not be completed. Use the sign-in method associated
+            with your invitation, or try a different account.
           </p>
         )}
         {user ? (
@@ -249,6 +254,8 @@ function Home() {
         ) : (
           <button onClick={signIn}>Sign in to Property Flow</button>
         )}
+        {failed && !user && <button className="secondary" onClick={switchAccount}>Use a different account</button>}
+        <p><Link to="/help/invitations">Sign-in and invitation help</Link></p>
       </section>
     </div>
   );
@@ -281,19 +288,19 @@ function Pages() {
     "/resident/rent": <Rent resident />,
     "/company/reports": <Reports />,
     "/account": <Account />,
+    "/help": <Help/>,
   };
   return (
     <Routes>
       <Route path="/" element={<Home />} />
+      <Route path="/help/:articleId" element={<Shell><Help/></Shell>}/>
       {routes.map((r) => (
         <Route
           key={r.path}
           path={r.path}
           element={
             <Shell>
-              <ProtectedRoute permission={r.permission}>
-                {pages[r.path]}
-              </ProtectedRoute>
+              {r.path === "/help" ? pages[r.path] : <ProtectedRoute permission={r.permission}>{pages[r.path]}</ProtectedRoute>}
             </Shell>
           }
         />
@@ -461,6 +468,7 @@ export default function App() {
         <AuthProvider>
           <FeedbackProvider>
             <Pages />
+            <WorkspaceGuide/>
           </FeedbackProvider>
         </AuthProvider>
       </BrowserRouter>

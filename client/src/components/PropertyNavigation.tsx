@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
 export function propertyLink(
@@ -56,12 +56,12 @@ function PropertyName({ id }: { id: string }) {
 }
 function PropertyTabs({ id, name }: { id: string; name?: string }) {
   const { can } = useAuth(),
-    location = useLocation();
+    location = useLocation(), navigate=useNavigate();
   const root = `/company/properties/${encodeURIComponent(id)}`;
   const tabs = [
     ["Property details", root, "property.read"],
     ["Units", root + "/units", "property.read"],
-    ["Residents", root + "/residents", "resident.assignment.manage"],
+    ["Tenant access", root + "/residents", "resident.assignment.manage"],
     ["Leases", propertyLink("/company/leases", id), "lease.manage"],
     [
       "Maintenance",
@@ -70,7 +70,7 @@ function PropertyTabs({ id, name }: { id: string; name?: string }) {
     ],
     ["Rent & balances", propertyLink("/company/rent", id), "finance.manage"],
     ["Deposits", propertyLink("/company/deposits", id), "finance.manage"],
-    ["Finances", propertyLink("/company/finances", id), "finance.manage"],
+    ["Cash activity", propertyLink("/company/finances", id), "finance.manage"],
     ["Reports", propertyLink("/company/reports", id), "finance.manage"],
   ];
   return (
@@ -100,6 +100,7 @@ function PropertyTabs({ id, name }: { id: string; name?: string }) {
           ) : null;
         })()}
       </div>
+      <label className="context-select">Property section<select aria-label="Property section" value={tabs.find(([,path])=>path.split("?")[0]===location.pathname)?.[1] || root} onChange={event=>navigate(event.target.value)}>{tabs.filter(([, ,p])=>can(p as Parameters<typeof can>[0])).map(([title,path])=><option key={path} value={path}>{title}</option>)}</select></label>
       <nav className="context-tabs" aria-label="Property navigation">
         {tabs
           .filter(([, , p]) => can(p as Parameters<typeof can>[0]))

@@ -962,3 +962,18 @@ button, .button { border-radius: 6px; }
   .core-table .row-actions { display:flex; flex-wrap:wrap; align-items:start; gap:1rem; padding-top:.5rem; }
   .row-more summary,.core-table .tenant-row-action { display:inline-flex; align-items:center; min-height:44px; }
 }
+
+/* Keep the mobile shell compact; account actions live with the expanded menu. */
+.context-select,.lease-section-select { display:none; }
+@media(max-width:700px) {
+ .sidebar-footer:not(.expanded) { display:none; }
+ .sidebar .workspace-label { margin-top:.45rem; font-size:.75rem; }
+ .topbar { height:52px; padding:.5rem 1rem; }
+ .context-tabs { display:none; }
+ .context-select,.lease-section-select { display:flex; flex-direction:column; gap:.35rem; margin:.75rem 0; font-size:.8rem; }
+ .lease-section-nav { display:none; }
+ .sidebar .nav-sections.expanded { gap:.5rem; }
+}
+
+.context-help { flex-shrink:0; font-weight:550; padding:.5rem .25rem; }
+.report-shortcuts { margin:0 0 1.5rem; column-gap:1.25rem; }
