@@ -413,7 +413,7 @@ function LeaseWorkspace({ id }: { id: string }) {
       >
         {draftLease && (
           <Form
-            key={`${draftLease.id}:${draftLease.version}`}
+            key={`${draftLease.id}:${draftLease.version}:${draftLease.status}`}
             label="Save lease terms"
             operation="lease.update"
             secondaryActions={

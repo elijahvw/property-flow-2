@@ -41,8 +41,9 @@ export async function contactEligible(tx: Tx, companyId: string, id: string, pro
   if(!selected)throw new AccessError(404,"NOT_FOUND","Tenant not found.");
   if(selected.userId){
     const member=await tx.companyMembership.findUnique({where:{userId:selected.userId}});
+    if(member&&member.companyId!==companyId)throw new AccessError(404,"NOT_FOUND","Resident not found.");
     const account=await tx.user.findUniqueOrThrow({where:{id:selected.userId}});
-    if(account.status!=="active" || (member&&(member.companyId!==companyId||member.role!=="resident"||member.status!=="active")))throw new AccessError(409,"RESIDENT_INELIGIBLE","Review this account's current company access before using it on a lease.");
+    if(account.status!=="active" || (member&&(member.role!=="resident"||member.status!=="active")))throw new AccessError(409,"RESIDENT_INELIGIBLE","Review this account's current company access before using it on a lease.");
     if(member){if(assign)await connectProperty(tx,companyId,selected.userId,propertyId);else await eligible(tx,companyId,selected.userId,propertyId);}
   }
   await tx.$queryRaw`UPDATE "ResidentContact" SET "updatedAt"="updatedAt" WHERE id=${id} AND "companyId"=${companyId} RETURNING id`;

@@ -179,6 +179,9 @@ test('lease overview prompts only for an actual draft and outstanding owner appr
 });
 test('draft activation opens a reviewed Active status and saves that intent',async({page})=>{
  const state=await fixture(page);state.lease.status='draft';await page.goto('/company/leases/shared');
+ await page.getByRole('button',{name:'Edit lease record',exact:true}).click();
+ await expect(page.getByRole('dialog',{name:'Review lease terms'}).getByRole('combobox',{name:'Lease status',exact:true})).toHaveValue('draft');
+ await page.getByRole('dialog',{name:'Review lease terms'}).getByRole('button',{name:'Close',exact:true}).click();
  await page.getByRole('button',{name:'Review draft & activate',exact:true}).click();
  const dialog=page.getByRole('dialog',{name:'Review lease terms'});
  await expect(dialog.getByRole('combobox',{name:'Lease status',exact:true})).toHaveValue('active');
