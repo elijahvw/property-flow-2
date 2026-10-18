@@ -1,5 +1,7 @@
 # Local feature release notes — October 17, 2026
 
+Proposed in [PR #46](https://github.com/elijahvw/property-flow-2/pull/46), stacked after #45/#44. CI and deployment are separate from local validation.
+
 PR implementation; not merged, deployed or accepted. The user will handle deployment after merging the pending stack.
 
 - Private document foundation (migration031): management uploads against leases/maintenance, retained immutable versions, quarantine and a fail-closed ClamAV adapter, audited downloads, archive/restore and bounded private database storage. No public frontend storage or implicit resident/staff sharing. Real scan/download activation requires a maintained ClamAV runtime; not configured or verified here. [Contract](private-documents.md).

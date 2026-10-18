@@ -1,5 +1,7 @@
 # Private documents — local foundation (PF-15)
 
+Proposed in [PR #46](https://github.com/elijahvw/property-flow-2/pull/46), stacked after #45/#44. CI and deployment are separate from local validation.
+
 October 17, 2026: implemented locally; not merged, deployed or user-accepted. The user selected private uploads and deferred deployment. No live storage, scanner or provider configuration was changed.
 
 Owners/managers upload PDF, PNG, JPEG and UTF-8 text originals to an exact lease or maintenance request. Lease workspace → Documents and maintenance detail → Private documents provide upload, versions, scan, download and archive/restore. Upload never shares a document. Residents and staff have no document authority in this increment, including assigned maintenance staff. Explicit recipient sharing and resident uploads remain future work.
