@@ -41,8 +41,9 @@ export async function contactEligible(tx: Tx, companyId: string, id: string, pro
   if(!selected)throw new AccessError(404,"NOT_FOUND","Tenant not found.");
   if(selected.userId){
     const member=await tx.companyMembership.findUnique({where:{userId:selected.userId}});
+    if(member&&member.companyId!==companyId)throw new AccessError(404,"NOT_FOUND","Resident not found.");
     const account=await tx.user.findUniqueOrThrow({where:{id:selected.userId}});
-    if(account.status!=="active" || (member&&(member.companyId!==companyId||member.role!=="resident"||member.status!=="active")))throw new AccessError(409,"RESIDENT_INELIGIBLE","Review this account's current company access before using it on a lease.");
+    if(account.status!=="active" || (member&&(member.role!=="resident"||member.status!=="active")))throw new AccessError(409,"RESIDENT_INELIGIBLE","Review this account's current company access before using it on a lease.");
     if(member){if(assign)await connectProperty(tx,companyId,selected.userId,propertyId);else await eligible(tx,companyId,selected.userId,propertyId);}
   }
   await tx.$queryRaw`UPDATE "ResidentContact" SET "updatedAt"="updatedAt" WHERE id=${id} AND "companyId"=${companyId} RETURNING id`;
@@ -279,8 +280,8 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
       if (outsideTerm || draftWithPayment) throw new AccessError(409, "LEASE_RENT_CONFLICT", "These lease changes conflict with posted rent. Correct affected charges before changing their term; a lease with active charges or payments cannot become a draft. Posted amounts are never recalculated by a lease edit.");
       // Historical ended records remain editable after resident revocation/transfer.
       if (data.status !== "ended") {
-        if(previous.residentId)await eligible(tx, companyId, previous.residentId, previous.propertyId);
-        else if(previous.residentContactId)await contactEligible(tx,companyId,previous.residentContactId,previous.propertyId);
+        if(previous.residentContactId)await contactEligible(tx,companyId,previous.residentContactId,previous.propertyId);
+        else if(previous.residentId)await eligible(tx, companyId, previous.residentId, previous.propertyId);
       }
       const unit = await lockUnit(tx, companyId, previous.unitId);
       if (data.status !== "ended" && unit.status !== "active") throw new AccessError(409, "UNIT_ARCHIVED", "Restore this unit before reopening a lease.");

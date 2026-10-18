@@ -30,6 +30,20 @@ export async function residentAccountCases(t,db,admin,call,provider,remote,count
   assert.ok(household.contacts.some(c=>c.id===person.id),'accounts awaiting first sign-in remain selectable');
   const before=counts().create;assert.equal(ok(await call('owner','POST','/api/company/leases',leaseBody)).id,lease.id);assert.equal(counts().create,before);
  });
+ await t.test('draft activation and edits use the prepared tenant without granting portal access',async()=>{
+  const update={startsOn:leaseBody.startsOn,endsOn:leaseBody.endsOn,monthlyRent:leaseBody.monthlyRent,status:'active',expectedVersion:lease.version};
+  lease=ok(await call('owner','PATCH','/api/company/leases/'+lease.id,update));
+  assert.equal(lease.status,'active');
+  assert.equal(await db.companyMembership.findUnique({where:{userId:accountId}}),null);
+  assert.equal((await admin.query('SELECT count(*)::int n FROM "ResidentPropertyAssignment" WHERE "userId"=$1',[accountId])).rows[0].n,0);
+  assert.equal((await db.user.findUniqueOrThrow({where:{id:accountId}})).firstSignedInAt,null);
+  await admin.query(`UPDATE "User" SET status='disabled' WHERE id=$1`,[accountId]);
+  try {
+   const blocked=await call('owner','PATCH','/api/company/leases/'+lease.id,{...update,monthlyRent:'1100',expectedVersion:lease.version});
+   assert.equal(blocked.statusCode,409);assert.equal(blocked.json().code,'RESIDENT_INELIGIBLE');
+   assert.equal((await admin.query('SELECT "rentCents" FROM "Lease" WHERE id=$1 AND "companyId"=$2',[lease.id,'a'])).rows[0].rentCents,100000);
+  } finally { await admin.query(`UPDATE "User" SET status='active' WHERE id=$1`,[accountId]); }
+ });
  await t.test('editing the current tenant name updates the same Auth0 account and local mirror',async()=>{
   const current=ok(await call('owner','GET',root+'/'+person.id));
   const before=counts().create;
