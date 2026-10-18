@@ -929,6 +929,7 @@ function StaffPropertyForm({ value, member, saved }: { value: StaffPropertyScope
   const describe = (v: { scope: string; propertyIds: string[] }) => v.scope === "all" ? "All company properties" : v.propertyIds.length ? `${v.propertyIds.length} selected ${v.propertyIds.length === 1 ? "property" : "properties"}` : "No properties";
   return <>
     <p>Staff can view property and unit records. Financial records, leases, tenant profiles and maintenance management require separate authority.</p>
+    {scope === "selected" && <label>Find a property<input type="search" value={search} onChange={e => setSearch(e.target.value)} /></label>}
     <Form operation="membership.update" feedbackText="Staff property access saved." label="Save staff access" submit={async () => {
       await api(`/api/company/members/${encodeURIComponent(member.userId)}/property-access`, { method: "PUT", body: { scope, propertyIds: scope === "all" ? [] : selected, maintenanceExecution, expectedVersion: value.expectedVersion } });
       saved();
@@ -940,7 +941,6 @@ function StaffPropertyForm({ value, member, saved }: { value: StaffPropertyScope
       {scope === "all" ? <p>Includes current properties and properties added later.</p> : <fieldset>
         <legend>Choose properties</legend>
         <p>{selected.length ? `${selected.length} selected` : "No properties selected. Saving revokes all property access."}</p>
-        <label>Find a property<input type="search" value={search} onChange={e => setSearch(e.target.value)} /></label>
         {!value.properties.length ? <p>Add a property to the company before granting access.</p> : !shown.length ? <p>No properties match your search.</p> : <div className="staff-property-options">{shown.map(p => <label className="staff-property-option" key={p.id}>
           <input type="checkbox" checked={selected.includes(p.id)} onChange={e => setSelected(ids => e.target.checked ? [...ids, p.id] : ids.filter(id => id !== p.id))} />
           <span><strong>{p.name}</strong><small>{p.address}</small></span>

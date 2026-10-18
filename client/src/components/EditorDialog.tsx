@@ -71,7 +71,7 @@ export function EditorDialog({
   const notify = useFeedback();
   const fields = () => Array.from(dialog.current?.querySelectorAll<
     HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-  >('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea') || [])
+  >('input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="search"]), select, textarea') || [])
     .filter(field => !('readOnly' in field && field.readOnly));
   const fieldValue = (field: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) => {
     if (field instanceof HTMLInputElement) {
