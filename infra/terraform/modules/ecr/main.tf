@@ -175,6 +175,11 @@ resource "aws_ecs_task_definition" "app" {
       essential = true
       cpu       = 256
       memory    = 3072
+      # Finish the first signature update before clamd loads its database.
+      # Concurrent first startup can otherwise load old data before freshclam's
+      # notification socket exists; periodic SelfCheck cannot detect that race.
+      entryPoint = ["/bin/sh", "-c"]
+      command    = ["freshclam --foreground --stdout && exec /init"]
       # No port mapping. ECS containers share loopback; the daemon binds only it.
       environment = [
         { name = "CLAMD_CONF_TCPAddr", value = "127.0.0.1" },
@@ -190,7 +195,7 @@ resource "aws_ecs_task_definition" "app" {
         { name = "FRESHCLAM_CHECKS", value = "12" }
       ]
       healthCheck = {
-        command  = ["CMD-SHELL", "clamdcheck.sh"]
+        command  = ["CMD-SHELL", "test \"$(echo PING | nc 127.0.0.1 3310)\" = PONG"]
         interval = 30, timeout = 5, retries = 3, startPeriod = 300
       }
       logConfiguration = {
