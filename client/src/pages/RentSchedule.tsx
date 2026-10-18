@@ -12,8 +12,8 @@ import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
-import { Form } from "./Workspace";
-import { dollars } from "./Finances";
+import { Form } from "../components/Form";
+import { dollars } from "../money";
 type Lease = {
   id: string;
   version: number;

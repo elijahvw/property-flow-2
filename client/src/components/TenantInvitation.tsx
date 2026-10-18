@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
 import { useResource } from "../useResource";
-import { Form } from "../pages/Workspace";
+import { Form } from "./Form";
 import { formatDate } from "../dates";
 export type ContactInvitationState = {
   id: string;
@@ -14,6 +14,7 @@ type InviteContact = {
   email: string | null;
   version: number;
   userId: string | null;
+  portal?: {state:string}|null;
   status: string;
   leases: {
     id: string;
@@ -50,7 +51,7 @@ export function TenantInvitation({
       <div className="invitation-result">
         <h3>Invitation link ready</h3>
         <p>
-          Share this private link with the tenant. They can request account
+          The Auth0 sign-in account is ready. Share this private link with the tenant. They can request password
           setup emails, verify their email, then sign in and accept. It connects
           to the profile you already saved.
         </p>
@@ -102,8 +103,8 @@ export function TenantInvitation({
       </div>
     );
   const person = r.data;
-  if (person.userId)
-    return <p>This tenant already has a linked portal account.</p>;
+  if (person.portal)
+    return <p>This account already has portal access configured. Manage its access from the tenant record.</p>;
   if (!person.email || person.status !== "active")
     return (
       <p>
@@ -180,8 +181,8 @@ export function TenantInvitation({
         shown above.
       </label>
       <p className="help">
-        You’ll get a private link to share. Creating the link does not send an
-        email or activate access. The tenant completes setup and verified
+        You’ll get a private link to share. This invitation uses their existing Auth0 account. It does not create another user, send an
+        email or activate portal access. The tenant completes setup and verified
         acceptance first.
       </p>
     </Form>

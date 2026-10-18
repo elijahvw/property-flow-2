@@ -1,3 +1,5 @@
+import { prepareAccount, saveAccount } from "./resident-accounts.js";
+import type { IdentityProvider } from "./identity-provider.js";
 import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { companyDay } from "./reports.js";
@@ -39,6 +41,7 @@ const limits = {
 } as const;
 const fields = [...Object.keys(limits), "preferredContact"];
 const contactSelect = {
+  user: {select:{id:true,email:true,emailVerified:true,firstSignedInAt:true}},
   id: true,
   userId: true,
   name: true,
@@ -125,6 +128,10 @@ async function portal(tx: Tx, companyId: string, userId: string | null) {
       user: { select: { status: true, emailVerified: true } },
     },
   });
+  if (!member) {
+    const assigned=await tx.companyMembership.findUnique({where:{userId},select:{userId:true}});
+    return assigned ? {userId,state:"disabled",membershipVersion:null,manageable:false} : null;
+  }
   return {
     userId,
     state:
@@ -188,7 +195,7 @@ export async function contactDirectory(tx: Tx, companyId: string) {
   const result = [
     ...contacts.map((c) => {
       const member = c.userId ? memberMap.get(c.userId) : undefined;
-      const state = !c.userId
+      const state = !member
         ? c.invitations.length
           ? "pending"
           : "offline"
@@ -277,9 +284,10 @@ export function registerContactRecords(
   db: PrismaClient,
   authenticate: preValidationHookHandler,
   origin: string,
+  provider?: IdentityProvider,
 ) {
   const auth = { preValidation: authenticate };
-  server.post("/api/company/resident-contacts", auth, (request) => {
+  server.post("/api/company/resident-contacts", auth, async (request) => {
     mutation(request, origin);
     const b = input(request, [...fields, "submissionKey", "duplicateReviewed"]),
       data = details(b);
@@ -293,6 +301,15 @@ export function registerContactRecords(
         "Duplicate review must be true or false.",
       );
     const key = submission(b.submissionKey, data);
+    const replay=await scoped(db,request,"resident.assignment.manage",async(tx,companyId)=>{
+      const previous=await tx.residentContact.findFirst({where:{companyId,createdById:request.principal!.id,submissionKey:key.submissionKey},select:{...contactSelect,submissionHash:true}});
+      if(previous){sameSubmission(previous.submissionHash!,key.submissionHash);const{submissionHash:_hash,...row}=previous;return row;}
+      if (!b.duplicateReviewed && await tx.residentContact.findFirst({where:{companyId,OR:[{name:{equals:data.name,mode:"insensitive"}},...(data.email?[{email:{equals:data.email,mode:"insensitive" as const}}]:[])]},select:{id:true}}))
+        throw new AccessError(409,"POSSIBLE_DUPLICATE","A tenant with this name or email already exists. Review the directory, or confirm this is a separate person before saving.");
+      return null;
+    });
+    if(replay)return replay;
+    const account=await prepareAccount(provider,data.email,data.name);
     return scoped(
       db,
       request,
@@ -339,9 +356,12 @@ export function registerContactRecords(
             "POSSIBLE_DUPLICATE",
             "A tenant with this name or email already exists. Review the directory, or confirm this is a separate person before saving.",
           );
+        const userId=await saveAccount(tx,request,account,companyId);
+        if(await tx.residentContact.findFirst({where:{companyId,userId},select:{id:true}}))throw new AccessError(409,"CONTACT_EXISTS","This account already has tenant details in this company. Open the existing tenant; no duplicate account was created.");
         const row = await tx.residentContact.create({
           data: {
             companyId,
+            userId,
             ...data,
             createdById: request.principal!.id,
             ...key,
@@ -459,7 +479,7 @@ export function registerContactRecords(
   server.patch<{ Params: { contactId: string } }>(
     "/api/company/resident-contacts/:contactId",
     auth,
-    (request) => {
+    async (request) => {
       mutation(request, origin);
       const id = assignmentId(request.params.contactId),
         b = input(request, [...fields, "expectedVersion", "status"]),
@@ -472,6 +492,23 @@ export function registerContactRecords(
           "INVALID_INPUT",
           "Choose active or archived.",
         );
+      const nameTarget = await scoped(db,request,"resident.assignment.manage",async(tx,companyId)=>{
+        const old=await tx.residentContact.findFirst({where:{id,companyId},select:contactSelect});
+        if(!old)throw new AccessError(404,"NOT_FOUND","Tenant not found in this company.");
+        if(old.version!==expectedVersion)throw conflict();
+        if(old.name===data.name || old.status!=="active" || status!=="active" || !old.userId)return null;
+        const user=await tx.user.findUniqueOrThrow({where:{id:old.userId},include:{identities:true,membership:true}});
+        // Historical business records confer no authority over a transferred or
+        // platform administrator's account. Current resident accounts may sync.
+        if(user.status!=="active" || user.platformRole || (user.membership && (user.membership.companyId!==companyId || user.membership.role!=="resident" || user.membership.status!=="active")))return null;
+        const identity=user.identities.find(i=>i.issuer===provider?.issuer);
+        if(!provider || !identity)throw new AccessError(503,"IDENTITY_NOT_CONFIGURED","This account's name cannot be updated until its Auth0 connection is available. Review it in Property Flow Users.");
+        return {userId:user.id,updatedAt:user.updatedAt,subject:identity.subject};
+      });
+      if(nameTarget){
+        const remote=await provider!.rename(nameTarget.subject,data.name);
+        if(remote.user_id!==nameTarget.subject || remote.name!==data.name)throw new AccessError(409,"IDENTITY_PROFILE_CONFLICT","Auth0 did not confirm the account name. Refresh and retry.");
+      }
       return scoped(
         db,
         request,
@@ -499,6 +536,12 @@ export function registerContactRecords(
             select: contactSelect,
           });
           if (old.version !== expectedVersion) throw conflict();
+          if(nameTarget){
+            const user=await tx.user.findUniqueOrThrow({where:{id:nameTarget.userId},include:{membership:true,identities:true}});
+            if(old.userId!==user.id || user.updatedAt.getTime()!==nameTarget.updatedAt.getTime() || user.status!=="active" || user.platformRole || !user.identities.some(i=>i.issuer===provider!.issuer&&i.subject===nameTarget.subject) || (user.membership && (user.membership.companyId!==companyId || user.membership.role!=="resident" || user.membership.status!=="active")))throw conflict();
+            await tx.user.update({where:{id:user.id},data:{name:data.name}});
+            await audit(tx,request,companyId,user.id,"user.profile.updated");
+          }
           const company = await tx.company.findUniqueOrThrow({
               where: { id: companyId },
               select: { timezone: true },

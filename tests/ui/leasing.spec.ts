@@ -42,6 +42,23 @@ test('unit creation survives response loss, shows success and explicit new-recor
  await page.getByRole('button',{name:'Create unit',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();expect(state.units.length).toBe(1);expect(state.keys[0]).toBe(state.keys[1]);
  await page.getByRole('button',{name:'Add a unit',exact:true}).click();await expect(page.getByLabel('Unit name',{exact:true})).toHaveValue('');await page.getByLabel('Unit name',{exact:true}).fill('Apartment 2');await page.getByRole('button',{name:'Create unit',exact:true}).click();await expect(page.getByRole('heading',{name:'Apartment 2',exact:true})).toBeVisible();expect(state.keys[2]).not.toBe(state.keys[0]);
 });
+test('lease setup selects the only property and opens its choices without a redundant step',async({page})=>{
+ const state=await fixture(page);state.units.push({id:'u1',label:'Available suite',propertyId:'home',status:'active',version:1});
+ await page.goto('/company/leases');await page.getByRole('button',{name:'Record a lease',exact:true}).click();
+ await expect(page.getByLabel('Property for new lease')).toHaveValue('home');
+ await expect(page.getByLabel('Unit for new lease')).toBeVisible();
+ await expect(page.getByText('Each tenant has one Auth0 account;', {exact:false})).toBeVisible();
+ expect(state.keys).toHaveLength(0);
+});
+test('unit search keeps typing responsive and batches the API query',async({page})=>{
+ const state=await fixture(page);state.units.push({id:'u1',label:'Garden studio',propertyId:'home',status:'active',version:1});
+ const queries:string[]=[];page.on('request',request=>{const url=new URL(request.url());if(url.pathname.endsWith('/units')&&url.searchParams.get('q'))queries.push(url.searchParams.get('q')!);});
+ await page.goto('/company/properties/home/units');await expect(page.getByRole('heading',{name:'Garden studio',exact:true})).toBeVisible();
+ await page.getByLabel('Find unit',{exact:true}).pressSequentially('Garden',{delay:5});
+ await expect(page.getByLabel('Find unit',{exact:true})).toHaveValue('Garden');
+ await expect.poll(()=>queries.at(-1)).toBe('Garden');expect(queries).toHaveLength(1);
+ await page.reload();await expect(page.getByLabel('Find unit',{exact:true})).toHaveValue('Garden');
+});
 test('lease creation retries same key and records exact monthly rent',async({page})=>{
  const state=await fixture(page,'manager');state.units.push({id:'u1',label:'Unit 1',propertyId:'home',status:'active',version:1});state.loseLease=true;
  await page.goto('/company/leases');await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await page.getByLabel('New lease start date').fill('2026-11-01');await page.getByLabel('New lease monthly rent (USD)').fill('1234.56');

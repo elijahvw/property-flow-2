@@ -28,7 +28,7 @@ export async function profileCases(t, admin, call, app, db) {
   const contact = ok(
     await call("owner", "POST", "/api/company/resident-contacts", {
       name: "Recorded legal tenant name",
-      email: "contact@test.invalid",
+      email: "personal@test.invalid",
       phone: "555-0100",
       managementNotes: "PRIVATE MANAGEMENT NOTE",
       submissionKey: randomUUID(),
@@ -38,6 +38,7 @@ export async function profileCases(t, admin, call, app, db) {
     user,
     contact.id,
   ]);
+  await admin.query(`UPDATE "ResidentContact" SET email='contact@test.invalid' WHERE id=$1`,[contact.id]);
   const unit = ok(
       await call("owner", "POST", "/api/company/properties/home/units", {
         label: "Profile home",

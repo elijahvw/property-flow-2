@@ -107,7 +107,7 @@ async function fixture(page: Page, { verified = true, platform = true } = {}) {
         return json({ emailVerified: state.verified });
       if (path.endsWith("/verification"))
         return json({ message: "Verification email requested." });
-      if (path.endsWith("/password-setup"))
+      if ((path.endsWith("/password-setup") || path.endsWith("/password-reset")))
         return json({ message: "Password setup email requested." });
       if (path.endsWith("/membership")) {
         state.membershipRequests.push(req.postDataJSON());
@@ -182,7 +182,7 @@ test("opening Users automatically discovers identities and allows company/owner 
   await expect(
     page.getByText("Verification email requested.", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Send password setup email" }).click();
+  await page.getByRole("button", { name: "Send password reset email" }).click();
   await expect(
     page.getByText("Password setup email requested.", { exact: true }),
   ).toBeVisible();

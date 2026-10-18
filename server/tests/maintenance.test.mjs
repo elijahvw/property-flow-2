@@ -11,6 +11,9 @@ import {registerApplication} from '../dist/application.js';
 import {registerSessions,digest} from '../dist/sessions.js';
 import {permissions} from '../dist/access.js';
 import {maintenanceUpdateCases} from './maintenance-update-cases.mjs';
+import {privateDocumentCases} from './private-document-cases.mjs';
+import {workOrderCases} from './work-order-cases.mjs';
+import {AccessError} from '../dist/access.js';
 import {maintenanceCostCases} from './maintenance-cost-cases.mjs';
 const url=process.env.TEST_MAINTENANCE_DATABASE_URL;
 test('maintenance grants only active company owners/managers',()=>{
@@ -32,7 +35,8 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  }
  for(const [id,company] of [['home','a'],['foreign-home','b']])await admin.query('INSERT INTO "Property" (id,name,address,city,state,zip,"companyId","updatedAt") VALUES ($1,$1,\'street\',\'city\',\'state\',\'zip\',$2,NOW())',[id,company]);
  await admin.query('INSERT INTO "ResidentPropertyAssignment" ("companyId","propertyId","userId") VALUES (\'a\',\'home\',\'resident\'),(\'a\',\'home\',\'other\')');
- const app=Fastify();t.after(()=>app.close());const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(app,db,auth,'https://app.test');
+ const scanControl={fail:false};
+ const app=Fastify();t.after(()=>app.close());const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(app,db,auth,'https://app.test',undefined,{documentScanner:async bytes=>{if(scanControl.gate)await scanControl.gate();if(scanControl.fail)throw new AccessError(503,'SCANNER_UNAVAILABLE','Test scanner unavailable');return bytes.includes(Buffer.from('EICAR'))?'rejected':'clean';}});
  const call=async(user,method,path,payload,extra={})=>{
  if(payload&&method==='PATCH'&&path.startsWith('/api/company/maintenance/')&&!Object.hasOwn(payload,'expectedVersion'))payload={...payload,expectedVersion:(await admin.query('SELECT version FROM "MaintenanceRequest" WHERE id=$1',[path.split('/').pop()])).rows[0]?.version||1};
  if(payload&&method==='PATCH'&&path.startsWith('/api/platform/companies/')&&!Object.hasOwn(payload,'expectedVersion'))payload={...payload,expectedVersion:(await db.company.findUnique({where:{id:path.split('/').pop()}}))?.version};
@@ -272,4 +276,6 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  assert.equal((await call('manager','GET','/api/company/maintenance')).json().length,3);
  assert.equal((await admin.query('SELECT count(*)::int n FROM "MaintenanceRequest"')).rows[0].n,3);
  });
+ await t.test('private document foundation',async sub=>privateDocumentCases(sub,admin,db,call,id,scanControl));
+ await t.test('delegated maintenance workflow',async sub=>workOrderCases(sub,admin,db,call,app));
 });

@@ -18,8 +18,8 @@ import {
   propertyLink,
 } from "../components/PropertyNavigation";
 import { RecordIdentity } from "../components/RecordIdentity";
-import { Form } from "./Workspace";
-import { dollars } from "./Finances";
+import { Form } from "../components/Form";
+import { dollars } from "../money";
 import { downloadReport, moneyCell } from "../report-export";
 type Summary = {
   receivedCents?:string;appliedCents?:string;returnedCents?:string;correctedCents?:string;

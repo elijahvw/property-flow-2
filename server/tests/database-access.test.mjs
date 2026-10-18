@@ -1,3 +1,4 @@
+import {fixtureIdentities} from "./fixture-identities.mjs";
 import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -36,9 +37,10 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
     if (companyId) await admin.query('INSERT INTO "CompanyMembership" ("userId","companyId",role,"updatedAt") VALUES ($1,$2,$3,NOW())', [id,companyId,role]);
     await db.session.create({ data: { tokenHash: digest(`token-${id}`), csrfToken: 'test-csrf', userId: id, expiresAt: new Date(Date.now()+3600000), idleExpiresAt: new Date(Date.now()+3600000) } });
   }
+  const provider=await fixtureIdentities(admin);
   const app = Fastify({routerOptions:{maxParamLength:MAX_USER_ID_BYTES}}); t.after(() => app.close());
   const auth = await registerSessions(app, db, { origin: 'https://app.test', domain: 'unused.auth0.com', clientId: 'test-web', clientSecret: 'test-only', secure: true });
-  registerApplication(app, db, auth, 'https://app.test');
+  registerApplication(app, db, auth, 'https://app.test',provider);
   const call = async (user, method, path, body, extra = {}) => {
     if (body && method==='PATCH' && path.startsWith('/api/platform/companies/') && !Object.hasOwn(body,'expectedVersion')) body={...body,expectedVersion:(await db.company.findUnique({where:{id:path.split('/').pop()}}))?.version};
     if (body && method==='PUT' && path.endsWith('/membership') && !Object.hasOwn(body,'expectedVersion')) body={...body,expectedVersion:(await db.companyMembership.findUnique({where:{userId:decodeURIComponent(path.split('/').at(-2))}}))?.version??null};
@@ -151,7 +153,7 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
     const instance=Fastify({routerOptions:{maxParamLength:MAX_USER_ID_BYTES}});t.after(()=>instance.close());
     instance.setErrorHandler((error,_request,reply)=>reply.code(error.statusCode||500).send({code:error.code,error:error.message}));
     const instanceAuth=await registerSessions(instance,database,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test-web',clientSecret:'test-only',secure:true});
-    registerApplication(instance,database,instanceAuth,'https://app.test');return instance;
+    registerApplication(instance,database,instanceAuth,'https://app.test',provider);return instance;
   };
   const controlledCall = async(instance,user,method,path,body) => {
     if(body&&method==='PUT'&&path.endsWith('/membership')&&!Object.hasOwn(body,'expectedVersion'))body={...body,expectedVersion:(await db.companyMembership.findUnique({where:{userId:decodeURIComponent(path.split('/').at(-2))}}))?.version??null};
@@ -236,13 +238,14 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
           await admin.query('DELETE FROM "ResidentContact" WHERE "userId" = ANY($1::text[])',[[targetId,ownerId]]);
           await admin.query('DELETE FROM "CompanyMembership" WHERE "userId" = ANY($1::text[])',[[targetId,ownerId]]);
           await admin.query('DELETE FROM "Session" WHERE "userId" = ANY($1::text[])',[[targetId,ownerId]]);
+          await admin.query('DELETE FROM "Identity" WHERE "userId" = ANY($1::text[])',[[targetId,ownerId]]);
           await admin.query('DELETE FROM "User" WHERE id = ANY($1::text[])',[[targetId,ownerId]]);
         });
        }
       }
     }
   });
-  await t.test('real stale snapshots exhaust three retries with 409 and no assignment/audit write',async()=>{
+  await t.test('real stale snapshots exhaust five retries with 409 and no assignment/audit write',async()=>{
     const targetId='race-exhaustion';await seedRaceUser(targetId,'resident');
     const a=(await tenantTransaction(db,'a',tx=>tx.property.findMany()))[0];let attempts=0;
     const controlled=await controlledApp(coordinatedDb(async(_tx,execute)=>{
@@ -253,7 +256,7 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
       return execute();
     }));
     const result=await controlledCall(controlled,'manager-a','PUT',`/api/company/properties/${a.id}/residents/${targetId}`);
-    assert.equal(result.statusCode,409,result.body);assert.equal(result.json().code,'ACCESS_CONFLICT');assert.equal(attempts,3);
+    assert.equal(result.statusCode,409,result.body);assert.equal(result.json().code,'ACCESS_CONFLICT');assert.equal(attempts,5);
     assert.deepEqual(await tenantTransaction(db,'a',tx=>tx.residentPropertyAssignment.findMany({where:{userId:targetId}})),[]);
     assert.equal(await db.auditEvent.count({where:{action:'resident.assignment.assigned',targetId}}),0);
   });
@@ -297,8 +300,8 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
     assert.equal((await call('invitee','POST','/api/invitations/accept',{token:acceptanceToken})).statusCode,403);
     await call('manager-a','PATCH','/api/company/members/invitee',{role:'staff',status:'disabled'});
     const invite = await call('platform','POST','/api/invitations',{companyId:'b',role:'owner',email:'invitee@test.invalid'});
-    const token = new URL(invite.json().acceptanceUrl).hash.slice(1);
-    assert.equal((await call('invitee','POST','/api/invitations/accept',{token})).statusCode,409);
+    assert.equal(invite.statusCode,409,invite.body);
+    assert.equal(invite.json().code,'IDENTITY_CONFLICT');
     assert.equal((await db.companyMembership.findUnique({where:{userId:'invitee'}})).status,'disabled');
   });
   await t.test('revoked and expired invitations cannot be accepted', async () => {

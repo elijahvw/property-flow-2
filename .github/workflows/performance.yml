@@ -1,0 +1,55 @@
+name: Local workflow performance
+on:
+  workflow_dispatch:
+    inputs:
+      publish_grafana:
+        description: Publish aggregate results to the Property Flow performance dashboard
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: propertyflow-local-performance
+  cancel-in-progress: false
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: grafana/setup-k6-action@v1
+        with:
+          k6-version: '2.3.0'
+      - run: npm ci --no-audit --no-fund
+      - name: Build production application
+        run: |
+          DATABASE_URL=postgresql://build:build@127.0.0.1:1/propertyflow_access_test npm run build --workspace=server
+          npm run build --workspace=@property-flow/client
+          npx playwright install --with-deps --only-shell chromium
+          docker pull postgres:17-alpine
+      - name: Measure isolated workflows (no preview or cloud application traffic)
+        run: node scripts/test-performance.mjs ci
+      - name: Build aggregate Grafana dashboard
+        if: always()
+        run: node scripts/performance-dashboard.mjs /tmp/propertyflow-performance-ci.json > /tmp/propertyflow-performance-dashboard.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workflow-performance-${{ github.sha }}
+          path: |
+            /tmp/propertyflow-performance-ci.json
+            /tmp/propertyflow-performance-dashboard.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish measured aggregates to Grafana
+        if: success() && inputs.publish_grafana
+        env:
+          GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.GRAFANA_SERVICE_ACCOUNT_TOKEN }}
+        run: python3 scripts/publish-performance.py /tmp/propertyflow-performance-ci.json

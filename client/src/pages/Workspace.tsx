@@ -11,11 +11,10 @@ import {
   UserVerificationControls,
 } from "../components/UserProvisioning";
 import { DraftReset } from "../components/DraftReset";
-import { useFeedback } from "../components/Feedback";
 import { PropertyFields } from "../components/PropertyFields";
-import { EditorDialog, useEditorBusy } from "../components/EditorDialog";
+import { EditorDialog } from "../components/EditorDialog";
 import { UserActivity } from "../components/UserActivity";
-import React, { useEffect, useId, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useUserDirectory } from "../useUserDirectory";
 import {
   Link,
@@ -28,8 +27,8 @@ import { api, ApiError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { monitorOperation } from "../operations";
 import { useResource } from "../useResource";
+import { formatActivityTime } from "../dates";
 import OwnerOnboarding from "../components/OwnerOnboarding";
-import type { OperationName } from "../operation-lifecycle";
 
 type Company = {
   id: string;
@@ -72,103 +71,7 @@ function LoadState({ error, retry }: { error?: string; retry: () => void }) {
     <p role="status">Loading records…</p>
   );
 }
-export function Form({
-  children,
-  submit,
-  label = "Save changes",
-  operation = "account.update",
-  successText = "Saved.",
-  feedbackText,
-  secondaryActions,
-}: {
-  children: React.ReactNode;
-  submit: (data: FormData) => Promise<void>;
-  label?: string;
-  operation?: OperationName;
-  successText?: string;
-  feedbackText?: string;
-  secondaryActions?: React.ReactNode;
-}) {
-  const notify = useFeedback();
-  const editor = useEditorBusy(),
-    formId = useId();
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    [saved, setSaved] = useState(false);
-  useEffect(() => {
-    editor.register(formId, busy);
-    return () => editor.register(formId, false);
-  }, [busy, editor.register, formId]);
-  return (
-    <form
-      className="workflow-form"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        if (busy || editor.busy) return;
-        const data = new FormData(event.currentTarget);
-        setBusy(true);
-        setError("");
-        setSaved(false);
-        notify("");
-        try {
-          await monitorOperation(operation, () => submit(data));
-          setSaved(true);
-          if (
-            operation !== "page.data.load" &&
-            operation !== "auth.session.restore"
-          )
-            notify(
-              feedbackText ||
-              (
-                {
-                  "property.create": "Property created.",
-                  "unit.create": "Unit created.",
-                  "unit.update": "Unit saved.",
-                  "lease.create": "Lease recorded.",
-                  "lease.update": "Lease saved.",
-                  "finance.create": "Transaction recorded.",
-                  "rent.charge": "Rent posted. Balance updated.",
-                  "deposit.setup": "Deposit requirement saved.",
-                  "deposit.update": "Deposit requirement changed; history retained.",
-                  "deposit.receipt": "Deposit received. Held balance updated.",
-                  "deposit.void": "Deposit correction saved; history retained.",
-                  "rent.payment": "Payment recorded. Balance updated.",
-                  "rent.void": "Correction saved; history retained.",
-                  "finance.void": "Correction saved; history retained.",
-                  "membership.update": "Resident or membership changes saved.",
-                  "maintenance.create": "Maintenance request submitted.",
-                  "maintenance.status": "Request status updated.",
-                  "invitation.create":
-                    "Invitation created. Copy its link to share.",
-                  "company.create": "Company created.",
-                  "company.update": "Company saved.",
-                } as Record<string, string>
-              )[operation] || "Changes saved.",
-            );
-        } catch (e) {
-          setError(e instanceof Error ? e.message : "Unable to save changes.");
-        } finally {
-          setBusy(false);
-        }
-      }}
-    >
-      <fieldset disabled={busy || editor.busy}>
-        {children}
-        <div className="actions form-actions">
-          {secondaryActions}
-          <span className="action-spacer" />
-          <button type="submit">{busy ? "Saving…" : label}</button>
-          {saved && <span role="status">{successText}</span>}
-        </div>
-      </fieldset>
-      {error && (
-        <p className="notice error" role="alert">
-          {error}
-        </p>
-      )}
-    </form>
-  );
-}
+import { Form } from "../components/Form";
 const text = (data: FormData, key: string) => String(data.get(key) || "");
 function Field({
   name,
@@ -1039,6 +942,53 @@ export function Team() {
     />
   );
 }
+type StaffPropertyScope = {
+  expectedVersion: number;
+  scope: string;
+  propertyIds: string[];
+  properties: { id: string; name: string; address: string }[];
+  history: { id: string; actorName: string; createdAt: string; detail: { from: { scope: string; propertyIds: string[] }; to: { scope: string; propertyIds: string[] } } }[];
+};
+function StaffPropertyEditor({ member, saved }: { member: Member; saved: () => void }) {
+  const r = useResource<StaffPropertyScope>(`/api/company/members/${encodeURIComponent(member.userId)}/property-access`);
+  return r.data ? <><StaffPropertyForm value={r.data} member={member} saved={saved} /><StaffMaintenanceAccess userId={member.userId} saved={saved} /></> : <LoadState error={r.error} retry={r.reload} />;
+}
+function StaffMaintenanceAccess({ userId, saved }: { userId: string; saved: () => void }) {
+  const r = useResource<{ version: number; maintenanceExecution: boolean }>(`/api/company/members/${encodeURIComponent(userId)}/maintenance-access`);
+  return <section><h3>Maintenance execution</h3><p>Optional authority to accept assigned work, record team progress and submit completion for management review. Existing property scope still applies. This grants no finance, lease or tenant-profile access.</p>{!r.data ? <LoadState error={r.error} retry={r.reload} /> : <Form operation="membership.update" label="Save maintenance access" submit={async data => { await api(`/api/company/members/${encodeURIComponent(userId)}/maintenance-access`, { method: "PUT", body: { enabled: data.get("enabled") === "on", expectedVersion: r.data!.version } }); saved(); }}><label><input name="enabled" type="checkbox" defaultChecked={r.data.maintenanceExecution} />Allow maintenance execution</label><p>Revoking this grant immediately blocks assigned work. Role changes and disabling membership clear the grant.</p></Form>}</section>;
+}
+function StaffPropertyForm({ value, member, saved }: { value: StaffPropertyScope; member: Member; saved: () => void }) {
+  const [scope, setScope] = useState(value.scope);
+  const [selected, setSelected] = useState(value.propertyIds);
+  const [search, setSearch] = useState("");
+  const shown = value.properties.filter(p => `${p.name} ${p.address}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const describe = (v: { scope: string; propertyIds: string[] }) => v.scope === "all" ? "All company properties" : v.propertyIds.length ? `${v.propertyIds.length} selected ${v.propertyIds.length === 1 ? "property" : "properties"}` : "No properties";
+  return <>
+    <p>Staff can view property and unit records. Financial records, leases, tenant profiles and maintenance management require separate authority.</p>
+    <Form operation="membership.update" feedbackText="Staff property access saved." label="Save property access" submit={async () => {
+      await api(`/api/company/members/${encodeURIComponent(member.userId)}/property-access`, { method: "PUT", body: { scope, propertyIds: scope === "all" ? [] : selected, expectedVersion: value.expectedVersion } });
+      saved();
+    }}>
+      <label>Property access<select aria-label="Property access" value={scope} onChange={e => setScope(e.target.value)}>
+        <option value="all">All company properties</option>
+        <option value="selected">Selected properties only</option>
+      </select></label>
+      {scope === "all" ? <p>Includes current properties and properties added later.</p> : <fieldset>
+        <legend>Choose properties</legend>
+        <p>{selected.length ? `${selected.length} selected` : "No properties selected. Saving revokes all property access."}</p>
+        <label>Find a property<input type="search" value={search} onChange={e => setSearch(e.target.value)} /></label>
+        {!value.properties.length ? <p>Add a property to the company before granting access.</p> : !shown.length ? <p>No properties match your search.</p> : <div className="staff-property-options">{shown.map(p => <label className="staff-property-option" key={p.id}>
+          <input type="checkbox" checked={selected.includes(p.id)} onChange={e => setSelected(ids => e.target.checked ? [...ids, p.id] : ids.filter(id => id !== p.id))} />
+          <span><strong>{p.name}</strong><small>{p.address}</small></span>
+        </label>)}</div>}
+      </fieldset>}
+      <p><strong>After saving:</strong> {describe({ scope, propertyIds: selected })}. Property viewing remains read-only. Separately granted maintenance execution also follows this property scope. Changes apply on the next request.</p>
+    </Form>
+    {value.history.length > 0 && <details><summary>Recent property access changes</summary><ul>{value.history.map(h => <li key={h.id}>
+      {formatActivityTime(h.createdAt)} · {h.actorName}: {describe(h.detail.from)} → {describe(h.detail.to)}
+    </li>)}</ul></details>}
+  </>;
+}
 function TeamDirectory() {
   const r = useResource<Member[]>("/api/company/members");
   const { user, data, refreshUser } = useAuth();
@@ -1046,6 +996,7 @@ function TeamDirectory() {
   const [inviting, setInviting] = useState(params.has("invite")),
     [transferring, setTransferring] = useState(false);
   const [selected, setSelected] = useState("");
+  const [propertyMember, setPropertyMember] = useState("");
   const [invitationRevision, setInvitationRevision] = useState(0);
   const team = r.data?.filter((m) => m.role !== "resident");
   const member = team?.find((m) => m.userId === selected);
@@ -1055,8 +1006,8 @@ function TeamDirectory() {
         <p className="eyebrow">Company</p>
         <h1>Team</h1>
         <p>
-          Manage owners, managers and staff. Tenant profiles and property access
-          live in Tenants.
+          Manage owners, managers and staff, including staff property access.
+          Tenant profiles live in Tenants.
         </p>
         <div className="actions">
           <button onClick={() => setInviting(true)}>Invite team member</button>
@@ -1080,6 +1031,7 @@ function TeamDirectory() {
                 </div>
                 <Badge>{m.role}</Badge>
                 <Badge>{m.status}</Badge>
+                {m.role === "staff" && <button className="secondary" onClick={() => setPropertyMember(m.userId)}>Property access</button>}
                 {m.role !== "owner" && (
                   <button
                     className="secondary"
@@ -1093,6 +1045,9 @@ function TeamDirectory() {
           </ul>
         )}
       </section>
+      {team?.find(m => m.userId === propertyMember) && <EditorDialog open title={`Property access for ${team.find(m => m.userId === propertyMember)!.user.name || team.find(m => m.userId === propertyMember)!.user.email}`} onClose={() => setPropertyMember("")}>
+        <StaffPropertyEditor key={propertyMember} member={team.find(m => m.userId === propertyMember)!} saved={() => { setPropertyMember(""); r.reload(); }} />
+      </EditorDialog>}
       {member && (
         <EditorDialog
           open

@@ -40,6 +40,8 @@ server.setErrorHandler((failure, request, reply) => {
   const status =
     error instanceof AccessError
       ? error.statusCode
+      : error.statusCode === 413
+        ? 413
       : error.statusCode === 429
         ? 429
         : code === "P2025"
@@ -52,6 +54,8 @@ server.setErrorHandler((failure, request, reply) => {
   const message =
     error instanceof AccessError
       ? error.message
+      : status === 413
+        ? "The upload exceeds the allowed size. Choose a file up to 5 MB."
       : status === 429
         ? "Too many sign-in attempts. Please wait a minute."
         : status === 404

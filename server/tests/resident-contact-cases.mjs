@@ -123,10 +123,11 @@ export async function residentContactCases(t, admin, call, db) {
     const body = { propertyId:'home',unitId:unit.id,residentId:'resident',startsOn:'2018-01-01',endsOn:'2018-12-31',monthlyRent:'100.01',status:'ended',submissionKey:randomUUID() };
     const lease = ok(await call('owner','POST','/api/company/leases',body));
     const root = `/api/company/leases/${lease.id}/participants`;
-    const details = { name:'Record only',email:'resident@test.invalid',phone:'555-0300',role:'occupant',startsOn:'2018-01-01',endsOn:null,userId:null,submissionKey:randomUUID() };
+    const details = { name:'Record only',email:'record-only@test.invalid',phone:'555-0300',role:'occupant',startsOn:'2018-01-01',endsOn:null,userId:null,submissionKey:randomUUID() };
     const offline = ok(await call('owner','POST',root,details));
     assert.equal(ok(await call('owner','POST',root,details)).contactId, offline.contactId);
-    const second = ok(await call('owner','POST',root,{ ...details,submissionKey:randomUUID() }));
+    assert.equal((await call('owner','POST',root,{...details,submissionKey:randomUUID()})).statusCode,409,'One Auth0 account cannot become duplicate tenant profiles');
+    const second = ok(await call('owner','POST',root,{ ...details,email:'second-record@test.invalid',submissionKey:randomUUID() }));
     assert.notEqual(second.contactId, offline.contactId);
     const primary = ok(await call('owner','GET',root)).items.find(p => p.userId === 'resident');
     assert.equal(primary.contactId, lease.residentContactId);

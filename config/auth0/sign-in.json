@@ -1,0 +1,12 @@
+{
+  "branding": {
+    "colors": {"primary": "#176e59", "page_background": "#f5f7f8"},
+    "logo_path": "/property-flow-mark.svg"
+  },
+  "prompts": {"universal_login_experience": "new", "identifier_first": false},
+  "application": {"name": "Property Flow", "initiate_login_path": "/api/auth/login"},
+  "custom_text": {
+    "login": {"login": {"title": "Sign in to Property Flow", "description": "Use your existing Property Flow account.", "buttonText": "Sign in", "forgotPasswordText": "Forgot your password?"}},
+    "reset-password": {"reset-password": {"title": "Choose your Property Flow password", "description": "Set a password for your existing account.", "buttonText": "Save password"}}
+  }
+}

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
-import { Form } from "../pages/Workspace";
+import { Form } from "./Form";
 export function EmailVerification() {
   const { user, refreshUser } = useAuth(),
     [message, setMessage] = useState("");

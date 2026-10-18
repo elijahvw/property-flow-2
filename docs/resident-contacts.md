@@ -1,3 +1,17 @@
+# Current account policy — October 17, 2026
+
+The user replaced the optional-account policy below. New tenants and every new lease participant require one Auth0 account, prepared from Property Flow before recording their participation. Existing User + exact Identity issuer/subject remains the only account representation; ResidentContact stores company-owned business details and references that account through userId. Invitations reference the same existing account through accountId; they are access/onboarding records, never another account type.
+
+Auth0 creation/reuse happens under fresh management authorization before the final scoped transaction. The local mirror, contact/lease writes and audit commit together. External provider creation cannot share the PostgreSQL transaction; a later local rejection can leave an unassigned Auth0 account, which a retry reuses. A possible-duplicate review occurs before contacting Auth0 and is rechecked at commit. Multiple identities for an email require explicit account review, never automatic merging. Current exact subject bindings take precedence over correspondence email. Account existence grants no membership, property access or financial authority.
+
+Owners can send password-reset email from tenant details; platform owners can do so from Users. Resets resolve the stored issuer/subject and current provider email, cannot accept a caller-selected recipient, enforce cooldown/disabled checks, and never create accounts. Existing social/enterprise accounts use their own sign-in provider. Database onboarding sends one password setup email, which also verifies the address; no redundant verification email is requested. See [sign-in settings](auth0-sign-in.md).
+
+Legacy unbound contacts and financial history are retained without bulk Auth0 creation or email matching. The next authorized lease/household/invitation operation prepares their account, requiring an email when missing. Prior accepted records and removed participants are not rewritten. Existing memberships and approvals continue to gate portal access. No production accounts or provider settings have been modified by local validation.
+
+Migration 202610170030_resident_identity_accounts adds the nullable Invitation.accountId foreign key/index and an immutable target guard. Apply it with the matching server before new invitation writes. The old binary can read the additive schema, but rolling back the server can restore the old delayed-account behavior. Do not drop account/identity/history rows on rollback. Local preview uses a clearly simulated provider and never sends live email.
+
+The sections below document earlier shipped increments and their original policy; this current policy supersedes statements that a new participant can remain accountless.
+
 # Offline tenant contacts: identity, recording and optional portal access
 
 This is the first reviewable slice of PF-03, based on merged PR #34 / main `0e492f8`. The user reports #34 deployed. The [backlog](product-backlog.md) splits contact identity/backfill, offline contact and lease forms, and verified portal linking into separate reviews.

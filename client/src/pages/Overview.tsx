@@ -2,7 +2,7 @@ import { formatDate } from "../dates";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
-import { dollars } from "./Finances";
+import { dollars } from "../money";
 import { propertyLink } from "../components/PropertyNavigation";
 type OverviewData = {
   residentApprovals?: {pendingCount:number};

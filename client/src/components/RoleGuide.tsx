@@ -60,7 +60,7 @@ export function RoleGuide() {
                   ))}
                 {role.permissions.includes("property.read") &&
                   !role.permissions.includes("property.write") && (
-                    <li>View property information</li>
+                    <li>View property information. An owner may separately grant maintenance execution within the selected property scope.</li>
                   )}
                 {role.permissions.includes("resident.self") && (
                   <>

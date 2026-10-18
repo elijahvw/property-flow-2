@@ -1,3 +1,5 @@
+import {staffPropertyAccessCases} from "./staff-property-access-cases.mjs";
+import {fixtureIdentities} from "./fixture-identities.mjs";
 import {renewalCases} from "./renewal-cases.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -34,7 +36,7 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
  }
  for(const [id,company] of [['home','a'],['other-home','a'],['foreign-home','b']])await admin.query(`INSERT INTO "Property"(id,name,address,city,state,zip,"companyId","updatedAt") VALUES($1,$1,'street','city','state','zip',$2,NOW())`,[id,company]);
  await admin.query(`INSERT INTO "ResidentPropertyAssignment"("companyId","propertyId","userId") VALUES('a','home','resident'),('a','home','resident2'),('b','foreign-home','foreign-resident')`);
- const app=Fastify();t.after(()=>app.close());const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(app,db,auth,'https://app.test');
+ const app=Fastify();t.after(()=>app.close());const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(app,db,auth,'https://app.test',await fixtureIdentities(admin));
  const call=(user,method,path,payload,extra={})=>app.inject({method,url:path,headers:{...(user?{cookie:`__Host-pf-session=token-${user}`} : {}),origin:'https://app.test','x-csrf-token':'csrf',...extra},...(payload?{payload}:{})});
  const units='/api/company/properties/home/units',leases='/api/company/leases';
  let unit,lease;
@@ -182,22 +184,28 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
  await t.test('real browser units and lease commit-response-loss replay',{skip:!process.env.TEST_LEASING_BROWSER_URL},async()=>{
   const browser=await chromium.launch({headless:true});try{
    const page=await browser.newPage();let loseUnit=true,loseLease=true;const keys={unit:[],lease:[]};
-   await page.route('**/api/**',async route=>{const req=route.request(),u=new URL(req.url());const response=await app.inject({method:req.method(),url:u.pathname+u.search,headers:{...req.headers(),origin:'https://app.test',cookie:'__Host-pf-session=token-owner'},...(req.postData()?{payload:req.postData()}:{})});
-    if(req.method()==='POST'){
+   await page.route('**/api/**',async route=>{const req=route.request(),u=new URL(req.url());
+    if(u.pathname==='/api/telemetry')return route.fulfill({status:202,json:{accepted:true}});
+    const response=await app.inject({method:req.method(),url:u.pathname+u.search,headers:{...req.headers(),origin:'https://app.test',cookie:'__Host-pf-session=token-owner'},...(req.postData()?{payload:req.postData()}:{})});
+    if(req.method()==='POST'&&(u.pathname===units||u.pathname===leases)){
      const type=u.pathname.endsWith('/units')?'unit':'lease';keys[type].push(req.postDataJSON().submissionKey);assert.equal(response.statusCode,200,response.body);
      if(type==='unit'&&loseUnit){loseUnit=false;return route.abort('failed');}if(type==='lease'&&loseLease){loseLease=false;return route.abort('failed');}
     }
     await route.fulfill({status:response.statusCode,contentType:'application/json',body:response.body});
    });
-   await page.goto(process.env.TEST_LEASING_BROWSER_URL+'/company/properties/home/units');await page.getByRole('button',{name:'Add a unit',exact:true}).click();await page.getByLabel('Unit name',{exact:true}).fill('Browser unit');await page.getByRole('spinbutton',{name:/^Bedrooms/}).fill('0');await page.getByRole('spinbutton',{name:'Bathrooms',exact:true}).fill('2.25');await page.getByRole('spinbutton',{name:/^Market rent/}).fill('1250.01');
+   await page.goto(process.env.TEST_LEASING_BROWSER_URL+'/company/properties/home/units');
+   await page.evaluate(()=>fetch('/api/telemetry',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({operations:[]})}));assert.deepEqual(keys,{unit:[],lease:[]},'telemetry is never a business mutation');
+   await page.getByRole('button',{name:'Add a unit',exact:true}).click();await page.getByLabel('Unit name',{exact:true}).fill('Browser unit');await page.getByRole('spinbutton',{name:/^Bedrooms/}).fill('0');await page.getByRole('spinbutton',{name:'Bathrooms',exact:true}).fill('2.25');await page.getByRole('spinbutton',{name:/^Market rent/}).fill('1250.01');
    await page.getByRole('button',{name:'Create unit',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create unit',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();assert.equal(keys.unit[0],keys.unit[1]);
    const browserUnit=(await admin.query(`SELECT id,bedrooms,"bathroomsHundredths","marketRentCents" FROM "Unit" WHERE label='Browser unit'`)).rows;assert.equal(browserUnit.length,1);assert.equal(browserUnit[0].bedrooms,0);assert.equal(browserUnit[0].bathroomsHundredths,225);assert.equal(browserUnit[0].marketRentCents,125001);await expect(page.locator('.feedback-region')).toContainText('Unit created.');
    await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Leases',exact:true}).click();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await page.getByLabel('Unit for new lease').selectOption(browserUnit[0].id);
+   const candidates=(await call('owner','GET','/api/company/properties/home/residents?includeContacts=true')).json();const primary=candidates.find(p=>p.userId==='resident');assert.ok(primary);await page.getByLabel('Primary resident').selectOption(primary.contactId||primary.userId);
    await page.getByLabel('New lease start date').fill('2026-11-01');await page.getByLabel('New lease end date',{exact:true}).fill('2027-10-31');await page.getByLabel('New lease monthly rent (USD)').fill('1250.50');
    await page.getByRole('button',{name:'Review lease',exact:true}).click();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();assert.equal(keys.lease[0],keys.lease[1]);
    assert.equal((await admin.query(`SELECT count(*)::int n FROM "Lease" WHERE "unitId"=$1`,[browserUnit[0].id])).rows[0].n,1);
    assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='lease.created' AND "targetId" IN (SELECT id FROM "Lease" WHERE "unitId"=$1)`,[browserUnit[0].id])).rows[0].n,1);
   }finally{await browser.close();}
  });
+ await t.test('staff property access',async scopeTest=>staffPropertyAccessCases(scopeTest,admin,call,db,app));
  await t.test('linked lease renewals',async renewalTest=>renewalCases(renewalTest,admin,call,db));
 });

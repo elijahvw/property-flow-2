@@ -22,7 +22,7 @@ Applies to this repository. Read relevant implementation and product documentati
 ## Product and interface
 
 - Properties, units, tenants, leases and maintenance form connected workflows. Preserve context and offer clear next actions from actual record state.
-- Show setup prompts only for missing setup. Optional portal invitations are not a prerequisite for offline property management.
+- Show setup prompts only for missing setup. Account creation happens before new tenant/lease participation; portal activation and first sign-in remain separate.
 - Make directories useful for daily work: meaningful labels, property/unit context, search, clear status and direct detail links. Keep secondary and archival actions unobtrusive.
 - Forms must be readable and easy to navigate, with grouped fields, useful detail, clear required/optional labels, validation and preserved input after errors.
 - Display dates with the month name, day and year. Group postal addresses as street, then city/state/postal code. Keep dates, currency and status wording consistent.
@@ -30,10 +30,10 @@ Applies to this repository. Read relevant implementation and product documentati
 
 ## Identity, authorization and history
 
-- A tenant/contact profile can exist without a login. Contact email, a profile or a lease record never grants portal access by itself.
+- Auth0 is the account authority. New tenants and every new leaseholder/occupant require an existing or precreated account. Use the existing User + exact Identity mapping; contacts and invitations reference that account. Account existence, contact email, a profile or a lease record never grants portal access by itself.
 - Keep profile, platform authority, company membership, property access and lease participation distinct. Identity is keyed by issuer/subject, never automatically linked by email.
 - Leaseholders may see authorized shared lease finances; occupants have no financial access. Owners approve resident additions/removals. Emergency contacts are separate from household members.
-- Staff retain read-only property access. Residents may edit permitted personal details, never their own company role, property/unit assignment, lease terms or access grants.
+- Staff default to read-only property access. An explicit owner grant may add maintenance execution only within current property scope and assignment; it grants no finance, lease, team or document authority. Residents may edit permitted personal details, never their own company role, property/unit assignment, lease terms or access grants.
 - Authorize each API operation from fresh server-side membership and permissions. Treat route IDs and `X-Company-ID` as untrusted input.
 - Property data operations use transaction-local company context, explicit company filters and existing row-level security. Platform authority does not bypass company boundaries.
 - Preserve financial source IDs, signed/posted history and immutable audit events. Record consequential changes atomically; use version checks and durable submission keys where retries or concurrent edits could duplicate or overwrite work.

@@ -133,7 +133,7 @@ async function fixture(
   });
   return state;
 }
-test("save a tenant without login, retain a readable address and connect the next lease", async ({
+test("create one account, retain a readable address and connect the next lease", async ({
   page,
 }) => {
   const state = await fixture(page);
@@ -319,13 +319,13 @@ test("an invited tenant can start account setup before sign-in and the private t
   const state = await fixture(page, { signedIn: false });
   await page.goto("/invite?contact=1#setup-test-token");
   await expect(
-    page.getByRole("heading", { name: "Welcome to your rental workspace" }),
+    page.getByRole("heading", { name: "Welcome to Property Flow" }),
   ).toBeVisible();
   await expect(page).toHaveURL(/\/invite$/);
   await page
-    .getByRole("button", { name: "Email me account setup links" })
+    .getByRole("button", { name: "Email me a setup link" })
     .click();
-  await expect(page.getByText(/Account setup emails requested/)).toBeVisible();
+  await expect(page.getByText(/Account setup request completed/)).toBeVisible();
   expect(state.setup).toBe(1);
   await page.screenshot({
     path: "/tmp/propertyflow-invitation-setup-desktop.png",

@@ -424,8 +424,8 @@ export function registerUserAdministration(
   }
   routes("/api/account", false);
   routes("/api/platform/users/:userId", true);
-  server.post<{ Params: { userId: string } }>(
-    "/api/platform/users/:userId/password-setup",
+  for (const action of ["password-setup", "password-reset"]) server.post<{ Params: { userId: string } }>(
+    "/api/platform/users/:userId/" + action,
     auth,
     async (request) => {
       platform(request);

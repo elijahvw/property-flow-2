@@ -3,7 +3,7 @@ import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
 import { formatDate } from "../dates";
-import { Form } from "../pages/Workspace";
+import { Form } from "./Form";
 import { DateField } from "./DateField";
 
 type Invitation={id:string;email:string;participantName:string;participantRole:string;approvedAt:string|null;acceptedAt:string|null;revokedAt:string|null;expiresAt:string};

@@ -20,7 +20,7 @@ export function registerOverview(
           "INVALID_INPUT",
           "Unknown property directory filter.",
         );
-      return scoped(db, request, "property.read", async (tx, companyId) => {
+      return scoped(db, request, "property.read", async (tx, companyId, propertyIds) => {
         const company = await tx.company.findUniqueOrThrow({
           where: { id: companyId },
           select: { timezone: true },
@@ -34,11 +34,11 @@ export function registerOverview(
           day = new Date(today + "T00:00:00Z");
         const units = await tx.unit.groupBy({
           by: ["propertyId"],
-          where: { companyId, status: "active" },
+          where: { companyId, status: "active", ...(propertyIds ? { propertyId: { in: propertyIds } } : {}) },
           _count: true,
         });
         const properties = await tx.property.findMany({
-          where: { companyId },
+          where: { companyId, ...(propertyIds ? { id: { in: propertyIds } } : {}) },
           select: { id: true },
           orderBy: [{ name: "asc" }, { id: "asc" }],
         });
@@ -105,7 +105,8 @@ export function registerOverview(
         request.query.propertyId === undefined
           ? undefined
           : assignmentId(request.query.propertyId);
-      return scoped(db, request, "property.read", async (tx, companyId) => {
+      return scoped(db, request, "property.read", async (tx, companyId, propertyIds) => {
+        if (propertyId && propertyIds && !propertyIds.includes(propertyId)) throw new AccessError(404, "NOT_FOUND", "Property not found.");
         const company = await tx.company.findUniqueOrThrow({
           where: { id: companyId },
           select: { name: true, timezone: true },
@@ -128,10 +129,10 @@ export function registerOverview(
           date = new Date(today + "T00:00:00Z"),
           through = new Date(date);
         through.setUTCDate(through.getUTCDate() + 30);
-        const where = { companyId, ...(propertyId ? { propertyId } : {}) };
+        const where = { companyId, ...(propertyId ? { propertyId } : propertyIds ? { propertyId: { in: propertyIds } } : {}) };
         const propertyWhere = {
           companyId,
-          ...(propertyId ? { id: propertyId } : {}),
+          ...(propertyId ? { id: propertyId } : propertyIds ? { id: { in: propertyIds } } : {}),
         };
         const result = {
           company,

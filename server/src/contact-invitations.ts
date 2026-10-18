@@ -1,3 +1,4 @@
+import { contactAccount } from "./resident-accounts.js";
 import { residentCompatibilityProfile } from "./resident-contacts.js";
 import { previewLeaseInvitation } from "./lease-invitations.js";
 import { randomBytes } from "node:crypto";
@@ -65,7 +66,7 @@ export async function validContactInvitation(tx: Tx, invitation: Invitation) {
       status: "active",
     },
   });
-  if (!contact || contact.email?.toLowerCase() !== invitation.email)
+  if (!contact || (invitation.accountId ? contact.userId !== invitation.accountId : contact.email?.toLowerCase() !== invitation.email))
     throw new AccessError(
       403,
       "INVITATION_INVALID",
@@ -360,12 +361,13 @@ export function registerContactInvitations(
   server.post<{ Params: { contactId: string } }>(
     "/api/company/resident-contacts/:contactId/invitations",
     auth,
-    (request) => {
+    async (request) => {
       mutation(request, origin);
       const body = input(request, ["expectedVersion", "approvals"]),
         expectedVersion = version(body.expectedVersion);
       const id = assignmentId(request.params.contactId),
         token = randomBytes(32).toString("base64url");
+      const accountId = await contactAccount(db, request, "members.manage", provider, id, expectedVersion);
       return scoped(db, request, "members.manage", async (tx, companyId) => {
         await tx.$queryRaw`UPDATE "ResidentContact" SET "updatedAt"="updatedAt" WHERE id=${id} AND "companyId"=${companyId} RETURNING id`;
         const contact = await tx.residentContact.findFirst({
@@ -374,13 +376,7 @@ export function registerContactInvitations(
         if (!contact)
           throw new AccessError(404, "NOT_FOUND", "Tenant not found.");
         if (contact.version !== expectedVersion) throw conflict();
-        if (contact.userId)
-          throw new AccessError(
-            409,
-            "CONTACT_ALREADY_LINKED",
-            "This profile already has a linked account. Manage its portal access instead.",
-          );
-        if (!contact.email)
+        if (!contact.email && !contact.userId)
           throw new AccessError(
             400,
             "EMAIL_REQUIRED",
@@ -445,12 +441,14 @@ export function registerContactInvitations(
             "INVITATION_CHANGED",
             "The household changed. Refresh the tenant and review portal access again.",
           );
+        const targetAccount = await tx.user.findUniqueOrThrow({where:{id:accountId},select:{email:true}});
         const row = await tx.invitation.create({
           data: {
             companyId,
             contactId: id,
+            accountId,
             contactLeaseApprovals,
-            email: contact.email.toLowerCase(),
+            email: targetAccount.email.toLowerCase(),
             role: "resident",
             createdBy: request.principal!.id,
             tokenHash: digest(token),
@@ -468,9 +466,8 @@ export function registerContactInvitations(
       });
     },
   );
-  // Token-authorized setup supports invitees without an Auth0 account while
-  // public registration stays disabled. It creates no membership/access; only
-  // subsequent signed-in verified acceptance links the intended contact.
+  // Setup only sends email for an already prepared exact Auth0 identity.
+  // Account creation belongs to the authorized inviter, never password reset.
   server.post(
     "/api/invitations/setup-account",
     { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
@@ -494,7 +491,7 @@ export function registerContactInvitations(
             where: { tokenHash: digest(b.token as string) },
           });
           if (
-            (!invitation?.contactId && !invitation?.leaseId) ||
+            !invitation ||
             invitation.acceptedAt ||
             invitation.revokedAt ||
             invitation.expiresAt.getTime() <= Date.now()
@@ -504,6 +501,14 @@ export function registerContactInvitations(
               "INVITATION_INVALID",
               "This invitation is expired or unavailable.",
             );
+          if (!invitation.contactId && !invitation.leaseId) {
+            await tx.$queryRaw`SELECT set_config('app.company_id',${invitation.companyId},true)`;
+            const company = await tx.company.findFirst({where:{id:invitation.companyId,status:"active"}});
+            const inviter = await tx.user.findUnique({where:{id:invitation.createdBy},include:{membership:true}});
+            if (!company || !inviter || inviter.status !== "active" || !inviter.emailVerified || (inviter.platformRole !== "owner" && (inviter.membership?.companyId !== invitation.companyId || inviter.membership.status !== "active" || inviter.membership.role !== "owner")))
+              throw new AccessError(403,"INVITATION_INVALID","This invitation is no longer available.");
+            return {invitation, contact: null};
+          }
           if (invitation.leaseId) {
             const preview = await previewLeaseInvitation(tx, invitation);
             if (!invitation.contactId)
@@ -514,26 +519,39 @@ export function registerContactInvitations(
             await previewContactInvitation(tx, invitation);
           return { invitation, contact };
         });
-      const { invitation, contact } = await check();
+      const { invitation } = await check();
       if (!provider)
         throw new AccessError(
           503,
           "IDENTITY_NOT_CONFIGURED",
           "Account setup is unavailable. Ask the owner for assistance.",
         );
-      const user = await provider.create(invitation.email, contact.name);
+      if (!invitation.accountId) throw new AccessError(409,"ACCOUNT_SETUP_REQUIRED","Ask the inviter to replace this older invitation from Property Flow so it is bound to your sign-in account.");
+      const identity = await db.identity.findFirst({where:{userId:invitation.accountId,issuer:provider.issuer}});
+      if (!identity) throw new AccessError(409,"IDENTITY_CONFLICT","This invitation needs account review by the platform administrator.");
+      const user = await provider.get(identity.subject);
+      if (user.email.toLowerCase() !== invitation.email) throw new AccessError(409,"EMAIL_CHANGED","The account email changed. Ask the inviter for a new invitation.");
       await check();
+      await serializable(db, async tx => {
+        await tx.$queryRaw`UPDATE "User" SET "updatedAt"="updatedAt" WHERE id=${invitation.accountId} RETURNING id`;
+        const account = await tx.user.findUniqueOrThrow({where:{id:invitation.accountId!}});
+        if (account.status !== "active") throw new AccessError(403,"ACCOUNT_DISABLED","This account is disabled.");
+        if (account.passwordSetupSentAt && Date.now()-account.passwordSetupSentAt.getTime()<60000) throw new AccessError(429,"SETUP_COOLDOWN","Wait a minute before requesting another setup email.");
+        await tx.user.update({where:{id:account.id},data:{passwordSetupSentAt:new Date()}});
+      });
       if (user.blocked)
         throw new AccessError(
           403,
           "ACCOUNT_DISABLED",
           "This account is disabled. Ask the owner for assistance.",
         );
-      await provider.setup(invitation.email);
-      if (!user.email_verified) await provider.verify(user.user_id);
+      const passwordAccount=user.identities?.some(i=>i.provider === "auth0" && i.connection === provider.databaseConnection);
+      if(passwordAccount)await provider.setup(user.email);
+      else if(!user.email_verified)await provider.verify(user.user_id);
       return {
-        message:
-          "Account setup email requested. Follow the password setup and verification links, then return to this invitation to sign in and accept.",
+        message: passwordAccount
+          ? "Password setup email requested. Choose your password using that link, then sign in to Property Flow. Completing password setup also verifies your email address."
+          : user.email_verified ? "Your account is ready. Sign in with your existing sign-in provider. No password setup is needed." : "Verification email requested. Verify your email, then sign in with your existing sign-in provider.",
       };
     },
   );

@@ -5,7 +5,7 @@ import { useResource } from "../useResource";
 import { tenantDirectorySearch, tenantLedgerContext } from "../tenant-links";
 import { propertyLink } from "../components/PropertyNavigation";
 import { ResidentEditor, type ResidentProfileDetail } from "./ResidentProfiles";
-import { dollars } from "./Finances";
+import { dollars } from "../money";
 import { formatDate } from "../dates";
 import { tenantPortalState } from "../tenant-status";
 import { leasePath } from "../lease-links";

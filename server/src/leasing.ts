@@ -1,3 +1,5 @@
+import { contactAccount, requireContactAccount, userAccount } from "./resident-accounts.js";
+import type { IdentityProvider } from "./identity-provider.js";
 import {currentLeaseTerms,readTermChanges} from "./lease-term-policy.js";
 import { leasePerson, leasePersonSelect } from "./lease-person.js";
 import { linkedResidentContact, participantContact } from "./resident-contacts.js";
@@ -37,7 +39,12 @@ async function connectProperty(tx:Tx,companyId:string,userId:string,propertyId:s
 export async function contactEligible(tx: Tx, companyId: string, id: string, propertyId: string, assign=false) {
   const selected=await tx.residentContact.findFirst({where:{id,companyId}});
   if(!selected)throw new AccessError(404,"NOT_FOUND","Tenant not found.");
-  if(selected.userId){if(assign)await connectProperty(tx,companyId,selected.userId,propertyId);else await eligible(tx,companyId,selected.userId,propertyId);}
+  if(selected.userId){
+    const member=await tx.companyMembership.findUnique({where:{userId:selected.userId}});
+    const account=await tx.user.findUniqueOrThrow({where:{id:selected.userId}});
+    if(account.status!=="active" || (member&&(member.companyId!==companyId||member.role!=="resident"||member.status!=="active")))throw new AccessError(409,"RESIDENT_INELIGIBLE","Review this account's current company access before using it on a lease.");
+    if(member){if(assign)await connectProperty(tx,companyId,selected.userId,propertyId);else await eligible(tx,companyId,selected.userId,propertyId);}
+  }
   await tx.$queryRaw`UPDATE "ResidentContact" SET "updatedAt"="updatedAt" WHERE id=${id} AND "companyId"=${companyId} RETURNING id`;
   const contact=await tx.residentContact.findFirstOrThrow({where:{id,companyId}});
   if(contact.status!=="active")throw new AccessError(409,"TENANT_ARCHIVED","Restore this tenant before recording a lease.");
@@ -54,14 +61,15 @@ export async function activeSlot(tx: Tx, companyId: string, unitId: string, exce
   if (await tx.lease.findFirst({ where: { companyId, unitId, status: "active", ...(except ? { id: { not: except } } : {}) }, select: { id: true } }))
     throw new AccessError(409, "ACTIVE_LEASE_EXISTS", "This unit already has an active lease. End it before archiving the unit or activating another lease.");
 }
-export function registerLeasing(server: FastifyInstance, db: PrismaClient, authenticate: preValidationHookHandler, origin: string) {
+export function registerLeasing(server: FastifyInstance, db: PrismaClient, authenticate: preValidationHookHandler, origin: string, provider?: IdentityProvider) {
   const auth = { preValidation: authenticate };
   server.get<{ Params: { propertyId: string }; Querystring: { cursor?: string; status?: string; q?: string } }>("/api/company/properties/:propertyId/units", auth, request => {
     const q = request.query;
     if (Object.keys(q).some(k => !["cursor", "status", "q"].includes(k))) throw new AccessError(400, "INVALID_INPUT", "Unknown unit filter.");
     if (q.q !== undefined && (typeof q.q !== "string" || q.q.length > 200 || q.q.includes("\0"))) throw new AccessError(400, "INVALID_INPUT", "Search must be at most 200 characters.");
     const propertyId = assignmentId(request.params.propertyId), cursor = q.cursor === undefined ? undefined : assignmentId(q.cursor), status = q.status === undefined ? undefined : choice(q.status, ["active", "archived"], "unit status"), search = q.q?.trim();
-    return scoped(db, request, "property.read", async (tx, companyId) => {
+    return scoped(db, request, "property.read", async (tx, companyId, propertyIds) => {
+      if (propertyIds && !propertyIds.includes(propertyId)) throw new AccessError(404, "NOT_FOUND", "Property not found.");
       await property(tx, companyId, propertyId);
       return page(await tx.unit.findMany({ where: { companyId, propertyId, status, ...(search ? { OR: [{ label: { contains: search, mode: "insensitive" } }, { floor: { contains: search, mode: "insensitive" } }] } : {}), ...(cursor ? { id: { lt: cursor } } : {}) }, select: unitSelect, take: 51, orderBy: { id: "desc" } }));
     });
@@ -134,7 +142,7 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
       return {...page(await tx.lease.findMany({where:{companyId,...(propertyId?{propertyId}:{}),...(unitId?{unitId}:{}),...(status?{status}:{}),...dates,...(search?{AND:[{OR:[{property:{name:{contains:search,mode:"insensitive"}}},{unit:{label:{contains:search,mode:"insensitive"}}},{residentContact:{name:{contains:search,mode:"insensitive"}}},{residentContact:{email:{contains:search,mode:"insensitive"}}},{resident:{name:{contains:search,mode:"insensitive"}}},{resident:{email:{contains:search,mode:"insensitive"}}}]}]}:{}),...(cursor?{id:{lt:cursor}}:{})},select:leaseSelect,take:51,orderBy:{id:"desc"}}).then(async rows=>(await currentLeaseTerms(tx,companyId,rows)).map(row=>({...row,resident:leasePerson(row)})))),...(selectedUnit?{unit:selectedUnit}:{})};
     });
   });
-  server.post("/api/company/leases", auth, request => {
+  server.post("/api/company/leases", auth, async request => {
     mutation(request, origin);
     const b = input(request, ["propertyId", "unitId", "residentId", "residentContactId", "startsOn", "endsOn", "monthlyRent", "status", "submissionKey", "previousLeaseId", "expectedPreviousVersion", ...paymentPolicyKeys]);
     const propertyId = assignmentId(b.propertyId), unitId = assignmentId(b.unitId), residentId = b.residentId == null ? null : opaqueUserId(b.residentId), residentContactId = b.residentContactId == null ? null : assignmentId(b.residentContactId), data = terms(b);
@@ -147,6 +155,29 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
     // Keep the original fingerprint for default policies and old clients' retries.
     const fingerprint = policy.rentDueDay===1 && policy.graceDays===0 && policy.paymentInstructions===null ? data : {...data,...policy};
     const key = submission(b.submissionKey, previousLeaseId?[propertyId,unitId,residentContactId?{contactId:residentContactId}:residentId,fingerprint,previousLeaseId,expectedPreviousVersion]:[propertyId, unitId, residentContactId?{contactId:residentContactId}:residentId, fingerprint]);
+    const accounts = await scoped(db, request, "lease.manage", async (tx, companyId) => {
+      const prior = await tx.lease.findFirst({where:{companyId,createdById:request.principal!.id,submissionKey:key.submissionKey},select:{submissionHash:true}});
+      if(prior){sameSubmission(prior.submissionHash,key.submissionHash);return {contacts:[],users:[],retained:[]};}
+      await property(tx,companyId,propertyId);
+      const selectedUnit=await tx.unit.findFirst({where:{id:unitId,propertyId,companyId},select:{id:true}});
+      if(!selectedUnit)throw new AccessError(404,"NOT_FOUND","Unit not found.");
+      const contact=residentContactId ? await tx.residentContact.findFirst({where:{id:residentContactId,companyId,status:"active"}}) : null;
+      if(residentContactId&&!contact)throw new AccessError(404,"NOT_FOUND","Tenant not found.");
+      const ids=contact?[contact.id]:[];
+      const users=residentId?[residentId]:[];
+      const retained:string[]=[];
+      if(previousLeaseId){
+        const previous=await tx.lease.findFirst({where:{id:previousLeaseId,companyId},select:{id:true}});
+        if(!previous)throw new AccessError(404,"NOT_FOUND","Previous lease not found.");
+        const members=await tx.leaseParticipant.findMany({where:{companyId,leaseId:previousLeaseId,removedAt:null,OR:[{endsOn:null},{endsOn:{gte:data.startsOn}}]},take:201});
+        if(members.length>200)throw new AccessError(422,"HOUSEHOLD_SCOPE_TOO_LARGE","Too many household records.");
+        for(const member of members){if(member.contactId)ids.push(member.contactId);else if(member.userId)retained.push(member.userId);else throw new AccessError(409,"ACCOUNT_REQUIRED","Open each existing household profile and prepare its account before renewing this lease.");}
+      }
+      return {contacts:[...new Set(ids)],users:[...new Set(users)],retained:[...new Set(retained)]};
+    });
+    for(const contactId of accounts.contacts)await contactAccount(db,request,"lease.manage",provider,contactId);
+    for(const userId of accounts.users)await userAccount(db,request,"lease.manage",provider,userId);
+    for(const userId of accounts.retained)await userAccount(db,request,"lease.manage",provider,userId,true);
     return scoped(db, request, "lease.manage", async (tx, companyId) => {
       const previous = await tx.lease.findFirst({ where: { companyId, createdById: request.principal!.id, submissionKey: key.submissionKey }, select: { ...leaseSelect, submissionHash: true } });
       if (previous) {
@@ -159,6 +190,7 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
       if(residentId)await eligible(tx,companyId,residentId,propertyId);
       const primaryContact = residentContactId ? await contactEligible(tx,companyId,residentContactId,propertyId,true) : await linkedResidentContact(tx,companyId,residentId!);
       if(primaryContact.status!=="active")throw new AccessError(409,"TENANT_ARCHIVED","Restore this tenant before recording a lease.");
+      await requireContactAccount(tx, primaryContact);
       const primaryUserId = primaryContact.userId;
       if(previousLeaseId){
         await tx.$queryRaw`UPDATE "Lease" SET "updatedAt"="updatedAt" WHERE id=${previousLeaseId} AND "companyId"=${companyId} RETURNING id`;
@@ -184,6 +216,7 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
         if(members.length>200)throw new AccessError(422,"HOUSEHOLD_SCOPE_TOO_LARGE","Too many household records to prepare a complete renewal.");
         for(const member of members){
           const contactId=member.contactId??(await participantContact(tx,companyId,member)).id;
+          await requireContactAccount(tx, await tx.residentContact.findFirstOrThrow({where:{id:contactId,companyId}}));
           if(!member.contactId)await tx.leaseParticipant.update({where:{id:member.id},data:{contactId}});
           await tx.leaseParticipant.create({data:{companyId,propertyId,leaseId:row.id,userId:member.userId,contactId,name:member.name,email:member.email,phone:member.phone,role:member.role,portalApproved:false,startsOn:member.startsOn>data.startsOn?member.startsOn:data.startsOn,endsOn:member.endsOn,createdById:request.principal!.id,submissionKey:`renewal:${row.id}:${member.id}`,submissionHash:key.submissionHash}});
         }

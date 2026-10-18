@@ -3,19 +3,11 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api";
-import { AcceptInvitation, Form } from "../pages/Workspace";
-import ProtectedRoute from "./ProtectedRoute";
+import { AcceptInvitation } from "../pages/Workspace";
+import { Form } from "./Form";
 export function InvitationEntry() {
   const { user, loading, error, signIn, refreshUser } = useAuth();
-  if (
-    sessionStorage.getItem("pf-contact-invitation") !== "true" &&
-    sessionStorage.getItem("pf-lease-invitation") !== "true"
-  )
-    return (
-      <ProtectedRoute>
-        <AcceptInvitation />
-      </ProtectedRoute>
-    );
+  const [setupMessage,setSetupMessage]=useState("");
   if (loading) return <p role="status">Restoring your sign-in…</p>;
   const token = sessionStorage.getItem("pf-invitation");
   if (!token)
@@ -36,33 +28,32 @@ export function InvitationEntry() {
   if (!user)
     return (
       <section className="panel invitation-welcome">
-        <p className="record-kicker">Your resident portal</p>
-        <h1>Welcome to your rental workspace</h1>
+        <p className="record-kicker">Your Property Flow account</p>
+        <h1>Welcome to Property Flow</h1>
         <p>
-          Your owner has invited you to the resident portal. Complete account
-          setup, then sign in with the invited email to connect your rental
-          records.
+          You have been invited to Property Flow. Your Property Flow account is ready. Choose a password if needed, then sign in to review your access.
         </p>
         <ol className="lease-next-steps">
           <li>
-            <h2>Set up your account</h2>
+            <h2>Choose your password</h2>
             <p>
-              If you haven’t signed in before, request password setup and
-              verification emails.
+              Request a setup email for your existing account. Choose your password using the link, then sign in below. This does not create another user.
             </p>
             <Form
-              label="Email me account setup links"
+              label="Email me a setup link"
               operation="invitation.accept"
               submit={async () => {
-                await api("/api/invitations/setup-account", {
+                const result=await api<{message:string}>("/api/invitations/setup-account", {
                   method: "POST",
                   body: { token },
                 });
+                setSetupMessage(result.message);
               }}
-              feedbackText="Account setup emails requested. Follow the password and verification links, then return here to sign in."
+              feedbackText="Account setup request completed."
             >
               {null}
             </Form>
+            {setupMessage && <p role="status">{setupMessage}</p>}
           </li>
           <li>
             <h2>Sign in & accept</h2>

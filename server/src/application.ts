@@ -1,3 +1,5 @@
+import { registerAccountPasswords } from "./account-passwords.js";
+import { prepareAccount, saveAccount } from "./resident-accounts.js";
 import {registerLeaseProration} from "./lease-proration.js";
 import {registerLeaseTransitions} from "./lease-transitions.js";
 import {registerLeaseTermChanges} from "./lease-term-changes.js";
@@ -26,6 +28,7 @@ import {
   requirePermission,
 } from "./access.js";
 import { membershipAccessSelect } from "./membership-view.js";
+import { registerStaffPropertyAccess } from "./staff-property-access.js";
 import { registerResidentProfiles } from "./resident-profiles.js";
 import { input, mutation, boundedText } from "./operational.js";
 import { registerCompanyAdministration } from "./company-administration.js";
@@ -41,6 +44,9 @@ import { registerLeasing } from "./leasing.js";
 import { registerLeaseParticipants } from "./lease-participants.js";
 import { registerLeaseInvitations, acceptLeaseInvitation, replayLeaseAcceptance, previewLeaseInvitation } from "./lease-invitations.js";
 import { registerMaintenance } from "./maintenance.js";
+import { registerPrivateDocuments } from "./private-documents.js";
+import { registerWorkOrders } from "./work-orders.js";
+import type { DocumentScanner } from "./document-scanner.js";
 import { registerMaintenanceCosts } from "./maintenance-costs.js";
 import { digest } from "./sessions.js";
 import { propertySelect, propertyData, propertyKeys } from "./property-fields.js";
@@ -117,6 +123,8 @@ async function clearAssignments(tx: Tx, userId: string, companyId?: string) {
   if (!companyId) return;
   await tx.$queryRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
   await tx.residentPropertyAssignment.deleteMany({ where: { companyId, userId } });
+  await tx.staffPropertyAccess.deleteMany({ where: { companyId, userId } });
+  await tx.companyMembership.updateMany({ where: { companyId, userId }, data: { maintenanceExecution: false } });
 }
 export function assignmentId(value: unknown): string {
   if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_|:@.\-]{0,199}$/.test(value))
@@ -136,16 +144,21 @@ export async function serializable<T>(db: PrismaClient, run: (tx: Tx) => Promise
   for (let attempt = 0; ; attempt++) {
     try { return await db.$transaction(run, { isolationLevel: "Serializable" }); }
     catch (error) {
-      const failure = error as { code?: string; meta?: { code?: string; driverAdapterError?: { cause?: { originalCode?: string } } } };
-      // Raw lock queries can report PostgreSQL SQLSTATE through P2010.
+      const failure = error as { name?: string; code?: string; cause?: { kind?: string; originalCode?: string }; meta?: { code?: string; driverAdapterError?: { cause?: { originalCode?: string } } } };
+      // Raw queries wrap SQLSTATE in P2010; COMMIT may expose the adapter's
+      // structured conflict directly. Do not classify private error text.
       const retryable = failure.code === "P2034" ||
+        (failure.name === "DriverAdapterError" && (failure.cause?.kind === "TransactionWriteConflict" || ["40001", "40P01"].includes(failure.cause?.originalCode ?? ""))) ||
         ["40001", "40P01"].includes(failure.code ?? "") ||
         (failure.code === "P2010" && [
           failure.meta?.code,
           failure.meta?.driverAdapterError?.cause?.originalCode,
         ].some(code => ["40001", "40P01"].includes(code ?? "")));
       if (!retryable) throw error;
-      if (attempt >= 2) throw new AccessError(409, "ACCESS_CONFLICT", "Access changed. Refresh and try again.");
+      if (attempt >= 4) throw new AccessError(409, "ACCESS_CONFLICT", "Access changed. Refresh and try again.");
+      // Back off between multi-stage account operations to avoid retrying the
+      // same serialization conflict in lockstep. Authorization is re-read.
+      await new Promise(resolve => setTimeout(resolve, 10 * (attempt + 1) + Math.floor(Math.random() * 10)));
     }
   }
 }
@@ -218,12 +231,16 @@ export function registerApplication(
   authenticate: preValidationHookHandler,
   origin: string,
   identityProvider?: IdentityProvider,
+  options: { documentScanner?: DocumentScanner } = {},
 ) {
+  registerPrivateDocuments(server, db, authenticate, origin, options.documentScanner);
+  registerWorkOrders(server, db, authenticate, origin);
+  registerAccountPasswords(server, db, authenticate, origin, identityProvider);
   registerMaintenance(server, db, authenticate, origin);
   registerMaintenanceCosts(server, db, authenticate, origin);
-  registerLeasing(server, db, authenticate, origin);
-  registerLeaseParticipants(server, db, authenticate, origin);
-  registerLeaseInvitations(server, db, authenticate, origin);
+  registerLeasing(server, db, authenticate, origin, identityProvider);
+  registerLeaseParticipants(server, db, authenticate, origin, identityProvider);
+  registerLeaseInvitations(server, db, authenticate, origin, identityProvider);
   registerFinances(server, db, authenticate, origin);
   registerDeposits(server, db, authenticate, origin);
   registerRent(server, db, authenticate, origin);
@@ -234,18 +251,19 @@ export function registerApplication(
   registerLeaseTransitions(server,db,authenticate,origin);
   registerLeaseTermChanges(server,db,authenticate,origin);
   registerLeaseSettlements(server, db, authenticate, origin);
-  registerAccountProfile(server, db, authenticate, origin);
+  registerAccountProfile(server, db, authenticate, origin, identityProvider);
   registerRentSchedules(server, db, authenticate, origin);
   registerRentRecovery(server, db, authenticate, origin);
   registerUserAdministration(server, db, authenticate, origin, identityProvider);
   registerCompanyAdministration(server, db, authenticate, origin);
   registerResidentProfiles(server, db, authenticate, origin);
-  registerContactRecords(server, db, authenticate, origin);
+  registerContactRecords(server, db, authenticate, origin, identityProvider);
   registerContactInvitations(server, db, authenticate, origin,identityProvider);
   registerReports(server, db, authenticate);
   registerOverview(server, db, authenticate);
   const auth = { preValidation: authenticate };
   registerPropertyDetail(server, db, authenticate, origin);
+  registerStaffPropertyAccess(server, db, authenticate, origin);
   const serial = <T>(request: FastifyRequest, run: (tx: Tx) => Promise<T>) =>
     serializable(db,
       async (tx) => {
@@ -439,10 +457,21 @@ export function registerApplication(
     platform(request); mutation(request, origin);
     const userId = opaqueUserId(request.params.userId), body = input(request, ["name"]);
     const name = boundedText(body.name, 200, "Display name");
+    const identity=await serial(request,async tx=>{
+      await lockTarget(tx,request.principal!.id);await lockTarget(tx,userId);
+      const user=await tx.user.findUnique({where:{id:userId},include:{identities:true}});
+      if(!user)throw new AccessError(404,"NOT_FOUND","User not found.");
+      const identity=user.identities.find(i=>i.issuer===identityProvider?.issuer);
+      if(!identityProvider?.rename || !identity)throw new AccessError(503,"IDENTITY_NOT_CONFIGURED","Account name changes require the Auth0 connection for this account. Reconcile the account from Property Flow Users first.");
+      return identity;
+    });
+    const remote=await identityProvider!.rename(identity.subject,name);
+    if(remote.user_id!==identity.subject||remote.name!==name)throw new AccessError(409,"IDENTITY_PROFILE_CONFLICT","Auth0 did not confirm this name. Refresh and retry.");
     return serial(request, async tx => {
       await lockTarget(tx, request.principal!.id);
       await lockTarget(tx, userId);
-      if (!await tx.user.findUnique({where:{id:userId}})) throw new AccessError(404,"NOT_FOUND","User not found.");
+      const currentIdentity=await tx.identity.findUnique({where:{issuer_subject:{issuer:identity.issuer,subject:identity.subject}}});
+      if(currentIdentity?.userId!==userId)throw new AccessError(409,"IDENTITY_CONFLICT","The account identity changed. Refresh and retry.");
       const result = await tx.user.update({where:{id:userId},data:{name},select:{id:true,name:true}});
       await audit(tx, request, "user.profile.updated", undefined, userId);
       return result;
@@ -587,7 +616,7 @@ export function registerApplication(
       await propertyInScope(tx, companyId, propertyId);
       if(Object.keys(request.query).some(k=>k!=="includeContacts")||request.query.includeContacts!==undefined&&request.query.includeContacts!=="true")throw new AccessError(400,"INVALID_INPUT","Unknown resident selection filter.");
       if(request.query.includeContacts==="true"){
-        const contacts=await tx.residentContact.findMany({where:{companyId,status:"active",OR:[{userId:null},{user:{status:"active",membership:{companyId,role:"resident",status:"active"}}}]},select:{id:true,userId:true,name:true,email:true},orderBy:[{name:"asc"},{id:"asc"}],take:2001});
+        const contacts=await tx.residentContact.findMany({where:{companyId,status:"active",OR:[{userId:null},{user:{status:"active",OR:[{membership:null},{membership:{companyId,role:"resident",status:"active"}}]}}]},select:{id:true,userId:true,name:true,email:true},orderBy:[{name:"asc"},{id:"asc"}],take:2001});
         const legacy=await tx.residentPropertyAssignment.findMany({where:{companyId,propertyId,membership:{role:"resident",status:"active",user:{status:"active",residentContacts:{none:{companyId}}}}},select:{userId:true,membership:{select:{user:{select:{name:true,email:true}}}}},take:2001});
         if(contacts.length+legacy.length>2000)throw new AccessError(422,"TENANT_SELECTION_TOO_LARGE","More than 2,000 tenants are eligible. No incomplete selection is shown.");
         return [...contacts.map(c=>({...c,contactId:c.id})),...legacy];
@@ -630,17 +659,12 @@ export function registerApplication(
   });
 
   server.get("/api/company/properties", auth, async (request) => {
-    const companyId = scope(request, "property.read");
-    return tenantTransaction(
-      db,
-      companyId,
-      (tx) =>
+    return scoped(db, request, "property.read", (tx, companyId, propertyIds) =>
         tx.property.findMany({
-          where: { companyId },
+          where: { companyId, ...(propertyIds ? { id: { in: propertyIds } } : {}) },
           orderBy: [{ name: "asc" }, { id: "asc" }],
           select: propertySelect,
         }),
-      { id: request.principal!.id, permission: "property.read" },
     );
   });
   server.post("/api/company/properties", auth, request => {
@@ -692,12 +716,16 @@ export function registerApplication(
         "OWNER_PROTECTED",
         "Only the platform owner can invite a company owner.",
       );
+    await serial(request, tx => activeCompany(tx, companyId));
+    const account = await prepareAccount(identityProvider, email, email);
     const token = randomBytes(32).toString("base64url");
     return serial(request, async (tx) => {
       await activeCompany(tx, companyId);
+      const accountId = await saveAccount(tx, request, account, companyId);
       const invitation = await tx.invitation.create({
         data: {
           companyId,
+          accountId,
           email,
           role,
           tokenHash: digest(token),
@@ -780,6 +808,7 @@ export function registerApplication(
     return serial(request,async tx=>{
       const invitation=await tx.invitation.findUnique({where:{tokenHash:digest(token)}});
       if(!invitation||(!invitation.leaseId&&!invitation.contactId)||invitation.revokedAt||(!invitation.acceptedAt&&invitation.expiresAt.getTime()<=Date.now())||(invitation.email!==user.email.toLowerCase()&&!(invitation.contactId&&!invitation.leaseId&&invitation.acceptedAt)))throw new AccessError(403,"INVITATION_INVALID","This invitation is unavailable for your account.");
+      if(invitation.accountId && invitation.accountId !== user.id) throw new AccessError(403,"INVITATION_IDENTITY_MISMATCH","Sign in with the account this invitation was created for.");
       await activeCompany(tx,invitation.companyId);
       if(invitation.contactId&&!invitation.leaseId){if(invitation.acceptedAt){const {company,contact}=await replayContactAcceptance(tx,request,invitation);return {company:company.name,name:contact.name,contact:true,accepted:true,leaseApprovals:[],leases:[]};}return previewContactInvitation(tx,invitation);}
       if(invitation.acceptedAt)await replayLeaseAcceptance(tx,request,invitation);
@@ -819,6 +848,7 @@ export function registerApplication(
           "INVITATION_INVALID",
           "This invitation is unavailable for your account.",
         );
+      if(invitation.accountId && invitation.accountId !== user.id) throw new AccessError(403,"INVITATION_IDENTITY_MISMATCH","Sign in with the account this invitation was created for.");
       await activeCompany(tx, invitation.companyId);
       // An invitation can only create a membership. It cannot reactivate,
       // promote or transfer an existing member (including a disabled member).

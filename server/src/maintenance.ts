@@ -327,11 +327,12 @@ export function registerMaintenance(
         propertyId?: string;
         priority?: string;
         q?: string;
+        workStatus?: string;
       };
     }>(base, auth, async (request) => {
       if (
         Object.keys(request.query).some(
-          (k) => !["status", "propertyId", "priority", "q"].includes(k),
+          (k) => !["status", "propertyId", "priority", "q", ...(!resident ? ["workStatus"] : [])].includes(k),
         )
       )
         throw new AccessError(400, "INVALID_INPUT", "Unknown filter.");
@@ -355,6 +356,7 @@ export function registerMaintenance(
         request.query.q === undefined
           ? undefined
           : text(request.query.q, 200, "Search");
+      const workStatus = request.query.workStatus === undefined ? undefined : choice(request.query.workStatus, ["unassigned", "assigned", "accepted", "pending_review", "complete"], "work status");
       return scoped(request, resident, async (tx, companyId) => {
         if (
           propertyId &&
@@ -372,6 +374,7 @@ export function registerMaintenance(
                 : status,
             propertyId,
             priority,
+            executionStatus: workStatus,
             ...(q
               ? {
                   OR: [
@@ -395,7 +398,7 @@ export function registerMaintenance(
                 }
               : {}),
           },
-          select,
+          select: { ...select, ...(!resident ? { executionStatus: true } : {}) },
           orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         });
       });
@@ -570,11 +573,13 @@ export function registerMaintenance(
       return scoped(request, false, async (tx, companyId) => {
         const previous = await tx.maintenanceRequest.findFirst({
           where: { id, companyId },
-          select,
+          select: { ...select, assigneeId: true },
         });
         if (!previous)
           throw new AccessError(404, "NOT_FOUND", "Request not found.");
         if (previous.version !== expectedVersion) throw conflict();
+        if (previous.assigneeId && previous.status !== status)
+          throw new AccessError(409, "WORK_REVIEW_REQUIRED", "Use assigned work to accept, review completion or reopen this request.");
         if (patch.unitId !== undefined && patch.unitId !== previous.unitId)
           await unit(tx, companyId, previous.propertyId, patch.unitId);
         const changes: Record<

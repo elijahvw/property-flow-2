@@ -15,7 +15,7 @@ export class ApiError extends Error {
 }
 export async function api<T>(
   path: string,
-  options: { method?: string; body?: unknown; signal?: AbortSignal } = {},
+  options: { method?: string; body?: unknown; signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<T> {
   if (!path.startsWith("/api/"))
     throw new Error("Only same-origin API paths are allowed");
@@ -23,7 +23,7 @@ export async function api<T>(
   const cancel = () => controller.abort();
   options.signal?.addEventListener("abort", cancel, { once: true });
   if (options.signal?.aborted) cancel();
-  const timer = setTimeout(cancel, 10000);
+  const timer = setTimeout(cancel, options.timeoutMs ?? 10000);
   try {
     const response = await fetch(path, {
       method: options.method || "GET",

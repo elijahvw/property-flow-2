@@ -1,3 +1,4 @@
+import { useDebouncedValue } from "../useDebouncedValue";
 import { usePropertySearchParams } from "../usePropertySearchParams";
 import { DraftReset } from "../components/DraftReset";
 import { PropertyNavigation } from "../components/PropertyNavigation";
@@ -9,8 +10,10 @@ import { api } from "../api";
 import { formatDate, formatActivityDate, formatActivityTime } from "../dates";
 import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
-import { Form } from "./Workspace";
+import { Form } from "../components/Form";
 import { MaintenanceCosts } from "../components/MaintenanceCosts";
+import { PrivateDocuments } from "../components/PrivateDocuments";
+import { WorkOrderPanel } from "./WorkOrders";
 type Row = {
   id: string;
   propertyId: string;
@@ -20,6 +23,7 @@ type Row = {
   category: string;
   priority: string;
   status: string;
+  executionStatus?: string;
   version: number;
   targetOn: string | null;
   createdAt: string;
@@ -70,7 +74,7 @@ function Loading({ error, retry }: { error?: string; retry: () => void }) {
 }
 function directoryQuery(params: URLSearchParams) {
   const q = new URLSearchParams();
-  for (const key of ["propertyId", "status", "priority", "q", "nested"])
+  for (const key of ["propertyId", "status", "priority", "q", "nested", "workStatus"])
     if (params.get(key)) q.set(key, params.get(key)!);
   return q;
 }
@@ -211,7 +215,9 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
   const status = params.get("status") || "",
     propertyId = params.get("propertyId") || "",
     query = params.get("q") || "",
-    priority = params.get("priority") || "";
+    priority = params.get("priority") || "",
+    workStatus = params.get("workStatus") || "";
+  const search = useDebouncedValue(query.trim());
   const [newProperty, setNewProperty] = useState("");
   const [createdId, setCreatedId] = useState("");
   const base = resident
@@ -223,7 +229,7 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
     true,
   );
   const r = useResource<Row[]>(
-    `${base}?${new URLSearchParams(Object.entries({ status, propertyId, q: query.trim(), priority }).filter(([, v]) => v))}`,
+    `${base}?${new URLSearchParams(Object.entries({ status, propertyId, q: search, priority, ...(!resident ? {workStatus} : {}) }).filter(([, v]) => v))}`,
     true,
     true,
   );
@@ -409,6 +415,7 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
             Open, in progress and completed work
           </span>
         </div>
+        {search !== query.trim() && <p role="status" className="help">Updating search…</p>}
         <div className="directory-toolbar">
           <label className="directory-search">
             Find request
@@ -435,6 +442,9 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
               ))}
             </select>
           </label>
+          {!resident && <label>Filter assigned work<select aria-label="Filter assigned work" value={workStatus} onChange={e => change("workStatus", e.target.value)}>
+            <option value="">All work stages</option><option value="unassigned">Unassigned</option><option value="assigned">Awaiting acceptance</option><option value="accepted">In progress with teammate</option><option value="pending_review">Completion awaiting review</option><option value="complete">Completion approved</option>
+          </select></label>}
           <label>
             Filter property
             <select
@@ -554,6 +564,7 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
                           <span className={`status-pill ${row.status}`}>
                             {label(row.status)}
                           </span>
+                          {!resident && row.executionStatus && row.executionStatus !== "unassigned" && <span className="cell-detail">{({assigned:"Awaiting acceptance",accepted:"Work accepted",pending_review:"Completion awaiting review",complete:"Completion approved"} as Record<string,string>)[row.executionStatus]}</span>}
                         </td>
                         <td>
                           <Link
@@ -763,6 +774,8 @@ function RequestDetail({ id, resident }: { id: string; resident: boolean }) {
           </div>
           <RequestUpdates endpoint={endpoint} resident={resident} canShare={row.residentUpdatesAvailable === true} />
           {!resident && can("finance.manage") && <MaintenanceCosts requestId={id} propertyId={row.propertyId} />}
+          {!resident && <WorkOrderPanel id={id} management changed={r.reload} />}
+          {!resident && <PrivateDocuments source="maintenance" sourceId={id} />}
           {!resident && draft && (
             <EditorDialog
               open={editing}

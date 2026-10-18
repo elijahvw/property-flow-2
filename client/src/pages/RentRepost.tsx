@@ -1,8 +1,8 @@
 import { formatDate, formatMonth } from "../dates";
 import { useState } from "react";
 import { api, ApiError } from "../api";
-import { Form } from "./Workspace";
-import { dollars } from "./Finances";
+import { Form } from "../components/Form";
+import { dollars } from "../money";
 import { useAuth } from "../context/AuthContext";
 export type RepostReview = {
   scheduleId: string;

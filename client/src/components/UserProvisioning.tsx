@@ -1,15 +1,15 @@
 import { DraftReset } from "./DraftReset";
 import { useState } from "react";
 import { api } from "../api";
-import { Form } from "../pages/Workspace";
+import { Form } from "./Form";
 export function UserProvisioning({ saved }: { saved: (id?: string) => void }) {
   const [key, setKey] = useState(() => crypto.randomUUID());
   return (
     <section className="panel">
       <h2>Create a sign-in account</h2>
       <p>
-        Create an email/password identity, then assign its company and role
-        below. Use Send password setup email from its profile so the user
+        Create or reuse the Auth0 account for this person, then assign its company and role
+        below. Use Send password reset email from its profile so the user
         chooses their password. Creating an account does not send email
         automatically.
       </p>
@@ -45,7 +45,7 @@ export function UserProvisioning({ saved }: { saved: (id?: string) => void }) {
           <input name="email" type="email" required maxLength={254} />
         </label>
         <p className="help">
-          Existing email/password accounts are reused. Company access is
+          Existing Auth0 accounts are reused. Company access is
           assigned separately.
         </p>
       </Form>
@@ -102,10 +102,10 @@ export function UserVerificationControls({
       {id.startsWith("auth0|") && (
         <Form
           operation="account.verification"
-          label="Send password setup email"
+          label="Send password reset email"
           submit={async () => {
             const result = await api<{ message: string }>(
-              `/api/platform/users/${encodeURIComponent(id)}/password-setup`,
+              `/api/platform/users/${encodeURIComponent(id)}/password-reset`,
               { method: "POST", body: {} },
             );
             setMessage(result.message);

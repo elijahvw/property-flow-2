@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
 import { api } from "../api";
-import { Form } from "./Workspace";
+import { Form } from "../components/Form";
 import { EditorDialog } from "../components/EditorDialog";
 import { DraftReset } from "../components/DraftReset";
 import { Address } from "../components/Address";

@@ -69,6 +69,7 @@ model User {
   createdMaintenanceCosts MaintenanceCost[] @relation("MaintenanceCostCreator")
   unlinkedMaintenanceCosts MaintenanceCost[] @relation("MaintenanceCostUnlinker")
   residentContacts ResidentContact[] @relation("ContactAccount")
+  accountInvitations Invitation[] @relation("InvitationAccount")
   createdResidentContacts ResidentContact[] @relation("ContactCreator")
   leaseParticipants LeaseParticipant[]
   createdLeaseParticipants LeaseParticipant[] @relation("LeaseParticipantCreator")
@@ -79,6 +80,9 @@ model User {
   createdDepositAccounts DepositAccount[] @relation("DepositAccountCreator")
   createdDepositRevisions DepositRevision[] @relation("DepositRevisionCreator")
   createdDepositReceipts DepositReceipt[] @relation("DepositReceiptCreator")
+  documentVersions DocumentVersion[]
+  workOrderActions WorkOrderAction[]
+  assignedMaintenance MaintenanceRequest[] @relation("MaintenanceAssignee")
   membership CompanyMembership?
   sessions Session[]
   companyId  String?
@@ -99,6 +103,9 @@ model Identity {
 }
 
 model CompanyMembership {
+  maintenanceExecution Boolean @default(false)
+  staffPropertyScope String @default("all")
+  staffProperties StaffPropertyAccess[]
   contactName String?
   contactPhone String?
   emergencyContactName String?
@@ -119,6 +126,9 @@ model CompanyMembership {
 }
 
 model Invitation {
+  accountId String?
+  account User? @relation("InvitationAccount", fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@index([accountId])
   contactLeaseApprovals Json?
   contactId String?
   contact ResidentContact? @relation(fields:[contactId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
@@ -184,6 +194,7 @@ model AuditEvent {
 }
 
 model Property {
+  staffAccess StaffPropertyAccess[]
   propertyType String?
   yearBuilt Int?
   parcelId String?
@@ -214,6 +225,16 @@ model Property {
   @@unique([id, companyId])
 }
 
+model StaffPropertyAccess {
+  companyId String
+  propertyId String
+  userId String
+  property Property @relation(fields: [propertyId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Restrict)
+  membership CompanyMembership @relation(fields: [userId, companyId], references: [userId, companyId], onDelete: Cascade, onUpdate: Restrict)
+  @@id([propertyId, userId])
+  @@index([companyId, userId])
+}
+
 model ResidentPropertyAssignment {
   companyId String
   propertyId String
@@ -226,6 +247,12 @@ model ResidentPropertyAssignment {
 }
 
 model MaintenanceRequest {
+  documents PrivateDocument[]
+  assignee User? @relation("MaintenanceAssignee",fields:[assigneeId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  assigneeId String?
+  executionStatus String @default("unassigned")
+  workActions WorkOrderAction[]
+  @@index([companyId, assigneeId, executionStatus])
   costs MaintenanceCost[]
   updates MaintenanceUpdate[]
   submissionKey String?
@@ -364,6 +391,8 @@ model ResidentContact {
 }
 
 model Lease {
+  documents PrivateDocument[]
+  @@unique([id, companyId])
  prorations LeaseProration[]
  transitions LeaseTransition[] @relation("TransitionOld")
  successorTransitions LeaseTransition[] @relation("TransitionNew")
@@ -894,4 +923,58 @@ model LeaseTransition {
  successor Lease? @relation("TransitionNew",fields:[successorId,propertyId,companyId],references:[id,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
  @@unique([companyId,createdById,submissionKey])
  @@index([companyId,leaseId,id])
+}
+
+model PrivateDocument {
+  lease Lease? @relation(fields:[leaseId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+  request MaintenanceRequest? @relation(fields:[requestId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+  id String @id @default(cuid())
+  companyId String
+  leaseId String?
+  requestId String?
+  title String
+  version Int @default(1)
+  archivedAt DateTime?
+  createdAt DateTime @default(now())
+  versions DocumentVersion[]
+  @@unique([id, companyId])
+  @@index([companyId, leaseId, requestId])
+}
+model DocumentVersion {
+  creator User @relation(fields:[createdById],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  id String @id @default(cuid())
+  companyId String
+  documentId String
+  number Int
+  filename String
+  mediaType String
+  byteLength Int
+  sha256 String
+  content Bytes
+  createdById String
+  submissionKey String
+  submissionHash String
+  scanStatus String @default("pending")
+  scannedAt DateTime?
+  createdAt DateTime @default(now())
+  document PrivateDocument @relation(fields:[documentId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+  @@unique([documentId,number])
+  @@unique([companyId,createdById,submissionKey])
+  @@index([companyId,documentId])
+}
+
+model WorkOrderAction {
+  actor User @relation(fields:[actorId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  id String @id @default(cuid())
+  companyId String
+  requestId String
+  actorId String
+  action String
+  note String
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  request MaintenanceRequest @relation(fields:[requestId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+  @@unique([companyId,actorId,submissionKey])
+  @@index([companyId,requestId,createdAt,id])
 }

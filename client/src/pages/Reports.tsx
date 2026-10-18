@@ -7,8 +7,8 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
-import { Form } from "./Workspace";
-import { dollars } from "./Finances";
+import { Form } from "../components/Form";
+import { dollars } from "../money";
 import { downloadReport, moneyCell } from "../report-export";
 type Base = {
   generatedAt: string;

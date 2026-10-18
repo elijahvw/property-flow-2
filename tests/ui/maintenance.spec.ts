@@ -3,6 +3,7 @@ async function fixture(page:Page,resident=true){
  const state={rows:[] as any[],properties:[{id:'home',name:'Home'}],fail:false,assigned:true,posts:[] as any[],patches:[] as any[],updates:[] as any[],updatePosts:[] as any[],updateFail:false,shareable:true,detailDenied:false};
  await page.route('**/api/**',async route=>{
   const url=new URL(route.request().url()),path=url.pathname,method=route.request().method(),json=(value:unknown,status=200)=>route.fulfill({json:value,status});
+  if(path==='/api/telemetry')return json({accepted:true});
   if(path==='/api/bootstrap')return json({user:{id:'u',name:'Test Owner',email:'u@test.invalid',status:'active',emailVerified:true},membership:{companyId:'a',version:1,role:resident?'resident':'manager',status:'active',company:{name:'Company',status:'active'}},permissions:resident?['resident.self']:['property.read','maintenance.manage'],destination:resident?'/resident/maintenance':'/company/maintenance',csrfToken:'fixture'});
   if(path.endsWith('/units'))return json({items:[{id:'unit-a',label:'Apartment 1',status:'active'}],nextCursor:null});
   if(path.endsWith('/properties'))return json(state.assigned?state.properties:[]);
@@ -54,6 +55,7 @@ test('property maintenance intake stays in scope while company intake keeps prop
  await page.goto('/company/properties/home/maintenance');await page.getByRole('button',{name:'Add request',exact:true}).click();
  const property=page.getByRole('dialog').getByRole('combobox',{name:'Property',exact:true});await expect(property.locator('option')).toHaveText(['Home']);await expect(property).toHaveValue('home');
  await page.getByLabel('Title',{exact:true}).fill('Inspect boiler');await page.getByLabel('Description',{exact:true}).fill('Check the boiler at Home.');await page.getByRole('button',{name:'Save request',exact:true}).click();expect(state.posts[0].propertyId).toBe('home');
+ await page.evaluate(()=>fetch('/api/telemetry',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':'fixture'},body:JSON.stringify({events:[{name:'maintenance.create',outcome:'success',duration:1}]})}));expect(state.posts).toHaveLength(1);expect(state.rows).toHaveLength(1);
  await page.getByRole('link',{name:'Manage request →',exact:true}).click();await expect(page).toHaveURL(/\/company\/maintenance\/request\?propertyId=home&nested=true$/);await page.getByRole('link',{name:'← Back to maintenance',exact:true}).click();await expect(page).toHaveURL(/\/company\/properties\/home\/maintenance$/);
  await page.goto('/company/maintenance');await page.getByRole('button',{name:'Add request',exact:true}).click();const companyProperty=page.getByRole('dialog').getByRole('combobox',{name:'Property',exact:true});await expect(companyProperty.locator('option')).toHaveText(['Garden','Home']);await companyProperty.selectOption('garden');await expect(companyProperty).toHaveValue('garden');
 });

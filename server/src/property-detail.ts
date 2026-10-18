@@ -27,7 +27,8 @@ export function registerPropertyDetail(
     auth,
     (request) => {
       const id = assignmentId(request.params.propertyId);
-      return scoped(db, request, "property.read", async (tx, companyId) => {
+      return scoped(db, request, "property.read", async (tx, companyId, propertyIds) => {
+        if (propertyIds && !propertyIds.includes(id)) throw new AccessError(404, "NOT_FOUND", "Property not found.");
         const row = await tx.property.findFirst({
           where: { id, companyId },
           select: propertySelect,
