@@ -50,3 +50,28 @@ test('automatic refresh clamps a shrinking account list to an available page',as
 test('future lease rent defaults to its first month and accepts an agreed due date before move-in',async({page})=>{
  const state=await fixture(page);state.accounts[0].lease.startsOn='2027-01-15';state.accounts[0].lease.endsOn='2027-12-31';await page.goto('/company/rent?leaseId=lease-a');await page.getByRole('button',{name:'Post monthly rent',exact:true}).click();await expect(page.getByLabel('Rent month',{exact:true})).toHaveValue('2027-01');await page.getByLabel('Due date').fill('2026-12-20');await page.getByRole('button',{name:'Post rent charge',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();expect(state.posted[0]).toMatchObject({periodOn:'2027-01-01',dueOn:'2026-12-20',amount:'1000.00'});
 });
+
+test('one-time charge reviews stay page-only and discarded drafts do not return',async({page})=>{
+ const state=await fixture(page);await page.goto('/company/rent?leaseId=lease-a');
+ await page.getByRole('button',{name:'Add one-time charge',exact:true}).click();
+ await page.getByLabel('Amount (USD)',{exact:true}).fill('45.05');await page.getByLabel('Description shown to the tenant').fill('Synthetic parking charge');
+ await page.getByRole('button',{name:'Review charge',exact:true}).click();
+ expect(await page.evaluate(()=>Object.keys(sessionStorage).filter(key=>key.startsWith('pf-lease-adjustment:')))).toEqual([]);
+ await page.getByRole('button',{name:'Save as draft',exact:true}).click();
+ await page.getByRole('button',{name:'Resume review',exact:true}).click();await expect(page.getByText('Synthetic parking charge',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Back to details',exact:true}).click();await page.getByLabel('Amount (USD)',{exact:true}).fill('46.05');
+ await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:'Close without saving',exact:true}).click();
+ await page.getByRole('button',{name:'Add one-time charge',exact:true}).click();await expect(page.getByLabel('Amount (USD)',{exact:true})).toHaveValue('');expect(state.posted).toHaveLength(0);
+});
+
+test('submitted adjustment recovery preserves the exact payload and source version across refresh',async({page})=>{
+ const state=await fixture(page);state.lose=true;await page.goto('/company/rent?leaseId=lease-a');
+ await page.getByRole('button',{name:'Add one-time charge',exact:true}).click();await page.getByLabel('Amount (USD)',{exact:true}).fill('45.05');await page.getByLabel('Description shown to the tenant').fill('Synthetic parking charge');
+ await page.getByRole('button',{name:'Review charge',exact:true}).click();await page.getByRole('button',{name:'Post one-time charge',exact:true}).click();
+ await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();await expect(page.getByRole('button',{name:'Back to details',exact:true})).toHaveCount(0);
+ state.accounts[0].lease.version=2;await page.reload();await page.getByRole('button',{name:'Resume review',exact:true}).click();
+ await expect(page.getByText('Synthetic parking charge',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Back to details',exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Post one-time charge',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();
+ expect(state.posted).toHaveLength(2);expect(state.posted[1]).toEqual(state.posted[0]);expect(state.posted[1].expectedLeaseVersion).toBe(1);
+ expect(await page.evaluate(()=>Object.keys(sessionStorage).filter(key=>key.startsWith('pf-lease-adjustment:')))).toEqual([]);
+});

@@ -124,13 +124,13 @@ function useReview<T>(name: string, id: string) {
   const [value, setValue] = useState<Review<T> | null>(() => {
     try {
       const r = JSON.parse(sessionStorage.getItem(key) || "null");
-      return r?.body?.submissionKey && r.preview ? r : null;
+      return r?.attempted && r?.body?.submissionKey && r.preview ? r : null;
     } catch {
       return null;
     }
   });
   const retain = (r: Review<T>) => {
-    sessionStorage.setItem(key, JSON.stringify(r));
+    if (r.attempted) sessionStorage.setItem(key, JSON.stringify(r));
     setValue(r);
   };
   const clear = () => {
@@ -354,9 +354,9 @@ function ProrationWorkspace({
       </section>
       {d?.history?.length ? <ProrationHistory rows={d.history} /> : null}
       <EditorDialog
-        open={open}
+        open={open} hasChanges={!!review.value}
         title={review.value ? "Confirm partial rent" : "Review partial rent"}
-        onClose={() => setOpen(false)}
+        onClose={() => setOpen(false)} onDiscard={clear}
       >
         {review.value ? (
           <>
@@ -428,6 +428,7 @@ function ProrationEditor({
   const [override, setOverride] = useState("");
   return (
     <Form
+      reviewOnly
       label="Preview partial rent"
       operation="page.data.load"
       successText=""
@@ -741,7 +742,7 @@ function TransitionWorkspace({
         </details>
       ) : null}
       <EditorDialog
-        open={open}
+        open={open} hasChanges={!!review.value}
         title={
           review.value
             ? review.value.preview.kind === "renew"
@@ -751,7 +752,7 @@ function TransitionWorkspace({
                 : "Review end date"
             : "Lease dates & rent"
         }
-        onClose={() => setOpen(false)}
+        onClose={() => setOpen(false)} onDiscard={clear}
       >
         {review.value ? (
           <>
@@ -854,6 +855,7 @@ function TransitionEditor({
     );
   return (
     <Form
+      reviewOnly
       label="Review changes"
       operation="page.data.load"
       successText=""

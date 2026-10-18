@@ -1,3 +1,4 @@
+import { useEditorSelection } from "../useEditorSelection";
 import { recordReference } from "../record-reference";
 import { formatDate, formatMonth } from "../dates";
 import { DateField } from "../components/DateField";
@@ -121,7 +122,7 @@ export function RentSchedule({
     key = `pf:rent-schedule:${auth?.user.id}:${auth?.membership?.companyId}:${lease.id}`;
   const [cursor, setCursor] = useState(""),
     [open, setOpen] = useState(false),
-    [manage, setManage] = useState<Schedule | null>(null),
+    [manage, setManage, manageOpen, saveManageDraft] = useEditorSelection<Schedule | null>(null),
     [note, setNote] = useState("");
   const r = useResource<Data>(
     `/api/company/rent/${encodeURIComponent(lease.id)}/schedule${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
@@ -372,7 +373,7 @@ export function RentSchedule({
       <EditorDialog
         open={repostOpen}
         title="Review installment repost"
-        onClose={() => setRepostOpen(false)}
+        onClose={() => setRepostOpen(false)} onDiscard={() => { setRepostOpen(false); setRepost(null); }}
       >
         {repost && (
           <RentRepost
@@ -404,7 +405,7 @@ export function RentSchedule({
         />
       </EditorDialog>
       <EditorDialog
-        open={!!manage}
+        open={manageOpen} onSaveDraft={saveManageDraft}
         title="Manage billing schedule"
         onClose={() => setManage(null)}
       >
@@ -591,6 +592,7 @@ function ScheduleSetup({
   return (
     <Form
       key="configure"
+      reviewOnly
       label="Review schedule"
       operation="page.data.load"
       submit={async (f) => {

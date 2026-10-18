@@ -215,3 +215,14 @@ test("a dual platform/company owner sees the authority for the current workspace
   );
   await expect(page.locator(".sidebar-footer")).toContainText("Platform owner");
 });
+
+
+test('profile review is page-only until submitted and explicit saving does not write browser storage',async({page})=>{
+ const state=await fixture(page,'resident');await page.goto('/account');await page.getByRole('button',{name:'Contact',exact:true}).click();
+ await page.getByRole('button',{name:'Edit contact details',exact:true}).click();await page.getByLabel('Primary phone',{exact:true}).fill('555-9999');
+ await page.getByRole('button',{name:'Review profile changes',exact:true}).click();await expect(page.getByRole('heading',{name:'Review profile changes',exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>Object.keys(sessionStorage).filter(key=>key.startsWith('pf:profile')))).toEqual([]);
+ await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:'Save draft & close',exact:true}).click();
+ expect(state.patches).toHaveLength(0);await page.reload();await page.getByRole('button',{name:'Contact',exact:true}).click();await page.getByRole('button',{name:'Edit contact details',exact:true}).click();
+ await expect(page.getByLabel('Primary phone',{exact:true})).toHaveValue('555-0100');expect(state.patches).toHaveLength(0);
+});

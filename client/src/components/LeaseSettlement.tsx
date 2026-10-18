@@ -106,7 +106,7 @@ const chargeLabel = (c: Statement["items"][number]) =>
 function retained(key: string): Review | null {
   try {
     const r = JSON.parse(sessionStorage.getItem(key) || "null");
-    return r &&
+    return r && r.attempted &&
       r.body &&
       typeof r.body.submissionKey === "string" &&
       r.preview?.before?.financial
@@ -559,14 +559,14 @@ function SettlementWorkspace({
       {!resident && (
         <>
           <EditorDialog
-            open={open}
+            open={open} hasChanges={!!review}
             title={
               review
                 ? "Confirm move-out settlement"
                 : "Prepare move-out settlement"
             }
             description={`${d.lease.property.name} · ${d.lease.unit.label}`}
-            onClose={() => setOpen(false)}
+            onClose={() => setOpen(false)} onDiscard={clear}
           >
             {review ? (
               <>
@@ -679,7 +679,7 @@ function SettlementWorkspace({
                   data={draft}
                   root={root}
                   reviewed={(next) => {
-                    sessionStorage.setItem(key, JSON.stringify(next));
+
                     setReview(next);
                   }}
                 />
@@ -774,6 +774,7 @@ function SettlementEditor({
     held = data.current?.deposit?.heldCents || "0";
   return (
     <Form
+      reviewOnly
       label={step === 3 ? "Review settlement" : "Continue"}
       operation="page.data.load"
       successText=""

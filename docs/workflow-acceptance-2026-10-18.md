@@ -10,27 +10,41 @@ Priorities: P1 blocks a core task or violates a boundary; P2 creates substantial
 
 ## Findings under follow-up
 
+### W10 · Draft retention must be explicit — P2, user requirement
+
+**Implemented locally; final regression/release verification pending.** Previously, the shared EditorDialog kept closed editors mounted, implicitly retaining unfinished forms. Tenant/contact and several financial/profile workflows also wrote unfinished drafts or reviews to browser session storage; LeaseAdjustments wrote whenever its draft state changed. The user explicitly rejected automatic draft saving.
+
+Required behavior: unchanged forms close normally. Closing a changed form offers **Keep editing**, **Close without saving**, and **Save draft & close** where a draft can be meaningfully resumed. Provide an explicit **Save as draft** option. No silent draft creation or retention on close. Preserve current input after an error while the editor stays open. Treat a submitted request with an uncertain response separately so retry safety and posted financial history are preserved.
+
+The user chose **page-only** drafts. Explicit saving retains the original React form, selected files, reviewed source versions and submission key in memory. Refresh, page departure or scope changes clear unsubmitted work. Changed-form Close/Escape now asks for a choice; unchanged forms close directly. Multi-step reviews no longer persist before submission. Recovery journals for already-submitted requests remain separate and keep exact retry payloads. Local validation: client build,25client unit checks,202UI cases in the full run plus19focused cases including the corrected new multi-form test. Coverage includes discard, Escape, saved-draft reopen, refresh, file retention, no pre-submit storage, source-version safety and independent user-management sections. Release/live confirmation remain pending.
+
 ### W01 · Changed household approval has an awkward owner recovery — P2
 
-**Confirmed live; local correction validated, not yet deployed.** Create a tenant invitation, change the lease, then choose **Send or replace invitation → Create replacement link**. The server correctly refuses the stale approval, but tells the signed-in owner: “The household changed. Ask the owner for a newly reviewed invitation.” Repeating the replacement cannot succeed. Recovery required closing the dialog, revoking the old invitation, opening Invite to portal, reviewing access again, creating a link and sending it.
+**Confirmed live; merged/deployed in PR51; targeted live recheck pending.** Create a tenant invitation, change the lease, then choose **Send or replace invitation → Create replacement link**. The server correctly refuses the stale approval, but tells the signed-in owner: “The household changed. Ask the owner for a newly reviewed invitation.” Repeating the replacement cannot succeed. Recovery required closing the dialog, revoking the old invitation, opening Invite to portal, reviewing access again, creating a link and sending it.
 
 Local correction: a changed-approval response offers **Review current access**, opening the existing fresh review without a separate revoke step. The existing save transaction replaces old contact links atomically. Preserve explicit owner approval, version checks, old-link invalidation and invitation history. Do not silently refresh the approved scope.
 
 ### W02 · Sending a team invitation leaves an empty creation form behind — P3
 
-**Observed live; local correction validated, not yet deployed.** After a successful team invitation send, **Done** closes delivery but leaves the blank Invite team member dialog open. An owner must close another dialog to return to the team list, without an explicit choice to invite someone else.
+**Observed live; merged/deployed in PR51; targeted live recheck pending.** After a successful team invitation send, **Done** closes delivery but leaves the blank Invite team member dialog open. An owner must close another dialog to return to the team list, without an explicit choice to invite someone else.
 
 Local correction: **Done** closes the team invitation dialog and returns to the list. A deliberate next invitation starts with a fresh form/key. Other embedded invitation forms retain their existing completion behavior.
 
 ### W03 · Latest document scan result is hidden with version history — P3
 
-**Observed live; local correction validated, not yet deployed.** After leaving and returning to Documents, collapsed retained-version sections hide the current clean/rejected status and the clean-file download. The document title and version-upload/archive actions remain visible. Opening retained versions reveals the result.
+**Observed live; merged/deployed in PR51; targeted live recheck pending.** After leaving and returning to Documents, collapsed retained-version sections hide the current clean/rejected status and the clean-file download. The document title and version-upload/archive actions remain visible. Opening retained versions reveals the result.
 
 Local correction: the latest scan status appears beside the document title while retained versions and downloads remain expandable. Full mobile/keyboard live review remains pending.
 
 ### W04 · First-time password setup and return to invitation — P2 review
 
-**Confirmed journey interruption; local recovery improvement validated, not yet deployed.** The invited person moves from invitation to setup email to the identity provider, then back to sign-in and invitation acceptance. Owner setup worked. Manager password/sign-in landed at **Account access pending** despite a saved invitation; opening /invite recovered the correct review, then acceptance succeeded. The exact identity-provider return path remains under investigation. The local Access pending page now offers **Review your invitation** for a saved invitation; disabled accounts do not receive this prompt. Staff and resident journeys remain incomplete. Check email wording, sender consistency, which tab to return to, preserved destination, wrong-account recovery and verification instructions. Browser policy requiring the human to enter a new password is a testing constraint, not a product defect.
+**Confirmed journey interruption; recovery improvement merged/deployed in PR51; targeted live recheck pending.** The invited person moves from invitation to setup email to the identity provider, then back to sign-in and invitation acceptance. Owner setup worked. Manager password/sign-in landed at **Account access pending** despite a saved invitation; opening /invite recovered the correct review, then acceptance succeeded. The exact identity-provider return path remains under investigation. The local Access pending page now offers **Review your invitation** for a saved invitation; disabled accounts do not receive this prompt. Staff and resident journeys remain incomplete. Check email wording, sender consistency, which tab to return to, preserved destination, wrong-account recovery and verification instructions. Browser policy requiring the human to enter a new password is a testing constraint, not a product defect.
+
+### W09 · Help search does not prioritize the named task — P3
+
+**Observed live; open, not part of PR51.** From public Help, search **rent**. The app returns 14 of 15 guides, placing **Post rent and record a lease payment** seventh after broad matches. The search functions, but does little to narrow this common task, especially on a phone. Empty search results and recovery to matching guides work.
+
+Smallest useful correction to assess: put title/summary matches ahead of incidental article-body matches, retaining useful related guides. Check a short task set (invitation, rent, deposit, maintenance, password) before choosing matching rules. No search service or new infrastructure is needed.
 
 ## Fixed findings and release verification
 
@@ -75,6 +89,6 @@ Each item stays open until its complete user journey and relevant error/recovery
 
 ## Evidence and next action
 
-All live writes are confined to the explicitly authorized, labeled sample company. No real payment, vendor dispatch or support correspondence occurred. PR48, PR49 and PR50 are deployed; migrations033/034 were verified. Screenshots in `/tmp`: `pf-live-document-scanning.jpg`, `pf-live-lease-activated.jpg`, `pf-live-sample-report.jpg`, `pf-live-invitation-help.jpg`.
+All live writes are confined to the explicitly authorized, labeled sample company. No real payment, vendor dispatch or support correspondence occurred. PR48, PR49 and PR50 are deployed; migrations033/034 were verified. Screenshots in `/tmp`: `pf-live-document-scanning.jpg`, `pf-live-lease-activated.jpg`, `pf-live-sample-report.jpg`, `pf-live-invitation-help.jpg`, `pf-live-public-help.jpg`, `pf-live-help-rent-search.jpg`.
 
-Local follow-up validation: client production build and 25 focused invitation/tenant/document UI cases passed. No server schema or authority changes. Next: complete staff password/sign-in, review and release the focused follow-up, then continue resident/staff role acceptance and the unchecked journeys. Keep this log updated with new findings and verified resolutions; do not silently convert unchecked coverage into a pass.
+PR51 validation: client production build, 25 focused invitation/tenant/document UI cases and full CI passed. Merged as `5c76f8c`; deployment `39142308369` passed frontend/public/authentication checks. Backend unchanged. No schema or authority changes. Targeted signed-in rechecks remain pending. Next: complete staff password/sign-in, recheck the deployed follow-up, then continue resident/staff role acceptance and the unchecked journeys. Keep this log updated with new findings and verified resolutions; do not silently convert unchecked coverage into a pass.

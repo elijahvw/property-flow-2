@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Account, Entry } from "../pages/Rent";
 import { useAuth } from "../context/AuthContext";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import { Form } from "./Form";
 import { dollars } from "../money";
 import { formatDate, formatMonth } from "../dates";
@@ -28,6 +28,7 @@ export type LeaseCredit = {
   };
 };
 type Draft = {
+  attempted?: boolean;
   mode: "charge" | "credit" | "reverse";
   submissionKey: string;
   expectedLeaseVersion: number;
@@ -64,7 +65,7 @@ function amountInCents(value: string) {
 function pending(key: string): Draft | null {
   try {
     const value = JSON.parse(sessionStorage.getItem(key) ?? "null");
-    return value &&
+    return value && value.attempted === true &&
       ["charge", "credit", "reverse"].includes(value.mode) &&
       typeof value.submissionKey === "string" &&
       Number.isInteger(value.expectedLeaseVersion) &&
@@ -104,13 +105,13 @@ export function LeaseAdjustments({
   const storageKey = `pf-lease-adjustment:${data?.user.id}:${data?.membership?.companyId}:${account.lease.id}`;
   const [draft, setDraft] = useState<Draft | null>(() => pending(storageKey));
   const [open, setOpen] = useState(false),
-    [review, setReview] = useState(false);
+    [review, setReview] = useState(!!draft?.attempted);
   const unpaid = (account.charges ?? []).filter(
     (c) => !c.voidedAt && BigInt(c.remainingCents ?? "0") > 0n,
   );
   useEffect(() => {
     try {
-      if (draft) sessionStorage.setItem(storageKey, JSON.stringify(draft));
+      if (draft?.attempted) sessionStorage.setItem(storageKey, JSON.stringify(draft));
       else sessionStorage.removeItem(storageKey);
     } catch {
       /* The current draft still works when storage is unavailable. */
@@ -240,7 +241,7 @@ export function LeaseAdjustments({
       )}
       {!resident && (
         <EditorDialog
-          open={open && !!draft}
+          open={open && !!draft} hasChanges={!!draft?.attempted}
           title={
             draft?.mode === "charge"
               ? "Add one-time charge"
@@ -249,6 +250,7 @@ export function LeaseAdjustments({
                 : "Record a credit"
           }
           onClose={() => setOpen(false)}
+          onDiscard={() => { setDraft(null); setReview(false); setOpen(false); }}
         >
           {draft && (
             <>
@@ -448,7 +450,7 @@ export function LeaseAdjustments({
                       ? "Charge posted. Lease balance updated."
                       : "Credit history saved. Lease balance updated."
                   }
-                  secondaryActions={
+                  secondaryActions={!draft.attempted &&
                     <button
                       type="button"
                       className="secondary"
@@ -468,7 +470,10 @@ export function LeaseAdjustments({
                       expectedLeaseVersion: draft.expectedLeaseVersion,
                       submissionKey: draft.submissionKey,
                     };
-                    await api(
+                    const attempt = { ...draft, attempted: true };
+                    sessionStorage.setItem(storageKey, JSON.stringify(attempt));
+                    setDraft(attempt);
+                    try { await api(
                       draft.mode === "charge"
                         ? `${root}/one-time-charges`
                         : draft.mode === "reverse"
@@ -500,6 +505,14 @@ export function LeaseAdjustments({
                                 },
                       },
                     );
+                    } catch (error) {
+                      if (!draft.attempted && error instanceof ApiError && [400,403,404,409,422].includes(error.status)) {
+                        sessionStorage.removeItem(storageKey);
+                        setDraft({ ...draft, attempted: false });
+                      }
+                      throw error;
+                    }
+                    sessionStorage.removeItem(storageKey);
                     setDraft(null);
                     setOpen(false);
                     setReview(false);

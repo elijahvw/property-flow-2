@@ -6,6 +6,7 @@ Read when changing a user workflow.
 - Show setup prompts only for missing setup. Portal activation is distinct from account creation. Every new tenant and lease participant has an Auth0 account; recording their lease does not require first sign-in or grant portal authority.
 - Make directories useful for daily work: meaningful labels, property/unit context, search, clear status and direct detail links. Keep secondary and archival actions unobtrusive.
 - Forms must be readable and easy to navigate, with grouped fields, useful detail, clear required/optional labels, validation and preserved input after errors.
+- Draft saving is an explicit user action. Explicitly saved drafts live only in memory while their page stays open; do not store unfinished input in local/session storage or the database. Do not silently retain or persist an unfinished form when it is closed. Closing a changed editor must offer Keep editing, Close without saving, and Save draft & close where drafts are supported. Preserve input while the editor remains open after validation/network errors. Keep already-submitted request recovery distinct from an unsubmitted draft; discarding a draft does not undo a completed business write or justify duplicating an uncertain financial submission.
 - Display dates with the month name, day and year. Group postal addresses as street, then city/state/postal code. Keep dates, currency and status wording consistent.
 - Use responsive layouts, semantic controls, visible focus, accessible labels and explicit loading, empty, error and success states.
 

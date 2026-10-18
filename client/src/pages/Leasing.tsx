@@ -1,3 +1,4 @@
+import { useEditorSelection } from "../useEditorSelection";
 import { useDebouncedValue } from "../useDebouncedValue";
 import { TenantForm,type TenantContact } from "../components/TenantForm";
 import { formatDate } from "../dates";
@@ -121,7 +122,7 @@ function UnitList({
     query = params.get("q") || "",
     status = params.get("status") || "";
   const [adding, setAdding] = useState(false),
-    [selected, setSelected] = useState<Unit | null>(null);
+    [selected, setSelected, selectedOpen, saveSelectedDraft] = useEditorSelection<Unit | null>(null);
   const [key, setKey] = useState(() => crypto.randomUUID()),
     [error, setError] = useState(""),
     [success, setSuccess] = useState("");
@@ -178,7 +179,7 @@ function UnitList({
             <EditorDialog
               open={adding}
               title="Add a unit"
-              onClose={() => setAdding(false)}
+              onClose={() => setAdding(false)} onDiscard={() => { setAdding(false); setKey(crypto.randomUUID()); }}
             >
               <Form
                 key={key}
@@ -307,7 +308,8 @@ function UnitList({
       )}
       {selected && (
         <EditorDialog
-          open
+          open={selectedOpen}
+          onSaveDraft={saveSelectedDraft}
           title={`Edit unit ${selected.label}`}
           onClose={() => {
             setSelected(null);
@@ -382,8 +384,8 @@ function LeaseList() {
   const { propertyId: pathPropertyId } = useParams();
   const [params, setParams] = useSearchParams();
   const [adding, setAdding] = useState(params.get("new") === "lease"),
-    [selected, setSelected] = useState<Lease | null>(null),
-    [renewing, setRenewing] = useState<Lease | null>(null);
+    [selected, setSelected, selectedOpen, saveSelectedDraft] = useEditorSelection<Lease | null>(null),
+    [renewing, setRenewing, renewingOpen, saveRenewingDraft] = useEditorSelection<Lease | null>(null);
   const contextId = pathPropertyId || params.get("propertyId") || "",
     unitId = params.get("unitId") || "",
     status = params.get("status") || "",
@@ -790,7 +792,7 @@ function LeaseList() {
         )}
       </section>
       <EditorDialog
-        open={!!renewing}
+        open={renewingOpen} onSaveDraft={saveRenewingDraft}
         title="Prepare lease renewal"
         onClose={() => {
           setRenewing(null);
@@ -814,7 +816,8 @@ function LeaseList() {
       </EditorDialog>
       {selected && (
         <EditorDialog
-          open
+          open={selectedOpen}
+          onSaveDraft={saveSelectedDraft}
           title={`Edit lease · ${selected.property.name} · ${selected.unit.label}`}
           onClose={() => {
             setSelected(null);
@@ -902,7 +905,7 @@ export function LeaseCreate({
   }, [units.data]);
   return (
     <>
-      <EditorDialog open={addingTenant} title="Add tenant for this lease" onClose={()=>{setAddingTenant(false);setTenantFormRevision(v=>v+1);residents.reload();}}><TenantForm key={tenantFormRevision} saved={row=>{setNewTenant(row);setSelectedTenant(row.id);setAddingTenant(false);residents.reload();}} cancel={()=>setAddingTenant(false)}/></EditorDialog>
+      <EditorDialog open={addingTenant} title="Add tenant for this lease" onSaveDraft={()=>setAddingTenant(false)} onClose={()=>{setAddingTenant(false);setTenantFormRevision(v=>v+1);residents.reload();}}><TenantForm key={tenantFormRevision} saved={row=>{setNewTenant(row);setSelectedTenant(row.id);setAddingTenant(false);residents.reload();}} cancel={()=>setAddingTenant(false)}/></EditorDialog>
       <div className="prerequisite-links">
         <Link
           to={`/company/properties/${encodeURIComponent(propertyId)}/residents`}
@@ -957,6 +960,7 @@ export function LeaseCreate({
                   secondaryActions={
                     <DraftReset reset={() => setKey(crypto.randomUUID())} />
                   }
+                  reviewOnly
                   label="Review lease"
                   submit={async (form) => {
                     setReview({
@@ -1218,6 +1222,7 @@ export function LeaseRenewal({
       <div hidden={!!review}>
         <Form
           operation="page.data.load"
+          reviewOnly
           label="Review renewal"
           submit={async (f) =>
             setReview({

@@ -34,7 +34,7 @@ export function PrivateDocuments({source,sourceId}:{source:'leases'|'maintenance
         }}><span className="help">Access is checked again for each download.</span></Form>}
       </li>)}</ul></details>
     </li>)}</ul>}
-    {r.data&&draft&&<EditorDialog open={open} title={draft.document?'Upload new document version':'Upload private document'} onClose={()=>setOpen(false)}><DocumentUpload key={draft.key} endpoint={endpoint} scanningConfigured={!!r.data.scanningConfigured} draft={draft} saved={message=>{setNotice(message);setDraft(null);setOpen(false);r.reload();}} discard={()=>{setDraft(null);setOpen(false);}} /></EditorDialog>}
+    {r.data&&draft&&<EditorDialog open={open} title={draft.document?'Upload new document version':'Upload private document'} onClose={()=>setOpen(false)} onDiscard={()=>{setDraft(null);setOpen(false);}}><DocumentUpload key={draft.key} endpoint={endpoint} scanningConfigured={!!r.data.scanningConfigured} draft={draft} saved={message=>{setNotice(message);setDraft(null);setOpen(false);r.reload();}} discard={()=>{setDraft(null);setOpen(false);}} /></EditorDialog>}
   </section>;
 }
 function DocumentUpload({endpoint,scanningConfigured,draft,saved,discard}:{endpoint:string;scanningConfigured:boolean;draft:{document:Document|null;key:string};saved:(message:string)=>void;discard:()=>void}) {

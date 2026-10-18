@@ -171,6 +171,7 @@ test("property deposit directory connects named lease, complete balances, export
     ),
   ).toBe(true);
   await editor.getByRole("button", { name: "Close", exact: true }).click();
+  await editor.getByRole("button", {name:"Save draft & close",exact:true}).click();
   await expect(account).toBeVisible();
 });
 test("resident deposit view is read only and conceals internal notes; access revocation removes balances", async ({

@@ -1,3 +1,4 @@
+import { useEditorSelection } from "../useEditorSelection";
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { formatDate } from "../dates";
@@ -10,7 +11,7 @@ import { TenantInvitation } from "./TenantInvitation";
 type Row = InvitationResult & { email: string; role: string; contactId?: string | null; leaseId?: string | null; participantRole?: string | null; acceptedAt: string | null; revokedAt: string | null; company?: { name: string } };
 export function InvitationHistory({ platform = false, audience }: { platform?: boolean; audience?: "team" | "tenants" }) {
   const [query, setQuery] = useState(""), [status, setStatus] = useState(""), [page, setPage] = useState(1), [selected, setSelected] = useState<Row | null>(null), [error, setError] = useState("");
-  const [reviewContact, setReviewContact] = useState<string | null>(null);
+  const [reviewContact, setReviewContact, reviewOpen, saveReviewDraft] = useEditorSelection<string | null>(null);
   const search = useDebouncedValue(query, 250);
   const params = new URLSearchParams({ page: String(page), ...(audience ? { audience } : {}), ...(search ? { q: search } : {}), ...(status ? { status } : {}) });
   const r = useResource<{ items: Row[]; total: number; pageSize: number } | Row[]>(`/api/invitations?${params}`, false, true);
@@ -26,7 +27,7 @@ export function InvitationHistory({ platform = false, audience }: { platform?: b
       const label = row.acceptedAt ? "Accepted" : row.revokedAt ? "Revoked" : Date.parse(row.expiresAt) <= Date.now() ? "Expired" : "Pending";
       return <li key={row.id}><div><strong>{row.email}</strong><p>{row.participantRole || row.role}{platform && row.company ? ` · ${row.company.name}` : ""} · Expires {formatDate(row.expiresAt)}</p><span className="help">{invitationDeliveryLabel(row)}</span></div><span className="badge">{label}</span>{!row.acceptedAt && !row.revokedAt && <div className="actions"><button className="secondary" onClick={() => setSelected(row)}>Send or replace</button><button className="text-button" onClick={async () => { setError(""); try { await api(`/api/invitations/${encodeURIComponent(row.id)}/revoke`, { method: "POST", body: { expectedVersion: row.version } }); r.reload(); } catch (failure) { setError(failure instanceof Error ? failure.message : "Unable to revoke this invitation."); } }}>Revoke</button></div>}</li>;
     })}</ul><nav className="actions" aria-label="Invitation pages"><button className="secondary" disabled={page === 1} onClick={() => setPage(value => value - 1)}>Previous invitations</button><span>Page {page}</span><button className="secondary" disabled={page * 25 >= total} onClick={() => setPage(value => value + 1)}>Next invitations</button></nav></>}
-    {selected && <EditorDialog open title={`Invitation for ${selected.email}`} onClose={() => { setSelected(null); r.reload(); }}><InvitationDelivery key={selected.id} initial={selected} changed={r.reload} done={() => { setSelected(null); r.reload(); }} reviewAccess={!platform && selected.contactId && !selected.leaseId ? () => { setReviewContact(selected.contactId!); setSelected(null); } : undefined} /></EditorDialog>}
-    {reviewContact && <EditorDialog open title="Review tenant invitation" onClose={() => { setReviewContact(null); r.reload(); }}><TenantInvitation contactId={reviewContact} done={() => { setReviewContact(null); r.reload(); }}/></EditorDialog>}
+    {selected && <EditorDialog open draftable={false} title={`Invitation for ${selected.email}`} onClose={() => { setSelected(null); r.reload(); }}><InvitationDelivery key={selected.id} initial={selected} changed={r.reload} done={() => { setSelected(null); r.reload(); }} reviewAccess={!platform && selected.contactId && !selected.leaseId ? () => { setReviewContact(selected.contactId!); setSelected(null); } : undefined} /></EditorDialog>}
+    {reviewContact && <EditorDialog open={reviewOpen} onSaveDraft={saveReviewDraft} title="Review tenant invitation" onClose={() => { setReviewContact(null); r.reload(); }}><TenantInvitation contactId={reviewContact} done={() => { setReviewContact(null); r.reload(); }}/></EditorDialog>}
   </section>;
 }

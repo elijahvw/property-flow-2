@@ -1,3 +1,4 @@
+import { useEditorSelection } from "../useEditorSelection";
 import { TeamInvitationReview } from "../components/TeamInvitationReview";
 import { InvitationHistory } from "../components/InvitationHistory";
 import { InvitationDelivery, type InvitationResult } from "../components/InvitationDelivery";
@@ -235,7 +236,7 @@ function PeopleWorkspace() {
   const r = useResource<Person[]>("/api/platform/users", true),
     companies = useResource<Company[]>("/api/platform/companies", true, true);
   const [params,setParams] = useSearchParams();
-  const [selected, setSelected] = useState(params.get("userId") || "");
+  const [selected, setSelected, selectedOpen, saveSelectedDraft] = useEditorSelection(params.get("userId") || "");
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
   const directory = useUserDirectory(r.reload);
@@ -267,7 +268,7 @@ function PeopleWorkspace() {
         open={creating}
         title="Add user"
         onClose={() => setCreating(false)}
-        description="Create a sign-in account, then assign company access. Your draft is kept when you close this form."
+        description="Create a sign-in account, then assign company access. Save a draft explicitly to keep it on this page."
       >
         <UserProvisioning
           saved={(id) => {
@@ -432,7 +433,8 @@ function PeopleWorkspace() {
       </section>
       {person && (
         <EditorDialog
-          open
+          open={selectedOpen}
+          onSaveDraft={saveSelectedDraft}
           title={`Manage ${person.name || person.email}`}
           onClose={() => {
             setSelected("");
@@ -679,7 +681,7 @@ function PropertyDirectory() {
         <EditorDialog
           open={adding}
           title="Add a property"
-          onClose={() => setAdding(false)}
+          onClose={() => setAdding(false)} onDiscard={() => { setAdding(false); setPropertyKey(crypto.randomUUID()); }}
           description="Start with the address. Add units and residents from the property workspace after saving."
         >
           <Form
@@ -957,8 +959,8 @@ function TeamDirectory() {
   const [params] = useSearchParams();
   const [inviting, setInviting] = useState(params.has("invite")),
     [transferring, setTransferring] = useState(false);
-  const [selected, setSelected] = useState("");
-  const [propertyMember, setPropertyMember] = useState("");
+  const [selected, setSelected, selectedOpen, saveSelectedDraft] = useEditorSelection("");
+  const [propertyMember, setPropertyMember, propertyMemberOpen, savePropertyDraft] = useEditorSelection("");
   const [teamQuery, setTeamQuery] = useState(""), [teamStatus, setTeamStatus] = useState(""), [teamRole, setTeamRole] = useState(""), [teamPage, setTeamPage] = useState(0);
   const [invitationRevision, setInvitationRevision] = useState(0);
   const team = r.data?.filter((m) => m.role !== "resident");
@@ -1014,12 +1016,13 @@ function TeamDirectory() {
         {r.data && !filteredTeam?.length && <p>No team members match these filters.</p>}
         {!!filteredTeam?.length && <nav className="actions" aria-label="Team pages"><button className="secondary" disabled={!teamPage} onClick={()=>setTeamPage(p=>p-1)}>Previous team members</button><span>{filteredTeam.length} matching members · Page {teamPage+1}</span><button className="secondary" disabled={(teamPage+1)*25>=filteredTeam.length} onClick={()=>setTeamPage(p=>p+1)}>Next team members</button></nav>}
       </section>
-      {team?.find(m => m.userId === propertyMember) && <EditorDialog open title={`Staff access for ${team.find(m => m.userId === propertyMember)!.user.name || team.find(m => m.userId === propertyMember)!.user.email}`} onClose={() => setPropertyMember("")}>
+      {team?.find(m => m.userId === propertyMember) && <EditorDialog open={propertyMemberOpen} onSaveDraft={savePropertyDraft} title={`Staff access for ${team.find(m => m.userId === propertyMember)!.user.name || team.find(m => m.userId === propertyMember)!.user.email}`} onClose={() => setPropertyMember("")}>
         <StaffPropertyEditor key={propertyMember} member={team.find(m => m.userId === propertyMember)!} saved={() => { setPropertyMember(""); r.reload(); }} />
       </EditorDialog>}
       {member && (
         <EditorDialog
-          open
+          open={selectedOpen}
+          onSaveDraft={saveSelectedDraft}
           title={`Access for ${member.user.name || member.user.email}`}
           onClose={() => setSelected("")}
         >
@@ -1166,6 +1169,7 @@ export function ManageResidents({
     <EditorDialog
       open
       title={`Residents for ${property.name}`}
+      draftable={false}
       onClose={close}
       busy={busy}
     >

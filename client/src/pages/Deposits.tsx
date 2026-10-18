@@ -214,7 +214,7 @@ function DepositDirectory({ resident }: { resident: boolean }) {
           <button onClick={()=>setChoosingLease(true)}>Set up a security deposit</button>
         )}
       </header>
-      {!resident&&choosingLease&&<EditorDialog open title="Choose a lease for this deposit" onClose={()=>setChoosingLease(false)}><DepositLeasePicker propertyId={propertyId} selected={id=>{setChoosingLease(false);setParams(previous=>{const next=new URLSearchParams(previous);next.set("leaseId",id);return next;});}}/></EditorDialog>}
+      {!resident&&choosingLease&&<EditorDialog open draftable={false} title="Choose a lease for this deposit" onClose={()=>setChoosingLease(false)}><DepositLeasePicker propertyId={propertyId} selected={id=>{setChoosingLease(false);setParams(previous=>{const next=new URLSearchParams(previous);next.set("leaseId",id);return next;});}}/></EditorDialog>}
       {resident && !leaseId && <ResidentFinancialNotice />}
       {r.error && <Load error={r.error} retry={r.reload} />}{" "}
       {!r.data ? (
@@ -343,6 +343,7 @@ function DepositDirectory({ resident }: { resident: boolean }) {
         <EditorDialog
           open
           title="Security deposit account"
+          draftable={false}
           onClose={() => setParams(propertyId ? { propertyId } : {})}
         >
           {resident && <ResidentFinancialNotice />}
@@ -650,7 +651,7 @@ function DepositAccountPanel({
                     ? "Correct deposit receipt"
                     : "Security deposit requirement"
               }
-              onClose={() => setOpen(false)}
+              onClose={() => setOpen(false)} onDiscard={() => { setOpen(false); setEditor(null); r.reload(); }}
             >
               <DepositEditor
                 key={`${editor.kind}:${editor.receipt?.id || ""}:${editor.restored?.payload.submissionKey || ""}:${editor.revision || ""}`}
@@ -812,6 +813,7 @@ function DepositEditor({
       )}
       <div hidden={!!review}>
         <Form
+          reviewOnly
           label={
             kind === "receipt"
               ? "Review deposit receipt"

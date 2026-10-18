@@ -12,6 +12,7 @@ export function Form({
   successText = "Saved.",
   feedbackText,
   secondaryActions,
+  reviewOnly = false,
 }: {
   children: React.ReactNode;
   submit: (data: FormData) => Promise<void>;
@@ -20,6 +21,7 @@ export function Form({
   successText?: string;
   feedbackText?: string;
   secondaryActions?: React.ReactNode;
+  reviewOnly?: boolean;
 }) {
   const notify = useFeedback();
   const editor = useEditorBusy(),
@@ -37,13 +39,15 @@ export function Form({
       onSubmit={async (event) => {
         event.preventDefault();
         if (busy || editor.busy) return;
-        const data = new FormData(event.currentTarget);
+        const form = event.currentTarget;
+        const data = new FormData(form);
         setBusy(true);
         setError("");
         setSaved(false);
         notify("");
         try {
           await monitorOperation(operation, () => submit(data), operation.startsWith("document.") ? 60000 : undefined);
+          if (!reviewOnly) editor.completed(form);
           setSaved(true);
           if (
             operation !== "page.data.load" &&

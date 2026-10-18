@@ -19,7 +19,7 @@ export function PropertySearch() {
       <button className="property-search-trigger" onClick={() => setOpen(true)}>
         <span aria-hidden="true">⌕</span> Find a property <kbd>⌘ K</kbd>
       </button>
-      <EditorDialog
+      <EditorDialog draftable={false}
         open={open}
         title="Find a property"
         onClose={() => setOpen(false)}

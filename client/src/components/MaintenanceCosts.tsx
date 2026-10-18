@@ -1,3 +1,4 @@
+import { useEditorSelection } from "../useEditorSelection";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
@@ -23,7 +24,7 @@ function Failure({ error, retry }: { error?: string; retry: () => void }) {
 export function MaintenanceCosts({ requestId, propertyId }: { requestId: string; propertyId: string }) {
   const endpoint = `/api/company/maintenance/${encodeURIComponent(requestId)}/costs`;
   const [cursor, setCursor] = useState(""), [adding, setAdding] = useState(false),
-    [unlinking, setUnlinking] = useState<Cost | null>(null), [success, setSuccess] = useState("");
+    [unlinking, setUnlinking, unlinkOpen, saveUnlinkDraft] = useEditorSelection<Cost | null>(null), [success, setSuccess] = useState("");
   const r = useResource<{ items: Cost[]; nextCursor: string | null; summary: { paidCents: string; paidCount: number } }>(`${endpoint}${cursor ? `?${new URLSearchParams({ cursor })}` : ""}`, true, true);
   const financePath = `/company/properties/${encodeURIComponent(propertyId)}/finances`;
   const refresh = (message: string) => { setCursor(""); r.reload(); setSuccess(message); };
@@ -52,7 +53,7 @@ export function MaintenanceCosts({ requestId, propertyId }: { requestId: string;
     <EditorDialog open={adding} title="Link a paid maintenance expense" onClose={() => setAdding(false)}>
       <ExpensePicker endpoint={endpoint} saved={() => { setAdding(false); refresh("Expense linked. Financial records are unchanged."); }} />
     </EditorDialog>
-    {unlinking && <EditorDialog open title="Unlink maintenance expense" onClose={() => setUnlinking(null)}>
+    {unlinking && <EditorDialog open={unlinkOpen} onSaveDraft={saveUnlinkDraft} title="Unlink maintenance expense" onClose={() => setUnlinking(null)}>
       <p>{unlinking.entry.reference} · {dollars(unlinking.entry.amountCents)} · {formatDate(unlinking.entry.occurredOn)}</p>
       <p>This removes the expense from this request's cost total. The paid transaction stays in Cash activity; unlinking does not refund or void it.</p>
       <Form key={`${unlinking.id}:${unlinking.version}`} operation="maintenance.cost.unlink" label="Unlink expense" feedbackText="Maintenance expense unlinked."

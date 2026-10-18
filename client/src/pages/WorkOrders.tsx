@@ -42,7 +42,7 @@ export function WorkOrderPanel({id,management=false,changed=()=>{}}:{id:string;m
       </div>
       <h3>Work history</h3>{row.historyLimited&&<p>Showing the latest 100 work events. Earlier events remain retained.</p>}
       {!row.actions?.length?<p>No delegated work recorded.</p>:<ol>{row.actions.map(event=><li key={event.id}><strong>{labels[event.action]}</strong> · {formatActivityTime(event.createdAt)}{event.author?` · ${event.author}`:''}<p className="preserve-lines">{event.note}</p></li>)}</ol>}
-      {draft&&<EditorDialog open={open} title={labels[draft.action]||'Update assigned work'} onClose={()=>setOpen(false)}><WorkAction key={draft.key} endpoint={endpoint} draft={draft} saved={()=>{setDraft(null);setOpen(false);r.reload();changed();}} discard={()=>{setDraft(null);setOpen(false);r.reload();}} /></EditorDialog>}
+      {draft&&<EditorDialog open={open} title={labels[draft.action]||'Update assigned work'} onClose={()=>setOpen(false)} onDiscard={()=>{setDraft(null);setOpen(false);r.reload();}}><WorkAction key={draft.key} endpoint={endpoint} draft={draft} saved={()=>{setDraft(null);setOpen(false);r.reload();changed();}} discard={()=>{setDraft(null);setOpen(false);r.reload();}} /></EditorDialog>}
     </>}
   </section>;
 }

@@ -8,6 +8,7 @@ import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api";
+import { useEditorSelection } from "../useEditorSelection";
 import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
 import { TenantForm, type TenantContact } from "../components/TenantForm";
@@ -48,7 +49,7 @@ function ContactWorkspace({ id }: { id: string }) {
     );
   const [invite, setInvite] = useState(false),[delivery,setDelivery]=useState<ContactInvitationState|null>(null);
   const [editing, setEditing] = useState(false),
-    [access, setAccess] = useState(false),
+    [access, setAccess, accessOpen, saveAccessDraft] = useEditorSelection(false),
     [archive, setArchive] = useState(false);
   const [draft, setDraft] = useState<Contact | null>(null),
     person = r.data;
@@ -293,7 +294,7 @@ function ContactWorkspace({ id }: { id: string }) {
       <EditorDialog
         open={editing}
         title="Edit tenant details"
-        onClose={() => setEditing(false)}
+        onClose={() => setEditing(false)} onDiscard={() => { setEditing(false); setDraft(null); r.reload(); }}
       >
         {draft && (
           <TenantForm
@@ -381,11 +382,13 @@ function ContactWorkspace({ id }: { id: string }) {
           </Form>
         )}
       </EditorDialog>
-      {delivery&&<EditorDialog open title={`Invitation for ${person.name}`} onClose={()=>{setDelivery(null);r.reload();}}><InvitationDelivery key={delivery.id} initial={delivery} changed={r.reload} done={()=>{setDelivery(null);r.reload();}} reviewAccess={!delivery.leaseId?()=>{setDelivery(null);setInvite(true);}:undefined}/></EditorDialog>}
+      {delivery&&<EditorDialog open draftable={false} title={`Invitation for ${person.name}`} onClose={()=>{setDelivery(null);r.reload();}}><InvitationDelivery key={delivery.id} initial={delivery} changed={r.reload} done={()=>{setDelivery(null);r.reload();}} reviewAccess={!delivery.leaseId?()=>{setDelivery(null);setInvite(true);}:undefined}/></EditorDialog>}
       {access && person.userId && (
         <ResidentEditor
           id={person.userId}
           mode="access"
+          open={accessOpen}
+          onSaveDraft={saveAccessDraft}
           close={() => {
             setAccess(false);
             r.reload();

@@ -87,7 +87,7 @@ type Review = {
 function retained(key: string): Review | null {
   try {
     const r = JSON.parse(sessionStorage.getItem(key) || "null");
-    return r &&
+    return r && r.attempted &&
       ["change", "cancel"].includes(r.kind) &&
       typeof r.body?.submissionKey === "string" &&
       Array.isArray(r.preview?.installments)
@@ -467,7 +467,7 @@ function TermsWorkspace({
       )}
       {!resident && (
         <EditorDialog
-          open={open}
+          open={open} hasChanges={!!review}
           title={
             review
               ? review.kind === "cancel"
@@ -478,7 +478,7 @@ function TermsWorkspace({
                 : "Plan future lease terms"
           }
           description={`${d.lease.property.name} · ${d.lease.unit.label}`}
-          onClose={() => setOpen(false)}
+          onClose={() => setOpen(false)} onDiscard={clear}
         >
           {review ? (
             <>
@@ -569,7 +569,7 @@ function TermsWorkspace({
                 snapshot={draft.data}
                 changeId={draft.changeId}
                 reviewed={(value) => {
-                  sessionStorage.setItem(storage, JSON.stringify(value));
+
                   setReview(value);
                 }}
               />
@@ -600,6 +600,7 @@ function TermsEditor({
   const current = snapshot.current;
   return (
     <Form
+      reviewOnly
       label={
         changeId
           ? "Review cancellation"
