@@ -17,6 +17,7 @@ import { Link } from "react-router-dom";
 import { scheduledDueDate, graceDates } from "../rent-policy";
 import { api, ApiError } from "../api";
 import { useAuth } from "../context/AuthContext";
+import { useEditorSelection } from "../useEditorSelection";
 import { useResource } from "../useResource";
 import {
   PropertyNavigation,
@@ -667,7 +668,7 @@ function LeaseLedger({
   );
   const [chargeOpen, setChargeOpen] = useState(false),
     [paymentOpen, setPaymentOpen] = useState(false),
-    [correction, setCorrection] = useState<{
+    [correction, setCorrection, correctionOpen, saveCorrectionDraft] = useEditorSelection<{
       row: Entry;
       type: "charge" | "payment";
     } | null>(null);
@@ -1001,7 +1002,7 @@ function LeaseLedger({
                       disabled={stale}
                       className="text-button"
                       onClick={() =>
-                        setCorrection({
+                        setCorrection(previous => previous?.row.id === row.id ? previous : {
                           row,
                           type: tab === "charges" ? "charge" : "payment",
                         })
@@ -1047,7 +1048,9 @@ function LeaseLedger({
           />
           {correction && (
             <EditorDialog
-              open
+              key={`${correction.row.id}:${correction.type}`}
+              open={correctionOpen}
+              onSaveDraft={saveCorrectionDraft}
               title={`Void ${correction.type}`}
               onClose={() => setCorrection(null)}
             >
@@ -1122,6 +1125,7 @@ function RentEditor({
       open={open}
       title={mode === "charge" ? "Post monthly rent" : "Record rent payment"}
       onClose={close}
+      onDiscard={() => { clear(); close(); }}
     >
       <RentDraft
         key={key}
@@ -1212,6 +1216,7 @@ function RentDraft({
   const grace = graceDates(actualDue, savedGrace);
   return (
     <Form
+      recovering={!!pending}
       operation={mode === "charge" ? "rent.charge" : "rent.payment"}
       label={mode === "charge" ? "Post rent charge" : "Record payment received"}
       secondaryActions={<DraftReset reset={reset} />}

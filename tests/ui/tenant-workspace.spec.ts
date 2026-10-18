@@ -66,7 +66,7 @@ test('contact drafts survive dismissal and do not absorb background record versi
   const state=await fixture(page);await page.goto('/company/residents/auth0%7Ctenant');
   const edit=page.getByRole('button',{name:'Edit resident profile',exact:true});await edit.click();
   const dialog=page.getByRole('dialog');await dialog.getByLabel('Contact phone',{exact:true}).fill('555-9999');
-  await dialog.getByRole('button',{name:'Close',exact:true}).click();
+  await dialog.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:'Save draft & close',exact:true}).click();
   state.profile.version++;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
   await edit.click();await expect(dialog.getByLabel('Contact phone',{exact:true})).toHaveValue('555-9999');
   await dialog.getByRole('button',{name:'Save resident profile',exact:true}).click();

@@ -18,7 +18,7 @@ async function fixture(page:Page,role='owner'){
 }
 async function fill(page:Page){await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await page.getByLabel('Date received or paid').fill('2026-10-14');await page.getByLabel('Amount (USD)').fill('1234.56');await page.getByLabel('Memo (optional)').fill('October receipt');}
 test('lost transaction response retains draft and key through filtering; explicit new action resets',async({page})=>{
- const state=await fixture(page);state.lose=true;await page.goto('/company/finances');await fill(page);await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByLabel('Filter property').selectOption('home');await page.getByRole('button',{name:'Apply filters'}).click();await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await expect(page.getByLabel('Amount (USD)')).toHaveValue('1234.56');await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();expect(state.entries.length).toBe(1);expect(state.keys[0]).toBe(state.keys[1]);await expect(page.getByRole('region',{name:'All matching active entries'})).toContainText('$1,234.56');await fill(page);await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect.poll(()=>state.keys.length).toBe(3);expect(state.keys[2]).not.toBe(state.keys[0]);
+ const state=await fixture(page);state.lose=true;await page.goto('/company/finances');await fill(page);await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:/^(Save draft & close|Close & keep recovery)$/,exact:true}).click();await page.getByLabel('Filter property').selectOption('home');await page.getByRole('button',{name:'Apply filters'}).click();await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await expect(page.getByLabel('Amount (USD)')).toHaveValue('1234.56');await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();expect(state.entries.length).toBe(1);expect(state.keys[0]).toBe(state.keys[1]);await expect(page.getByRole('region',{name:'All matching active entries'})).toContainText('$1,234.56');await fill(page);await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect.poll(()=>state.keys.length).toBe(3);expect(state.keys[2]).not.toBe(state.keys[0]);
 });
 test('void response loss preserves reason and retry removes amount from totals while retaining history',async({page})=>{
  const state=await fixture(page);await page.goto('/company/finances');await fill(page);await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect(page.getByRole('heading',{name:'Home · income · $1,234.56'})).toBeVisible();state.loseVoid=true;await page.getByRole('button',{name:'Void transaction',exact:true}).click();await page.getByLabel('Correction reason').fill('Wrong property');await page.getByRole('dialog').getByRole('button',{name:'Void transaction',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('dialog').getByRole('button',{name:'Void transaction',exact:true}).click();await expect(page.getByText('Voided: Wrong property')).toBeVisible();await expect(page.locator('.metric-grid')).toContainText('Net recorded$0.00');await expect(page.getByRole('heading',{name:'Home · income · $1,234.56'})).toBeVisible();
@@ -27,7 +27,7 @@ test('finance authority restricted to owner and manager',async({page})=>{
  for(const role of ['staff','resident','platform']){await page.unroute('**/api/**');const state=await fixture(page,role);await page.goto('/company/finances');await expect(page.getByRole('heading',{name:'Access unavailable'})).toBeVisible();expect(state.requests.length).toBe(0);}
 });
 test('pagination preserves a pending transaction and whole-filter totals; expenses show negative net',async({page})=>{
- const state=await fixture(page,'manager');for(let i=0;i<51;i++)state.entries.push({id:'seed-'+String(i).padStart(3,'0'),propertyId:'home',property:{name:'Home'},kind:'expense',category:'repairs',occurredOn:'2026-10-14',amountCents:101,memo:null,version:1,voidedAt:null});await page.goto('/company/finances');await fill(page);await page.getByRole('button',{name:'Close',exact:true}).click();await expect(page.getByText('50 transactions on this page')).toBeVisible();await page.getByRole('button',{name:'Next page'}).click();await expect(page.getByText('1 transactions on this page')).toBeVisible();await expect(page.locator('.metric-grid')).toContainText('-$51.51');await page.getByRole('button',{name:'First page'}).click();await expect(page.getByText('50 transactions on this page')).toBeVisible();await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await expect(page.getByLabel('Amount (USD)')).toHaveValue('1234.56');await page.getByLabel('What are you recording?',{exact:true}).selectOption('expense');await page.getByLabel('Category',{exact:true}).selectOption('utilities');await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect.poll(()=>state.keys.length).toBe(1);expect(state.entries.at(-1).category).toBe('utilities');
+ const state=await fixture(page,'manager');for(let i=0;i<51;i++)state.entries.push({id:'seed-'+String(i).padStart(3,'0'),propertyId:'home',property:{name:'Home'},kind:'expense',category:'repairs',occurredOn:'2026-10-14',amountCents:101,memo:null,version:1,voidedAt:null});await page.goto('/company/finances');await fill(page);await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:/^(Save draft & close|Close & keep recovery)$/,exact:true}).click();await expect(page.getByText('50 transactions on this page')).toBeVisible();await page.getByRole('button',{name:'Next page'}).click();await expect(page.getByText('1 transactions on this page')).toBeVisible();await expect(page.locator('.metric-grid')).toContainText('-$51.51');await page.getByRole('button',{name:'First page'}).click();await expect(page.getByText('50 transactions on this page')).toBeVisible();await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await expect(page.getByLabel('Amount (USD)')).toHaveValue('1234.56');await page.getByLabel('What are you recording?',{exact:true}).selectOption('expense');await page.getByLabel('Category',{exact:true}).selectOption('utilities');await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect.poll(()=>state.keys.length).toBe(1);expect(state.entries.at(-1).category).toBe('utilities');
 });
 test('company refresh discards transaction drafts',async({page})=>{
  const state=await fixture(page);await page.goto('/company/finances');await fill(page);state.company='b';await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(page.getByRole('dialog')).not.toBeVisible();await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await expect(page.getByLabel('Amount (USD)')).toHaveValue('');await expect(page.getByLabel('Memo (optional)')).toHaveValue('');
@@ -37,4 +37,64 @@ test('cash entry chooses the source once and preserves its draft when changing i
  const state=await fixture(page);await page.goto('/company/finances?propertyId=home');await fill(page);const intent=page.getByLabel('What are you recording?',{exact:true});await expect(page.getByLabel('Category',{exact:true})).toHaveValue('other');await expect(page.getByLabel('Transaction type')).toHaveCount(0);
  await intent.selectOption('rent');await expect(page.getByRole('link',{name:'Choose a rent account'})).toHaveAttribute('href','/company/properties/home/rent');await expect(page.getByRole('button',{name:'Record transaction',exact:true})).not.toBeVisible();expect(state.keys).toHaveLength(0);
  await intent.selectOption('income');await expect(page.getByLabel('Amount (USD)')).toHaveValue('1234.56');await intent.selectOption('deposit');await expect(page.getByRole('link',{name:'Choose a deposit account'})).toHaveAttribute('href','/company/properties/home/deposits');expect(state.keys).toHaveLength(0);
+});
+
+
+test('changed editors confirm close and Escape; discard removes unfinished values',async({page})=>{
+ const state=await fixture(page);await page.goto('/company/finances');await fill(page);
+ await page.getByRole('button',{name:'Close',exact:true}).click();
+ const confirmation=page.getByRole('alertdialog',{name:'Close without saving changes?'});
+ await expect(confirmation).toBeVisible();await expect(confirmation.getByRole('button',{name:'Keep editing'})).toBeFocused();
+ await page.setViewportSize({width:390,height:844});expect(await page.getByRole('dialog').evaluate(node=>node.scrollWidth<=node.clientWidth)).toBe(true);
+ await page.screenshot({path:'/tmp/pf_explicit_draft_close_mobile.png',fullPage:false});
+ await page.keyboard.press('Escape');await expect(confirmation).not.toBeVisible();
+ await expect(page.getByLabel('Amount (USD)')).toHaveValue('1234.56');
+ await page.keyboard.press('Escape');await expect(confirmation).toBeVisible();
+ await confirmation.getByRole('button',{name:'Keep editing'}).click();
+ await expect(page.getByLabel('Memo (optional)')).toHaveValue('October receipt');
+ await page.getByRole('button',{name:'Close',exact:true}).click();
+ await confirmation.getByRole('button',{name:'Close without saving',exact:true}).click();
+ await expect(page.getByRole('dialog')).not.toBeVisible();expect(state.keys).toHaveLength(0);
+ await page.getByRole('button',{name:'Record a transaction',exact:true}).click();
+ await expect(page.getByLabel('Amount (USD)')).toHaveValue('');await expect(page.getByLabel('Memo (optional)')).toHaveValue('');
+ await page.getByRole('button',{name:'Close',exact:true}).click();await expect(confirmation).not.toBeVisible();await expect(page.getByRole('dialog')).not.toBeVisible();
+});
+
+test('explicit drafts remain on this page but disappear on refresh without creating records',async({page})=>{
+ const state=await fixture(page);await page.goto('/company/finances');await fill(page);
+ await page.getByRole('button',{name:'Save as draft',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();
+ await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await expect(page.getByLabel('Amount (USD)')).toHaveValue('1234.56');
+ await expect(page.getByText('Saved draft · available only while this page stays open.')).toBeVisible();
+ await page.getByRole('button',{name:'Close',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();
+ expect(await page.evaluate(()=>Object.keys(sessionStorage).filter(key=>key.startsWith('pf-')||key.startsWith('pf:')))).toEqual([]);
+ await page.reload();await page.getByRole('button',{name:'Record a transaction',exact:true}).click();
+ await expect(page.getByLabel('Amount (USD)')).toHaveValue('');await expect(page.getByLabel('Memo (optional)')).toHaveValue('');expect(state.entries).toHaveLength(0);expect(state.keys).toHaveLength(0);
+});
+
+test('a saved correction stays bound to its original source and never carries input into another transaction',async({page})=>{
+ const state=await fixture(page);
+ for(const [id,name] of [['first','First property'],['second','Second property']])state.entries.push({id,propertyId:id,property:{name},kind:'expense',category:'repairs',occurredOn:'2026-10-14',amountCents:1000,version:1,voidedAt:null});
+ await page.goto('/company/finances');
+ const first=page.locator('.record-list > li').filter({has:page.getByRole('heading',{name:'First property · expense · $10.00',exact:true})});
+ const second=page.locator('.record-list > li').filter({has:page.getByRole('heading',{name:'Second property · expense · $10.00',exact:true})});
+ await first.getByRole('button',{name:'Void transaction',exact:true}).click();await page.getByLabel('Correction reason').fill('Original source correction');await page.getByRole('button',{name:'Save as draft',exact:true}).click();
+ state.entries[0].version=2;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await first.getByRole('button',{name:'Void transaction',exact:true}).click();
+ await expect(page.getByLabel('Correction reason')).toHaveValue('Original source correction');await page.getByRole('dialog').getByRole('button',{name:'Void transaction',exact:true}).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('This record changed');
+ await page.getByRole('button',{name:'Save as draft',exact:true}).click();
+ page.once('dialog',dialog=>dialog.dismiss());await second.getByRole('button',{name:'Void transaction',exact:true}).click();
+ await expect(page.getByRole('dialog')).not.toBeVisible();await first.getByRole('button',{name:'Void transaction',exact:true}).click();await expect(page.getByLabel('Correction reason')).toHaveValue('Original source correction');
+ await page.getByRole('button',{name:'Close',exact:true}).click();
+ page.once('dialog',dialog=>dialog.accept());await second.getByRole('button',{name:'Void transaction',exact:true}).click();
+ await expect(page.getByLabel('Correction reason')).toHaveValue('');await expect(page.getByText('Saved draft · available only while this page stays open.')).toHaveCount(0);expect(state.entries.every(row=>!row.voidedAt)).toBe(true);
+});
+
+test('an uncertain submitted transaction cannot be discarded or given a fresh key on close',async({page})=>{
+ const state=await fixture(page);state.lose=true;await page.goto('/company/finances');await fill(page);
+ await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();
+ await expect(page.getByLabel('Amount (USD)')).toBeDisabled();await expect(page.getByLabel('What are you recording?',{exact:true})).toBeDisabled();await expect(page.getByRole('button',{name:'Clear draft',exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Close',exact:true}).click();
+ const recovery=page.getByRole('alertdialog',{name:'Recover the submitted request'});await expect(recovery).toBeVisible();await expect(recovery.getByRole('button',{name:'Close without saving',exact:true})).toHaveCount(0);
+ await recovery.getByRole('button',{name:'Close & keep recovery',exact:true}).click();await page.getByRole('button',{name:'Record a transaction',exact:true}).click();
+ await expect(page.getByLabel('Amount (USD)')).toHaveValue('1234.56');await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();
+ expect(state.keys).toHaveLength(2);expect(state.keys[0]).toBe(state.keys[1]);expect(state.entries).toHaveLength(1);
 });

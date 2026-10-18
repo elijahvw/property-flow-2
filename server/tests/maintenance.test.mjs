@@ -86,7 +86,7 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  await page.goto(process.env.TEST_MAINTENANCE_BROWSER_URL+'/resident/maintenance');
  await page.getByRole('button',{name:'Submit a request',exact:true}).click();await page.getByLabel('Title',{exact:true}).fill('Lost response regression');await page.getByLabel('Description',{exact:true}).fill('Committed before transport loss');
  await page.getByRole('button',{name:'Submit request',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();
- await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:'Submit a request',exact:true}).click();await expect(page.getByLabel('Title',{exact:true})).toHaveValue('Lost response regression');
+ await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:/^(Save draft & close|Close & keep recovery)$/,exact:true}).click();await page.getByRole('button',{name:'Submit a request',exact:true}).click();await expect(page.getByLabel('Title',{exact:true})).toHaveValue('Lost response regression');
  await page.getByRole('button',{name:'Submit request',exact:true}).click();await expect(page.getByText('Request submitted.',{exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Lost response regression'})).toHaveCount(1);
  assert.equal(keys.length,2);assert.equal(keys[0],keys[1]);
  assert.equal((await admin.query(`SELECT count(*)::int n FROM "MaintenanceRequest"`)).rows[0].n,1);assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='maintenance.created'`)).rows[0].n,1);

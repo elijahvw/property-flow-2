@@ -210,7 +210,7 @@ function CompanyDirectory() {
       <EditorDialog
         open={adding}
         title="Create company profile"
-        onClose={() => setAdding(false)}
+        onClose={() => setAdding(false)} onDiscard={() => { setAdding(false); setKey(crypto.randomUUID()); }}
       >
         <p>
           Save the business profile first, then assign an existing sign-in
@@ -324,6 +324,7 @@ function CompanyRecord() {
       `/api/platform/companies/${encodeURIComponent(companyId)}`,
     ),
     [editing, setEditing] = useState(false),
+    [draft, setDraft] = useState<CompanyProfile | null>(null),
     [error, setError] = useState("");
   if (!r.data) return <Load error={r.error} retry={r.reload} />;
   const c = r.data,
@@ -353,7 +354,8 @@ function CompanyRecord() {
           <button
             className="secondary"
             onClick={() => {
-              setEditing(!editing);
+              setDraft(previous => previous || c);
+              setEditing(true);
               setError("");
             }}
           >
@@ -364,18 +366,20 @@ function CompanyRecord() {
           open={editing}
           title="Edit company profile"
           onClose={() => setEditing(false)}
+          onDiscard={() => { setDraft(null); setEditing(false); r.reload(); }}
         >
           <Form
-            key={c.version}
+            key={(draft || c).version}
             operation="company.update"
             label="Save company profile"
             submit={async (form) => {
               try {
                 await api(`/api/platform/companies/${c.id}`, {
                   method: "PATCH",
-                  body: { ...payload(form), expectedVersion: c.version },
+                  body: { ...payload(form), expectedVersion: (draft || c).version },
                 });
                 setEditing(false);
+                setDraft(null);
                 r.reload();
               } catch (e) {
                 setError(
@@ -385,10 +389,10 @@ function CompanyRecord() {
               }
             }}
           >
-            <ProfileFields value={c} />
+            <ProfileFields value={draft || c} />
             <label>
               Company status
-              <select name="status" defaultValue={c.status}>
+              <select name="status" defaultValue={(draft || c).status}>
                 <option value="active">Active</option>
                 <option value="suspended">Suspended</option>
               </select>
@@ -402,6 +406,7 @@ function CompanyRecord() {
               className="secondary"
               onClick={() => {
                 setEditing(false);
+                setDraft(null);
                 r.reload();
               }}
             >

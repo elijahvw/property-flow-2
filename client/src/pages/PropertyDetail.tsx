@@ -153,6 +153,7 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
             )}
             {editable && (
               <EditorDialog
+                key={property.version}
                 open={editing}
                 title="Edit property"
                 onClose={() => setEditing(false)}

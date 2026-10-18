@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useResource } from '../useResource';
 import { formatActivityTime } from '../dates';
 import { Form } from './Form';
-import { EditorDialog } from './EditorDialog';
+import { EditorDialog, useEditorBusy } from './EditorDialog';
 type Version={id:string;number:number;filename:string;byteLength:number;scanStatus:string;createdAt:string};
 type Document={id:string;title:string;version:number;archivedAt:string|null;versions:Version[]};
 const scanLabel=(status:string)=>status==='clean'?'Cleared by scanning':status==='rejected'?'Rejected by scanning. Download blocked.':'Quarantined. Download blocked until scanning clears this version.';
@@ -34,11 +34,12 @@ export function PrivateDocuments({source,sourceId}:{source:'leases'|'maintenance
         }}><span className="help">Access is checked again for each download.</span></Form>}
       </li>)}</ul></details>
     </li>)}</ul>}
-    {r.data&&draft&&<EditorDialog open={open} title={draft.document?'Upload new document version':'Upload private document'} onClose={()=>setOpen(false)}><DocumentUpload key={draft.key} endpoint={endpoint} scanningConfigured={!!r.data.scanningConfigured} draft={draft} saved={message=>{setNotice(message);setDraft(null);setOpen(false);r.reload();}} discard={()=>{setDraft(null);setOpen(false);}} /></EditorDialog>}
+    {r.data&&draft&&<EditorDialog open={open} title={draft.document?'Upload new document version':'Upload private document'} onClose={()=>setOpen(false)} onDiscard={()=>{setDraft(null);setOpen(false);}}><DocumentUpload key={draft.key} endpoint={endpoint} scanningConfigured={!!r.data.scanningConfigured} draft={draft} saved={message=>{setNotice(message);setDraft(null);setOpen(false);r.reload();}} discard={()=>{setDraft(null);setOpen(false);}} /></EditorDialog>}
   </section>;
 }
 function DocumentUpload({endpoint,scanningConfigured,draft,saved,discard}:{endpoint:string;scanningConfigured:boolean;draft:{document:Document|null;key:string};saved:(message:string)=>void;discard:()=>void}) {
   const [file,setFile]=useState<File|null>(null);
+  const { uncertain } = useEditorBusy();
   return <Form operation="document.upload" label={scanningConfigured?"Upload & scan":"Upload to quarantine"} feedbackText="Document uploaded privately. Scanning is required before download." submit={async data=>{
     if(!file||!file.size||file.size>5*1024*1024)throw new Error('Choose a file between 1 byte and 5 MB.');
     const base64=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onerror=()=>reject(new Error('Unable to read this file. Choose it again.'));reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.readAsDataURL(file);});
@@ -50,7 +51,7 @@ function DocumentUpload({endpoint,scanningConfigured,draft,saved,discard}:{endpo
       catch { message='Document saved privately. Scanning did not finish; the file stays quarantined. Open its versions to retry scanning without uploading again.'; }
     }
     saved(message);
-  }} secondaryActions={<button type="button" className="secondary" onClick={discard}>Discard upload draft</button>}>
+  }} secondaryActions={<button type="button" className="secondary" disabled={uncertain} onClick={discard}>Discard upload draft</button>}>
     {draft.document?<p>New version of <strong>{draft.document.title}</strong>. Previous originals remain retained.</p>:<label>Document title<input name="title" required maxLength={160}/></label>}
     <label>Document file<input type="file" accept=".pdf,.png,.jpg,.jpeg,.txt" onChange={e=>setFile(e.target.files?.[0]||null)}/></label>
     {file&&<p>Selected: {file.name} · {Math.ceil(file.size/1024)} KB</p>}

@@ -836,6 +836,8 @@ export async function leaseTermCases(t, admin, call, app, db) {
           .getByRole("dialog")
           .getByRole("button", { name: "Close", exact: true })
           .click();
+        const discard = page.getByRole("button", { name: "Close without saving", exact: true });
+        if (await discard.isVisible()) await discard.click();
         await page.goto(
           process.env.TEST_FINANCES_BROWSER_URL +
             `/company/leases/${l.id}?section=terms`,

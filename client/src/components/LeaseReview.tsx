@@ -33,6 +33,7 @@ export function LeaseReview({
   const p = review.payload;
   return (
     <Form
+      recovering={pending}
       label={p.previousLeaseId ? "Create renewal draft" : "Create lease record"}
       operation="lease.create"
       successText="Lease recorded."

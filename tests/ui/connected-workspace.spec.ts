@@ -210,7 +210,7 @@ test("staff cannot bypass permission gates through nested property money and mai
 });
 
 test('property finance filter history restores dates without discarding an unsaved transaction',async({page})=>{
- await fixture(page);await page.goto('/company/properties/home/finances');await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await page.getByLabel('Amount (USD)',{exact:true}).fill('123.45');await page.getByRole('button',{name:'Close',exact:true}).click();
+ await fixture(page);await page.goto('/company/properties/home/finances');await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await page.getByLabel('Amount (USD)',{exact:true}).fill('123.45');await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:'Save draft & close',exact:true}).click();
  for(const day of ['2026-10-01','2026-10-02']){await page.getByLabel('From date').fill(day);await page.getByRole('button',{name:'Apply filters'}).click();await expect(page).toHaveURL(new RegExp('dateFrom='+day));}
  await page.goBack();await expect(page.getByLabel('From date')).toHaveValue('2026-10-01');await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await expect(page.getByLabel('Amount (USD)',{exact:true})).toHaveValue('123.45');
 });

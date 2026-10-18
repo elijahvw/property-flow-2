@@ -75,7 +75,7 @@ test('lease term drafts retain their reviewed version across dismissal and backg
  await page.getByRole('button',{name:'Edit lease record',exact:true}).click();
  const dialog=page.getByRole('dialog',{name:'Review lease terms',exact:true});
  await dialog.getByLabel('Lease monthly rent (USD)',{exact:true}).fill('1200.00');
- await dialog.getByRole('button',{name:'Close',exact:true}).click();
+ await dialog.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:'Save draft & close',exact:true}).click();
  state.lease.version++;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
  await page.getByRole('button',{name:'Edit lease record',exact:true}).click();
  await expect(dialog.getByLabel('Lease monthly rent (USD)',{exact:true})).toHaveValue('1200.00');

@@ -1,3 +1,4 @@
+import { useEditorSelection } from "../useEditorSelection";
 import { recordReference } from "../record-reference";
 import { formatDate } from "../dates";
 import { DateField } from "../components/DateField";
@@ -13,7 +14,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
-import { EditorDialog } from "../components/EditorDialog";
+import { EditorDialog, useEditorBusy } from "../components/EditorDialog";
 import { Form } from "../components/Form";
 type Entry = {
   maintenanceCosts?: { requestId: string }[];
@@ -70,7 +71,7 @@ function LedgerWorkspace() {
   const maintenanceReturn = params.get("maintenanceReturn") || "",
     entryId = params.get("entryId") || "";
   const [adding, setAdding] = useState(["transaction", "expense"].includes(params.get("new") || "")),
-    [selected, setSelected] = useState<Entry | null>(null);
+    [selected, setSelected, selectedOpen, saveSelectedDraft] = useEditorSelection<Entry | null>(null);
   const [key, setKey] = useState(() => crypto.randomUUID()),
     [kind, setKind] = useState(params.get("new") === "expense" ? "expense" : "income"),
     [filters, setFilters] = useState({
@@ -130,9 +131,10 @@ function LedgerWorkspace() {
       <EditorDialog
         open={adding}
         title="Record a transaction"
+        onDiscard={() => { setAdding(false); setKey(crypto.randomUUID()); setEntryMode(params.get("new")==="expense"?"expense":"income"); setKind(params.get("new")==="expense"?"expense":"income"); setDraftProperty(filters.propertyId); }}
         onClose={() => setAdding(false)}
       >
-        <label>What are you recording?<select aria-label="What are you recording?" value={entryMode} onChange={event=>{setEntryMode(event.target.value);if(["income","expense"].includes(event.target.value))setKind(event.target.value);}}><option value="income">Other income</option><option value="expense">Paid expense</option><option value="rent">Lease rent payment</option><option value="deposit">Security deposit receipt</option></select></label>
+        <CashEntryIntent value={entryMode} changed={value=>{setEntryMode(value);if(["income","expense"].includes(value))setKind(value);}}/>
         {["rent","deposit"].includes(entryMode)&&<section className="notice"><p>Record this against its lease so the balance and linked cash receipt update together. Do not enter it again here.</p><Link className="button" to={propertyLink(entryMode==="rent"?"/company/rent":"/company/deposits",draftProperty)}>{entryMode==="rent"?"Choose a rent account":"Choose a deposit account"}</Link></section>}
         <div hidden={["rent","deposit"].includes(entryMode)}>
         {!properties.data ? (
@@ -395,7 +397,9 @@ function LedgerWorkspace() {
       </section>
       {selected && (
         <EditorDialog
-          open
+          key={selected.id}
+          open={selectedOpen}
+          onSaveDraft={saveSelectedDraft}
           title="Void transaction"
           onClose={() => setSelected(null)}
         >
@@ -434,4 +438,9 @@ function LedgerWorkspace() {
       )}
     </>
   );
+}
+
+function CashEntryIntent({value,changed}:{value:string;changed:(value:string)=>void}) {
+  const {uncertain}=useEditorBusy();
+  return <label>What are you recording?<select disabled={uncertain} aria-label="What are you recording?" value={value} onChange={event=>changed(event.target.value)}><option value="income">Other income</option><option value="expense">Paid expense</option><option value="rent">Lease rent payment</option><option value="deposit">Security deposit receipt</option></select></label>;
 }

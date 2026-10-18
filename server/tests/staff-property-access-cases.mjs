@@ -158,6 +158,8 @@ export async function staffPropertyAccessCases(t, admin, call, db, app) {
       await expect(owner.getByText('1 selected', { exact: true })).toBeVisible();
       await owner.getByRole('button', { name: 'Save staff access', exact: true }).click();
       await expect(owner.getByRole('alert')).toBeVisible();
+      await expect(owner.getByLabel('Property access', { exact: true })).toBeDisabled();
+      await expect(owner.getByRole('searchbox', { name: 'Find a property' })).toBeEnabled();
       await owner.getByRole('searchbox', { name: 'Find a property' }).fill('');
       await expect(owner.getByRole('checkbox', { name: /^home / })).toBeChecked();
       await owner.getByRole('button', { name: 'Save staff access', exact: true }).click();

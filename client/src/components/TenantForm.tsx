@@ -76,13 +76,14 @@ export function TenantForm({
     storageKey = `pf:tenant-draft:${auth?.user.id}:${auth?.membership?.companyId}:${value?.id ?? "new"}`;
   const [initial] = useState(() => {
     try {
-      return JSON.parse(sessionStorage.getItem(storageKey) || "null") as {
+      const retained = JSON.parse(sessionStorage.getItem(storageKey) || "null") as {
         draft: Draft;
         key: string;
         review?: Draft;
         pending?: boolean;
         baseVersion?: number;
       } | null;
+      return retained?.pending ? retained : null;
     } catch {
       return null;
     }
@@ -105,7 +106,8 @@ export function TenantForm({
     next: Draft,
     reviewed: Draft | null = review,
     uncertain = pending,
-  ) =>
+  ) => {
+    if (!uncertain) { sessionStorage.removeItem(storageKey); return; }
     sessionStorage.setItem(
       storageKey,
       JSON.stringify({
@@ -116,6 +118,7 @@ export function TenantForm({
         baseVersion,
       }),
     );
+  };
   const finish = (row: TenantContact) => {
     setCreated(null);
     setDraft({ invitePortal: inviteInitially ? "yes" : "no" });
@@ -163,6 +166,7 @@ export function TenantForm({
       </ol>
       {review && (
         <Form
+          recovering={pending}
           label={value ? "Save tenant details" : "Save tenant"}
           operation="membership.update"
           feedbackText={
@@ -318,6 +322,7 @@ export function TenantForm({
       >
         <Form
           key={key}
+          reviewOnly
           label="Review tenant"
           operation="page.data.load"
           secondaryActions={

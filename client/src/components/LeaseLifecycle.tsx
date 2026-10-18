@@ -124,13 +124,13 @@ function useReview<T>(name: string, id: string) {
   const [value, setValue] = useState<Review<T> | null>(() => {
     try {
       const r = JSON.parse(sessionStorage.getItem(key) || "null");
-      return r?.body?.submissionKey && r.preview ? r : null;
+      return r?.attempted && r?.body?.submissionKey && r.preview ? r : null;
     } catch {
       return null;
     }
   });
   const retain = (r: Review<T>) => {
-    sessionStorage.setItem(key, JSON.stringify(r));
+    if (r.attempted) sessionStorage.setItem(key, JSON.stringify(r));
     setValue(r);
   };
   const clear = () => {
@@ -354,14 +354,15 @@ function ProrationWorkspace({
       </section>
       {d?.history?.length ? <ProrationHistory rows={d.history} /> : null}
       <EditorDialog
-        open={open}
+        open={open} hasChanges={!!review.value}
         title={review.value ? "Confirm partial rent" : "Review partial rent"}
-        onClose={() => setOpen(false)}
+        onClose={() => setOpen(false)} onDiscard={clear}
       >
         {review.value ? (
           <>
             <ProrationMath value={review.value.preview.snapshot} />
             <Form
+              recovering={!!review.value.attempted}
               label="Confirm partial rent charge"
               operation="rent.charge"
               feedbackText="Reviewed partial rent posted once."
@@ -428,6 +429,7 @@ function ProrationEditor({
   const [override, setOverride] = useState("");
   return (
     <Form
+      reviewOnly
       label="Preview partial rent"
       operation="page.data.load"
       successText=""
@@ -741,7 +743,7 @@ function TransitionWorkspace({
         </details>
       ) : null}
       <EditorDialog
-        open={open}
+        open={open} hasChanges={!!review.value}
         title={
           review.value
             ? review.value.preview.kind === "renew"
@@ -751,7 +753,7 @@ function TransitionWorkspace({
                 : "Review end date"
             : "Lease dates & rent"
         }
-        onClose={() => setOpen(false)}
+        onClose={() => setOpen(false)} onDiscard={clear}
       >
         {review.value ? (
           <>
@@ -759,6 +761,7 @@ function TransitionWorkspace({
               <div className="lease-review-confirmation">
                 <Form
                   label={transitionAction(review.value.preview.kind)}
+                  recovering={!!review.value.attempted}
                   operation="lease.update"
                   feedbackText="Reviewed lease transition saved. Prior money and history retained."
                   secondaryActions={
@@ -854,6 +857,7 @@ function TransitionEditor({
     );
   return (
     <Form
+      reviewOnly
       label="Review changes"
       operation="page.data.load"
       successText=""

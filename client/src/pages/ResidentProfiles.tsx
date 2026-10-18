@@ -158,6 +158,7 @@ function Directory() {
       <EditorDialog
         open={adding}
         title="Add tenant"
+        onSaveDraft={() => setAdding(false)}
         description="Save one account and tenant profile. You can activate portal access separately."
         onClose={() => {
           setAdding(false);
@@ -433,7 +434,7 @@ function Directory() {
     </div>
   );
 }
-export function ResidentEditor({ id, close, mode = "contact", open = true }: { id: string; close: () => void; mode?: "contact" | "access"; open?: boolean }) {
+export function ResidentEditor({ id, close, mode = "contact", open = true, onSaveDraft }: { id: string; close: () => void; mode?: "contact" | "access"; open?: boolean; onSaveDraft?: () => void }) {
   const { can } = useAuth();
   const helpId = useId();
   const [accessEditing, setAccessEditing] = useState(mode === "access");
@@ -448,6 +449,8 @@ export function ResidentEditor({ id, close, mode = "contact", open = true }: { i
       open={open}
       title={mode === "access" ? "Tenant portal access" : "Tenant contact information"}
       onClose={close}
+      onSaveDraft={onSaveDraft}
+      onDiscard={() => { setDraft(undefined); close(); }}
     >
       {r.error && (
         <p role="alert">

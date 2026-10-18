@@ -94,7 +94,7 @@ type Review = {
 function retained(key: string): Review | null {
   try {
     const r = JSON.parse(sessionStorage.getItem(key) || "null");
-    return r &&
+    return r && r.attempted &&
       typeof r.body?.submissionKey === "string" &&
       Array.isArray(r.changes)
       ? r
@@ -406,13 +406,13 @@ function CompanyDetails() {
         </>
       )}
       <EditorDialog
-        open={open}
+        open={open} hasChanges={!!review}
         title={
           review
             ? "Review company changes"
             : `Edit ${editor.title.toLowerCase()}`
         }
-        onClose={() => setOpen(false)}
+        onClose={() => setOpen(false)} onDiscard={clear}
       >
         {review ? (
           <>
@@ -431,6 +431,7 @@ function CompanyDetails() {
               ))}
             </dl>
             <Form
+              recovering={!!review.attempted}
               label="Save company details"
               operation="company.update"
               feedbackText="Company details saved with change history."
@@ -476,6 +477,7 @@ function CompanyDetails() {
         {draft && (
           <div hidden={!!review}>
             <Form
+              reviewOnly
               label="Review company details"
               operation="page.data.load"
               successText="Ready to confirm."
@@ -506,7 +508,7 @@ function CompanyDetails() {
                   },
                   changes,
                 };
-                sessionStorage.setItem(key, JSON.stringify(next));
+
                 setReview(next);
               }}
             >

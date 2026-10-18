@@ -409,7 +409,7 @@ function LeaseWorkspace({ id }: { id: string }) {
       <EditorDialog
         open={editing}
         title="Review lease terms"
-        onClose={() => setEditing(false)}
+        onClose={() => setEditing(false)} onDiscard={()=>{setDraftLease(null);setEditing(false);r.reload();}}
       >
         {draftLease && (
           <Form
@@ -453,7 +453,7 @@ function LeaseWorkspace({ id }: { id: string }) {
       <EditorDialog
         open={renewing}
         title="Prepare linked renewal"
-        onClose={() => setRenewing(false)}
+        onClose={() => setRenewing(false)} onDiscard={()=>{setRenewalDraft(null);setRenewing(false);r.reload();}}
       >
         {renewalDraft?.endsOn && (
           <LeaseRenewal

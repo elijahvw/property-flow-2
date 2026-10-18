@@ -202,7 +202,7 @@ test("staff and residents cannot mount or fetch management contact records", asy
     expect(state.profileLoads).toBe(0);
   }
 });
-test("property editor traps focus and keeps a dismissed draft without editing the directory", async ({
+test("property editor traps focus and keeps an explicitly saved draft without editing the directory", async ({
   page,
 }) => {
   await fixture(page);
@@ -216,6 +216,7 @@ test("property editor traps focus and keeps a dismissed draft without editing th
     await dialog.evaluate((node) => node.contains(document.activeElement)),
   ).toBe(true);
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await dialog.getByRole("button", {name:"Save draft & close",exact:true}).click();
   await expect(dialog).not.toBeVisible();
   await page.getByRole("button", { name: "Add property", exact: true }).click();
   await expect(dialog.getByLabel("Property name", { exact: true })).toHaveValue(

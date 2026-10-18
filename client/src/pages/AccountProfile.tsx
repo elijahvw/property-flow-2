@@ -52,7 +52,7 @@ type Review = {
 function retained(key: string): Review | null {
   try {
     const r = JSON.parse(sessionStorage.getItem(key) || "null");
-    return r && r.body && typeof r.body.submissionKey === "string" ? r : null;
+    return r && r.attempted && r.body && typeof r.body.submissionKey === "string" ? r : null;
   } catch {
     return null;
   }
@@ -393,13 +393,13 @@ function PersonalProfile() {
         </div>
       )}
       <EditorDialog
-        open={open}
+        open={open} hasChanges={!!review}
         title={
           review
             ? "Review profile changes"
             : `Edit ${editing === "address" ? "mailing address" : editing === "emergency" ? "emergency contact" : editing === "contact" ? "contact details" : "personal details"}`
         }
-        onClose={() => setOpen(false)}
+        onClose={() => setOpen(false)} onDiscard={clear}
       >
         {review ? (
           <>
@@ -428,6 +428,7 @@ function PersonalProfile() {
               ))}
             </dl>
             <Form
+              recovering={!!review.attempted}
               label="Save my profile"
               feedbackText="Your profile was saved."
               secondaryActions={
@@ -470,6 +471,7 @@ function PersonalProfile() {
         {draft && (
           <div hidden={!!review}>
             <Form
+              reviewOnly
               label="Review profile changes"
               successText="Ready to review."
               submit={async (form) => {
@@ -515,7 +517,7 @@ function PersonalProfile() {
                   submissionKey: crypto.randomUUID(),
                 };
                 const next = { body, changes };
-                sessionStorage.setItem(key, JSON.stringify(next));
+
                 setReview(next);
               }}
             >

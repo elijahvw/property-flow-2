@@ -53,6 +53,7 @@ export function RentRepost({
   const [pending, setPending] = useState<Pending | null>(restored ?? null);
   return (
     <Form
+      recovering={!!pending}
       label={pending ? "Retry this repost" : "Repost installment"}
       operation="rent.charge"
       successText="Installment reposted; original history retained."

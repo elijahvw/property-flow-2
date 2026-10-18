@@ -273,7 +273,7 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
       <EditorDialog
         open={adding}
         title={resident ? "Submit a request" : "Record a maintenance request"}
-        onClose={() => setAdding(false)}
+        onClose={() => setAdding(false)} onDiscard={() => { setAdding(false); setSubmissionKey(crypto.randomUUID()); setNewProperty(""); }}
       >
         <p className="help">
           For emergencies, contact local emergency services. High priority does
@@ -784,7 +784,7 @@ function RequestDetail({ id, resident }: { id: string; resident: boolean }) {
             <EditorDialog
               open={editing}
               title={`Update request · ${draft.title}`}
-              onClose={() => setEditing(false)}
+              onClose={() => setEditing(false)} onDiscard={() => { setEditing(false); setDraft(null); r.reload(); }}
             >
               <Form
                 key={`${draft.id}:${draft.version}`}
@@ -925,7 +925,7 @@ function RequestUpdates({ endpoint, resident, canShare }: { endpoint: string; re
           {updates.data.nextCursor && <button className="secondary" onClick={() => setCursor(updates.data!.nextCursor!)}>Older updates</button>}
         </div>
       </>}
-      {!resident && <EditorDialog open={adding} title="Add maintenance update" onClose={() => setAdding(false)}>
+      {!resident && <EditorDialog open={adding} title="Add maintenance update" onClose={() => setAdding(false)} onDiscard={() => { setAdding(false); setSubmissionKey(crypto.randomUUID()); }}>
         <Form key={submissionKey} operation="maintenance.update" label="Record update" feedbackText="Maintenance update recorded."
           secondaryActions={<DraftReset reset={() => setSubmissionKey(crypto.randomUUID())} />}
           submit={async form => {
