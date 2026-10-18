@@ -42,6 +42,12 @@ test('invitation history paginates and interrupted email retries preserve the ex
 test('wrong signed-in recipient gets recovery controls without accepting access',async({page})=>{
  await setup(page);await page.goto('/invite#fictional-private-token');await expect(page.getByRole('alert')).toContainText('Sign in with the invited account');await expect(page.getByRole('button',{name:'Use a different account'})).toBeVisible();await expect(page.getByRole('button',{name:'Accept invitation',exact:true})).toHaveCount(0);await expect(page).toHaveURL(/\/invite$/);
 });
+test('failed sign-in can leave the failed provider session and choose another account',async({page})=>{
+ await setup(page,{signedIn:false});let requested:URL|undefined;
+ await page.route('**/api/auth/login?**',route=>{requested=new URL(route.request().url());return route.fulfill({contentType:'text/html',body:'<h1>Choose your sign-in account</h1>'});});
+ await page.goto('/?authError=failed');await expect(page.getByRole('alert')).toContainText('sign-in method associated with your invitation');
+ await page.getByRole('button',{name:'Use a different account',exact:true}).click();await expect(page.getByRole('heading',{name:'Choose your sign-in account'})).toBeVisible();expect(requested?.searchParams.get('switchAccount')).toBe('1');
+});
 
 test('a new private invitation opened in the same tab replaces the earlier token and strips the fragment',async({page})=>{
  const state=await setup(page,{signedIn:false});await page.goto('/invite#fictional-first-link');await expect(page.getByRole('heading',{name:'Welcome to Property Flow'})).toBeVisible();await page.evaluate(()=>{window.location.hash='fictional-replacement-link';});await expect.poll(()=>state.entryTokens.at(-1)).toBe('fictional-replacement-link');await expect(page).toHaveURL(/\/invite$/);await expect(page.getByRole('button',{name:'Sign in to review invitation'})).toBeVisible();

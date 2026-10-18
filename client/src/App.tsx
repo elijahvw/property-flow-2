@@ -223,7 +223,7 @@ function Destination() {
   return <Navigate to={data?.destination || "/access"} replace />;
 }
 function Home() {
-  const { user, signIn } = useAuth();
+  const { user, signIn, switchAccount } = useAuth();
   const failed = new URLSearchParams(window.location.search).has("authError");
   return (
     <div className="landing">
@@ -243,8 +243,8 @@ function Home() {
         </p>
         {failed && (
           <p className="notice error" role="alert">
-            Sign-in could not be completed. Try again, or contact your
-            administrator.
+            Sign-in could not be completed. Use the sign-in method associated
+            with your invitation, or try a different account.
           </p>
         )}
         {user ? (
@@ -254,6 +254,7 @@ function Home() {
         ) : (
           <button onClick={signIn}>Sign in to Property Flow</button>
         )}
+        {failed && !user && <button className="secondary" onClick={switchAccount}>Use a different account</button>}
         <p><Link to="/help/invitations">Sign-in and invitation help</Link></p>
       </section>
     </div>
