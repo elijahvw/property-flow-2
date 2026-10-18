@@ -479,12 +479,16 @@ test('tenant invitation replacement keeps its new private link visible after the
  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(page.getByLabel('Private invitation link',{exact:true})).toHaveValue('https://example.test/invite?contact=1#fictional-replacement');
 });
 
-test('changed household approval opens a fresh explicit review without a separate revoke step',async({page})=>{
+for(const entry of ['tenant profile','invitation history'])test(`changed household approval from ${entry} opens a fresh explicit review without a separate revoke step`,async({page})=>{
  const state=await fixture(page);
  state.contact={id:'jordan-profile',name:'Fictional tenant',email:'tenant@test.invalid',status:'active',version:2,userId:'fictional-account',portal:null,leases:[{id:'participant',leaseId:'lease',role:'occupant',version:3,lease:{version:8,startsOn:'2026-10-01',endsOn:'2027-09-30',property:{name:'Fictional home'},unit:{label:'Unit A'}}}],invitations:[{id:'stale-invite',version:1,expiresAt:'2099-01-01',acceptedAt:null,revokedAt:null}],activity:[]};
  await page.route('**/api/invitations/delivery',route=>route.fulfill({json:{emailAvailable:false}}));
  await page.route('**/api/invitations/stale-invite/replace',route=>route.fulfill({status:409,json:{error:'The household changed. Ask the owner for a newly reviewed invitation.',code:'INVITATION_CHANGED'}}));
- await page.goto('/company/tenants/jordan-profile');await page.getByRole('button',{name:'Send or replace invitation',exact:true}).click();await page.getByRole('button',{name:'Create replacement link',exact:true}).click();
+ if(entry==='invitation history'){
+  await page.route(/\/api\/invitations(?:\?|$)/,route=>route.fulfill({json:{items:[{...state.contact.invitations[0],email:state.contact.email,role:'resident',contactId:state.contact.id,leaseId:null}],total:1,pageSize:25}}));
+  await page.goto('/company/residents');await page.locator('summary').filter({hasText:'Tenant invitations'}).click();await page.getByRole('button',{name:'Send or replace',exact:true}).click();
+ }else{await page.goto('/company/tenants/jordan-profile');await page.getByRole('button',{name:'Send or replace invitation',exact:true}).click();}
+ await page.getByRole('button',{name:'Create replacement link',exact:true}).click();
  await expect(page.getByRole('alert')).toContainText('Review the current access');await expect(page.getByRole('button',{name:'Retry replacement link',exact:true})).toHaveCount(0);await page.getByRole('button',{name:'Review current access',exact:true}).click();
  const review=page.getByRole('dialog',{name:'Review tenant invitation',exact:true});await expect(review.getByText('Occupant · no lease financial access',{exact:true})).toBeVisible();const approve=review.getByRole('checkbox',{name:'I approve this person and the access shown above.',exact:true});await expect(approve).not.toBeChecked();
  await review.getByRole('button',{name:'Create invitation link',exact:true}).click();expect(state.invites).toHaveLength(0);await approve.check();await review.getByRole('button',{name:'Create invitation link',exact:true}).click();await expect(review.getByLabel('Private invitation link',{exact:true})).toBeVisible();expect(state.invites).toHaveLength(1);expect(state.invites[0].approvals).toEqual([{id:'participant',leaseId:'lease',role:'occupant',version:3,leaseVersion:8}]);
