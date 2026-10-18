@@ -1,8 +1,9 @@
+import { Link } from "react-router-dom";
 import { formatDate } from "../dates";
 import { DateField } from "../components/DateField";
 import { usePropertySearchParams } from "../usePropertySearchParams";
 
-import { PropertyNavigation } from "../components/PropertyNavigation";
+import { propertyLink, PropertyNavigation } from "../components/PropertyNavigation";
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -127,6 +128,9 @@ function Builder({ today }: { today: string }) {
     [running, setRunning] = useState(false);
   const initialFrom = params.get("dateFrom") || `${today.slice(0, 4)}-01-01`,
     initialTo = params.get("dateTo") || today;
+  const previousMonth = new Date(today.slice(0,7)+"-01T12:00:00Z");
+  previousMonth.setUTCDate(0);
+  const previousMonthEnd=previousMonth.toISOString().slice(0,10), previousMonthStart=previousMonth.toISOString().slice(0,7)+"-01";
   const [dateFrom, setDateFrom] = useState(initialFrom), [dateTo, setDateTo] = useState(initialTo);
   useEffect(() => { setDateFrom(initialFrom); setDateTo(initialTo); }, [initialFrom, initialTo]);
   const routeProperty = params.get("propertyId") || "",
@@ -308,6 +312,7 @@ function Builder({ today }: { today: string }) {
             </label>
             {kind === "cash" ? (
               <>
+                <label>Report period<select aria-label="Report period" value={dateFrom===previousMonthStart&&dateTo===previousMonthEnd?"last_month":dateFrom===today.slice(0,7)+"-01"&&dateTo===today?"month":dateFrom===today.slice(0,4)+"-01-01"&&dateTo===today?"year":"custom"} onChange={event=>{if(event.target.value==="month"){setDateFrom(today.slice(0,7)+"-01");setDateTo(today);}if(event.target.value==="year"){setDateFrom(today.slice(0,4)+"-01-01");setDateTo(today);}if(event.target.value==="last_month"){const previous=new Date(today.slice(0,7)+"-01T12:00:00Z");previous.setUTCDate(0);setDateTo(previous.toISOString().slice(0,10));setDateFrom(previous.toISOString().slice(0,7)+"-01");}}}><option value="custom" disabled>Custom dates</option><option value="month">This month</option><option value="last_month">Last month</option><option value="year">Year to date</option></select></label>
                 <label>
                   From date
                   <DateField
@@ -357,6 +362,7 @@ function Builder({ today }: { today: string }) {
           </p>
         )}
       </section>
+      <nav className="report-shortcuts actions" aria-label="Other reports"><Link to={propertyLink("/company/rent",reportProperty)}>Balances & aging</Link><Link to={propertyLink("/company/deposits",reportProperty)}>Deposit balances</Link><Link to={propertyLink("/company/leases",reportProperty)}>Lease statements</Link><Link to="/help/reports">Report guide</Link></nav>
       {running && <p role="status">Generating complete report…</p>}
       {!report && !running && (
         <section className="panel empty-state">

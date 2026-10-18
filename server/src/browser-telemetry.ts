@@ -33,6 +33,8 @@ export const browserOperations = [
   "account.status",
   "invitation.create",
   "invitation.accept",
+  "invitation.send",
+  "onboarding.update",
   "membership.update",
   "ownership.transfer",
   "property.create",

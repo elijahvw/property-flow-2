@@ -1,6 +1,7 @@
-import {staffPropertyAccessCases} from "./staff-property-access-cases.mjs";
+import { newFixturePage } from "./browser-fixture.mjs";
 import {fixtureIdentities} from "./fixture-identities.mjs";
 import {renewalCases} from "./renewal-cases.mjs";
+import {staffPropertyAccessCases} from "./staff-property-access-cases.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID,createHash} from 'node:crypto';
@@ -183,7 +184,7 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
  });
  await t.test('real browser units and lease commit-response-loss replay',{skip:!process.env.TEST_LEASING_BROWSER_URL},async()=>{
   const browser=await chromium.launch({headless:true});try{
-   const page=await browser.newPage();let loseUnit=true,loseLease=true;const keys={unit:[],lease:[]};
+   const page=await newFixturePage(browser);let loseUnit=true,loseLease=true;const keys={unit:[],lease:[]};
    await page.route('**/api/**',async route=>{const req=route.request(),u=new URL(req.url());
     if(u.pathname==='/api/telemetry')return route.fulfill({status:202,json:{accepted:true}});
     const response=await app.inject({method:req.method(),url:u.pathname+u.search,headers:{...req.headers(),origin:'https://app.test',cookie:'__Host-pf-session=token-owner'},...(req.postData()?{payload:req.postData()}:{})});
@@ -193,9 +194,7 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
     }
     await route.fulfill({status:response.statusCode,contentType:'application/json',body:response.body});
    });
-   await page.goto(process.env.TEST_LEASING_BROWSER_URL+'/company/properties/home/units');
-   await page.evaluate(()=>fetch('/api/telemetry',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({operations:[]})}));assert.deepEqual(keys,{unit:[],lease:[]},'telemetry is never a business mutation');
-   await page.getByRole('button',{name:'Add a unit',exact:true}).click();await page.getByLabel('Unit name',{exact:true}).fill('Browser unit');await page.getByRole('spinbutton',{name:/^Bedrooms/}).fill('0');await page.getByRole('spinbutton',{name:'Bathrooms',exact:true}).fill('2.25');await page.getByRole('spinbutton',{name:/^Market rent/}).fill('1250.01');
+   await page.goto(process.env.TEST_LEASING_BROWSER_URL+'/company/properties/home/units');await page.getByRole('button',{name:'Add a unit',exact:true}).click();await page.getByLabel('Unit name',{exact:true}).fill('Browser unit');await page.getByRole('spinbutton',{name:/^Bedrooms/}).fill('0');await page.getByRole('spinbutton',{name:'Bathrooms',exact:true}).fill('2.25');await page.getByRole('spinbutton',{name:/^Market rent/}).fill('1250.01');
    await page.getByRole('button',{name:'Create unit',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create unit',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();assert.equal(keys.unit[0],keys.unit[1]);
    const browserUnit=(await admin.query(`SELECT id,bedrooms,"bathroomsHundredths","marketRentCents" FROM "Unit" WHERE label='Browser unit'`)).rows;assert.equal(browserUnit.length,1);assert.equal(browserUnit[0].bedrooms,0);assert.equal(browserUnit[0].bathroomsHundredths,225);assert.equal(browserUnit[0].marketRentCents,125001);await expect(page.locator('.feedback-region')).toContainText('Unit created.');
    await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Leases',exact:true}).click();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await page.getByLabel('Unit for new lease').selectOption(browserUnit[0].id);

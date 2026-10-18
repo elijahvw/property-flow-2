@@ -36,6 +36,7 @@ type Auth = {
   error: string | null;
   refreshUser: () => Promise<void>;
   signIn: () => void;
+  switchAccount: () => void;
   signOut: () => void;
   can: (p: Capability) => boolean;
 };
@@ -87,9 +88,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshUser]);
   const signIn = () => {
     window.location.assign(
-      `/api/auth/login?returnTo=${encodeURIComponent(window.location.pathname === "/invite" ? "/invite" : "/dashboard")}`,
+      `/api/auth/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`,
     );
   };
+  const switchAccount = () => window.location.assign(`/api/auth/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}&switchAccount=1`);
   const signOut = () => {
     void api<{ logoutUrl: string }>("/api/auth/logout", {
       method: "POST",
@@ -112,6 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         error,
         refreshUser,
         signIn,
+        switchAccount,
         signOut,
         can: (p) => !!data?.permissions.includes(p),
       }}

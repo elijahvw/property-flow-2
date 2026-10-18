@@ -71,8 +71,8 @@ test('role overview is actionable, grouped and responsive; failed load never inv
 });
 test('property tabs carry context through lease history, residents, finances, and reports without opening creation',async({page})=>{
  const state=await fixture(page);await page.goto('/company/properties/home/units');await page.getByRole('navigation',{name:'Property navigation'}).getByRole('link',{name:'Leases',exact:true}).click();await expect(page).toHaveURL(/\/company\/properties\/home\/leases$/);await expect(page.getByRole('heading',{name:'Maple House · Leases',exact:true})).toBeVisible();await expect(page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Properties',exact:true})).toHaveAttribute('aria-current','page');await expect(page.getByRole('dialog')).not.toBeVisible();await expect.poll(()=>state.requests.some(x=>x.startsWith('/api/company/leases?')&&x.includes('propertyId=home'))).toBe(true);
- await page.getByRole('navigation',{name:'Property navigation'}).getByRole('link',{name:'Residents',exact:true}).click();await expect(page.getByRole('heading',{name:'Assigned residents'})).toBeVisible();await expect(page.getByText('Jordan Resident',{exact:true})).toBeVisible();
- await page.getByRole('navigation',{name:'Property navigation'}).getByRole('link',{name:'Finances',exact:true}).click();await expect(page.getByLabel('Filter property')).toHaveValue('home');await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await expect(page.getByLabel('Transaction property')).toHaveValue('home');await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('navigation',{name:'Property navigation'}).getByRole('link',{name:'Reports',exact:true}).click();await expect(page.getByLabel('Report property')).toHaveValue('home');
+ await page.getByRole('navigation',{name:'Property navigation'}).getByRole('link',{name:'Tenant access',exact:true}).click();await expect(page.getByRole('heading',{name:'Tenant access'})).toBeVisible();await expect(page.getByText('Jordan Resident',{exact:true})).toBeVisible();
+ await page.getByRole('navigation',{name:'Property navigation'}).getByRole('link',{name:'Cash activity',exact:true}).click();await expect(page.getByLabel('Filter property')).toHaveValue('home');await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await expect(page.getByLabel('Transaction property')).toHaveValue('home');await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('navigation',{name:'Property navigation'}).getByRole('link',{name:'Reports',exact:true}).click();await expect(page.getByLabel('Report property')).toHaveValue('home');
 });
 test('saving is primary; draft discard is quiet and confirmed, and property switching retains ambiguous saves',async({page})=>{
  const state=await fixture(page);state.lose=true;await page.goto('/company/leases?propertyId=home&new=lease');await page.getByLabel('New lease start date').fill('2026-10-01');await page.getByLabel('New lease monthly rent (USD)').fill('1200.00');
@@ -93,7 +93,7 @@ test('company leases identify properties with the same unit label and property d
 for (const [module, title, endpoint] of [
   ["maintenance", "Maintenance", "maintenance"],
   ["rent", "Rent & balances", "rent"],
-  ["finances", "Finances", "finances"],
+  ["finances", "Cash activity", "finances"],
   ["reports", "Reports", "reports/context"],
   ["deposits", "Deposits", "deposits"],
 ]) {

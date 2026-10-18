@@ -29,6 +29,7 @@ export type Profile = {
   };
 };
 export type ResidentProfileDetail = Profile & {
+  contactId?: string | null;
   assignments: { property: { id: string; name: string; address: string } }[];
   activity: { id: string; action: string; createdAt: string }[];
 };

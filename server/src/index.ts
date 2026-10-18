@@ -1,3 +1,4 @@
+import { invitationMailer } from "./invitation-email.js";
 import { registerRentBillingWorker } from "./rent-billing-worker.js";
 import fastify, { type FastifyError } from "fastify";
 import {
@@ -103,6 +104,7 @@ registerApplication(
   authenticate,
   config.origin,
   identityProvider(),
+  { invitationMailer: invitationMailer() },
 );
 registerRentBillingWorker(server, prisma);
 server.setNotFoundHandler((_request, reply) =>

@@ -24,7 +24,7 @@ That route returned HTTP 302 to the existing Auth0 tenant with the CloudFront ca
 https://propertyflow.saasapps.cloud/api/auth/login
 ```
 
-An application website hostname does not require a paid Auth0 login hostname. Keep callback/logout/origin values aligned with the deployed backend; see [the domain procedure in PR #43](https://github.com/elijahvw/property-flow-2/pull/43). Do not replace the callback with the login URI. This application's invitations use its own stored token and approval workflow, not Auth0 Organizations invitations.
+An application website hostname does not require a paid Auth0 login hostname. Keep callback/logout/origin values aligned with the deployed backend; see [the existing domain procedure](custom-domain.md). Do not replace the callback with the login URI. This application's invitations use its own stored token and approval workflow, not Auth0 Organizations invitations.
 
 ## Shorter onboarding and password recovery
 

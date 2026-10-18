@@ -295,9 +295,9 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
     assert.equal((await call('invitee','POST','/api/invitations/accept',{token:acceptanceToken})).statusCode,403);
     await db.user.update({where:{id:'invitee'},data:{emailVerified:true}});
   });
-  await t.test('invitation is single use and cannot restore a disabled membership', async () => {
+  await t.test('invitation replays acknowledge access and cannot restore a disabled membership', async () => {
     assert.equal((await call('invitee','POST','/api/invitations/accept',{token:acceptanceToken})).statusCode,200);
-    assert.equal((await call('invitee','POST','/api/invitations/accept',{token:acceptanceToken})).statusCode,403);
+    assert.equal((await call('invitee','POST','/api/invitations/accept',{token:acceptanceToken})).statusCode,200);
     await call('manager-a','PATCH','/api/company/members/invitee',{role:'staff',status:'disabled'});
     const invite = await call('platform','POST','/api/invitations',{companyId:'b',role:'owner',email:'invitee@test.invalid'});
     assert.equal(invite.statusCode,409,invite.body);

@@ -1,7 +1,7 @@
 import {test,expect,Page} from '@playwright/test';
 const request=()=>({id:'job',propertyId:'home',unitId:null,unit:null,title:'Fictional repair',description:'Inspect the fictional fixture leak.',category:'plumbing',priority:'normal',status:'open',version:1,targetOn:'2026-10-23',createdAt:'2026-10-17T12:00:00Z',updatedAt:'2026-10-17T12:00:00Z',property:{name:'Fictional home'},activity:[]});
 async function setup(page:Page,staff=false){
- const state={row:request(),executionStatus:'unassigned',actions:[] as any[],workPosts:[] as any[],uploads:[] as any[],documents:[] as any[],failUpload:false,failWork:false,scanFails:false,denied:false};
+ const state={row:request(),executionStatus:'unassigned',actions:[] as any[],workPosts:[] as any[],uploads:[] as any[],documents:[] as any[],failUpload:false,failWork:false,scanFails:false,scanningConfigured:false,scanRequests:0,denied:false};
  await page.route('**/api/**',async route=>{
   const req=route.request(),path=new URL(req.url()).pathname,method=req.method(),json=(value:unknown,status=200)=>route.fulfill({json:value,status});
   if(path==='/api/telemetry')return json({accepted:true});
@@ -10,6 +10,7 @@ async function setup(page:Page,staff=false){
   if(path.includes('/documents')){
    if(state.denied)return json({error:'Document access revoked'},403);
    if(path.endsWith('/scan')){
+    state.scanRequests++;
     if(state.scanFails)return json({error:'Scanner unavailable. File remains quarantined.'},503);
     state.documents[0].versions[0].scanStatus='clean';return json({scanStatus:'clean'});
    }
@@ -22,7 +23,7 @@ async function setup(page:Page,staff=false){
     return json({documentId:'doc',versionId:'v1'});
    }
    if(method==='PATCH'){state.documents[0].archivedAt=req.postDataJSON().archived?'2026-10-17T14:00:00Z':null;state.documents[0].version++;return json({version:state.documents[0].version});}
-   return json({items:state.documents});
+   return json({items:state.documents,scanningConfigured:state.scanningConfigured});
   }
   if(path==='/api/company/work-orders')return json({items:[{...state.row,executionStatus:state.executionStatus}],nextCursor:null});
   if(path.startsWith('/api/company/work-orders/')){
@@ -44,6 +45,7 @@ test('private upload retains file/title/retry key, quarantines then downloads on
  await page.getByRole('button',{name:'Upload document',exact:true}).click();await page.getByLabel('Document title',{exact:true}).fill('Fixture repair report');await page.getByLabel('Document file',{exact:true}).setInputFiles({name:'report.txt',mimeType:'text/plain',buffer:Buffer.from('Fictional report')});state.failUpload=true;
  await page.getByRole('button',{name:'Upload to quarantine',exact:true}).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Upload interrupted');await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:'Upload document',exact:true}).click();await expect(page.getByLabel('Document title',{exact:true})).toHaveValue('Fixture repair report');await expect(page.getByText('Selected: report.txt · 1 KB',{exact:true})).toBeVisible();state.failUpload=false;
  await page.getByRole('button',{name:'Upload to quarantine',exact:true}).click();await expect(page.getByRole('heading',{name:'Fixture repair report',exact:true})).toBeVisible();expect(state.uploads[0]).toEqual(state.uploads[1]);await expect(page.getByRole('button',{name:'Download version 1',exact:true})).toHaveCount(0);
+ await page.getByText('1 retained version',{exact:true}).click();
  state.scanFails=true;await page.getByRole('button',{name:'Scan file',exact:true}).click();await expect(page.getByRole('alert')).toContainText('File remains quarantined');await expect(page.getByRole('button',{name:'Download version 1',exact:true})).toHaveCount(0);state.scanFails=false;await page.getByRole('button',{name:'Scan file',exact:true}).click();await expect(page.getByRole('button',{name:'Download version 1',exact:true})).toBeVisible();
  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download version 1',exact:true}).click();expect((await download).suggestedFilename()).toBe('report.txt');
  await page.getByRole('button',{name:'Archive document',exact:true}).click();await expect(page.getByRole('button',{name:'Restore document',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Download version 1',exact:true})).toBeVisible();
@@ -59,4 +61,11 @@ test('assigned staff accept, retain failed progress draft and submit for managem
 });
 test('revoked access removes private originals, assigned job details and open drafts',async({page})=>{
  const state=await setup(page,true);state.executionStatus='accepted';await page.goto('/company/work-orders/job');await page.getByRole('button',{name:'Record progress',exact:true}).click();await page.getByLabel('Work note',{exact:true}).fill('Private unsaved fixture detail');state.denied=true;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(page.getByRole('alert')).toContainText('Assigned work unavailable');await expect(page.getByLabel('Work note',{exact:true})).toHaveCount(0);await expect(page.getByText('Inspect the fictional fixture leak.',{exact:true})).toHaveCount(0);
+});
+
+test('configured scanning runs after upload and a scan outage preserves the original without uploading again',async({page})=>{
+ const state=await setup(page);state.scanningConfigured=true;state.scanFails=true;await page.goto('/company/maintenance/job');
+ await page.getByRole('button',{name:'Upload document',exact:true}).click();await page.getByLabel('Document title',{exact:true}).fill('Fictional scan recovery');await page.getByLabel('Document file',{exact:true}).setInputFiles({name:'report.txt',mimeType:'text/plain',buffer:Buffer.from('Fictional report')});
+ await page.getByRole('button',{name:'Upload & scan',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'Document saved privately. Scanning did not finish'})).toBeVisible();expect(state.uploads).toHaveLength(1);expect(state.scanRequests).toBe(1);
+ await page.getByText('1 retained version',{exact:true}).click();state.scanFails=false;await page.getByRole('button',{name:'Scan file',exact:true}).click();await expect(page.getByRole('button',{name:'Download version 1',exact:true})).toBeVisible();expect(state.uploads).toHaveLength(1);
 });

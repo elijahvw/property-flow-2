@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
-import { tenantDirectorySearch, tenantLedgerContext } from "../tenant-links";
+import { contactPath, tenantDirectorySearch, tenantLedgerContext } from "../tenant-links";
 import { propertyLink } from "../components/PropertyNavigation";
 import { ResidentEditor, type ResidentProfileDetail } from "./ResidentProfiles";
 import { dollars } from "../money";
@@ -37,6 +37,7 @@ function TenantWorkspace({ id }: { id: string }) {
   const directory = "/company/residents" + (search ? `?${search}` : "");
   if (!person) return <section className="panel tenant-load-state"><Link to={directory} aria-label="All tenants">← All tenants</Link>{profile.error ? <><h1>Tenant unavailable</h1><p role="alert">{profile.error}</p><button className="secondary" onClick={profile.reload}>Try again</button></> : <p role="status">Loading tenant workspace…</p>}</section>;
   const name = person.contactName || person.user.name || person.user.email;
+  if (person.contactId && !profile.error) return <Navigate replace to={contactPath(person.contactId,params)}/>;
   const portal = tenantPortalState(person);
   return <div className="tenant-workspace">
     <nav className="record-breadcrumb" aria-label="Breadcrumb"><Link to={directory} aria-label="All tenants">← All tenants</Link><span aria-hidden="true">/</span><span>{name}</span></nav>

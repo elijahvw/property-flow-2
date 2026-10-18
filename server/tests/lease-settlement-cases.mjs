@@ -1,3 +1,4 @@
+import { newFixturePage } from "./browser-fixture.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { chromium, expect } from "@playwright/test";
@@ -446,7 +447,7 @@ export async function leaseSettlementCases(t, admin, call, app, db) {
       );
       const browser = await chromium.launch({ headless: true });
       try {
-        const page = await browser.newPage();
+        const page = await newFixturePage(browser);
         let lose = true;
         const keys = [];
         await page.route("**/api/**", async (route) => {

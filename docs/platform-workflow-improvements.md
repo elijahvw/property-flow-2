@@ -1,0 +1,52 @@
+# Platform workflow improvements — October 18, 2026
+
+Local implementation of the approved [platform audit](platform-audit-2026-10-17.md). Changes are not a deployed release. Existing preview data, open drafts, accounts, financial history and older worktrees are preserved.
+
+## Invitations and people (A01–A04)
+
+Invitation creation binds the existing/prepared sign-in account by exact identity, with durable submission keys and company-scoped duplicate protection. Retrying a committed create returns the same invitation without recovering its secret. A deliberate replacement produces a new private link, cancels the earlier one and preserves history. Links remain hashed at rest and private fragments are removed from the address bar. Earlier open clients may omit creation/revocation keys/versions for compatibility; new controls send them.
+
+Generic team acceptance now rechecks the inviter's current verified, active authority and company state. A successful acceptance can be acknowledged again without changing membership or duplicating its audit. Revoked/disabled access cannot be restored with an accepted invitation. Household/contact invitations retain their existing owner approvals and source-version checks. A public invitation entry returns only purpose/company/role, then the signed-in recipient reviews access. Wrong-account, unavailable-link, password setup and email verification each have a clear recovery path. Sign-in restores an allowlisted internal destination and safe context, without copying private tokens or unrestricted search text into redirects.
+
+The same delivery control serves team, tenant and approved household invitations. History filters before server pagination and returns a complete matching count. Tenant records distinguish sign-in preparation, verification, first sign-in and separately managed portal access. Legacy user-based tenant routes resolve to the same-company canonical contact when it exists; this does not merge identities or rewrite records. The Team directory has role/status/search filters. An owner edits staff property scope and the separate maintenance-execution flag together, with one versioned save; default read-only, assignment and scope boundaries remain enforced.
+
+## Email activation
+
+The official AWS SESv2 adapter uses `INVITATION_EMAIL_FROM` and `INVITATION_EMAIL_REGION` (or `AWS_REGION`). The development sender is `Property Flow <invitations@propertyflow.saasapps.cloud>`; its domain and2048-bit DKIM are verified in SES. A dedicated task role allows only `ses:SendEmail` from that exact address/domain, using the runtime credential chain. No SMTP credentials or long-lived AWS keys are needed. A controlled Gmail recipient is verified and received the branded-domain delivery test with the correct signing domain and TLS. Production recipient access remains under AWS review; sandbox sending is limited to verified recipients until approved. The sending address has no receiving mailbox.
+
+Sending is an explicit action after access review. The app rotates the private link, records a sending attempt, invokes SES outside database transactions and records accepted/failed/unknown. “Accepted for sending” is a provider acknowledgement, never an inbox-delivery claim. SES retries are disabled because SendEmail has no idempotency token. A lost response reuses the same durable action and never sends again automatically. Timeouts/crashes are unconfirmed; the owner can share a replacement link or explicitly send again after a one-minute cooldown. Refresh history after a stale-version conflict. If authority changes during the external call, the final status can remain unconfirmed; acceptance still checks current authority.
+
+Activation references: [SES SendEmail](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_SendEmail.html), [production access](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html). This increment does not add bounce/webhook ingestion or background bulk notifications.
+
+## Walkthrough and Help (A05–A06)
+
+`/help` and its 15 task guides are public and searchable. Task links respect a signed-in user's permissions. Main navigation, contextual Help and invitation recovery connect to these guides. Content lives beside the product, using existing routes and components; no CMS, assistant service or new account system is introduced.
+
+The optional first-login walkthrough derives destinations from fresh server-side grants: platform administration, management, read-only staff, delegated staff and residents. Progress, dismissal and completion persist on the current User, scoped to workspace/company/role and guide version. Concurrent changes return a reloadable conflict; identical retries are harmless. It never grants authority. Users can skip immediately, continue working, or resume/replay through Help. Completing property or lease setup does not repeatedly show a completed prerequisite.
+
+## Connected daily work (A07–A16)
+
+- Cash activity, Rent & balances and Tenant access use distinct labels. The phone shell is compact; native property/lease section selectors expose the same destinations as desktop tabs. Safe login returns retain record context.
+- Overview hides zero-count attention rows and shows actual billing issues, overdue maintenance and completion reviews with matching filters. Existing company/timezone/source boundaries remain.
+- Draft leases connect household, rent setup and activation. Established leases retain their details-first workspace and show only real outstanding approvals.
+- Cash-entry intent directs lease rent and deposits to their own ledgers. Other income is the manual default; legacy unlinked historical rent remains explicitly labeled. Recorded receipts still produce one linked cash source. Deposits choose a lease directly instead of detouring through rent.
+- Maintenance supports unresolved due/today/upcoming/unscheduled and assignee filters, names the assignee and links review queues. Internal/shared updates, staff assignment boundaries and reviewed completion remain distinct. External maintenance notifications/vendor management are future scope.
+- Private-document pages report scanner configuration. Configured uploads automatically invoke scanning after the original is saved. A failed scan leaves that original quarantined with a scan-only retry; no duplicate upload is required. Retained versions are collapsed by default. A configured executable is not evidence of healthy definitions.
+- Reports offer month/last-month/year presets and links to existing balances, deposits and statements. Generated/exported snapshots and exact financial sources remain unchanged. Platform activity has server-side event filters, pagination and complete matching totals; provider discovery remains automatic pending evidence that it needs tuning.
+
+## Migrations and operating checks
+
+Apply migration `202610180033_invitation_workflows` and then `202610180034_workspace_guidance` through the normal reviewed release process. They add invitation versions, durable submissions, delivery/replacement history with a same-company foreign key, and private walkthrough preferences. Existing records receive safe defaults. No preview/development/customer database was migrated.
+
+For document activation, configure an absolute executable `DOCUMENT_SCANNER_BIN` path to the maintained ClamAV CLI, keep its definitions current and verify a real clean-file and standard antivirus-test-file journey in a controlled environment. The app checks executable availability, invokes without a shell, times out and removes private temporary files. Unconfigured/unavailable/rejected files remain undownloadable. A production scanner runtime was not installed or activated here.
+
+Bounded `invitation.send` and `onboarding.update` operation signals accompany the new controls. Delivery audit events record outcomes without private URLs; existing safe API metrics/traces cover endpoints. Never log tokens or email content. Investigate failed/unknown sending and scanner-unavailable outcomes using request correlation and scoped history; do not automatically replay external mail. RUM allows only fixed route segments and strips queries/fragments. No session replay or private form capture is enabled.
+
+Release acceptance still requires dedicated real provider identities for owner, manager, read-only/delegated staff, leaseholder, occupant, unverified and disabled accounts; actual inbox delivery, expired/replaced/wrong-account links, scanner definitions, deployed migrations, telemetry and recovery evidence. Isolated integration tests verify the corresponding authorization/data/retry contracts, not live provider activation. Merge, deployment, provider configuration and preview restart remain separate authorized actions. Payments remain last.
+
+
+## Local validation evidence
+
+Both production builds pass. The complete browser fixture run passed189 cases, then21 affected cases including the new last-page invitation regression passed (190 distinct UI cases overall). Disposable database runners passed291 checks:42 identity/invitation/guidance/activity,42 maintenance/documents/delegation,30 leasing/staff scope and177 financial/household/renewal/settlement cases. These include real browser-to-API operations with simulated identity/email/scanner boundaries, lost commit responses, competing writes, stale reviews, revocation and read-only residents. Release server72/client25 unit checks and84 operations checks passed. Five DB suites skip deliberately in the unit-only command and run through their isolated runners. `git diff --check` is clean.
+
+Visual inspection covered the desktop walkthrough and mobile Help article; responsive/keyboard regressions cover operating forms and navigation. Automated tests and migrations use disposable databases. No preview/customer database was used by tests. A separately authorized controlled inbox delivery test succeeded; full live invitation/account and deployed scanner acceptance remains pending.

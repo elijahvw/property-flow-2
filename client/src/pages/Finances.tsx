@@ -90,6 +90,7 @@ function LedgerWorkspace() {
     setFilters({ propertyId, dateFrom, dateTo });
     setCursor("");
   }, [routeFilter]);
+  const [entryMode,setEntryMode]=useState(params.get("new")==="expense"?"expense":"income");
   const [draftProperty, setDraftProperty] = useState(filters.propertyId);
   const properties = useResource<{ id: string; name: string }[]>(
     "/api/company/properties",
@@ -108,7 +109,7 @@ function LedgerWorkspace() {
       <header className="page-heading">
         {maintenanceReturn && <p><Link to={`/company/maintenance/${encodeURIComponent(maintenanceReturn)}?${new URLSearchParams({ propertyId: filters.propertyId, ...(pathPropertyId ? { nested: "true" } : {}) })}`}>← Back to maintenance request</Link></p>}
         <p className="eyebrow">Company operations</p>
-        <h1>Manual finances</h1>
+        <h1>Cash activity</h1>
         <p>
           Record income received and expenses paid, in USD. These records do not
           collect payments. Use{" "}
@@ -131,6 +132,9 @@ function LedgerWorkspace() {
         title="Record a transaction"
         onClose={() => setAdding(false)}
       >
+        <label>What are you recording?<select aria-label="What are you recording?" value={entryMode} onChange={event=>{setEntryMode(event.target.value);if(["income","expense"].includes(event.target.value))setKind(event.target.value);}}><option value="income">Other income</option><option value="expense">Paid expense</option><option value="rent">Lease rent payment</option><option value="deposit">Security deposit receipt</option></select></label>
+        {["rent","deposit"].includes(entryMode)&&<section className="notice"><p>Record this against its lease so the balance and linked cash receipt update together. Do not enter it again here.</p><Link className="button" to={propertyLink(entryMode==="rent"?"/company/rent":"/company/deposits",draftProperty)}>{entryMode==="rent"?"Choose a rent account":"Choose a deposit account"}</Link></section>}
+        <div hidden={["rent","deposit"].includes(entryMode)}>
         {!properties.data ? (
           <Load error={properties.error} retry={properties.reload} />
         ) : !properties.data.length ? (
@@ -201,25 +205,15 @@ function LedgerWorkspace() {
                 required
               />
             </label>
-            <label>
-              Transaction type
-              <select
-                name="kind"
-                value={kind}
-                onChange={(e) => setKind(e.target.value)}
-              >
-                <option value="income">Income received</option>
-                <option value="expense">Expense paid</option>
-              </select>
-            </label>
+            <input type="hidden" name="kind" value={kind}/>
             <label htmlFor="finance-category">Category</label>
             <select id="finance-category" key={kind} name="category">
               {(kind === "income"
-                ? ["rent", "other"]
+                ? ["other", "rent"]
                 : ["repairs", "utilities", "insurance", "property_tax", "other"]
               ).map((c) => (
                 <option key={c} value={c}>
-                  {c.replace("_", " ")}
+                  {c === "rent" ? "Unlinked historical rent" : c.replace("_", " ")}
                 </option>
               ))}
             </select>
@@ -227,12 +221,14 @@ function LedgerWorkspace() {
               Memo (optional)
               <textarea name="memo" maxLength={500} />
             </label>
+            {kind==="income"&&<p className="help">Rent received for a saved lease belongs in <Link to={propertyLink("/company/rent",filters.propertyId)}>Rent & balances</Link>. An unlinked historical rent entry does not change a lease balance.</p>}
             <p className="help">
               To correct a saved amount, void the entry and record a
               replacement. Your original history is retained.
             </p>
           </Form>
         )}
+        </div>
       </EditorDialog>
       <section className="panel">
         <h2>Transaction history</h2>

@@ -93,7 +93,7 @@ export const routes: {
   },
   {
     path: "/company/finances",
-    title: "Finances",
+    title: "Cash activity",
     permission: "finance.manage",
     section: "Company",
   },
@@ -116,6 +116,7 @@ export const routes: {
     section: "Resident",
   },
   { path: "/account", title: "My profile", section: "Account" },
+  { path: "/help", title: "Help", section: "Account" },
 ];
 export function visibleRoutes(permissions: readonly string[]) {
   return routes.filter(

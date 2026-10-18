@@ -1,8 +1,14 @@
 # Development start and stop
 
-After the first deployment, open GitHub Actions → Dev Start or Stop → Run workflow. Select branch `main`, choose `start` or `stop`, and run it. There is no automatic schedule.
+Open GitHub Actions → [Start development](https://github.com/elijahvw/property-flow-2/actions/workflows/dev-start.yml) or [Stop development](https://github.com/elijahvw/property-flow-2/actions/workflows/dev-stop.yml) → **Run workflow** on `main`. Each action uses the same checked controller; no build or redeployment is required. The existing **Dev Start or Stop** action remains available. There is no automatic schedule.
 
 Start brings `propertyflow-dev-db` online, waits for database availability, then sets `propertyflow-dev` in `propertyflow-dev-cluster` to one running task. Stop sets the service to zero tasks, waits for it to stop, then stops the database. Both actions verify account `800754316001` and use region `us-east-1`. Requests serialize with Deploy Dev. Failed waits make the run fail; check its logs rather than assuming the environment changed state. Starting can take several minutes. The workflow requires existing application resources; it does not create them.
+
+The app and ClamAV scanner run in the same ECS task, so both stop and start together. ECS waits for scanner health; startup then checks the public homepage, database readiness and authentication rejection. The scanner updates its signatures automatically. Until its loaded definitions are current, originals remain quarantined and can be retried.
+
+`config/dev-power.json` is the inventory of targets and retained resource types, with reasons and remaining costs. `scripts/validate-dev-power.py` runs before cloud changes and in CI. A new ECS service/database, a removed target, or an unclassified Terraform resource fails validation until its lifecycle is implemented or retention is explicitly justified. Changes to task containers are automatically covered by service start/stop. Every infrastructure PR must update this inventory and its operational tests; `AGENTS.md` records that requirement.
+
+Routine shutdown is a pause, not `terraform destroy`. It retains the database, original documents, credentials, images and public domain configuration. Do not use destruction to save development compute charges.
 
 The deployment role additionally needs `rds:StartDBInstance` and `rds:StopDBInstance` on `arn:aws:rds:us-east-1:800754316001:db:propertyflow-dev-db`. Its existing policy supplies discovery and ECS update permissions.
 

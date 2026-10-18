@@ -1,3 +1,4 @@
+import { newFixturePage } from "./browser-fixture.mjs";
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {chromium,expect} from '@playwright/test';
@@ -65,7 +66,7 @@ export async function workOrderCases(t,admin,db,call,app){
   assert.equal((await call('manager','POST',`/api/company/work-orders/${work.id}/actions`,{action:'assign',assigneeId:'staff',note:'Please inspect this fixture.',expectedVersion:1,submissionKey:randomUUID()})).statusCode,200);
   const browser=await chromium.launch({headless:true});
   try{
-   const page=await browser.newPage();let actor='staff';
+   const page=await newFixturePage(browser);let actor='staff';
    await page.route('**/api/**',async route=>{const req=route.request(),u=new URL(req.url());if(u.pathname==='/api/telemetry')return route.fulfill({status:202,json:{accepted:true}});const response=await app.inject({method:req.method(),url:u.pathname+u.search,headers:{...req.headers(),origin:'https://app.test',cookie:`__Host-pf-session=token-${actor}`},...(req.postData()?{payload:req.postData()}:{})});await route.fulfill({status:response.statusCode,contentType:'application/json',body:response.body});});
    await page.goto(process.env.TEST_MAINTENANCE_BROWSER_URL+`/company/work-orders/${work.id}`);
    await page.getByRole('button',{name:'Accept work',exact:true}).click();await page.getByLabel('Work note',{exact:true}).fill('Accepted isolated fixture.');await page.getByRole('button',{name:'Confirm acceptance',exact:true}).click();
@@ -73,8 +74,8 @@ export async function workOrderCases(t,admin,db,call,app){
    await page.setViewportSize({width:390,height:844});await page.screenshot({path:'/tmp/pf-delegated-maintenance-mobile.png',fullPage:true});
    actor='manager';await page.setViewportSize({width:1280,height:900});await page.goto(process.env.TEST_MAINTENANCE_BROWSER_URL+`/company/maintenance/${work.id}`);
    await page.getByRole('button',{name:'Approve completion',exact:true}).click();await page.getByLabel('Work note',{exact:true}).fill('Reviewed fixture completion.');await page.getByRole('button',{name:'Confirm completion approval',exact:true}).click();await expect(page.getByRole('button',{name:'Reopen work',exact:true})).toBeVisible();
-   await page.getByRole('button',{name:'Upload document',exact:true}).click();await page.getByLabel('Document title',{exact:true}).fill('Browser fixture report');await page.getByLabel('Document file',{exact:true}).setInputFiles({name:'browser-fixture.txt',mimeType:'text/plain',buffer:Buffer.from('Fictional browser report')});await page.getByRole('button',{name:'Upload to quarantine',exact:true}).click();
-   await page.getByRole('button',{name:'Scan file',exact:true}).click();await expect(page.getByRole('button',{name:'Download version 1',exact:true})).toBeVisible();const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download version 1',exact:true}).click();assert.equal((await download).suggestedFilename(),'browser-fixture.txt');
+   await page.getByRole('button',{name:'Upload document',exact:true}).click();await page.getByLabel('Document title',{exact:true}).fill('Browser fixture report');await page.getByLabel('Document file',{exact:true}).setInputFiles({name:'browser-fixture.txt',mimeType:'text/plain',buffer:Buffer.from('Fictional browser report')});await page.getByRole('button',{name:'Upload & scan',exact:true}).click();
+   await expect(page.getByRole('status').filter({hasText:'Document saved and cleared by scanning.'})).toBeVisible();await page.getByText('1 retained version',{exact:true}).click();await expect(page.getByRole('button',{name:'Download version 1',exact:true})).toBeVisible();const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download version 1',exact:true}).click();assert.equal((await download).suggestedFilename(),'browser-fixture.txt');
    await page.getByRole('heading',{name:'Private documents',exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:'/tmp/pf-private-documents-desktop.png'});
    const record=(await call('manager','GET',`/api/company/maintenance/${work.id}/documents`)).json().items[0];assert.equal(record.versions[0].scanStatus,'clean');assert.equal((await call('staff','GET',`/api/company/maintenance/${work.id}/documents`)).statusCode,403);
    assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='document.downloaded' AND "targetId"=$1`,[record.id])).rows[0].n,1);

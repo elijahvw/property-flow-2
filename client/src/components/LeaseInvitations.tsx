@@ -1,3 +1,4 @@
+import { InvitationDelivery, type InvitationResult } from "./InvitationDelivery";
 import { useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -6,17 +7,18 @@ import { formatDate } from "../dates";
 import { Form } from "./Form";
 import { DateField } from "./DateField";
 
-type Invitation={id:string;email:string;participantName:string;participantRole:string;approvedAt:string|null;acceptedAt:string|null;revokedAt:string|null;expiresAt:string};
+type Invitation={version?:number;deliveryStatus?:string;id:string;email:string;participantName:string;participantRole:string;approvedAt:string|null;acceptedAt:string|null;revokedAt:string|null;expiresAt:string};
 export function LeaseInvitations({leaseId,startsOn,resident=false}:{leaseId:string;startsOn:string;resident?:boolean}){
   const url=`/api/${resident?"resident":"company"}/leases/${encodeURIComponent(leaseId)}/invitations`,r=useResource<Invitation[]>(url,true,true);
   const owner=useAuth().can("members.manage");
-  const [link,setLink]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState(false);
-  async function action(id:string,action:string){if(busy)return;setBusy(true);setError("");try{const row=await api<{acceptanceUrl?:string}>(`${url}/${encodeURIComponent(id)}/${action}`,{method:"POST",body:{}});if(row.acceptanceUrl)setLink(row.acceptanceUrl);}catch(e){setError(e instanceof Error?e.message:"Unable to update invitation. Refresh its status before retrying. If an approved link was not copied, revoke the invitation and create another.");}finally{setBusy(false);r.reload();}}
+  const [result,setResult]=useState<InvitationResult|null>(null),[submissionKey,setSubmissionKey]=useState(()=>crypto.randomUUID());
+  const [error,setError]=useState(""),[busy,setBusy]=useState(false);
+  async function action(id:string,action:string,expectedVersion?:number){if(busy)return;setBusy(true);setError("");try{const row=await api<InvitationResult>(`${url}/${encodeURIComponent(id)}/${action}`,{method:"POST",body:{expectedVersion}});if(row.acceptanceUrl){setResult({...row,id:row.id||id,version:row.version||1});}}catch(e){setError(e instanceof Error?e.message:"Unable to update invitation. Refresh its status before retrying. If an approved link was not copied, revoke the invitation and create another.");}finally{setBusy(false);r.reload();}}
   return <section aria-label="Resident invitations">
     <h2>{resident?"Invitation history":owner?"Invite and approve residents":"Request a resident invitation"}</h2>
     <p>Owners approve every new resident. Only leaseholders receive access to the shared lease finances; occupants do not.</p>
-    {!resident&&<Form label={owner?"Create resident invitation":"Request owner approval"} operation="invitation.create" successText={owner?"Invitation ready. Copy the approved link.":"Request awaiting owner approval."} feedbackText={owner?"Resident invitation created. Copy the approved link.":"Resident request submitted for owner approval."} submit={async f=>{setLink("");try{const row=await api<{acceptanceUrl:string|null}>(url,{method:"POST",body:{name:f.get("name"),email:f.get("email"),role:f.get("role"),startsOn:f.get("startsOn")}});setLink(row.acceptanceUrl||"");}finally{r.reload();}}}>
-      <fieldset className="form-section"><legend>Invitation details</legend><p className="help">All four fields are required. No email is sent automatically. Approved links expire after 72 hours and require the recipient’s matching verified email.</p><div className="form-grid">
+    {!resident&&<Form label={owner?"Create resident invitation":"Request owner approval"} operation="invitation.create" successText={owner?"Invitation ready. Copy the approved link.":"Request awaiting owner approval."} feedbackText={owner?"Resident invitation created. Copy the approved link.":"Resident request submitted for owner approval."} submit={async f=>{try{const row=await api<InvitationResult>(url,{method:"POST",body:{submissionKey,name:f.get("name"),email:f.get("email"),role:f.get("role"),startsOn:f.get("startsOn")}});if(row.acceptanceUrl||(row.recovered&&row.approvedAt))setResult(row);setSubmissionKey(crypto.randomUUID());}finally{r.reload();}}}>
+      <fieldset className="form-section"><legend>Invitation details</legend><p className="help">All four fields are required. After approval, send an email invitation or share a private link. Links expire after 72 hours and require the intended verified account.</p><div className="form-grid">
         <label>Invited resident name<input name="name" required maxLength={200}/></label>
         <label>Invited resident email<input name="email" type="email" required maxLength={254}/></label>
         <label>Requested resident role<select name="role" aria-label="Requested resident role" defaultValue="occupant"><option value="occupant">Occupant · no financial access</option><option value="leaseholder">Leaseholder · shared financial access</option></select></label>
@@ -24,11 +26,11 @@ export function LeaseInvitations({leaseId,startsOn,resident=false}:{leaseId:stri
       </div></fieldset>
       <p className="help">Owner approval saves a tenant profile for tracking. Verified acceptance connects their login and adds the approved household access. To invite a profile you already recorded, use Leaseholders & occupants. It does not change the rent, sign an agreement or split the balance.</p>
     </Form>}
-    {link&&<label className="notice">Approved invitation link<input className="dd-privacy-hidden" readOnly value={link} aria-label="Resident invitation acceptance link" onFocus={e=>e.currentTarget.select()}/><span>Copy and share this link now. It is shown once.</span></label>}
+    {result&&<InvitationDelivery key={result.id} initial={result} changed={r.reload} done={()=>{setResult(null);r.reload();}}/>}
     {error&&<p role="alert" className="notice error">{error}</p>}
     {r.error?<p role="alert">{r.error} <button onClick={r.reload}>Refresh invitations</button></p>:!r.data?<p role="status">Loading invitations…</p>:!r.data.length?<p className="help">No resident invitations yet.</p>:<ul className="record-list">{r.data.map(i=>{
       const status=i.acceptedAt?"Accepted":i.revokedAt?"Revoked":new Date(i.expiresAt).getTime()<=Date.now()?"Expired":!i.approvedAt?"Awaiting owner approval":"Awaiting verified acceptance";
-      return <li key={i.id}><div><h3>{i.participantName}</h3><p>{i.email} · {i.participantRole}</p><p className="help">{status} · Expires {new Date(i.expiresAt).toLocaleString("en-US",{month:"long",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"})}</p></div>{!resident&&!i.acceptedAt&&!i.revokedAt&&status!=="Expired"&&(owner||!i.approvedAt)&&<div className="actions">{owner&&!i.approvedAt&&<button disabled={busy} onClick={()=>void action(i.id,"approve")}>Approve resident {i.participantName}</button>}<button disabled={busy} className="secondary" onClick={()=>void action(i.id,"revoke")}>{owner?"Revoke":"Cancel"} invitation for {i.participantName}</button></div>}</li>;
+      return <li key={i.id}><div><h3>{i.participantName}</h3><p>{i.email} · {i.participantRole}</p><p className="help">{status} · Expires {new Date(i.expiresAt).toLocaleString("en-US",{month:"long",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"})}</p></div>{!resident&&!i.acceptedAt&&!i.revokedAt&&status!=="Expired"&&(owner||!i.approvedAt)&&<div className="actions">{owner&&!i.approvedAt&&<button disabled={busy} onClick={()=>void action(i.id,"approve",i.version)}>Approve resident {i.participantName}</button>}<button disabled={busy} className="secondary" onClick={()=>void action(i.id,"revoke",i.version)}>{owner?"Revoke":"Cancel"} invitation for {i.participantName}</button></div>}</li>;
     })}</ul>}
   </section>;
 }

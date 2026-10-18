@@ -1,3 +1,4 @@
+import { newFixturePage } from "./browser-fixture.mjs";
 import assert from 'node:assert/strict';
 import { chromium, expect } from '@playwright/test';
 
@@ -136,7 +137,7 @@ export async function staffPropertyAccessCases(t, admin, call, db, app) {
   await t.test('owner browser grant, response-loss retry, history and staff view use the real API', { skip: !process.env.TEST_LEASING_BROWSER_URL }, async () => {
     const browser = await chromium.launch({ headless: true });
     try {
-      const owner = await browser.newPage(), staff = await browser.newPage();
+      const owner = await newFixturePage(browser), staff = await newFixturePage(browser);
       let loseResponse = true;
       const routePage = async (page, user) => page.route('**/api/**', async route => {
         const req = route.request(), u = new URL(req.url());
@@ -150,27 +151,27 @@ export async function staffPropertyAccessCases(t, admin, call, db, app) {
       });
       await routePage(owner, 'owner'); await routePage(staff, 'staff');
       await owner.goto(process.env.TEST_LEASING_BROWSER_URL + '/company/members');
-      await owner.getByRole('button', { name: 'Property access', exact: true }).click();
+      await owner.getByRole('button', { name: 'Staff access', exact: true }).click();
       await owner.getByLabel('Property access', { exact: true }).selectOption('selected');
       await owner.getByRole('checkbox', { name: /^home / }).check();
       await owner.getByRole('searchbox', { name: 'Find a property' }).fill('other-home');
       await expect(owner.getByText('1 selected', { exact: true })).toBeVisible();
-      await owner.getByRole('button', { name: 'Save property access', exact: true }).click();
+      await owner.getByRole('button', { name: 'Save staff access', exact: true }).click();
       await expect(owner.getByRole('alert')).toBeVisible();
       await owner.getByRole('searchbox', { name: 'Find a property' }).fill('');
       await expect(owner.getByRole('checkbox', { name: /^home / })).toBeChecked();
-      await owner.getByRole('button', { name: 'Save property access', exact: true }).click();
+      await owner.getByRole('button', { name: 'Save staff access', exact: true }).click();
       await expect(owner.getByRole('dialog')).not.toBeVisible();
       await expect(owner.locator('.feedback-region')).toContainText('Staff property access saved.');
       await staff.goto(process.env.TEST_LEASING_BROWSER_URL + '/company/properties');
       await expect(staff.getByRole('heading', { name: 'Properties', exact: true })).toBeVisible();
       await expect(staff.getByRole('link', { name: 'home', exact: true })).toBeVisible();
       await expect(staff.getByRole('link', { name: 'other-home', exact: true })).toHaveCount(0);
-      await owner.getByRole('button', { name: 'Property access', exact: true }).click();
+      await owner.getByRole('button', { name: 'Staff access', exact: true }).click();
       await owner.getByText('Recent property access changes', { exact: true }).click();
       await expect(owner.getByText(/Company administrator:/).first()).toBeVisible();
       await owner.getByRole('checkbox', { name: /^home / }).uncheck();
-      await owner.getByRole('button', { name: 'Save property access', exact: true }).click();
+      await owner.getByRole('button', { name: 'Save staff access', exact: true }).click();
       await expect(owner.getByRole('dialog')).not.toBeVisible();
       await staff.reload();
       await expect(staff.getByRole('link', { name: 'home', exact: true })).toHaveCount(0);

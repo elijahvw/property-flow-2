@@ -31,11 +31,19 @@ def candidate(definition, image, endpoint):
     if definition.get("family") != SERVICE:
         raise ValueError("Unexpected task family.")
     containers = definition["containerDefinitions"]
-    if len(containers) != 1 or containers[0]["name"] != "app":
+    names = [container["name"] for container in containers]
+    if names not in (["app"], ["app", "document-scanner"]):
         raise ValueError(
             "Apply the reviewed infrastructure before deploying the backend."
         )
     app = containers[0]
+    if len(containers) == 2:
+        scanner = containers[1]
+        if not re.fullmatch(r"clamav/clamav@sha256:[a-f0-9]{64}", scanner.get("image", "")) or scanner.get("portMappings"):
+            raise ValueError("The private scanner must use a pinned official image without exposed ports.")
+        scanner_env = {row["name"]: row["value"] for row in scanner.get("environment", [])}
+        if scanner_env.get("CLAMD_CONF_TCPAddr") != "127.0.0.1":
+            raise ValueError("The scanner must listen only on task loopback.")
     env = {row["name"]: row["value"] for row in app.get("environment", [])}
     if any(key.startswith(("DD_", "DATADOG_")) for key in env):
         raise ValueError("Legacy monitoring configuration remains in the task.")

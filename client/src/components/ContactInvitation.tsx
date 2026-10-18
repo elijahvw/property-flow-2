@@ -6,10 +6,17 @@ import { api } from "../api";
 import { AcceptInvitation } from "../pages/Workspace";
 import { Form } from "./Form";
 export function InvitationEntry() {
-  const { user, loading, error, signIn, refreshUser } = useAuth();
+  const { user, loading, error, signIn, switchAccount, refreshUser } = useAuth();
   const [setupMessage,setSetupMessage]=useState("");
+  const [entry,setEntry]=useState<{company:string;role:string;kind:string}|null>(null),[entryError,setEntryError]=useState(""),[entryRevision,setEntryRevision]=useState(0);
+  const [invitationToken,setInvitationToken]=useState(()=>sessionStorage.getItem("pf-invitation"));
+  useEffect(()=>{const changed=()=>{setEntry(null);setEntryError("");setSetupMessage("");setInvitationToken(sessionStorage.getItem("pf-invitation"));};window.addEventListener("pf-invitation-changed",changed);return()=>window.removeEventListener("pf-invitation-changed",changed);},[]);
+  useEffect(()=>{if(!invitationToken)return;setEntryError("");const controller=new AbortController();void api<NonNullable<typeof entry>>("/api/invitations/entry",{method:"POST",body:{token:invitationToken},signal:controller.signal}).then(value=>{
+    if(controller.signal.aborted)return;setEntry(value);
+    if(value.kind){sessionStorage.setItem("pf-contact-invitation",String(value.kind==="contact"));sessionStorage.setItem("pf-lease-invitation",String(value.kind==="lease"));}
+  }).catch(failure=>{if(!controller.signal.aborted)setEntryError(failure instanceof Error?failure.message:"Unable to open this invitation.");});return()=>controller.abort();},[invitationToken,entryRevision]);
   if (loading) return <p role="status">Restoring your sign-in…</p>;
-  const token = sessionStorage.getItem("pf-invitation");
+  const token = invitationToken;
   if (!token)
     return (
       <section className="panel">
@@ -17,6 +24,8 @@ export function InvitationEntry() {
         <p>Use the full private link provided by the owner.</p>
       </section>
     );
+  if(!entry&&!entryError) return <p role="status">Loading your invitation…</p>;
+  if(entryError) return <section className="panel"><h1>Invitation unavailable</h1><p role="alert">{entryError}</p><p>Your existing account and rental records are unchanged. Ask the current owner to send a fresh invitation.</p><div className="actions"><button className="secondary" onClick={()=>setEntryRevision(value=>value+1)}>Try invitation again</button><Link to="/help/invitations">Get invitation help</Link></div></section>;
   if (error)
     return (
       <section className="panel">
@@ -31,8 +40,10 @@ export function InvitationEntry() {
         <p className="record-kicker">Your Property Flow account</p>
         <h1>Welcome to Property Flow</h1>
         <p>
-          You have been invited to Property Flow. Your Property Flow account is ready. Choose a password if needed, then sign in to review your access.
+          {entry?.company ? `${entry.company} has invited you as a ${entry.role}.` : "You have been invited to Property Flow."} Sign in to review the invitation. If you need a password, use the setup option below.
         </p>
+        <div className="actions"><button onClick={signIn}>Sign in to review invitation</button><Link to="/help/invitations">Invitation help</Link></div>
+        <details className="editor-section"><summary>First time signing in or need a password?</summary>
         <ol className="lease-next-steps">
           <li>
             <h2>Choose your password</h2>
@@ -61,9 +72,9 @@ export function InvitationEntry() {
               Already have an account? Sign in with the invited email. You’ll
               review the invitation before accepting.
             </p>
-            <button onClick={signIn}>Sign in to review invitation</button>
+            <p>After setting your password, return here and use Sign in to review invitation.</p>
           </li>
-        </ol>
+        </ol></details>
       </section>
     );
   if (!user.emailVerified)
@@ -75,13 +86,14 @@ export function InvitationEntry() {
           <Link className="button secondary" to="/account">
             Account & verification
           </Link>
+          <button className="secondary" onClick={switchAccount}>Use a different account</button>
           <button onClick={() => void refreshUser()}>
             I’ve verified my email
           </button>
         </div>
       </section>
     );
-  return <AcceptInvitation />;
+  return <>{entry?.kind!=="team"&&<p className="help">Signed in as {user.email}. <button className="text-button" onClick={switchAccount}>Use a different account</button></p>}<AcceptInvitation /></>;
 }
 export function ContactInvitationReview({
   token,

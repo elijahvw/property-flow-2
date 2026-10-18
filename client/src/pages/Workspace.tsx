@@ -1,3 +1,6 @@
+import { TeamInvitationReview } from "../components/TeamInvitationReview";
+import { InvitationHistory } from "../components/InvitationHistory";
+import { InvitationDelivery, type InvitationResult } from "../components/InvitationDelivery";
 import {formatDate} from "../dates";
 import {CompanyProfile} from "./CompanyProfile";
 import {AccountProfile} from "./AccountProfile";
@@ -13,7 +16,7 @@ import {
 import { DraftReset } from "../components/DraftReset";
 import { PropertyFields } from "../components/PropertyFields";
 import { EditorDialog } from "../components/EditorDialog";
-import { UserActivity } from "../components/UserActivity";
+import { UserActivity, ActivityLog } from "../components/UserActivity";
 import React, { useEffect, useState } from "react";
 import { useUserDirectory } from "../useUserDirectory";
 import {
@@ -111,7 +114,7 @@ function RoleSelect({
   return (
     <label>
       Company role
-      <select name="role" defaultValue={value}>
+      <select aria-label="Company role" name="role" defaultValue={value}>
         {roles
           .filter(
             (role) =>
@@ -212,55 +215,13 @@ export function InvitationForm({
   reload?: () => void;
   audience?: "team" | "tenants";
 }) {
-  const [url, setUrl] = useState("");
-  return (
-    <>
-      <Form
-        label="Create invitation"
-        operation="invitation.create"
-        submit={async (data) => {
-          setUrl("");
-          const result = await api<{ acceptanceUrl: string }>(
-            "/api/invitations",
-            {
-              method: "POST",
-              body: {
-                email: text(data, "email"),
-                role: text(data, "role"),
-                ...(companyId ? { companyId } : {}),
-              },
-            },
-          );
-          setUrl(result.acceptanceUrl);
-          reload?.();
-        }}
-      >
-        <Field name="email" label="Email address" type="email" />
-        <RoleSelect
-          owner={owner}
-          audience={audience}
-          value={audience === "team" ? "manager" : "resident"}
-        />
-        <p className="help">
-          Expires after 72 hours. Only the person with this verified email can
-          accept. Share the link with them directly.
-        </p>
-      </Form>
-      {url && (
-        <label className="notice">
-          Invitation link
-          <input
-            className="dd-privacy-hidden"
-            readOnly
-            value={url}
-            onFocus={(e) => e.currentTarget.select()}
-            aria-label="Invitation acceptance link"
-          />
-          <span>Copy this link now. It is shown only once.</span>
-        </label>
-      )}
-    </>
-  );
+  const [result, setResult] = useState<InvitationResult | null>(null);
+  const [key, setKey] = useState(() => crypto.randomUUID());
+  if (result) return <InvitationDelivery initial={result} changed={reload} done={() => { setResult(null); setKey(crypto.randomUUID()); reload?.(); }} />;
+  return <Form label="Create invitation" operation="invitation.create" successText="Invitation ready." submit={async data => {
+    const row = await api<InvitationResult>("/api/invitations", { method:"POST", body: { email:text(data,"email"), name:text(data,"name"), role:text(data,"role"), submissionKey:key, ...(companyId ? {companyId} : {}) } });
+    setResult(row); reload?.();
+  }}><Field name="name" label="Name (optional)" required={false}/><Field name="email" label="Email address" type="email"/><RoleSelect owner={owner} audience={audience} value={audience === "team" ? "manager" : "resident"}/><p className="help">Review the role, then send an email invitation or copy a private link. It expires after 72 hours and only the intended person can accept.</p></Form>;
 }
 export function People() {
   const { data } = useAuth();
@@ -944,6 +905,7 @@ export function Team() {
 }
 type StaffPropertyScope = {
   expectedVersion: number;
+  maintenanceExecution?: boolean;
   scope: string;
   propertyIds: string[];
   properties: { id: string; name: string; address: string }[];
@@ -951,22 +913,19 @@ type StaffPropertyScope = {
 };
 function StaffPropertyEditor({ member, saved }: { member: Member; saved: () => void }) {
   const r = useResource<StaffPropertyScope>(`/api/company/members/${encodeURIComponent(member.userId)}/property-access`);
-  return r.data ? <><StaffPropertyForm value={r.data} member={member} saved={saved} /><StaffMaintenanceAccess userId={member.userId} saved={saved} /></> : <LoadState error={r.error} retry={r.reload} />;
-}
-function StaffMaintenanceAccess({ userId, saved }: { userId: string; saved: () => void }) {
-  const r = useResource<{ version: number; maintenanceExecution: boolean }>(`/api/company/members/${encodeURIComponent(userId)}/maintenance-access`);
-  return <section><h3>Maintenance execution</h3><p>Optional authority to accept assigned work, record team progress and submit completion for management review. Existing property scope still applies. This grants no finance, lease or tenant-profile access.</p>{!r.data ? <LoadState error={r.error} retry={r.reload} /> : <Form operation="membership.update" label="Save maintenance access" submit={async data => { await api(`/api/company/members/${encodeURIComponent(userId)}/maintenance-access`, { method: "PUT", body: { enabled: data.get("enabled") === "on", expectedVersion: r.data!.version } }); saved(); }}><label><input name="enabled" type="checkbox" defaultChecked={r.data.maintenanceExecution} />Allow maintenance execution</label><p>Revoking this grant immediately blocks assigned work. Role changes and disabling membership clear the grant.</p></Form>}</section>;
+  return r.data ? <StaffPropertyForm value={r.data} member={member} saved={saved} /> : <LoadState error={r.error} retry={r.reload} />;
 }
 function StaffPropertyForm({ value, member, saved }: { value: StaffPropertyScope; member: Member; saved: () => void }) {
   const [scope, setScope] = useState(value.scope);
+  const [maintenanceExecution,setMaintenanceExecution] = useState(value.maintenanceExecution || false);
   const [selected, setSelected] = useState(value.propertyIds);
   const [search, setSearch] = useState("");
   const shown = value.properties.filter(p => `${p.name} ${p.address}`.toLowerCase().includes(search.trim().toLowerCase()));
   const describe = (v: { scope: string; propertyIds: string[] }) => v.scope === "all" ? "All company properties" : v.propertyIds.length ? `${v.propertyIds.length} selected ${v.propertyIds.length === 1 ? "property" : "properties"}` : "No properties";
   return <>
     <p>Staff can view property and unit records. Financial records, leases, tenant profiles and maintenance management require separate authority.</p>
-    <Form operation="membership.update" feedbackText="Staff property access saved." label="Save property access" submit={async () => {
-      await api(`/api/company/members/${encodeURIComponent(member.userId)}/property-access`, { method: "PUT", body: { scope, propertyIds: scope === "all" ? [] : selected, expectedVersion: value.expectedVersion } });
+    <Form operation="membership.update" feedbackText="Staff property access saved." label="Save staff access" submit={async () => {
+      await api(`/api/company/members/${encodeURIComponent(member.userId)}/property-access`, { method: "PUT", body: { scope, propertyIds: scope === "all" ? [] : selected, maintenanceExecution, expectedVersion: value.expectedVersion } });
       saved();
     }}>
       <label>Property access<select aria-label="Property access" value={scope} onChange={e => setScope(e.target.value)}>
@@ -982,6 +941,7 @@ function StaffPropertyForm({ value, member, saved }: { value: StaffPropertyScope
           <span><strong>{p.name}</strong><small>{p.address}</small></span>
         </label>)}</div>}
       </fieldset>}
+      <label className="checkbox-label"><input type="checkbox" checked={maintenanceExecution} onChange={e=>setMaintenanceExecution(e.target.checked)}/>Allow maintenance execution</label><p className="help">Within this property scope, the teammate can accept assigned work, record progress and submit completion for management review. Financial, lease, tenant and document access stays restricted.</p>
       <p><strong>After saving:</strong> {describe({ scope, propertyIds: selected })}. Property viewing remains read-only. Separately granted maintenance execution also follows this property scope. Changes apply on the next request.</p>
     </Form>
     {value.history.length > 0 && <details><summary>Recent property access changes</summary><ul>{value.history.map(h => <li key={h.id}>
@@ -997,9 +957,13 @@ function TeamDirectory() {
     [transferring, setTransferring] = useState(false);
   const [selected, setSelected] = useState("");
   const [propertyMember, setPropertyMember] = useState("");
+  const [teamQuery, setTeamQuery] = useState(""), [teamStatus, setTeamStatus] = useState(""), [teamRole, setTeamRole] = useState(""), [teamPage, setTeamPage] = useState(0);
   const [invitationRevision, setInvitationRevision] = useState(0);
   const team = r.data?.filter((m) => m.role !== "resident");
   const member = team?.find((m) => m.userId === selected);
+  const filteredTeam = team?.filter(m => (!teamStatus || (m.status === "active" && m.user.status === "active" ? "active" : "disabled") === teamStatus) && (!teamRole || m.role === teamRole) && `${m.user.name || ""} ${m.user.email}`.toLowerCase().includes(teamQuery.trim().toLowerCase()));
+  useEffect(()=>{const last=Math.max(0,Math.ceil((filteredTeam?.length||0)/25)-1);if(r.data&&teamPage>last)setTeamPage(last);},[filteredTeam?.length,teamPage,r.data]);
+  const teamRows = filteredTeam?.slice(teamPage * 25, (teamPage + 1) * 25);
   return (
     <>
       <header className="page-heading">
@@ -1019,19 +983,20 @@ function TeamDirectory() {
         </div>
       </header>
       <section className="panel">
+        <div className="filters"><label>Find team member<input type="search" maxLength={200} value={teamQuery} onChange={e=>{setTeamQuery(e.target.value);setTeamPage(0);}}/></label><label>Team role<select value={teamRole} onChange={e=>{setTeamRole(e.target.value);setTeamPage(0);}}><option value="">All roles</option><option value="owner">Company owner</option><option value="manager">Manager</option><option value="staff">Staff</option></select></label><label>Team status<select value={teamStatus} onChange={e=>{setTeamStatus(e.target.value);setTeamPage(0);}}><option value="">All statuses</option><option value="active">Active</option><option value="disabled">Disabled</option></select></label></div>
         {!r.data ? (
           <LoadState error={r.error} retry={r.reload} />
         ) : (
           <ul className="record-list">
-            {team?.map((m) => (
+            {teamRows?.map((m) => (
               <li key={m.userId}>
                 <div>
                   <strong>{m.user.name || m.user.email}</strong>
                   <p>{m.user.email}</p>
                 </div>
                 <Badge>{m.role}</Badge>
-                <Badge>{m.status}</Badge>
-                {m.role === "staff" && <button className="secondary" onClick={() => setPropertyMember(m.userId)}>Property access</button>}
+                <Badge>{m.user.status !== "active" ? "Account disabled" : m.status}</Badge>
+                {m.role === "staff" && <button className="secondary" onClick={() => setPropertyMember(m.userId)}>Staff access</button>}
                 {m.role !== "owner" && (
                   <button
                     className="secondary"
@@ -1044,8 +1009,10 @@ function TeamDirectory() {
             ))}
           </ul>
         )}
+        {r.data && !filteredTeam?.length && <p>No team members match these filters.</p>}
+        {!!filteredTeam?.length && <nav className="actions" aria-label="Team pages"><button className="secondary" disabled={!teamPage} onClick={()=>setTeamPage(p=>p-1)}>Previous team members</button><span>{filteredTeam.length} matching members · Page {teamPage+1}</span><button className="secondary" disabled={(teamPage+1)*25>=filteredTeam.length} onClick={()=>setTeamPage(p=>p+1)}>Next team members</button></nav>}
       </section>
-      {team?.find(m => m.userId === propertyMember) && <EditorDialog open title={`Property access for ${team.find(m => m.userId === propertyMember)!.user.name || team.find(m => m.userId === propertyMember)!.user.email}`} onClose={() => setPropertyMember("")}>
+      {team?.find(m => m.userId === propertyMember) && <EditorDialog open title={`Staff access for ${team.find(m => m.userId === propertyMember)!.user.name || team.find(m => m.userId === propertyMember)!.user.email}`} onClose={() => setPropertyMember("")}>
         <StaffPropertyEditor key={propertyMember} member={team.find(m => m.userId === propertyMember)!} saved={() => { setPropertyMember(""); r.reload(); }} />
       </EditorDialog>}
       {member && (
@@ -1132,96 +1099,7 @@ function TeamDirectory() {
     </>
   );
 }
-export function Invitations({
-  platform = false,
-  audience,
-}: {
-  platform?: boolean;
-  audience?: "team" | "tenants";
-}) {
-  const r = useResource<
-    {
-      id: string;
-      email: string;
-      role: string;
-      expiresAt: string;
-      acceptedAt: string | null;
-      revokedAt: string | null;
-    }[]
-  >(audience ? `/api/invitations?audience=${audience}` : "/api/invitations");
-  const [error, setError] = useState("");
-  const rows = r.data?.filter(
-    (i) =>
-      !audience ||
-      (audience === "team" ? i.role !== "resident" : i.role === "resident"),
-  );
-  return (
-    <section className="panel">
-      <h2>
-        {platform
-          ? "Platform invitations"
-          : audience === "team"
-            ? "Team invitations"
-            : audience === "tenants"
-              ? "Tenant invitations"
-              : "Invitations"}
-      </h2>
-      {error && <p role="alert">{error}</p>}
-      {!r.data ? (
-        <LoadState error={r.error} retry={r.reload} />
-      ) : rows?.length ? (
-        <ul className="record-list">
-          {rows.map((i) => {
-            const pending =
-              !i.acceptedAt &&
-              !i.revokedAt &&
-              Date.parse(i.expiresAt) > Date.now();
-            return (
-              <li key={i.id}>
-                <div>
-                  <strong>{i.email}</strong>
-                  <p>
-                    {i.role} · Expires{" "}
-                    {new Date(i.expiresAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <Badge>
-                  {i.acceptedAt
-                    ? "Accepted"
-                    : i.revokedAt
-                      ? "Revoked"
-                      : pending
-                        ? "Pending"
-                        : "Expired"}
-                </Badge>
-                {pending && (
-                  <button
-                    className="secondary"
-                    onClick={async () => {
-                      try {
-                        await api(`/api/invitations/${i.id}/revoke`, {
-                          method: "POST",
-                          body: {},
-                        });
-                        r.reload();
-                      } catch {
-                        setError("Unable to revoke invitation. Try again.");
-                      }
-                    }}
-                  >
-                    Revoke
-                  </button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        <p>No invitations yet.</p>
-      )}
-    </section>
-  );
-}
+export function Invitations(props: {platform?:boolean;audience?:"team"|"tenants"}) { return <InvitationHistory {...props}/>; }
 export function CompanySettings() { return <CompanyProfile/>; }
 export function Account() { return <AccountProfile/>; }
 export function AccessStatus() {
@@ -1419,21 +1297,7 @@ export function AcceptInvitation() {
       <h1>Accept your invitation</h1>
       <p>Use the account whose verified email matches the invitation.</p>
       {token&&sessionStorage.getItem("pf-contact-invitation")==="true"&&sessionStorage.getItem("pf-lease-invitation")!=="true"?<ContactInvitationReview token={token} accepted={async()=>{sessionStorage.removeItem("pf-invitation");sessionStorage.removeItem("pf-contact-invitation");await refreshUser();navigate("/resident");}}/>:token&&sessionStorage.getItem("pf-lease-invitation")==="true"?<LeaseInvitationReview token={token} accepted={async()=>{sessionStorage.removeItem("pf-invitation");sessionStorage.removeItem("pf-lease-invitation");await refreshUser();navigate("/resident");}}/>:token ? (
-        <Form
-          label="Accept invitation"
-          operation="invitation.accept"
-          submit={async () => {
-            await api("/api/invitations/accept", {
-              method: "POST",
-              body: { token },
-            });
-            sessionStorage.removeItem("pf-invitation");
-            await refreshUser();
-            navigate("/dashboard");
-          }}
-        >
-          <p>This will assign your account to the inviting company.</p>
-        </Form>
+        <TeamInvitationReview token={token} accepted={async()=>{sessionStorage.removeItem("pf-invitation");await refreshUser();navigate("/dashboard");}}/>
       ) : (
         <p>Open the full invitation link sent by your administrator.</p>
       )}
@@ -1441,69 +1305,5 @@ export function AcceptInvitation() {
   );
 }
 export function Audit() {
-  const r = useResource<
-    {
-      id: string;
-      action: string;
-      actorId: string;
-      actorLabel?: string;
-      actor?: { name: string | null; email: string } | null;
-      companyName?: string | null;
-      targetUser?: { name: string | null; email: string } | null;
-      companyId: string | null;
-      targetId: string | null;
-      createdAt: string;
-    }[]
-  >("/api/platform/audit");
-  return (
-    <>
-      <header className="page-heading">
-        <p className="eyebrow">Platform</p>
-        <h1>Activity</h1>
-        <p>The 100 most recent recorded access and administration events.</p>
-      </header>
-      <section className="panel">
-        {!r.data ? (
-          <LoadState error={r.error} retry={r.reload} />
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Event</th>
-                  <th>Actor</th>
-                  <th>Company</th>
-                  <th>When</th>
-                </tr>
-              </thead>
-              <tbody>
-                {r.data.map((e) => (
-                  <tr key={e.id}>
-                    <td>{e.action}</td>
-                    <td>
-                      {e.actorLabel ||
-                        e.actor?.name ||
-                        e.actor?.email ||
-                        "Account"}
-                      {e.actor?.email && e.actorLabel !== e.actor.email && (
-                        <span className="cell-detail">{e.actor.email}</span>
-                      )}
-                      <RecordIdentity id={e.actorId} label="Actor" />
-                    </td>
-                    <td>
-                      {e.companyName || (e.companyId ? "Company" : "Platform")}
-                      {e.companyId && (
-                        <RecordIdentity id={e.companyId} label="Company" />
-                      )}
-                    </td>
-                    <td>{new Date(e.createdAt).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </>
-  );
+  return <><header className="page-heading"><p className="eyebrow">Platform</p><h1>Activity</h1><p>Find recorded access and administration changes across the platform.</p></header><section className="panel"><ActivityLog/></section></>;
 }

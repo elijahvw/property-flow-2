@@ -71,6 +71,7 @@ export type Entry = {
   paidAfterGraceCents?: string;
 };
 export type Account = {
+  billingIssue?:boolean;
   movements?:MoneyMovement[];
   credits?:LeaseCredit[];
   lease: {
@@ -179,6 +180,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
   const [search, setSearch] = useState(""),
     [view, setView] = useState(
       [
+        "billing_issues",
         "paid_late",
         "past_due",
         "after_grace",
@@ -209,7 +211,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
         `${a.lease.property.name} ${a.lease.unit.label} ${a.lease.resident?.name || ""} ${a.lease.resident?.email || ""}`
           .toLowerCase()
           .includes(search.toLowerCase()) &&
-        (view === "all" ||
+        (view === "all" || (view === "billing_issues" && !!a.billingIssue) ||
           (view === "paid_late" &&
             BigInt(a.summary.paidLateChargeCount ?? "0") > 0n) ||
           (view === "unpaid" && BigInt(a.summary.outstandingCents) > 0n) ||
@@ -267,7 +269,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
           {resident ? "My rental" : "Money · Rent operations"}
         </p>
         <h1>
-          {leaseId ? "Rent ledger" : resident ? "My rent" : "Rent & charges"}
+          {leaseId ? "Rent ledger" : resident ? "My rent" : "Rent & balances"}
         </h1>
         <p>
           {resident
@@ -444,6 +446,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                         }}
                       >
                         <option value="all">All accounts</option>
+                        {!resident&&<option value="billing_issues">Billing needs review</option>}
                         <option value="paid_late">Paid-late history</option>
                         <option value="unpaid">With unpaid charges</option>
                         <option value="credit">With unapplied credit</option>
@@ -1350,7 +1353,7 @@ function RentDraft({
       <p className="notice">
         {mode === "charge"
           ? `Review ${month}: the default is the full monthly rent. For a partial month, enter the agreed amount yourself. One active charge per lease month. The agreed due date can precede move-in; no automatic proration is performed.`
-          : "Record money you have already received. This creates one rent income entry in cash reports, applies it to unpaid lease charges, and keeps any excess as credit. Do not record it again in Finances."}
+          : "Record money you have already received. This creates one rent income entry in cash reports, applies it to unpaid lease charges, and keeps any excess as credit. Do not record it again in Cash activity."}
       </p>
     </Form>
   );

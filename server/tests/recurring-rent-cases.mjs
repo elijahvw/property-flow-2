@@ -1,3 +1,4 @@
+import { newFixturePage } from "./browser-fixture.mjs";
 import { chromium, expect } from "@playwright/test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -398,6 +399,8 @@ export async function recurringRentCases(t, admin, call, db) {
       assert.equal(row.schedule.nextPeriodOn.slice(0, 10), last);
       assert.equal(row.history.length, 1);
       assert.equal(row.schedule.lastErrorCode, "BILLING_RETRY_REQUIRED");
+      const accounts=await call('owner','GET','/api/company/rent');assert.equal(accounts.statusCode,200,accounts.body);assert.ok(accounts.json().accounts.some(account=>account.lease.id===lease.id&&account.billingIssue));
+      const attention=await call('owner','GET','/api/company/overview');assert.ok(attention.json().billingIssues.count>=1);
       assert.equal((await get()).charges.length, 1);
       await admin.query(
         `DROP TRIGGER reject_schedule_audit ON "AuditEvent";DROP FUNCTION reject_schedule_audit()`,
@@ -653,7 +656,7 @@ export async function recurringRentCases(t, admin, call, db) {
       );
       const browser = await chromium.launch({ headless: true });
       try {
-        const page = await browser.newPage();
+        const page = await newFixturePage(browser);
         let lose = true;
         const keys = [];
         await page.route("**/api/**", async (route) => {

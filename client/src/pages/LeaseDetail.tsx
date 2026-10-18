@@ -97,6 +97,18 @@ function LeaseWorkspace({ id }: { id: string }) {
     setEditing(true);
   };
   const tab = (value: string) => setParams({ ...context, section: value });
+  const sections = [
+          ["overview", "Overview"],
+          ["documents", "Documents"],
+          ["terms", "Terms & changes"],
+          ...(can("finance.manage") ? [["proration", "Partial rent"]] : []),
+          ["household", "Leaseholders & occupants"],
+          ["invitations", "Invitations & approvals"],
+          ["renewal", "Renewal"],
+          ...(can("finance.manage")
+            ? [["settlement", "Move-out & settlement"]]
+            : []),
+        ];
   const source = (module: string) =>
     `/company/${module}?${new URLSearchParams({ ...context, leaseId: id, leaseReturn: id })}`;
   return (
@@ -129,19 +141,9 @@ function LeaseWorkspace({ id }: { id: string }) {
           {r.error} <button onClick={r.reload}>Refresh lease</button>
         </p>
       )}
+      <label className="lease-section-select">Lease section<select aria-label="Lease section" value={section} onChange={event=>tab(event.target.value)}>{sections.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
       <nav className="lease-section-nav" aria-label="Lease sections">
-        {[
-          ["overview", "Overview"],
-          ["documents", "Documents"],
-          ["terms", "Terms & changes"],
-          ...(can("finance.manage") ? [["proration", "Partial rent"]] : []),
-          ["household", "Leaseholders & occupants"],
-          ["invitations", "Invitations & approvals"],
-          ["renewal", "Renewal"],
-          ...(can("finance.manage")
-            ? [["settlement", "Move-out & settlement"]]
-            : []),
-        ].map(([value, label]) => (
+        {sections.map(([value, label]) => (
           <button
             key={value}
             className={section === value ? "" : "secondary"}
@@ -164,6 +166,7 @@ function LeaseWorkspace({ id }: { id: string }) {
                   billing are optional, separate actions.
                 </p>
               </div>
+              <div className="actions"><button className="text-button" onClick={()=>tab("household")}>Review household</button>{can("finance.manage")&&<Link to={source("rent")}>Review rent setup</Link>}</div>
               <button
                 className="secondary"
                 disabled={!!r.error}

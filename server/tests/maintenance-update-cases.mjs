@@ -1,3 +1,4 @@
+import { newFixturePage } from "./browser-fixture.mjs";
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { chromium, expect } from '@playwright/test';
@@ -85,7 +86,7 @@ export async function maintenanceUpdateCases(t, admin, db, call, app, requestId)
   await t.test('browser committed-response-loss keeps the update draft, audience and key', { skip: !process.env.TEST_MAINTENANCE_BROWSER_URL }, async () => {
     const browser = await chromium.launch({ headless: true });
     try {
-      const page = await browser.newPage(); let lose = true; const attempts = [];
+      const page = await newFixturePage(browser); let lose = true; const attempts = [];
       await page.route('**/api/**', async route => {
         const req = route.request(), url = new URL(req.url());
         const response = await app.inject({ method: req.method(), url: url.pathname + url.search, headers: { ...req.headers(), origin: 'https://app.test', cookie: '__Host-pf-session=token-manager' }, ...(req.postData() ? { payload: req.postData() } : {}) });

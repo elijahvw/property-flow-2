@@ -5,7 +5,7 @@ export function NavigationIcon({ path }: { path: string }) {
       <path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 4v2" />
     </>
   );
-  const content = path.includes("overview") ? (
+  const content = path.startsWith("/help") ? <><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4m0 3h.01"/></> : path.includes("overview") ? (
     <>
       <rect x="3" y="3" width="7" height="7" rx="1" />
       <rect x="14" y="3" width="7" height="7" rx="1" />

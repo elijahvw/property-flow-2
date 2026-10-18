@@ -1,3 +1,4 @@
+import { InvitationDelivery } from "../components/InvitationDelivery";
 import { Address } from "../components/Address";
 import {
   TenantInvitation,
@@ -45,7 +46,7 @@ function ContactWorkspace({ id }: { id: string }) {
       true,
       true,
     );
-  const [invite, setInvite] = useState(false);
+  const [invite, setInvite] = useState(false),[delivery,setDelivery]=useState<ContactInvitationState|null>(null);
   const [editing, setEditing] = useState(false),
     [access, setAccess] = useState(false),
     [archive, setArchive] = useState(false);
@@ -118,7 +119,7 @@ function ContactWorkspace({ id }: { id: string }) {
           Edit tenant details
         </button>
       </header>
-      {person.user && <p className="notice">Sign-in account ready · {person.user.email} · {person.user.firstSignedInAt ? "Has signed in" : "No sign-in recorded"}. {person.portal ? "Portal access is managed below." : "Send a portal invitation to activate access; password setup uses this same account."}</p>}
+
       {r.error && (
         <p role="alert" className="notice error">
           {r.error} <button onClick={r.reload}>Refresh tenant</button>
@@ -195,17 +196,18 @@ function ContactWorkspace({ id }: { id: string }) {
           </section>
           <section className="panel">
             <h2>Account & portal access</h2>
-            {can("members.manage") && person.userId && <Form label="Send password reset email" operation="account.verification" submit={async()=>{await api(`/api/company/resident-contacts/${encodeURIComponent(id)}/password-reset`,{method:"POST",body:{}});}} feedbackText="Password reset email requested for the existing account."><p className="help">Auth0 sends the reset link. This uses the same account and does not change company or lease access.</p></Form>}
+            {person.user&&<p>Sign-in account ready · {person.user.email} · {person.user.firstSignedInAt?"Has signed in":"No sign-in recorded"}. Email {person.user.emailVerified?"verified":"not yet verified"}.</p>}
+            {can("members.manage") && person.userId && <Form label="Send password reset email" operation="account.verification" submit={async()=>{await api(`/api/company/resident-contacts/${encodeURIComponent(id)}/password-reset`,{method:"POST",body:{}});}} feedbackText="Password reset email requested for the existing account."><p className="help">Your sign-in provider sends the reset link. This uses the same account and does not change company or lease access.</p></Form>}
             {!person.portal ? (
               <>
                 <p>
                   {pending
                     ? "An invitation is pending. This tenant keeps the same profile when they verify their email and accept."
-                    : "This Auth0 account is ready. Invite them when you want to offer portal access."}
+                    : "Their sign-in account is ready. Invite them when you want to offer portal access."}
                 </p>
-                {can("members.manage") && person.status === "active" && (
-                  <button className="secondary" onClick={() => setInvite(true)}>
-                    {pending ? "Replace invitation" : "Invite to portal"}
+                {pending?.leaseId&&!pending.approvedAt?<p><Link to={`/company/leases/${encodeURIComponent(pending.leaseId)}?section=invitations`}>Review household invitation approval</Link></p>:can("members.manage") && person.status === "active" && (
+                  <button className="secondary" onClick={() => pending?setDelivery(pending):setInvite(true)}>
+                    {pending ? "Send or replace invitation" : "Invite to portal"}
                   </button>
                 )}
                 {pending && can("members.manage") && (
@@ -215,7 +217,7 @@ function ContactWorkspace({ id }: { id: string }) {
                     submit={async () => {
                       await api(
                         `/api/invitations/${encodeURIComponent(pending.id)}/revoke`,
-                        { method: "POST", body: {} },
+                        { method: "POST", body: {expectedVersion:pending.version} },
                       );
                       r.reload();
                     }}
@@ -379,6 +381,7 @@ function ContactWorkspace({ id }: { id: string }) {
           </Form>
         )}
       </EditorDialog>
+      {delivery&&<EditorDialog open title={`Invitation for ${person.name}`} onClose={()=>{setDelivery(null);r.reload();}}><InvitationDelivery key={delivery.id} initial={delivery} changed={r.reload} done={()=>{setDelivery(null);r.reload();}}/></EditorDialog>}
       {access && person.userId && (
         <ResidentEditor
           id={person.userId}

@@ -1,3 +1,4 @@
+import { newFixturePage } from "./browser-fixture.mjs";
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {digest} from '../dist/sessions.js';
@@ -90,7 +91,8 @@ export async function householdCases(t,admin,call,app){
    assert.equal((await call(id,'POST','/api/invitations/accept',{token:'pending-'+id})).statusCode,403);
    const approval=`/api/company/leases/${lease.id}/invitations/${invited.id}/approve`;
    assert.equal((await call('hh-manager','POST',approval,{})).statusCode,403);
-   const approved=ok(await call('hh-owner','POST',approval,{})),token=new URL(approved.acceptanceUrl).hash.slice(1);
+   assert.equal((await call('hh-owner','POST',approval,{expectedVersion:invited.version+1})).statusCode,409);
+   const approved=ok(await call('hh-owner','POST',approval,{expectedVersion:invited.version})),token=new URL(approved.acceptanceUrl).hash.slice(1);
    const profileBefore=(await admin.query(`SELECT c.id,c."userId" FROM "ResidentContact" c JOIN "Invitation" i ON i."contactId"=c.id WHERE i.id=$1`,[invited.id])).rows[0];assert.ok(profileBefore.id);assert.equal(profileBefore.userId,id,'owner approval reuses the same canonical account before login');
    assert.equal((await call(null,'POST','/api/invitations/setup-account',{token})).statusCode,200);
 
@@ -99,7 +101,7 @@ export async function householdCases(t,admin,call,app){
    assert.equal((await call('resident2','POST','/api/invitations/accept',{token})).statusCode,403);
    if(role==='occupant'&&process.env.TEST_FINANCES_BROWSER_URL){
     const browser=await chromium.launch({headless:true});try{
-     const page=await browser.newPage({viewport:{width:1280,height:1000}});
+     const page=await newFixturePage(browser, {viewport:{width:1280,height:1000}});
      await page.route('**/api/**',async route=>{const req=route.request(),url=new URL(req.url()),response=await app.inject({method:req.method(),url:url.pathname+url.search,headers:{...req.headers(),origin:'https://app.test',cookie:`__Host-pf-session=token-${id}`},...(req.postData()?{payload:req.postData()}:{})});await route.fulfill({status:response.statusCode,contentType:'application/json',body:response.body});});
      await page.goto(process.env.TEST_FINANCES_BROWSER_URL+`/invite?lease=1#${token}`);
      await expect(page).toHaveURL(/\/invite$/);await expect(page.locator('.lease-review-summary')).toContainText('Oak House · Shared apartment');
@@ -134,7 +136,9 @@ export async function householdCases(t,admin,call,app){
   assert.equal((await call('hh-manager','POST',`${companyRoot}/${ownerInvite.id}/revoke`,{})).statusCode,404);
   assert.equal(ok(await call('hh-manager','GET',companyRoot)).some(i=>i.id===ownerInvite.id),false);
   const ownRequest=ok(await call('hh-manager','POST',companyRoot,body('manager-request@test.invalid')));assert.equal(ownRequest.approvedAt,null);
-  ok(await call('hh-manager','POST',`${companyRoot}/${ownRequest.id}/revoke`,{}));
+  assert.equal((await call('hh-manager','POST',`${companyRoot}/${ownRequest.id}/revoke`,{expectedVersion:ownRequest.version+1})).statusCode,409);
+  ok(await call('hh-manager','POST',`${companyRoot}/${ownRequest.id}/revoke`,{expectedVersion:ownRequest.version}));
+  ok(await call('hh-manager','POST',`${companyRoot}/${ownRequest.id}/revoke`,{expectedVersion:ownRequest.version}));
   assert.equal((await call('hh-primary','POST',residentRoot,body('resident-blocked@test.invalid'))).statusCode,403);
   // Retain a request made before the portal became read-only.
   const residentRequest=ok(await call('hh-manager','POST',companyRoot,body('resident-approved@test.invalid')));
@@ -222,7 +226,7 @@ export async function householdCases(t,admin,call,app){
  });
  await t.test('real browser follows the lease workspace, household and invitation workflow', {skip:!process.env.TEST_FINANCES_BROWSER_URL},async()=>{
   const browser=await chromium.launch({headless:true});try{
-   const page=await browser.newPage({viewport:{width:1440,height:1000}});
+   const page=await newFixturePage(browser, {viewport:{width:1440,height:1000}});
    await page.route('**/api/**',async route=>{const req=route.request(),url=new URL(req.url()),response=await app.inject({method:req.method(),url:url.pathname+url.search,headers:{...req.headers(),origin:'https://app.test',cookie:'__Host-pf-session=token-hh-owner'},...(req.postData()?{payload:req.postData()}:{})});await route.fulfill({status:response.statusCode,contentType:'application/json',body:response.body});});
    await page.goto(process.env.TEST_FINANCES_BROWSER_URL+`/company/leases/${lease.id}`);
    await expect(page.getByRole('heading',{name:'Oak House · Shared apartment',exact:true})).toBeVisible();

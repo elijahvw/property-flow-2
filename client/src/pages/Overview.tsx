@@ -5,6 +5,7 @@ import { useResource } from "../useResource";
 import { dollars } from "../money";
 import { propertyLink } from "../components/PropertyNavigation";
 type OverviewData = {
+  billingIssues?:{count:number};
   residentApprovals?: {pendingCount:number};
   company: { name: string; timezone: string };
   property: { id: string; name: string } | null;
@@ -36,6 +37,7 @@ type OverviewData = {
     }[];
   };
   maintenance?: {
+    reviewCount?:number;overdueCount?:number;
     openCount: number;
     highPriorityCount: number;
     latest: {
@@ -86,6 +88,7 @@ function OverviewWorkspace() {
       true,
     ),
     d = r.data;
+  const needsAttention = !!d && [d.residentApprovals?.pendingCount,d.rentCollections?.afterGraceLeaseCount,d.maintenance?.openCount,d.maintenance?.reviewCount,d.maintenance?.overdueCount,d.leases?.endingSoonCount,d.leases?.draftCount,d.leases?.pastEndCount,d.billingIssues?.count].some(value=>(value||0)>0);
   const url = (path: string, extra: Record<string, string> = {}) =>
     propertyLink(path, id, extra);
   return (
@@ -185,9 +188,13 @@ function OverviewWorkspace() {
                     <h2>Needs attention</h2>
                     <span className="badge">Saved records</span>
                   </div>
+                  {!needsAttention && <p>No outstanding tasks need attention. Your portfolio records remain available below.</p>}
                   <div className="attention-list">
+                    {!!d.billingIssues?.count&&<Link to={url("/company/rent",{view:"billing_issues"})}><span className="attention-icon">!</span><div><strong>Review recurring billing</strong><span>{d.billingIssues.count} schedules need a check</span></div><span aria-hidden="true">→</span></Link>}
+                    {!!d.maintenance?.reviewCount&&<Link to={url("/company/maintenance",{workStatus:"pending_review"})}><span className="attention-icon">↗</span><div><strong>Review completed work</strong><span>{d.maintenance.reviewCount} awaiting management approval</span></div><span aria-hidden="true">→</span></Link>}
+                    {!!d.maintenance?.overdueCount&&<Link to={url("/company/maintenance",{due:"overdue"})}><span className="attention-icon">!</span><div><strong>Follow up overdue maintenance</strong><span>{d.maintenance.overdueCount} requests past their target date</span></div><span aria-hidden="true">→</span></Link>}
                     {d.residentApprovals&&d.residentApprovals.pendingCount>0&&<Link to={url("/company/leases",{approvals:"pending"})}><span className="attention-icon">↗</span><div><strong>Approve resident requests</strong><span>{d.residentApprovals.pendingCount} awaiting owner review</span></div><span aria-hidden="true">→</span></Link>}
-                    {d.rentCollections && (
+                    {!!d.rentCollections?.afterGraceLeaseCount && (
                       <Link to={url("/company/rent", { view: "after_grace" })}>
                         <span className="attention-icon">↗</span>
                         <div>
@@ -203,7 +210,7 @@ function OverviewWorkspace() {
                         <span aria-hidden="true">→</span>
                       </Link>
                     )}
-                    {d.maintenance && (
+                    {!!d.maintenance?.openCount && (
                       <Link
                         to={url("/company/maintenance", {
                           status: "unresolved",
@@ -222,7 +229,7 @@ function OverviewWorkspace() {
                     )}
                     {d.leases && (
                       <>
-                        <Link
+                        {d.leases.endingSoonCount>0&&<Link
                           to={url("/company/leases", {
                             attention: "ending_soon",
                           })}
@@ -236,15 +243,15 @@ function OverviewWorkspace() {
                             </span>
                           </div>
                           <span aria-hidden="true">→</span>
-                        </Link>
-                        <Link to={url("/company/leases", { status: "draft" })}>
+                        </Link>}
+                        {d.leases.draftCount>0&&<Link to={url("/company/leases", { status: "draft" })}>
                           <span className="attention-icon">≡</span>
                           <div>
                             <strong>Finish draft leases</strong>
                             <span>{d.leases.draftCount} draft records</span>
                           </div>
                           <span aria-hidden="true">→</span>
-                        </Link>
+                        </Link>}
                         {d.leases.pastEndCount > 0 && (
                           <Link
                             to={url("/company/leases", {

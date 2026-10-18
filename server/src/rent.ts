@@ -440,6 +440,7 @@ export function registerRent(
                 companyId,
                 leases.map((l) => l.id),
               );
+            const billingIssues = resident ? new Set<string>() : new Set((await tx.rentSchedule.findMany({where:{companyId,leaseId:{in:leases.map(lease=>lease.id)},status:"active",lastErrorCode:{not:null}},select:{leaseId:true}})).map(schedule=>schedule.leaseId));
             const accounts = leases.map((lease) => {
               const scopedData = {
                 credits: data.credits.filter(c=>c.leaseId===lease.id),
@@ -460,6 +461,7 @@ export function registerRent(
               return {
                 lease: resident ? { ...lease, resident: undefined, residentContact:undefined } : {...lease,resident:leasePerson(lease)},
                 summary,
+                ...(!resident?{billingIssue:billingIssues.has(lease.id)}:{}),
                 ...(leaseId
                   ? {
                       charges: scopedData.charges.map((c) => ({

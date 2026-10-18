@@ -412,6 +412,11 @@ export function registerContactRecords(
             select: {
               id: true,
               email: true,
+              version: true,
+              deliveryStatus: true,
+              deliveryRequestedAt: true,
+              leaseId: true,
+              approvedAt: true,
               expiresAt: true,
               acceptedAt: true,
               revokedAt: true,

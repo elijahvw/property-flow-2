@@ -30,7 +30,7 @@ type Draft = Record<string, string>;
 const groups = [
   {
     title: "Tenant contact",
-    help: "Enter the full name and sign-in email. Saving creates or reuses one Auth0 account and saves tenant details. Portal access is managed separately.",
+    help: "Enter the full name and sign-in email. Saving creates or reuses one sign-in account and saves tenant details. Portal access is managed separately.",
     fields: [
       ["name", "Full name", 200],
       ["preferredName", "Preferred name", 200],
@@ -228,7 +228,7 @@ export function TenantForm({
         >
           <h3>Review tenant details</h3>
           <p className="help">
-            Confirm the person and contact details before saving. The Auth0 account and tenant details are saved first; portal access is optional.
+            Confirm the person and contact details before saving. The sign-in account and tenant details are saved first; portal access is optional.
           </p>
           <dl className="lease-review-summary">
             <div>
@@ -282,7 +282,7 @@ export function TenantForm({
           {!value && (
             <p className="notice">
               {review.invitePortal === "yes"
-                ? "Next: review portal access and create an invitation link."
+                ? "Next: review portal access and send or share an invitation."
                 : "Portal access: Not invited. You can invite this tenant later from their profile."}
             </p>
           )}
@@ -461,7 +461,7 @@ export function TenantForm({
                 >
                   <option value="no">No · save the account without portal access</option>
                   <option value="yes">
-                    Yes · review access and create an invitation link
+                    Yes · review access and send or share an invitation
                   </option>
                 </select>
               </label>

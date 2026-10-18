@@ -5,14 +5,18 @@ import { registerBrowserErrors } from './browser-telemetry';
 import './index.css';
 
 // Remove invitation secrets before monitoring or route rendering starts.
-if (window.location.pathname === '/invite' && window.location.hash) {
+function captureInvitation() {
+  if (window.location.pathname !== '/invite' || !window.location.hash) return;
   sessionStorage.setItem('pf-invitation', window.location.hash.slice(1));
   if(new URLSearchParams(window.location.search).get('lease')==='1')sessionStorage.setItem('pf-lease-invitation','true');
   else sessionStorage.removeItem('pf-lease-invitation');
   if(new URLSearchParams(window.location.search).get('contact')==='1')sessionStorage.setItem('pf-contact-invitation','true');
   else sessionStorage.removeItem('pf-contact-invitation');
-  window.history.replaceState(null, '', '/invite');
+  window.history.replaceState(window.history.state, '', '/invite');
+  window.dispatchEvent(new Event('pf-invitation-changed'));
 }
+captureInvitation();
+window.addEventListener('hashchange', captureInvitation);
 
 registerBrowserErrors();
 

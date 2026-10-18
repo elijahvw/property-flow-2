@@ -50,4 +50,11 @@ Validation result: 25 client unit tests, 14 combined telemetry/privacy tests, 61
 
 ## Isolated workflow performance testing
 
-The October 17 audit adds [local performance tests and a measured Grafana comparison](workflow-performance.md). Tests create their own disposable data and run k6/production Chromium locally. Only bounded aggregates are published to `propertyflow-local-performance`; no private records/session material or preview/cloud application traffic is exported. The manual GitHub workflow can repeat and publish a run after merge. These snapshots supplement operational/RUM monitoring; they do not establish deployed capacity or close the remaining activation/acceptance items above.
+The October 17 workflow audit adds [local performance tests and a measured Grafana comparison](workflow-performance.md). Tests create disposable data and run k6/production Chromium locally. Only aggregates are published to `propertyflow-local-performance`; no preview/cloud application traffic or private records/session material is exported. Snapshots supplement the existing operational/RUM coverage. No application deployment is implied.
+
+
+## October 18 invitation and guidance workflows (local)
+
+The [approved workflow improvements](platform-workflow-improvements.md) add bounded `invitation.send` and `onboarding.update` browser operation names. Existing safe API status/duration/traces cover invitation entry, creation, replacement, acceptance and guide preferences. Delivery audit actions distinguish accepted/failed/unknown without recording the private link or message. Fixed RUM path segments include Help/guide/delivery/replace/entry; arbitrary IDs, query strings and fragments remain stripped. No replay/form capture is introduced.
+
+Use the existing operation failure view and request correlation for invitation send errors; inspect scoped delivery status after an interrupted request. Do not auto-resend an unknown SES outcome. Investigate scanner503s through the existing document-scan operation; keep the saved original quarantined and retry scanning after executable/definition recovery. Real SES delivery/bounce monitoring and maintained scanner/runtime verification accompany their separate activation, not a passing fixture. No live Grafana dashboards, rules, collectors or delivery destinations changed in this batch.

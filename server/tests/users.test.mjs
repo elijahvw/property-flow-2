@@ -1,3 +1,6 @@
+import { newFixturePage } from "./browser-fixture.mjs";
+import {workspaceGuideCases} from "./workspace-guide-cases.mjs";
+import {invitationWorkflowCases} from "./invitation-workflow-cases.mjs";
 import {residentAccountCases} from "./resident-account-cases.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -171,7 +174,8 @@ test(
       clientSecret: "test-only",
       secure: true,
     });
-    registerApplication(app, db, auth, "https://app.test", provider);
+    const invitationDeliveries=[];let invitationSendHook=async()=>{};
+    registerApplication(app, db, auth, "https://app.test", provider, {invitationMailer:async message=>{await invitationSendHook(message);invitationDeliveries.push(message);}});
     const call = async (user, method, path, payload, extra = {}) => {
       if (
         payload &&
@@ -1289,7 +1293,7 @@ test(
       async () => {
         const browser = await chromium.launch({ headless: true });
         try {
-          const page = await browser.newPage();
+          const page = await newFixturePage(browser);
           await page.route("**/api/**", async (route) => {
             const req = route.request(),
               u = new URL(req.url());
@@ -1332,6 +1336,14 @@ test(
         }
       },
     );
+    await t.test("invitation workflow integrity",sub=>invitationWorkflowCases(sub,db,admin,call,invitationDeliveries,hook=>{invitationSendHook=hook;},app));
+    await t.test("workspace guidance",sub=>workspaceGuideCases(sub,db,call));
+    await t.test("platform activity pagination filters before totals and never grants company access",async()=>{
+      const first=await call('platform','GET','/api/platform/audit?page=1&q=unrelated');assert.equal(first.statusCode,200,first.body);assert.equal(first.json().total,105);assert.equal(first.json().items.length,25);
+      const last=await call('platform','GET','/api/platform/audit?page=5&q=unrelated');assert.equal(last.json().items.length,5);
+      assert.equal((await call('owner','GET','/api/platform/audit?page=1')).statusCode,403);
+      assert.equal((await call('platform','GET','/api/platform/audit?page=-1')).statusCode,400);
+    });
     await t.test("resident identity lifecycle", sub=>residentAccountCases(sub,db,admin,call,provider,remote,()=>({create:createCalls,setup:setupCalls,verification:verificationCalls})));
   },
 );

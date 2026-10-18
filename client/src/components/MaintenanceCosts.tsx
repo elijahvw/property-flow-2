@@ -29,7 +29,7 @@ export function MaintenanceCosts({ requestId, propertyId }: { requestId: string;
   const refresh = (message: string) => { setCursor(""); r.reload(); setSuccess(message); };
   return <section className="panel maintenance-costs" aria-label="Maintenance costs">
     <div className="section-heading"><h2>Paid maintenance costs</h2><button onClick={() => { setAdding(true); setSuccess(""); }}>Link existing expense</button></div>
-    <p className="help">Link expenses already paid and recorded in Finances. Resolving a request does not record a payment. Voided expenses and unlinked records stay in history and are excluded from the total.</p>
+    <p className="help">Link expenses already paid and recorded in Cash activity. Resolving a request does not record a payment. Voided expenses and unlinked records stay in history and are excluded from the total.</p>
     {success && <p className="notice" role="status">{success}</p>}
     {r.error && r.data && <Failure error={r.error} retry={r.reload} />}
     {!r.data ? <Failure error={r.error} retry={r.reload} /> : <>
@@ -48,13 +48,13 @@ export function MaintenanceCosts({ requestId, propertyId }: { requestId: string;
       </ul>}
       <div className="actions">{cursor && <button className="secondary" onClick={() => setCursor("")}>Latest cost links</button>}{r.data.nextCursor && <button className="secondary" onClick={() => setCursor(r.data!.nextCursor!)}>Older cost links</button>}</div>
     </>}
-    <p><Link to={`${financePath}?${new URLSearchParams({ new: "expense", maintenanceReturn: requestId })}`}>Record a paid expense in Finances →</Link></p>
+    <p><Link to={`${financePath}?${new URLSearchParams({ new: "expense", maintenanceReturn: requestId })}`}>Record a paid expense in Cash activity →</Link></p>
     <EditorDialog open={adding} title="Link a paid maintenance expense" onClose={() => setAdding(false)}>
       <ExpensePicker endpoint={endpoint} saved={() => { setAdding(false); refresh("Expense linked. Financial records are unchanged."); }} />
     </EditorDialog>
     {unlinking && <EditorDialog open title="Unlink maintenance expense" onClose={() => setUnlinking(null)}>
       <p>{unlinking.entry.reference} · {dollars(unlinking.entry.amountCents)} · {formatDate(unlinking.entry.occurredOn)}</p>
-      <p>This removes the expense from this request's cost total. The paid transaction stays in Finances; unlinking does not refund or void it.</p>
+      <p>This removes the expense from this request's cost total. The paid transaction stays in Cash activity; unlinking does not refund or void it.</p>
       <Form key={`${unlinking.id}:${unlinking.version}`} operation="maintenance.cost.unlink" label="Unlink expense" feedbackText="Maintenance expense unlinked."
         submit={async form => { await api(`${endpoint}/${encodeURIComponent(unlinking.id)}/unlink`, { method: "POST", body: { expectedVersion: unlinking.version, reason: form.get("reason") } }); setUnlinking(null); refresh("Expense unlinked; its transaction and link history are retained."); }}>
         <label>Reason (required)<textarea name="reason" aria-label="Unlink reason" required maxLength={300} rows={3} /></label>
@@ -72,7 +72,7 @@ function ExpensePicker({ endpoint, saved }: { endpoint: string; saved: () => voi
     <label>Find paid expense<input type="search" value={query} maxLength={200} placeholder="Transaction reference or memo" onChange={e => { setQuery(e.target.value); setCursor(""); }} /></label>
     {r.error && r.data && <Failure error={r.error} retry={r.reload} />}
     {!r.data ? <Failure error={r.error} retry={r.reload} /> : <>
-      {!r.data.items.length ? <p>No eligible expenses match. Record the paid expense in Finances first, or adjust your search.</p> : <fieldset className="form-section"><legend>Available paid expenses</legend>
+      {!r.data.items.length ? <p>No eligible expenses match. Record the paid expense in Cash activity first, or adjust your search.</p> : <fieldset className="form-section"><legend>Available paid expenses</legend>
         {r.data.items.map(entry => <label className="expense-choice" key={entry.id}>
           <input type="radio" name="expense-choice" value={entry.id} checked={selected?.id === entry.id} onChange={() => setSelected(entry)} />
           <span><strong>{entry.reference} · {dollars(entry.amountCents)}</strong><span className="cell-detail">{formatDate(entry.occurredOn)} · {entry.category.replace(/_/g, " ")}</span>{entry.memo && <span className="cell-detail">{entry.memo}</span>}</span>

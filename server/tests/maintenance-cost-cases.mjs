@@ -1,3 +1,4 @@
+import { newFixturePage } from "./browser-fixture.mjs";
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { chromium, expect } from '@playwright/test';
@@ -109,7 +110,7 @@ export async function maintenanceCostCases(t, admin, db, call, app, requestId) {
   await t.test('real browser lost link and unlink responses replay one association and one audit', { skip: !process.env.TEST_MAINTENANCE_BROWSER_URL }, async () => {
     const fresh = await expense({ memo: 'Browser cost retry', amount: '35.50' }); const browser = await chromium.launch({ headless: true });
     try {
-      const page = await browser.newPage(); let loseLink = true, loseUnlink = true; const attempts = [];
+      const page = await newFixturePage(browser); let loseLink = true, loseUnlink = true; const attempts = [];
       await page.route('**/api/**', async route => {
         const req = route.request(), url = new URL(req.url()); const response = await app.inject({ method: req.method(), url: url.pathname + url.search, headers: { ...req.headers(), origin: 'https://app.test', cookie: '__Host-pf-session=token-manager' }, ...(req.postData() ? { payload: req.postData() } : {}) });
         if (req.method() === 'POST' && (url.pathname === base || url.pathname.endsWith('/unlink'))) {

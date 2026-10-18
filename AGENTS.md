@@ -4,6 +4,8 @@ Applies to this repository. Read relevant implementation and product documentati
 
 ## Development and delivery
 
+- Every cloud resource change must preserve `config/dev-power.json` and the Start/Stop development sequence. Run `python3 scripts/validate-dev-power.py`; new always-on resources need an implemented power action, and retained resources need an explicit cost/data rationale. ECS sidecars belong in the application task so they stop/start with it. Never use Terraform destroy for routine shutdown.
+
 - Build and validate locally first. Keep the local preview browser open when the user wants to follow along; preserve their preview data when restarting services.
 - Batch related feature, usability and performance work when requested. Do not merge, deploy, apply Terraform or change live configuration without authorization for that action.
 - Keep changes focused and practical. Reuse established components and source records; avoid speculative abstractions, placeholder controls and invented data.

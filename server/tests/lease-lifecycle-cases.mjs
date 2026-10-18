@@ -1,3 +1,4 @@
+import { newFixturePage } from "./browser-fixture.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { chromium, expect } from "@playwright/test";
@@ -674,7 +675,7 @@ export async function leaseLifecycleCases(t, admin, call, app, db) {
         }),
         browser = await chromium.launch({ headless: true });
       try {
-        const page = await browser.newPage({
+        const page = await newFixturePage(browser, {
           viewport: { width: 1440, height: 1000 },
         });
         let lose = true;
@@ -770,7 +771,7 @@ export async function leaseLifecycleCases(t, admin, call, app, db) {
       const l = await make("Browser lease ending"),
         browser = await chromium.launch({ headless: true });
       try {
-        const page = await browser.newPage({
+        const page = await newFixturePage(browser, {
           viewport: { width: 390, height: 844 },
         });
         let lose = true;

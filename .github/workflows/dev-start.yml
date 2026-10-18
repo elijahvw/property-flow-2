@@ -1,0 +1,12 @@
+name: Start development
+run-name: Start development
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  start:
+    uses: ./.github/workflows/dev-power.yml
+    with:
+      action: start

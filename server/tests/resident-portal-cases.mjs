@@ -1,3 +1,4 @@
+import { newFixturePage } from "./browser-fixture.mjs";
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { chromium, expect } from '@playwright/test';
@@ -46,11 +47,11 @@ export async function residentPortalCases(t, admin, call, app, { lease, today })
   await t.test('resident portal shows read-only history on desktop and phone without management forms', { skip: !process.env.TEST_FINANCES_BROWSER_URL }, async () => {
     const browser = await chromium.launch({ headless: true });
     try {
-      const page = await browser.newPage();
+      const page = await newFixturePage(browser);
       const writes = [];
       await page.route('**/api/**', async route => {
         const req = route.request(), url = new URL(req.url());
-        if (!['GET', 'HEAD'].includes(req.method())) writes.push(`${req.method()} ${url.pathname}`);
+        if (!['GET', 'HEAD'].includes(req.method()) && url.pathname !== '/api/account/guide') writes.push(`${req.method()} ${url.pathname}`);
         const response = await app.inject({ method: req.method(), url: url.pathname + url.search,
           headers: { ...req.headers(), origin: 'https://app.test', cookie: '__Host-pf-session=token-resident' },
           ...(req.postData() ? { payload: req.postData() } : {}) });

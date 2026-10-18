@@ -217,6 +217,8 @@ export function registerOverview(
           const open = { ...where, status: { in: ["open", "in_progress"] } };
           management.maintenance = {
             openCount: await tx.maintenanceRequest.count({ where: open }),
+            reviewCount: await tx.maintenanceRequest.count({where:{...where,executionStatus:"pending_review",status:{not:"resolved"}}}),
+            overdueCount: await tx.maintenanceRequest.count({where:{...open,targetOn:{lt:date}}}),
             highPriorityCount: await tx.maintenanceRequest.count({
               where: { ...open, priority: "high" },
             }),
@@ -236,6 +238,7 @@ export function registerOverview(
           };
         }
         if (grants.includes("finance.manage")) {
+          management.billingIssues={count:await tx.rentSchedule.count({where:{...where,status:"active",lastErrorCode:{not:null}}})};
           management.rentCollections = await rentCollections(tx,companyId,today,propertyId);
           const from = today.slice(0, 7) + "-01";
           const [totals] = await tx.$queryRaw<

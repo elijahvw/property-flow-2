@@ -93,10 +93,10 @@ test('owner approval is explicit for an occupant invitation and phone layout rem
  const state=await fixture(page);await page.setViewportSize({width:390,height:844});await page.goto('/company/leases/shared?section=invitations');
  await expect(page.locator('.record-list').getByText('Awaiting owner approval',{exact:false})).toBeVisible();
  await page.getByRole('button',{name:'Approve resident Alex Rivera',exact:true}).click();
- await expect(page.getByLabel('Resident invitation acceptance link',{exact:true})).toHaveValue('https://app.test/invite#isolated-test-only');
+ await expect(page.getByLabel('Private invitation link',{exact:true})).toHaveValue('https://app.test/invite#isolated-test-only');
  expect(state.writes[0].action).toBe('approve');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await page.getByRole('button',{name:'Renewal',exact:true}).click();await page.reload();
+ await page.getByLabel('Lease section',{exact:true}).selectOption('renewal');await page.reload();
  await expect(page.getByRole('heading',{name:'Prepare the next term',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'Prepare linked renewal',exact:true})).toBeVisible();
 });

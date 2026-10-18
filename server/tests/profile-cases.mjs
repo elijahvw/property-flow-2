@@ -1,3 +1,4 @@
+import { newFixturePage } from "./browser-fixture.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { chromium, expect } from "@playwright/test";
@@ -419,7 +420,7 @@ export async function profileCases(t, admin, call, app, db) {
     async () => {
       const browser = await chromium.launch({ headless: true });
       try {
-        const page = await browser.newPage();
+        const page = await newFixturePage(browser);
         let actor = user,
           lose = true;
         const keys = [];
