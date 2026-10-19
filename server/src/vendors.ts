@@ -116,6 +116,7 @@ export function registerVendors(
           vendorId: row.vendorId,
           requestId: row.requestId,
           recovered: true,
+          changed: row.changed,
         }
       : null;
   };
@@ -128,6 +129,7 @@ export function registerVendors(
     vendorId: string | null,
     requestId: string | null,
     snapshot: Prisma.InputJsonValue,
+    changed = true,
   ) => {
     await tx.vendorAction.create({
       data: {
@@ -138,17 +140,19 @@ export function registerVendors(
         vendorId,
         requestId,
         snapshot,
+        changed,
       },
     });
-    await audit(
-      tx,
-      request,
-      companyId,
-      requestId || vendorId!,
-      action === "link" ? "maintenance.vendor.changed" : `vendor.${action}`,
-      { vendorId, requestId },
-    );
-    return { saved: true, vendorId, requestId };
+    if (changed)
+      await audit(
+        tx,
+        request,
+        companyId,
+        requestId || vendorId!,
+        action === "link" ? "maintenance.vendor.changed" : `vendor.${action}`,
+        { vendorId, requestId },
+      );
+    return { saved: true, vendorId, requestId, changed };
   };
   const uniqueName = async (
     tx: Tx,
@@ -299,6 +303,25 @@ export function registerVendors(
         if (previous) return previous;
         if (before.version !== expectedVersion) throw conflict();
         await uniqueName(tx, companyId, data.nameKey, id);
+        if (
+          Object.entries(data).every(
+            ([field, value]) =>
+              field === "nameKey" ||
+              before[field as keyof typeof before] === value,
+          )
+        ) {
+          return record(
+            tx,
+            companyId,
+            request,
+            key,
+            "edit",
+            id,
+            null,
+            {},
+            false,
+          );
+        }
         const changed = await tx.vendor.updateMany({
           where: { id, companyId, version: expectedVersion },
           data: { ...data, version: { increment: 1 } },
@@ -401,6 +424,21 @@ export function registerVendors(
             "VENDOR_CHANGED",
             "This vendor changed or was archived. Reload and review its current details.",
           );
+        if (before.vendorId === vendorId) {
+          // Retain only a hidden retry receipt so later recovery cannot turn
+          // an unchanged save into an unintended reassignment.
+          return record(
+            tx,
+            companyId,
+            request,
+            key,
+            "link",
+            vendorId,
+            id,
+            {},
+            false,
+          );
+        }
         const changed = await tx.maintenanceRequest.updateMany({
           where: { id, companyId, version: expectedVersion },
           data: { vendorId, version: { increment: 1 } },
@@ -429,6 +467,7 @@ export function registerVendors(
           else await vendor(tx, companyId, id);
           const where: Prisma.VendorActionWhereInput = {
             companyId,
+            changed: true,
             ...(requestHistory
               ? { requestId: id }
               : {

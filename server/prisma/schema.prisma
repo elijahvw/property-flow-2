@@ -333,6 +333,7 @@ model VendorAction {
   requestId String?
   actorId String
   action String
+  changed Boolean @default(true)
   snapshot Json
   submissionKey String
   submissionHash String

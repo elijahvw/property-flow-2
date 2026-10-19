@@ -295,6 +295,96 @@ export async function vendorCases(t, admin, db, call, app) {
     },
   );
   await t.test(
+    "unchanged contact and link saves preserve versions/history and recover after later changes",
+    async () => {
+      const contactBefore = await current(),
+        contactPayload = await edit();
+      const contactAudit = (
+        await admin.query(
+          'SELECT count(*)::int n FROM "AuditEvent" WHERE "targetId"=$1',
+          [id],
+        )
+      ).rows[0].n;
+      const unchangedContact = await ok(
+        "manager",
+        "PATCH",
+        path,
+        contactPayload,
+      );
+      assert.equal(unchangedContact.changed, false);
+      assert.equal((await current()).version, contactBefore.version);
+      assert.equal(
+        (
+          await admin.query(
+            'SELECT count(*)::int n FROM "AuditEvent" WHERE "targetId"=$1',
+            [id],
+          )
+        ).rows[0].n,
+        contactAudit,
+      );
+      await ok("manager", "PATCH", path, await edit({ phone: "555-0104" }));
+      const laterContact = await current();
+      assert.equal(
+        (await ok("manager", "PATCH", path, contactPayload)).changed,
+        false,
+      );
+      assert.equal((await current()).version, laterContact.version);
+      assert.equal((await current()).phone, "555-0104");
+
+      const before = await requestCurrent(),
+        payload = await link(),
+        historyBefore = await ok("manager", "GET", linkPath + "/history");
+      const audits = (
+        await admin.query(
+          'SELECT count(*)::int n FROM "AuditEvent" WHERE "targetId"=$1',
+          [request.id],
+        )
+      ).rows[0].n;
+      assert.equal(
+        (await ok("manager", "POST", linkPath, payload)).changed,
+        false,
+      );
+      assert.equal((await requestCurrent()).version, before.version);
+      assert.equal(
+        (
+          await admin.query(
+            'SELECT count(*)::int n FROM "AuditEvent" WHERE "targetId"=$1',
+            [request.id],
+          )
+        ).rows[0].n,
+        audits,
+      );
+      const receipt = (
+        await admin.query(
+          'SELECT id FROM "VendorAction" WHERE "submissionKey"=$1',
+          [payload.submissionKey],
+        )
+      ).rows[0].id;
+      assert.equal(
+        (await ok("manager", "GET", linkPath + "/history")).items.length,
+        historyBefore.items.length,
+      );
+      assert.ok(
+        !(await ok("manager", "GET", path + "/history")).items.some(
+          (item) => item.id === receipt,
+        ),
+      );
+      await ok("manager", "POST", linkPath, await link(null));
+      const removed = await requestCurrent();
+      assert.equal(
+        (await ok("manager", "POST", linkPath, await link(null))).changed,
+        false,
+      );
+      assert.equal((await requestCurrent()).version, removed.version);
+      const recovered = await ok("manager", "POST", linkPath, payload);
+      assert.equal(recovered.recovered, true);
+      assert.equal(recovered.changed, false);
+      assert.equal((await requestCurrent()).vendor, null);
+      assert.equal((await requestCurrent()).version, removed.version);
+      await ok("manager", "POST", linkPath, await link());
+    },
+  );
+  await t.test(
     "archive retains links, excludes new choices, blocks stale choices and supports restore",
     async () => {
       const stale = await link();
@@ -653,10 +743,20 @@ export async function vendorCases(t, admin, db, call, app) {
             exact: true,
           })
           .fill("Browser fictional");
-        const beforeSearch=await requestCurrent();
-        await page.getByRole("searchbox", {name:"Find an active vendor",exact:true}).press("Enter");
-        await expect(page.getByRole("dialog",{name:"Choose vendor contact",exact:true})).toBeVisible();
-        assert.equal((await requestCurrent()).version,beforeSearch.version);
+        const beforeSearch = await requestCurrent();
+        await page
+          .getByRole("searchbox", {
+            name: "Find an active vendor",
+            exact: true,
+          })
+          .press("Enter");
+        await expect(
+          page.getByRole("dialog", {
+            name: "Choose vendor contact",
+            exact: true,
+          }),
+        ).toBeVisible();
+        assert.equal((await requestCurrent()).version, beforeSearch.version);
         await page
           .getByRole("button", {
             name: "Use Browser fictional vendor",
@@ -676,8 +776,11 @@ export async function vendorCases(t, admin, db, call, app) {
           }),
         ).toBeVisible();
         await page.setViewportSize({ width: 390, height: 844 });
-        const dismiss=page.getByRole("button", {name:"Dismiss confirmation",exact:true});
-        if(await dismiss.isVisible())await dismiss.click();
+        const dismiss = page.getByRole("button", {
+          name: "Dismiss confirmation",
+          exact: true,
+        });
+        if (await dismiss.isVisible()) await dismiss.click();
         await page
           .locator("section")
           .filter({

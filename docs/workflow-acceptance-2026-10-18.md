@@ -95,7 +95,7 @@ Each item stays open until its complete user journey and relevant error/recovery
 
 ## Deferred live testing
 
-The user deferred live testing while away from the laptop. Preserve sample-company state and resume staff/resident/draft acceptance later; no new password requests or emails are needed during feature development. PF-13 vendor contacts are implemented locally and validated against isolated fictional fixtures/disposable PostgreSQL: both builds,212 UI cases plus6 final focused cases,72 server/28 client unit checks,55 maintenance integration checks and the power inventory guard pass. Migration035 and live acceptance remain separate.
+The user deferred live testing while away from the laptop. Preserve sample-company state and resume staff/resident/draft acceptance later; no new password requests or emails are needed during feature development. PF-13 vendor contacts are implemented locally and validated against isolated fictional fixtures/disposable PostgreSQL: both builds,212 UI cases plus6 final focused cases,72 server/28 client unit checks,56 maintenance integration checks and the power inventory guard pass. Migration035 and live acceptance remain separate.
 
 ## Evidence and next action
 

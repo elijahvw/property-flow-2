@@ -209,7 +209,7 @@ export function MaintenanceVendor({
             key={draft.key}
             label="Save vendor link"
             operation="maintenance.vendor"
-            feedbackText="Vendor contact updated."
+            feedbackText="Vendor contact saved."
             submit={async (data) => {
               await api(endpoint, {
                 method: "POST",

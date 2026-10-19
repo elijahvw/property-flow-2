@@ -18,6 +18,7 @@ CREATE TABLE "VendorAction" (
  "vendorId" TEXT, "requestId" TEXT,
  "actorId" TEXT NOT NULL REFERENCES "User"(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
  action TEXT NOT NULL CHECK(action IN ('create','edit','archive','restore','link')),
+ changed BOOLEAN NOT NULL DEFAULT true CHECK(changed OR action IN ('link','edit')),
  snapshot JSONB NOT NULL, "submissionKey" TEXT NOT NULL, "submissionHash" TEXT NOT NULL,
  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
  FOREIGN KEY ("vendorId","companyId") REFERENCES "Vendor"(id,"companyId") ON DELETE RESTRICT ON UPDATE RESTRICT,
