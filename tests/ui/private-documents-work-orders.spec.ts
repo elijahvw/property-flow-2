@@ -31,7 +31,7 @@ async function setup(page:Page,staff=false){
    if(state.denied)return json({error:'Assigned work unavailable'},404);
    if(method==='POST'){
     const body=req.postDataJSON();state.workPosts.push(body);if(state.failWork)return json({error:'Work changed. Reload before retrying.'},409);
-    state.executionStatus=({assign:'assigned',accept:'accepted',submit:'pending_review',approve:'complete',reopen:'assigned'} as any)[body.action]||state.executionStatus;state.row.version++;
+    state.executionStatus=({assign:'assigned',accept:'accepted',submit:'pending_review',approve:'complete',reopen:'assigned'} as any)[body.action]||state.executionStatus;state.row.version++;if(body.action==='approve')state.row.status='resolved';else if(body.action==='reopen')state.row.status='open';
     state.actions.unshift({id:'event-'+state.workPosts.length,action:body.action,note:body.note,createdAt:'2026-10-17T14:00:00Z'});return json({version:state.row.version});
    }
    return json({...state.row,executionStatus:state.executionStatus,actions:state.actions,...!staff?{assigneeId:state.executionStatus==='unassigned'?null:'staff',assigneeName:'Fictional teammate',eligible:[{id:'staff',name:'Fictional teammate'}]}:{}});
