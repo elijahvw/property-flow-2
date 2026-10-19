@@ -14,6 +14,7 @@ import {permissions} from '../dist/access.js';
 import {maintenanceUpdateCases} from './maintenance-update-cases.mjs';
 import {privateDocumentCases} from './private-document-cases.mjs';
 import {workOrderCases} from './work-order-cases.mjs';
+import {vendorCases} from './vendor-cases.mjs';
 import {AccessError} from '../dist/access.js';
 import {maintenanceCostCases} from './maintenance-cost-cases.mjs';
 const url=process.env.TEST_MAINTENANCE_DATABASE_URL;
@@ -291,4 +292,5 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  });
  await t.test('private document foundation',async sub=>privateDocumentCases(sub,admin,db,call,id,scanControl));
  await t.test('delegated maintenance workflow',async sub=>workOrderCases(sub,admin,db,call,app));
+ await t.test('management vendor contacts',async sub=>vendorCases(sub,admin,db,call,app));
 });

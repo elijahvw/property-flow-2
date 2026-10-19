@@ -13,6 +13,8 @@ datasource db {
 }
 
 model Company {
+  vendors Vendor[]
+  vendorActions VendorAction[]
   id        String     @id @default(cuid())
   name      String
   domain    String?    @unique
@@ -49,6 +51,7 @@ model Company {
 }
 
 model User {
+  vendorActions VendorAction[]
   guideState Json?
   guideVersion Int @default(1)
   accountProfile AccountProfile?
@@ -261,6 +264,10 @@ model ResidentPropertyAssignment {
 }
 
 model MaintenanceRequest {
+  vendorId String?
+  vendor Vendor? @relation(fields:[vendorId, companyId], references:[id, companyId], onDelete:Restrict, onUpdate:Restrict, map:"maintenance_vendor_scope")
+  vendorActions VendorAction[]
+  @@index([companyId, vendorId, createdAt, id])
   documents PrivateDocument[]
   assignee User? @relation("MaintenanceAssignee",fields:[assigneeId],references:[id],onDelete:Restrict,onUpdate:Restrict)
   assigneeId String?
@@ -295,6 +302,48 @@ model MaintenanceRequest {
   @@index([companyId, unitId], map: "maintenance_unit_lookup")
   @@unique([id, companyId])
   @@unique([id, propertyId, companyId])
+}
+
+model Vendor {
+  id String @id @default(cuid())
+  companyId String
+  name String
+  nameKey String
+  service String?
+  contactName String?
+  email String?
+  phone String?
+  notes String?
+  status String @default("active")
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company Company @relation(fields:[companyId], references:[id], onDelete:Restrict, onUpdate:Restrict)
+  requests MaintenanceRequest[]
+  actions VendorAction[]
+  @@unique([id, companyId])
+  @@unique([companyId, nameKey])
+  @@index([companyId, status, name, id])
+}
+
+model VendorAction {
+  id String @id @default(cuid())
+  companyId String
+  vendorId String?
+  requestId String?
+  actorId String
+  action String
+  snapshot Json
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  company Company @relation(fields:[companyId], references:[id], onDelete:Restrict, onUpdate:Restrict)
+  vendor Vendor? @relation(fields:[vendorId, companyId], references:[id, companyId], onDelete:Restrict, onUpdate:Restrict)
+  request MaintenanceRequest? @relation(fields:[requestId, companyId], references:[id, companyId], onDelete:Restrict, onUpdate:Restrict)
+  actor User @relation(fields:[actorId], references:[id], onDelete:Restrict, onUpdate:Restrict)
+  @@unique([companyId, actorId, submissionKey])
+  @@index([companyId, vendorId, createdAt, id])
+  @@index([companyId, requestId, createdAt, id])
 }
 
 model MaintenanceCost {

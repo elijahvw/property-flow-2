@@ -13,6 +13,7 @@ import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "../components/Form";
 import { MaintenanceCosts } from "../components/MaintenanceCosts";
 import { PrivateDocuments } from "../components/PrivateDocuments";
+import { MaintenanceVendor } from "../components/MaintenanceVendor";
 import { WorkOrderPanel } from "./WorkOrders";
 type Row = {
   id: string;
@@ -246,6 +247,7 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
   return (
     <>
       {!resident && propertyId && <PropertyNavigation id={propertyId} />}
+      {!resident && <p className="actions"><Link to="/company/vendors">Vendor directory →</Link></p>}
       <header className="page-heading page-heading-row">
         <div>
           <p className="record-kicker">Operations / Maintenance</p>
@@ -624,6 +626,7 @@ function RequestDetail({ id, resident }: { id: string; resident: boolean }) {
     <>
       <nav className="record-breadcrumb">
         <Link to={directoryPath(params, resident)}>← Back to maintenance</Link>
+        {!resident&&params.get("vendorId")&&<Link to={`/company/vendors/${encodeURIComponent(params.get("vendorId")!)}`}>Back to vendor →</Link>}
       </nav>
       {r.error && row && <Loading error={r.error} retry={r.reload} />}
       {!row ? (
@@ -777,6 +780,7 @@ function RequestDetail({ id, resident }: { id: string; resident: boolean }) {
             </section>
           </div>
           <RequestUpdates endpoint={endpoint} resident={resident} canShare={row.residentUpdatesAvailable === true} />
+          {!resident && <MaintenanceVendor requestId={id} changed={r.reload} />}
           {!resident && can("finance.manage") && <MaintenanceCosts requestId={id} propertyId={row.propertyId} />}
           {!resident && <WorkOrderPanel id={id} management changed={r.reload} />}
           {!resident && <PrivateDocuments source="maintenance" sourceId={id} />}

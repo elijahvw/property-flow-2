@@ -32,8 +32,15 @@ Unsubmitted tenant/profile/financial reviews no longer write browser storage. Al
 Validation: client production build, 28 client unit checks,205 browser fixture cases and294 disposable database integration checks, including new close/Escape/discard/refresh/storage/source-version tests. PR52 merged3cfb816; exact-head CI39146821948 and frontend deployment39147366107passed. Public Chrome smoke passed; signed-in draft and broader role acceptance remain pending in [the workflow log](workflow-acceptance-2026-10-18.md).
 
 
-## October 18 — Help search task relevance (local)
+## October 18 — Help search task relevance (PR53 merged, deployed and verified live)
 
-Help Center search prioritizes guide titles, then summaries, ahead of incidental body matches. Related guides stay available, equal-ranked results keep their existing order, and clearing search restores the full directory. The account guide summary now names password reset. This addresses live finding W09 with no new service, migration or infrastructure change. Production client build,10 focused Help/invitation browser checks,390px Chrome visual verification and the power inventory guard pass. Deployment and live verification remain pending.
+Help Center search prioritizes guide titles, then summaries, ahead of incidental body matches. Related guides stay available, equal-ranked results keep their existing order, and clearing search restores the full directory. The account guide summary now names password reset. This addresses live finding W09 with no new service, migration or infrastructure change. Production client build,10 focused Help/invitation browser checks,390px Chrome visual verification and the power inventory guard pass. Exact-head CI39186265460and frontend deployment39187019964passed. Seven live task searches, empty-result recovery, clearing filters,390px layout and keyboard access were verified in Chrome. No backend rollout or migration.
 
 Multiword tasks such as rent payment and reset password match all query words without requiring an exact phrase.
+
+
+## October 18 — maintenance vendor contacts (local / PR)
+
+Management can search/add/reuse vendor contacts, edit details, archive/restore, inspect immutable history and follow linked maintenance requests. Request contact selection is separate from staff execution and paid-cost recording. Directory and linked-request totals cover every matching record; all three lists use server pagination. Contact/request versions, durable retries, atomic audit and company-scoped RLS protect writes and recovery. Residents, staff and platform-only accounts receive no vendor access. Explicit drafts remain page-only. No external vendor messages, provider activation or new cloud resources.
+
+Additive migration035 passed disposable validation; no live/preview migration was run. See [the workflow contract](maintenance-vendors.md). Both production builds,212 UI cases plus the final6 focused vendor checks,72 safe server/28 client unit checks,55 disposable maintenance integration checks and the power inventory guard pass. Coverage includes fresh role/company/RLS boundaries, concurrent creates/edits, search totals before pagination, immutable history, audit rollback, Enter search behavior, explicit drafts and committed-response-loss recovery. Live testing is deferred while the user is away from the laptop.

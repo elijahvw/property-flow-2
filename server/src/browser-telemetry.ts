@@ -18,6 +18,8 @@ export const browserOperations = [
   "unit.update",
   "lease.create",
   "lease.update",
+  "vendor.save",
+  "maintenance.vendor",
   "maintenance.work",
   "maintenance.create",
   "maintenance.status",
