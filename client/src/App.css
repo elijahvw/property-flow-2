@@ -980,6 +980,7 @@ button, .button { border-radius: 6px; }
 .report-shortcuts { margin:0 0 1.5rem; column-gap:1.25rem; }
 
 /* Calendar dates and the agenda share the same scoped, counted source rows. */
+.work-calendar .page-heading-row { gap:.5rem; }.work-calendar .page-heading-row h2,.work-calendar .page-heading-row .actions { margin:0; }
 .calendar-grid { table-layout:fixed; margin:.75rem 0; }
 .calendar-grid th,.calendar-grid td { text-align:center; padding:.25rem; border:0; }
 .calendar-grid abbr { text-decoration:none; }

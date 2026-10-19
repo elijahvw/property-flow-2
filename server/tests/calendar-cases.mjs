@@ -392,6 +392,7 @@ export async function calendarCases(t, admin, call, app) {
           ),
           true,
         );
+        await page.getByRole("heading",{name:"October 2026",exact:true}).scrollIntoViewIfNeeded();
         await page.screenshot({
           path: "/tmp/pf-work-calendar-local-mobile.png",
         });
