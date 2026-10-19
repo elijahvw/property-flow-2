@@ -124,3 +124,5 @@ The local audit refines core workflows and PF-27 monitoring with isolated k6/bro
 ### PF-20 audit follow-up — task-focused Help search
 
 W09 ranks title and summary matches ahead of incidental guide text, retaining related results and the normal directory order when cleared. Account guidance explicitly names password reset. Local implementation after PR52; validation, release and live acceptance tracked in [the workflow log](workflow-acceptance-2026-10-18.md). No external search service or infrastructure.
+
+Multiword tasks such as rent payment and reset password match all query words without requiring an exact phrase.

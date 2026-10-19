@@ -44,10 +44,12 @@ test('Help search puts the named task first while keeping related guides and cle
  const original=await guides.allTextContents();
  for(const [query,title] of [
   ['  RENT  ','Post rent and record a lease payment'],
+  ['rent   payment','Post rent and record a lease payment'],
   ['invitation','Send and accept an invitation'],
   ['deposit','Track security deposits'],
   ['maintenance','Submit, assign and complete maintenance'],
   ['password','Manage your profile and sign-in'],
+  ['reset password','Manage your profile and sign-in'],
  ]){
   await search.fill(query);await expect(guides.first()).toHaveText(title);
  }

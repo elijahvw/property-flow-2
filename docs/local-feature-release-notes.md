@@ -35,3 +35,5 @@ Validation: client production build, 28 client unit checks,205 browser fixture c
 ## October 18 — Help search task relevance (local)
 
 Help Center search prioritizes guide titles, then summaries, ahead of incidental body matches. Related guides stay available, equal-ranked results keep their existing order, and clearing search restores the full directory. The account guide summary now names password reset. This addresses live finding W09 with no new service, migration or infrastructure change. Production client build,10 focused Help/invitation browser checks,390px Chrome visual verification and the power inventory guard pass. Deployment and live verification remain pending.
+
+Multiword tasks such as rent payment and reset password match all query words without requiring an exact phrase.

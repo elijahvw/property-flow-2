@@ -10,11 +10,13 @@ export function Help() {
   const results = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return helpArticles;
+    const words = query.split(/\s+/);
+    const matches = (text: string) => words.every(word => text.toLowerCase().includes(word));
     return helpArticles.map(item => {
       let relevance = 0;
-      if (item.title.toLowerCase().includes(query)) relevance = 3;
-      else if (item.summary.toLowerCase().includes(query)) relevance = 2;
-      else if (`${item.audience} ${item.steps.join(" ")} ${item.notes.join(" ")}`.toLowerCase().includes(query)) relevance = 1;
+      if (matches(item.title)) relevance = 3;
+      else if (matches(item.summary)) relevance = 2;
+      else if (matches(`${item.title} ${item.summary} ${item.audience} ${item.steps.join(" ")} ${item.notes.join(" ")}`)) relevance = 1;
       return { item, relevance };
     }).filter(result => result.relevance > 0)
       .sort((left, right) => right.relevance - left.relevance)
