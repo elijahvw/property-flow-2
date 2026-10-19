@@ -112,3 +112,9 @@ Local evidence: 70 disposable maintenance API/browser checks passed, including d
 ## PF-14 connected work calendar — isolated validation
 
 The month calendar and agenda use real next schedule occurrences and unresolved request targets, complete day/month counts and source return context.77 disposable maintenance API/browser checks and34 affected UI cases pass. Both production builds and power inventory pass. Tests include29items beyond a page, empty selected day with unchanged month counts, exact generate/replay/skip transitions, month boundaries, retained timezone, denied roles, revoked/suspended scope, keyboard/mobile controls and real API source-return navigation. Fictional local evidence is retained separately; no production migration, merge, deployment or user-account testing. Hosted CI and live acceptance remain distinct.
+
+## PF-15 private document library — isolated validation
+
+Management-only cross-source metadata search/filter/paging opens and focuses the exact document at its source with expanded versions and retained return filters. Archive/restore and latest-vs-historical scan state are verified; quarantined latest uploads remain blocked even when an earlier original is cleared. No live accounts, files or production data were used. Initial84 disposable maintenance API/browser checks passed; final source/lease section and full UI regressions are recorded before PR. No migration or new cloud resource/provider; merge/deployment/live acceptance remain pending.
+
+Final local library evidence: all230UI fixtures,84disposable maintenance/API/browser checks and28client units pass. Both production builds pass. The real browser verifies maintenance and lease source focus, latest quarantine versus older cleared versions, return filters and lease section changes. Screenshots use fictional local data only. Calendar PR56 index review is being addressed separately before the library branch is opened.

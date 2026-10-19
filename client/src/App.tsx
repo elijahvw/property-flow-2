@@ -40,6 +40,7 @@ const ResidentDetail = lazy(() => import("./pages/ResidentDetail").then(module =
 const ContactDetail = lazy(() => import("./pages/ContactDetail").then(module => ({ default: module.ContactDetail })));
 const WorkOrders = lazy(() => import("./pages/WorkOrders").then(module => ({default:module.WorkOrders})));
 const AssignedWorkDetail = lazy(() => import("./pages/WorkOrders").then(module => ({default:module.AssignedWorkDetail})));
+const DocumentLibrary = lazy(() => import("./pages/DocumentLibrary").then(module=>({default:module.DocumentLibrary})));
 const WorkCalendar = lazy(() => import("./pages/WorkCalendar").then(module=>({default:module.WorkCalendar})));
 const Preventive = lazy(() => import("./pages/Preventive").then(module=>({default:module.Preventive})));
 const Vendors = lazy(() => import("./pages/Vendors").then(module=>({default:module.Vendors})));
@@ -150,7 +151,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                     ? "Account"
                     : /finances|reports|rent|deposits/.test(r.path)
                       ? "Money"
-                      : /leases|maintenance|work-orders/.test(r.path)
+                      : /leases|maintenance|work-orders|documents/.test(r.path)
                         ? "Operations"
                         : "Workspace";
               return section === group;
@@ -283,6 +284,7 @@ function Pages() {
     "/resident": <Resident />,
     "/resident/maintenance": <Maintenance resident />,
     "/company/maintenance": <Maintenance />,
+    "/company/documents": <DocumentLibrary/>,
     "/company/work-orders": <WorkOrders />,
     "/company/leases": <Leases />,
     "/company/finances": <Finances />,

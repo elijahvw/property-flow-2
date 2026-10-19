@@ -1,3 +1,4 @@
+import { documentLibraryBack } from "../document-context";
 import { calendarBack } from "../calendar-context";
 import { useDebouncedValue } from "../useDebouncedValue";
 import { usePropertySearchParams } from "../usePropertySearchParams";
@@ -628,6 +629,7 @@ function RequestDetail({ id, resident }: { id: string; resident: boolean }) {
     <>
       <nav className="record-breadcrumb">
         <Link to={directoryPath(params, resident)}>← Back to maintenance</Link>
+        {!resident&&documentLibraryBack(params)&&<Link to={documentLibraryBack(params)!}>Back to document library →</Link>}
         {!resident&&calendarBack(params)&&<Link to={calendarBack(params)!}>Back to work calendar →</Link>}
         {!resident&&params.get("planId")&&<Link to={`/company/preventive/${encodeURIComponent(params.get("planId")!)}`}>Back to schedule →</Link>}
         {!resident&&params.get("vendorId")&&<Link to={`/company/vendors/${encodeURIComponent(params.get("vendorId")!)}`}>Back to vendor →</Link>}

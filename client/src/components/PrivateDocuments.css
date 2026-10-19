@@ -32,3 +32,5 @@
   .private-document-list > li > .actions { grid-template-columns: 1fr; gap: .75rem; }
   .private-documents button { white-space: normal; }
 }
+
+.private-document-list > .private-document-target { outline:2px solid #40876d; outline-offset:4px; border-radius:6px; scroll-margin:1rem; }

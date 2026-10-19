@@ -1,3 +1,4 @@
+import { documentLibraryBack, documentLibraryContext } from "../document-context";
 import { LeaseProration, LeaseTransition } from "../components/LeaseLifecycle";
 import { LeaseTermChanges } from "../components/LeaseTermChanges";
 import { LeaseSettlement } from "../components/LeaseSettlement";
@@ -96,7 +97,7 @@ function LeaseWorkspace({ id }: { id: string }) {
     setDraftLease((previous) => activate ? { ...(previous || lease), status: "active" } : previous || lease);
     setEditing(true);
   };
-  const tab = (value: string) => setParams({ ...context, section: value });
+  const tab = (value: string) => setParams({ ...context, ...documentLibraryContext(params), section: value });
   const sections = [
           ["overview", "Overview"],
           ["documents", "Documents"],
@@ -115,6 +116,7 @@ function LeaseWorkspace({ id }: { id: string }) {
     <div className="lease-workspace">
       <TenantReturnLink />
       <nav className="record-breadcrumb" aria-label="Breadcrumb">
+        {documentLibraryBack(params)&&<Link to={documentLibraryBack(params)!}>Back to document library →</Link>}
         <Link to={directory}>← All leases</Link>
         <span>/</span>
         <Link

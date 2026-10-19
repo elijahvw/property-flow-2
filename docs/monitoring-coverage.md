@@ -71,3 +71,7 @@ Local workflow operations `preventive.save` and `preventive.occurrence` use exis
 ### PF-14 connected work calendar
 
 The existing page.data.load lifecycle and authenticated API monitoring cover calendar loads and errors. RUM allows the fixed work-calendar segment, redacts record IDs and removes queries. SQL scope/counts/pages run in one authorized transaction; no private descriptions, notes, authors or contact/retry data are selected. Investigate role/company/property scope and selected month/day before retrying. No new provider, cloud runtime or power-control action. Live monitoring acceptance remains deferred.
+
+### PF-15 private document library
+
+Existing page.data.load outcome/duration/failure signals and authenticated API monitoring cover the directory and source reads. RUM permits only the fixed documents route and redacts IDs/queries. Metadata queries never select original bytes, hashes, author identities or submission/download secrets. Source scan/download signals remain existing document.scan/document.download operations with fresh checks. Investigate current management/company/property scope, archive filter and latest-version result; retry source scan without uploading a duplicate. No runtime/power-control change.

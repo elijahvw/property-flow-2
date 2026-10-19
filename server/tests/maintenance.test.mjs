@@ -14,6 +14,7 @@ import {permissions} from '../dist/access.js';
 import {maintenanceUpdateCases} from './maintenance-update-cases.mjs';
 import {privateDocumentCases} from './private-document-cases.mjs';
 import {workOrderCases} from './work-order-cases.mjs';
+import {documentLibraryCases} from './document-library-cases.mjs';
 import {calendarCases} from './calendar-cases.mjs';
 import {preventiveCases} from './preventive-cases.mjs';
 import {vendorCases} from './vendor-cases.mjs';
@@ -297,4 +298,5 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  await t.test('management vendor contacts',async sub=>vendorCases(sub,admin,db,call,app));
  await t.test('preventive maintenance schedules',async sub=>preventiveCases(sub,admin,db,call,app));
  await t.test('connected work calendar',async sub=>calendarCases(sub,admin,call,app));
+ await t.test('private document library',async sub=>documentLibraryCases(sub,admin,call,app));
 });

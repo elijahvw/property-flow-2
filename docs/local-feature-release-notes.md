@@ -56,3 +56,7 @@ Migration036 adds management-only recurring property/unit schedules, reviewed re
 ## PF-14 connected work calendar — local, release pending
 
 Management can review next active schedule occurrences and unresolved request targets together by month, property, type and day. Counts cover all matching source rows before paging. Open a source and return with the same filters. Paused/finished schedules, resolved requests and unscheduled requests are excluded; the latter remain linked in the existing queue. Generated occurrences become their existing request once, while the schedule advances. No new schema, runtime resource or external calendar provider; depends on the recurring schedule increment (#55).
+
+## PF-15 private document library — local, release pending
+
+Documents now provides a management-only company directory across lease and maintenance attachments. Search title/latest filename/property/request; filter source, property, archive and latest scan result before complete counts/paging. Results open the exact retained source document with versions expanded and preserve return filters across source/lease sections. No file is copied, downloaded, scanned or shared by listing. New versions' scan results remain distinct from older cleared originals. Existing source workflows retain fresh authorization and quarantine controls. No new migration/resource/provider; stacked after the connected calendar (#56).
