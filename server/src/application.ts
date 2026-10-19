@@ -46,6 +46,7 @@ import { registerFinances } from "./finances.js";
 import { registerLeasing } from "./leasing.js";
 import { registerLeaseParticipants } from "./lease-participants.js";
 import { registerLeaseInvitations, acceptLeaseInvitation, replayLeaseAcceptance, previewLeaseInvitation } from "./lease-invitations.js";
+import { registerWorkCalendar } from "./work-calendar.js";
 import { registerPreventive } from "./preventive.js";
 import { registerVendors } from "./vendors.js";
 import { registerMaintenance } from "./maintenance.js";
@@ -246,6 +247,7 @@ export function registerApplication(
   registerMaintenance(server, db, authenticate, origin);
   registerVendors(server, db, authenticate, origin);
   registerPreventive(server, db, authenticate, origin);
+  registerWorkCalendar(server, db, authenticate);
   registerMaintenanceCosts(server, db, authenticate, origin);
   registerLeasing(server, db, authenticate, origin, identityProvider);
   registerLeaseParticipants(server, db, authenticate, origin, identityProvider);

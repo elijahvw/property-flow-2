@@ -52,3 +52,7 @@ PR54 is open at5708688. Exact-head CI39189388351passed, CodeRabbit is successful
 ## PF-14 preventive schedules — local, release pending
 
 Migration036 adds management-only recurring property/unit schedules, reviewed request generation, explicit skip with reason, pause/resume, source links and immutable paginated history. Weekly/monthly/quarterly/yearly calendar recurrence retains original day and stored timezone; missed dates remain due. Atomic versioned writes and durable retry receipts prevent duplicate occurrences. Existing work-order assignment/completion/vendor/document/cost flows are reused. No new cloud resource, automatic generation or external provider. Run additive migration during authorized release. Live account acceptance remains deferred.
+
+## PF-14 connected work calendar — local, release pending
+
+Management can review next active schedule occurrences and unresolved request targets together by month, property, type and day. Counts cover all matching source rows before paging. Open a source and return with the same filters. Paused/finished schedules, resolved requests and unscheduled requests are excluded; the latter remain linked in the existing queue. Generated occurrences become their existing request once, while the schedule advances. No new schema, runtime resource or external calendar provider; depends on the recurring schedule increment (#55).

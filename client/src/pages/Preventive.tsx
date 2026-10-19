@@ -1,3 +1,4 @@
+import { calendarBack } from "../calendar-context";
 import { useState } from "react";
 import {
   Link,
@@ -361,6 +362,7 @@ function Directory() {
     <>
       <nav className="record-breadcrumb">
         <Link to="/company/maintenance">← Maintenance</Link>
+        <Link to="/company/work-calendar">Work calendar →</Link>
       </nav>
       <header className="page-heading page-heading-row">
         <div>
@@ -719,6 +721,7 @@ function PlanDetail({ id }: { id: string }) {
   return (
     <>
       <nav className="record-breadcrumb">
+        {calendarBack(params)&&<Link to={calendarBack(params)!}>Back to work calendar →</Link>}
         <Link to={`/company/preventive?${params}`}>← Back to schedules</Link>
         <Link to="/company/maintenance">Maintenance requests →</Link>
       </nav>

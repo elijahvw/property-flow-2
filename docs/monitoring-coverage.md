@@ -67,3 +67,7 @@ Use the existing operation failure view and request correlation for invitation s
 ### PF-14 preventive maintenance
 
 Local workflow operations `preventive.save` and `preventive.occurrence` use existing bounded lifecycle outcomes/durations/failures. RUM preserves static preventive/occurrences path segments and redacts record IDs. No instructions, skip reasons, contact details, recurrence payload or search input enters signals. Existing API/server error monitoring applies; troubleshoot scope, plan status/version, unit activity and transaction rollback before retrying the immutable original submission. No new cloud service; power inventory is unchanged. Deployment and live signal acceptance pending.
+
+### PF-14 connected work calendar
+
+The existing page.data.load lifecycle and authenticated API monitoring cover calendar loads and errors. RUM allows the fixed work-calendar segment, redacts record IDs and removes queries. SQL scope/counts/pages run in one authorized transaction; no private descriptions, notes, authors or contact/retry data are selected. Investigate role/company/property scope and selected month/day before retrying. No new provider, cloud runtime or power-control action. Live monitoring acceptance remains deferred.
