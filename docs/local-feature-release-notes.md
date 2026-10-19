@@ -32,8 +32,31 @@ Unsubmitted tenant/profile/financial reviews no longer write browser storage. Al
 Validation: client production build, 28 client unit checks,205 browser fixture cases and294 disposable database integration checks, including new close/Escape/discard/refresh/storage/source-version tests. PR52 merged3cfb816; exact-head CI39146821948 and frontend deployment39147366107passed. Public Chrome smoke passed; signed-in draft and broader role acceptance remain pending in [the workflow log](workflow-acceptance-2026-10-18.md).
 
 
-## October 18 — Help search task relevance (local)
+## October 18 — Help search task relevance (PR53 merged, deployed and verified live)
 
-Help Center search prioritizes guide titles, then summaries, ahead of incidental body matches. Related guides stay available, equal-ranked results keep their existing order, and clearing search restores the full directory. The account guide summary now names password reset. This addresses live finding W09 with no new service, migration or infrastructure change. Production client build,10 focused Help/invitation browser checks,390px Chrome visual verification and the power inventory guard pass. Deployment and live verification remain pending.
+Help Center search prioritizes guide titles, then summaries, ahead of incidental body matches. Related guides stay available, equal-ranked results keep their existing order, and clearing search restores the full directory. The account guide summary now names password reset. This addresses live finding W09 with no new service, migration or infrastructure change. Production client build,10 focused Help/invitation browser checks,390px Chrome visual verification and the power inventory guard pass. Exact-head CI39186265460and frontend deployment39187019964passed. Seven live task searches, empty-result recovery, clearing filters,390px layout and keyboard access were verified in Chrome. No backend rollout or migration.
 
 Multiword tasks such as rent payment and reset password match all query words without requiring an exact phrase.
+
+
+## October 18 — maintenance vendor contacts (local / PR)
+
+Management can search/add/reuse vendor contacts, edit details, archive/restore, inspect immutable history and follow linked maintenance requests. Request contact selection is separate from staff execution and paid-cost recording. Directory and linked-request totals cover every matching record; all three lists use server pagination. Contact/request versions, durable retries, atomic audit and company-scoped RLS protect writes and recovery. Residents, staff and platform-only accounts receive no vendor access. Explicit drafts remain page-only. No external vendor messages, provider activation or new cloud resources.
+
+Additive migration035 passed disposable validation; no live/preview migration was run. See [the workflow contract](maintenance-vendors.md). Both production builds,212 UI cases plus the final6 focused vendor checks,72 safe server/28 client unit checks,56 disposable maintenance integration checks and the power inventory guard pass. Coverage includes fresh role/company/RLS boundaries, concurrent creates/edits, search totals before pagination, immutable history, audit rollback, Enter search behavior, explicit drafts and committed-response-loss recovery. Live testing is deferred while the user is away from the laptop.
+
+Unchanged contact/link saves preserve source versions and visible business history; hidden immutable retry receipts safely acknowledge a lost response after subsequent changes. Covered by a real database regression.
+
+PR54 is open at5708688. Exact-head CI39189388351passed, CodeRabbit is successful and the unchanged-save finding is resolved. Migration035/release and live account acceptance remain pending; no live/preview database or provider changes were made.
+
+## PF-14 preventive schedules — local, release pending
+
+Migration036 adds management-only recurring property/unit schedules, reviewed request generation, explicit skip with reason, pause/resume, source links and immutable paginated history. Weekly/monthly/quarterly/yearly calendar recurrence retains original day and stored timezone; missed dates remain due. Atomic versioned writes and durable retry receipts prevent duplicate occurrences. Existing work-order assignment/completion/vendor/document/cost flows are reused. No new cloud resource, automatic generation or external provider. Run additive migration during authorized release. Live account acceptance remains deferred.
+
+## PF-14 connected work calendar — local, release pending
+
+Management can review next active schedule occurrences and unresolved request targets together by month, property, type and day. Counts cover all matching source rows before paging. Open a source and return with the same filters. Paused/finished schedules, resolved requests and unscheduled requests are excluded; the latter remain linked in the existing queue. Generated occurrences become their existing request once, while the schedule advances. No new schema, runtime resource or external calendar provider; depends on the recurring schedule increment (#55).
+
+## PF-15 private document library — local, release pending
+
+Documents now provides a management-only company directory across lease and maintenance attachments. Search title/latest filename/property/request; filter source, property, archive and latest scan result before complete counts/paging. Results open the exact retained source document with versions expanded and preserve return filters across source/lease sections. No file is copied, downloaded, scanned or shared by listing. New versions' scan results remain distinct from older cleared originals. Existing source workflows retain fresh authorization and quarantine controls. No new migration/resource/provider; stacked after the connected calendar (#56).

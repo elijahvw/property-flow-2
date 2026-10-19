@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { Link, useSearchParams } from "react-router-dom";
+import { useEffect, useRef, useState } from 'react';
 import './PrivateDocuments.css';
 import { api } from '../api';
 import { useResource } from '../useResource';
@@ -9,21 +10,25 @@ type Version={id:string;number:number;filename:string;byteLength:number;scanStat
 type Document={id:string;title:string;version:number;archivedAt:string|null;versions:Version[]};
 const scanLabel=(status:string)=>status==='clean'?'Cleared by scanning':status==='rejected'?'Rejected by scanning. Download blocked.':'Quarantined. Download blocked until scanning clears this version.';
 export function PrivateDocuments({source,sourceId}:{source:'leases'|'maintenance';sourceId:string}) {
+  const [params]=useSearchParams(), focusedId=params.get("documentId"), focused=useRef<string|null>(null);
   const endpoint=`/api/company/${source}/${encodeURIComponent(sourceId)}/documents`;
   const r=useResource<{items:Document[];scanningConfigured?:boolean}>(endpoint,true,true), [notice,setNotice]=useState(''), [open,setOpen]=useState(false), [draft,setDraft]=useState<{document:Document|null;key:string}|null>(null);
+  useEffect(()=>{if(!focusedId||!r.data?.items.some(doc=>doc.id===focusedId)||focused.current===focusedId)return;const node=window.document.getElementById(`private-document-${focusedId}`);if(node){focused.current=focusedId;node.focus();node.scrollIntoView({block:"start"});}},[focusedId,r.data]);
   const begin=(document:Document|null)=>{setDraft(current=>current||{document,key:crypto.randomUUID()});setOpen(true);};
   return <section className="panel private-documents">
     <div className="section-heading"><h2>Private documents</h2><button disabled={!r.data||!!r.error} onClick={()=>begin(null)}>Upload document</button></div>
+    <p><Link to="/company/documents">Open document library →</Link></p>
     <p className="help">Management only. Uploads are quarantined until scanning clears them. Originals and earlier versions are retained. PDF, PNG, JPEG or text, up to 5 MB each.</p>
     {r.data&&<p className="help">{r.data.scanningConfigured?'Scanning is configured. Each upload is scanned automatically; only cleared files can be downloaded.':'Scanning is not configured. You can retain private originals, but downloads stay blocked until an administrator enables scanning.'}</p>}
     {notice&&<p role="status">{notice}</p>}
     {r.error&&<p role="alert">{r.error} <button onClick={r.reload}>Reload documents</button></p>}
-    {!r.data?<p role="status">Loading documents…</p>:!(r.data.items||[]).length?<p>No documents uploaded for this record.</p>:<ul className="private-document-list">{r.data.items.map(doc=><li key={doc.id}>
+    {focusedId&&r.data&&!r.data.items?.some(doc=>doc.id===focusedId)&&<p className="notice">This document is unavailable at this source. Review the retained documents below or return to the library.</p>}
+    {!r.data?<p role="status">Loading documents…</p>:!(r.data.items||[]).length?<p>No documents uploaded for this record.</p>:<ul className="private-document-list">{r.data.items.map(doc=><li key={doc.id} id={`private-document-${doc.id}`} tabIndex={-1} className={doc.id===focusedId?"private-document-target":undefined}>
       <h3>{doc.title}{doc.archivedAt?' · Archived':''}</h3>
       {doc.versions[0]&&<p className="help">Latest version: {scanLabel(doc.versions[0].scanStatus)}</p>}
       <div className="actions">{!doc.archivedAt&&<button className="secondary" onClick={()=>begin(doc)}>Upload new version · {doc.title}</button>}
       <Form operation="document.archive" feedbackText={doc.archivedAt?"Document restored.":"Document archived; originals retained."} label={doc.archivedAt?'Restore document':'Archive document'} submit={async()=>{await api(`${endpoint}/${doc.id}`,{method:'PATCH',body:{expectedVersion:doc.version,archived:!doc.archivedAt}});r.reload();}}><p className="help">{doc.archivedAt?'Restore to allow new versions.':'Archiving keeps every original available to management.'}</p></Form></div>
-      <details><summary>{doc.versions.length} retained {doc.versions.length===1?'version':'versions'}</summary><ul className="private-version-list">{doc.versions.map((v,index)=><li key={v.id}>
+      <details key={`${doc.id}:${doc.id===focusedId}`} open={doc.id===focusedId?true:undefined}><summary>{doc.versions.length} retained {doc.versions.length===1?'version':'versions'}</summary><ul className="private-version-list">{doc.versions.map((v,index)=><li key={v.id}>
         <strong>Version {v.number}{index===0?' · Latest uploaded':''}</strong><p>{v.filename} · {Math.ceil(v.byteLength/1024)} KB · {formatActivityTime(v.createdAt)}</p>
         <p>{scanLabel(v.scanStatus)}</p>
         {v.scanStatus==='pending'&&!doc.archivedAt&&<Form operation="document.scan" feedbackText="Scan finished. Review the recorded result." label="Scan file" submit={async()=>{await api(`${endpoint}/${doc.id}/versions/${v.id}/scan`,{method:'POST',body:{},timeoutMs:45000});r.reload();}}><span className="help">Scanning may take up to 30 seconds.</span></Form>}

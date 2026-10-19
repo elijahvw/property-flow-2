@@ -1,3 +1,5 @@
+import { documentLibraryBack } from "../document-context";
+import { calendarBack } from "../calendar-context";
 import { useDebouncedValue } from "../useDebouncedValue";
 import { usePropertySearchParams } from "../usePropertySearchParams";
 import { DraftReset } from "../components/DraftReset";
@@ -13,6 +15,8 @@ import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "../components/Form";
 import { MaintenanceCosts } from "../components/MaintenanceCosts";
 import { PrivateDocuments } from "../components/PrivateDocuments";
+import { PreventiveSource } from "../components/PreventiveSource";
+import { MaintenanceVendor } from "../components/MaintenanceVendor";
 import { WorkOrderPanel } from "./WorkOrders";
 type Row = {
   id: string;
@@ -134,7 +138,7 @@ function PriorityField({ value = "normal" }: { value?: string }) {
     </label>
   );
 }
-function UnitPicker({
+export function UnitPicker({
   propertyId,
   initial,
 }: {
@@ -246,6 +250,7 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
   return (
     <>
       {!resident && propertyId && <PropertyNavigation id={propertyId} />}
+      {!resident && <p className="actions"><Link to="/company/vendors">Vendor directory →</Link><Link to="/company/preventive">Preventive maintenance →</Link><Link to="/company/work-calendar">Work calendar →</Link></p>}
       <header className="page-heading page-heading-row">
         <div>
           <p className="record-kicker">Operations / Maintenance</p>
@@ -624,6 +629,10 @@ function RequestDetail({ id, resident }: { id: string; resident: boolean }) {
     <>
       <nav className="record-breadcrumb">
         <Link to={directoryPath(params, resident)}>← Back to maintenance</Link>
+        {!resident&&documentLibraryBack(params)&&<Link to={documentLibraryBack(params)!}>Back to document library →</Link>}
+        {!resident&&calendarBack(params)&&<Link to={calendarBack(params)!}>Back to work calendar →</Link>}
+        {!resident&&params.get("planId")&&<Link to={`/company/preventive/${encodeURIComponent(params.get("planId")!)}`}>Back to schedule →</Link>}
+        {!resident&&params.get("vendorId")&&<Link to={`/company/vendors/${encodeURIComponent(params.get("vendorId")!)}`}>Back to vendor →</Link>}
       </nav>
       {r.error && row && <Loading error={r.error} retry={r.reload} />}
       {!row ? (
@@ -777,6 +786,8 @@ function RequestDetail({ id, resident }: { id: string; resident: boolean }) {
             </section>
           </div>
           <RequestUpdates endpoint={endpoint} resident={resident} canShare={row.residentUpdatesAvailable === true} />
+          {!resident && <PreventiveSource requestId={id}/>}
+          {!resident && <MaintenanceVendor requestId={id} changed={r.reload} />}
           {!resident && can("finance.manage") && <MaintenanceCosts requestId={id} propertyId={row.propertyId} />}
           {!resident && <WorkOrderPanel id={id} management changed={r.reload} />}
           {!resident && <PrivateDocuments source="maintenance" sourceId={id} />}

@@ -5,7 +5,8 @@ async function fixture(page: Page, role = 'manager') {
   const state = { entries: [expense('e1', 'TX-101', 25000, 'Boiler repair'), expense('e2', 'TX-102', 4505, 'Kitchen sink parts')], links: [] as any[], posts: [] as any[], unlinks: [] as any[], loseLink: false, loseUnlink: false, costReads: 0 };
   await page.route('**/api/**', async route => {
     const req = route.request(), url = new URL(req.url()), path = url.pathname, method = req.method(), json = (value: unknown, status = 200) => route.fulfill({ json: value, status });
-    if (path === '/api/bootstrap') return json({ user: { id: 'u', name: 'Manager', email: 'u@test.invalid', status: 'active', emailVerified: true }, membership: { companyId: 'a', version: 1, role, status: 'active', company: { name: 'Company', status: 'active' } }, permissions: role === 'resident' ? ['resident.self'] : role === 'staff' ? ['property.read'] : ['property.read', 'maintenance.manage', 'finance.manage'], csrfToken: 'fixture' });
+    if (path.endsWith('/preventive')) return json(null);
+  if (path === '/api/bootstrap') return json({ user: { id: 'u', name: 'Manager', email: 'u@test.invalid', status: 'active', emailVerified: true }, membership: { companyId: 'a', version: 1, role, status: 'active', company: { name: 'Company', status: 'active' } }, permissions: role === 'resident' ? ['resident.self'] : role === 'staff' ? ['property.read'] : ['property.read', 'maintenance.manage', 'finance.manage'], csrfToken: 'fixture' });
     if (path === '/api/company/properties') return json([{ id: 'home', name: 'Maple House' }]);
     if (path === '/api/company/properties/home') return json({ id: 'home', name: 'Maple House' });
     if (path.endsWith('/updates')) return json({ items: [], nextCursor: null });

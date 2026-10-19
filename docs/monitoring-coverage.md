@@ -58,3 +58,20 @@ The October 17 workflow audit adds [local performance tests and a measured Grafa
 The [approved workflow improvements](platform-workflow-improvements.md) add bounded `invitation.send` and `onboarding.update` browser operation names. Existing safe API status/duration/traces cover invitation entry, creation, replacement, acceptance and guide preferences. Delivery audit actions distinguish accepted/failed/unknown without recording the private link or message. Fixed RUM path segments include Help/guide/delivery/replace/entry; arbitrary IDs, query strings and fragments remain stripped. No replay/form capture is introduced.
 
 Use the existing operation failure view and request correlation for invitation send errors; inspect scoped delivery status after an interrupted request. Do not auto-resend an unknown SES outcome. Investigate scanner503s through the existing document-scan operation; keep the saved original quarantined and retry scanning after executable/definition recovery. Real SES delivery/bounce monitoring and maintained scanner/runtime verification accompany their separate activation, not a passing fixture. No live Grafana dashboards, rules, collectors or delivery destinations changed in this batch.
+
+
+## Vendor contact workflow — local PF-13 increment
+
+`vendor.save` and `maintenance.vendor` use the existing bounded operation lifecycle and server browser-telemetry allowlist. Existing API route metrics/error alerts apply to contact, history and link endpoints. Vendor IDs and query strings are scrubbed from browser telemetry; contact fields, notes, snapshots and search text are never emitted. No external delivery is claimed. For403/404 inspect current company/management authority; for409 inspect duplicates/current versions; after response loss retry the original key/payload. Contact/link/audit writes roll back together on failure. No new provider or cloud service; activation/real-account telemetry acceptance is deferred with live testing. [Contract and recovery](maintenance-vendors.md).
+
+### PF-14 preventive maintenance
+
+Local workflow operations `preventive.save` and `preventive.occurrence` use existing bounded lifecycle outcomes/durations/failures. RUM preserves static preventive/occurrences path segments and redacts record IDs. No instructions, skip reasons, contact details, recurrence payload or search input enters signals. Existing API/server error monitoring applies; troubleshoot scope, plan status/version, unit activity and transaction rollback before retrying the immutable original submission. No new cloud service; power inventory is unchanged. Deployment and live signal acceptance pending.
+
+### PF-14 connected work calendar
+
+The existing page.data.load lifecycle and authenticated API monitoring cover calendar loads and errors. RUM allows the fixed work-calendar segment, redacts record IDs and removes queries. SQL scope/counts/pages run in one authorized transaction; no private descriptions, notes, authors or contact/retry data are selected. Investigate role/company/property scope and selected month/day before retrying. No new provider, cloud runtime or power-control action. Live monitoring acceptance remains deferred.
+
+### PF-15 private document library
+
+Existing page.data.load outcome/duration/failure signals and authenticated API monitoring cover the directory and source reads. RUM permits only the fixed documents route and redacts IDs/queries. Metadata queries never select original bytes, hashes, author identities or submission/download secrets. Source scan/download signals remain existing document.scan/document.download operations with fresh checks. Investigate current management/company/property scope, archive filter and latest-version result; retry source scan without uploading a duplicate. No runtime/power-control change.

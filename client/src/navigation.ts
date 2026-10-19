@@ -103,6 +103,7 @@ export const routes: {
     permission: "lease.manage",
     section: "Company",
   },
+  {path:"/company/documents",title:"Documents",permission:"maintenance.manage",section:"Company"},
   {
     path: "/company/maintenance",
     title: "Maintenance",

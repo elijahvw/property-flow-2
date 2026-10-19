@@ -3,6 +3,7 @@ async function fixture(page:Page,resident=true){
  const state={rows:[] as any[],properties:[{id:'home',name:'Home'}],fail:false,assigned:true,posts:[] as any[],patches:[] as any[],updates:[] as any[],updatePosts:[] as any[],updateFail:false,shareable:true,detailDenied:false};
  await page.route('**/api/**',async route=>{
   const url=new URL(route.request().url()),path=url.pathname,method=route.request().method(),json=(value:unknown,status=200)=>route.fulfill({json:value,status});
+  if (path.endsWith('/preventive')) return json(null);
   if(path==='/api/telemetry')return json({accepted:true});
   if(path==='/api/bootstrap')return json({user:{id:'u',name:'Test Owner',email:'u@test.invalid',status:'active',emailVerified:true},membership:{companyId:'a',version:1,role:resident?'resident':'manager',status:'active',company:{name:'Company',status:'active'}},permissions:resident?['resident.self']:['property.read','maintenance.manage'],destination:resident?'/resident/maintenance':'/company/maintenance',csrfToken:'fixture'});
   if(path.endsWith('/units'))return json({items:[{id:'unit-a',label:'Apartment 1',status:'active'}],nextCursor:null});

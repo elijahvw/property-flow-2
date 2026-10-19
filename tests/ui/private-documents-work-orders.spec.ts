@@ -4,6 +4,7 @@ async function setup(page:Page,staff=false){
  const state={row:request(),executionStatus:'unassigned',actions:[] as any[],workPosts:[] as any[],uploads:[] as any[],documents:[] as any[],failUpload:false,failWork:false,scanFails:false,scanningConfigured:false,scanRequests:0,denied:false};
  await page.route('**/api/**',async route=>{
   const req=route.request(),path=new URL(req.url()).pathname,method=req.method(),json=(value:unknown,status=200)=>route.fulfill({json:value,status});
+  if (path.endsWith('/preventive')) return json(null);
   if(path==='/api/telemetry')return json({accepted:true});
   if(path==='/api/bootstrap')return json({user:{id:'fixture',name:'Fictional operator',email:'operator@test.invalid',status:'active',emailVerified:true},membership:{companyId:'a',version:1,role:staff?'staff':'owner',status:'active',company:{id:'a',name:'Fictional company',status:'active'}},permissions:staff?['property.read','maintenance.execute']:['property.read','maintenance.manage','members.manage'],destination:staff?'/company/work-orders':'/company/maintenance',csrfToken:'fixture'});
   if(method!=='GET')expect(req.headers()['x-csrf-token']).toBe('fixture');
@@ -30,7 +31,7 @@ async function setup(page:Page,staff=false){
    if(state.denied)return json({error:'Assigned work unavailable'},404);
    if(method==='POST'){
     const body=req.postDataJSON();state.workPosts.push(body);if(state.failWork)return json({error:'Work changed. Reload before retrying.'},409);
-    state.executionStatus=({assign:'assigned',accept:'accepted',submit:'pending_review',approve:'complete',reopen:'assigned'} as any)[body.action]||state.executionStatus;state.row.version++;
+    state.executionStatus=({assign:'assigned',accept:'accepted',submit:'pending_review',approve:'complete',reopen:'assigned'} as any)[body.action]||state.executionStatus;state.row.version++;if(body.action==='approve')state.row.status='resolved';else if(body.action==='reopen')state.row.status='open';
     state.actions.unshift({id:'event-'+state.workPosts.length,action:body.action,note:body.note,createdAt:'2026-10-17T14:00:00Z'});return json({version:state.row.version});
    }
    return json({...state.row,executionStatus:state.executionStatus,actions:state.actions,...!staff?{assigneeId:state.executionStatus==='unassigned'?null:'staff',assigneeName:'Fictional teammate',eligible:[{id:'staff',name:'Fictional teammate'}]}:{}});

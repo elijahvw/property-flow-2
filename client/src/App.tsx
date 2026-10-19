@@ -40,6 +40,10 @@ const ResidentDetail = lazy(() => import("./pages/ResidentDetail").then(module =
 const ContactDetail = lazy(() => import("./pages/ContactDetail").then(module => ({ default: module.ContactDetail })));
 const WorkOrders = lazy(() => import("./pages/WorkOrders").then(module => ({default:module.WorkOrders})));
 const AssignedWorkDetail = lazy(() => import("./pages/WorkOrders").then(module => ({default:module.AssignedWorkDetail})));
+const DocumentLibrary = lazy(() => import("./pages/DocumentLibrary").then(module=>({default:module.DocumentLibrary})));
+const WorkCalendar = lazy(() => import("./pages/WorkCalendar").then(module=>({default:module.WorkCalendar})));
+const Preventive = lazy(() => import("./pages/Preventive").then(module=>({default:module.Preventive})));
+const Vendors = lazy(() => import("./pages/Vendors").then(module=>({default:module.Vendors})));
 const Maintenance = lazy(() => import("./pages/Maintenance").then(module => ({ default: module.Maintenance })));
 const MaintenanceRequestDetail = lazy(() => import("./pages/Maintenance").then(module => ({ default: module.MaintenanceRequestDetail })));
 const Deposits = lazy(() => import("./pages/Deposits").then(module => ({ default: module.Deposits })));
@@ -87,6 +91,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const main = useRef<HTMLElement>(null);
   const route =
+    ((location.pathname.startsWith("/company/vendors")||location.pathname.startsWith("/company/preventive")||location.pathname==="/company/work-calendar") ? {...routes.find(r=>r.path==="/company/maintenance")!,title:location.pathname==="/company/work-calendar"?"Work calendar":location.pathname.startsWith("/company/preventive")?"Preventive maintenance":"Vendors"} : undefined) ||
     (location.pathname.startsWith("/help/") ? routes.find(r=>r.path==="/help") : undefined) ||
     routes.find((r) => r.path === location.pathname) ||
     (location.pathname.startsWith("/company/properties/")
@@ -146,7 +151,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                     ? "Account"
                     : /finances|reports|rent|deposits/.test(r.path)
                       ? "Money"
-                      : /leases|maintenance|work-orders/.test(r.path)
+                      : /leases|maintenance|work-orders|documents/.test(r.path)
                         ? "Operations"
                         : "Workspace";
               return section === group;
@@ -158,7 +163,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                   <NavLink
                     key={r.path}
                     to={r.path}
-                    className={({isActive})=>isActive||(r.path==="/company/residents"&&location.pathname.startsWith("/company/tenants/"))?"active":undefined}
+                    className={({isActive})=>isActive||(r.path==="/company/maintenance"&&(location.pathname.startsWith("/company/vendors")||location.pathname.startsWith("/company/preventive")||location.pathname==="/company/work-calendar"))||(r.path==="/company/residents"&&location.pathname.startsWith("/company/tenants/"))?"active":undefined}
                     onClick={() => setMenuOpen(false)}
                   >
                     <NavigationIcon path={r.path} />
@@ -279,6 +284,7 @@ function Pages() {
     "/resident": <Resident />,
     "/resident/maintenance": <Maintenance resident />,
     "/company/maintenance": <Maintenance />,
+    "/company/documents": <DocumentLibrary/>,
     "/company/work-orders": <WorkOrders />,
     "/company/leases": <Leases />,
     "/company/finances": <Finances />,
@@ -293,6 +299,11 @@ function Pages() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
+      <Route path="/company/work-calendar" element={<Shell><ProtectedRoute permission="maintenance.manage"><WorkCalendar/></ProtectedRoute></Shell>}/>
+      <Route path="/company/preventive" element={<Shell><ProtectedRoute permission="maintenance.manage"><Preventive/></ProtectedRoute></Shell>}/>
+      <Route path="/company/preventive/:planId" element={<Shell><ProtectedRoute permission="maintenance.manage"><Preventive/></ProtectedRoute></Shell>}/>
+      <Route path="/company/vendors" element={<Shell><ProtectedRoute permission="maintenance.manage"><Vendors/></ProtectedRoute></Shell>}/>
+      <Route path="/company/vendors/:vendorId" element={<Shell><ProtectedRoute permission="maintenance.manage"><Vendors/></ProtectedRoute></Shell>}/>
       <Route path="/help/:articleId" element={<Shell><Help/></Shell>}/>
       {routes.map((r) => (
         <Route
