@@ -23,10 +23,17 @@ Validation: both production builds, the189-case UI suite plus final targeted/pag
 Separate **Start development** and **Stop development** Actions use the shared ordered controller, include all app/scanner task containers, preserve data and serialize with deployment. Startup verifies public readiness. CI requires lifecycle coverage for Terraform resources through `config/dev-power.json`; new services/databases or unclassified resource types fail until covered. Retained storage, routing and credentials keep their stated charges. See [power controls](dev-power.md). The smaller0.5vCPU/4GB scanner task is estimated at$27.75/month compute, an$18.74 increase over the former task at730hours, before credits/taxes and other usage.
 
 
-## October 18 — explicit page-only drafts (local / PR)
+## October 18 — explicit page-only drafts (merged and deployed, PR52)
 
 Changed forms now ask whether to keep editing, close without saving, or save a draft and close. Save as draft is also available directly. Only explicit saving retains the mounted form, selected file, opening source version and submission key while its page stays open. Refresh, navigation or company/access changes clear unsubmitted drafts. Unchanged editors close directly; forms keep their input after errors while open.
 
 Unsubmitted tenant/profile/financial reviews no longer write browser storage. Already-submitted requests retain separate recovery journals with their exact payload and retry identity. Interrupted submissions offer Close & keep recovery, lock the attempted form data and block draft reset; closing cannot rotate their key. Selecting a different record asks before replacing a saved draft, and preserves an interrupted request until recovery. Closing never reverses a completed write. User-management sections preserve each other’s unfinished changes after independent saves. Read-only account/picker dialogs close without draft controls. Existing authorization, financial sources and history remain unchanged. No migration or infrastructure change; development power inventory validation passes.
 
-Validation: client production build, 28 client unit checks,205 browser fixture cases and294 disposable database integration checks, including new close/Escape/discard/refresh/storage/source-version tests. Release and live acceptance are recorded separately in [the workflow log](workflow-acceptance-2026-10-18.md).
+Validation: client production build, 28 client unit checks,205 browser fixture cases and294 disposable database integration checks, including new close/Escape/discard/refresh/storage/source-version tests. PR52 merged3cfb816; exact-head CI39146821948 and frontend deployment39147366107passed. Public Chrome smoke passed; signed-in draft and broader role acceptance remain pending in [the workflow log](workflow-acceptance-2026-10-18.md).
+
+
+## October 18 — Help search task relevance (local)
+
+Help Center search prioritizes guide titles, then summaries, ahead of incidental body matches. Related guides stay available, equal-ranked results keep their existing order, and clearing search restores the full directory. The account guide summary now names password reset. This addresses live finding W09 with no new service, migration or infrastructure change. Production client build,10 focused Help/invitation browser checks,390px Chrome visual verification and the power inventory guard pass. Deployment and live verification remain pending.
+
+Multiword tasks such as rent payment and reset password match all query words without requiring an exact phrase.

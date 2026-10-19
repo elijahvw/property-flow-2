@@ -9,7 +9,18 @@ export function Help() {
   const article = helpArticles.find(item => item.id === articleId);
   const results = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return helpArticles.filter(item => !query || `${item.title} ${item.summary} ${item.audience} ${item.steps.join(" ")} ${item.notes.join(" ")}`.toLowerCase().includes(query));
+    if (!query) return helpArticles;
+    const words = query.split(/\s+/);
+    const matches = (text: string) => words.every(word => text.toLowerCase().includes(word));
+    return helpArticles.map(item => {
+      let relevance = 0;
+      if (matches(item.title)) relevance = 3;
+      else if (matches(item.summary)) relevance = 2;
+      else if (matches(`${item.title} ${item.summary} ${item.audience} ${item.steps.join(" ")} ${item.notes.join(" ")}`)) relevance = 1;
+      return { item, relevance };
+    }).filter(result => result.relevance > 0)
+      .sort((left, right) => right.relevance - left.relevance)
+      .map(result => result.item);
   }, [search]);
   return <div className="help-center">
     <header className="page-heading"><p className="eyebrow">Support & guidance</p><h1>{article ? article.title : "Help Center"}</h1><p>{article ? article.summary : "Practical guides for your next task, from getting started to managing daily work."}</p>{user?.status === "active" && user.emailVerified && !!data?.permissions.length && <button className="secondary" onClick={() => window.dispatchEvent(new Event("pf-guide-replay"))}>Replay walkthrough</button>}</header>
