@@ -71,6 +71,18 @@ export async function calendarCases(t, admin, call, app) {
     submissionKey: randomUUID(),
   });
   await t.test(
+    "calendar request ranges can use the partial target-date index",
+    async () => {
+      const client=await admin.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('SET LOCAL enable_seqscan=off');
+        const plan=await client.query(`EXPLAIN (COSTS OFF) SELECT id FROM "MaintenanceRequest" WHERE "companyId"='a' AND status<>'resolved' AND "targetOn" BETWEEN '2026-10-01' AND '2026-10-31'`);
+        assert.match(plan.rows.map(row=>row['QUERY PLAN']).join('\n'),/calendar_request_targets/);
+      } finally {await client.query('ROLLBACK');client.release();}
+    },
+  );
+  await t.test(
     "calendar combines next schedules and unresolved targets with complete month/day counts before paging",
     async () => {
       const first = await ok("manager", "GET", base + "?" + filter);
