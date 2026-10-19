@@ -97,6 +97,7 @@ export function safeReturnTo(value: unknown): string {
     // encoding and dot traversal rather than trusting URL normalization.
     if (url.pathname.split("/").some(segment => /[\\/%?#\s]/.test(decodeURIComponent(segment)) || [".",".."].includes(decodeURIComponent(segment))) || /(?:^|\/)(?:\.|%2e){1,2}(?:\/|$)/i.test(value.split("?")[0])) return "/dashboard";
     const allowed = new Set(["propertyId","unitId","leaseId","residentId","contactId","tenantId","tenantContact","tenantProperty","tenantAccess","tenantRental","tenantRecords","leaseReturn","section","status","access","rental","records","attention","approvals","view","age","kind","dateFrom","dateTo","statementFrom","new"]);
+    for(const key of ["q","page","due","priority","workStatus","assignee","month","day","planId","vendorId","calendarMonth","calendarDay","calendarProperty","calendarKind","calendarPage"])allowed.add(key);
     const query = new URLSearchParams();
     for (const [key,item] of url.searchParams) if (allowed.has(key) && item.length <= 200 && !/[\\\x00-\x1f\x7f]/.test(item)) query.set(key,item);
     return url.pathname + (query.size ? `?${query}` : "");
