@@ -1,4 +1,5 @@
 export type OperationName =
+  | 'preventive.save' | 'preventive.occurrence'
   | 'vendor.save' | 'maintenance.vendor'
   | 'document.upload' | 'document.scan' | 'document.download' | 'document.archive'
   | 'deposit.setup' | 'deposit.update' | 'deposit.receipt' | 'deposit.void'

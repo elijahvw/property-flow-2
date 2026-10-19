@@ -529,7 +529,8 @@ caption { text-align:left; color:#5d7166; font-size:.85rem; padding:.8rem 0; }
 .nav-group { display:flex; flex-direction:column; gap:.15rem; }
 .mobile-menu-toggle { display:none; }
 .topbar { gap:1rem; }
-.topbar-location { display:flex; gap:.7rem; align-items:center; white-space:nowrap; }
+.topbar-location { display:flex; gap:.7rem; align-items:center; white-space:nowrap; min-width:0; flex:1; }
+.topbar-location > :last-child { min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .topbar-location a { color:#51665d; text-decoration:none; }
 .property-search-trigger { margin-left:auto; min-height:36px; padding:.35rem .7rem; background:#f7f9f8; border-color:#dfe5e1; color:#62736b; font-size:.8rem; font-weight:450; }
 .property-search-trigger:hover { background:#edf3ef; }

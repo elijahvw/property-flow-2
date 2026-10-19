@@ -63,3 +63,7 @@ Use the existing operation failure view and request correlation for invitation s
 ## Vendor contact workflow — local PF-13 increment
 
 `vendor.save` and `maintenance.vendor` use the existing bounded operation lifecycle and server browser-telemetry allowlist. Existing API route metrics/error alerts apply to contact, history and link endpoints. Vendor IDs and query strings are scrubbed from browser telemetry; contact fields, notes, snapshots and search text are never emitted. No external delivery is claimed. For403/404 inspect current company/management authority; for409 inspect duplicates/current versions; after response loss retry the original key/payload. Contact/link/audit writes roll back together on failure. No new provider or cloud service; activation/real-account telemetry acceptance is deferred with live testing. [Contract and recovery](maintenance-vendors.md).
+
+### PF-14 preventive maintenance
+
+Local workflow operations `preventive.save` and `preventive.occurrence` use existing bounded lifecycle outcomes/durations/failures. RUM preserves static preventive/occurrences path segments and redacts record IDs. No instructions, skip reasons, contact details, recurrence payload or search input enters signals. Existing API/server error monitoring applies; troubleshoot scope, plan status/version, unit activity and transaction rollback before retrying the immutable original submission. No new cloud service; power inventory is unchanged. Deployment and live signal acceptance pending.

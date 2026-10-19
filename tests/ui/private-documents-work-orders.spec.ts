@@ -4,6 +4,7 @@ async function setup(page:Page,staff=false){
  const state={row:request(),executionStatus:'unassigned',actions:[] as any[],workPosts:[] as any[],uploads:[] as any[],documents:[] as any[],failUpload:false,failWork:false,scanFails:false,scanningConfigured:false,scanRequests:0,denied:false};
  await page.route('**/api/**',async route=>{
   const req=route.request(),path=new URL(req.url()).pathname,method=req.method(),json=(value:unknown,status=200)=>route.fulfill({json:value,status});
+  if (path.endsWith('/preventive')) return json(null);
   if(path==='/api/telemetry')return json({accepted:true});
   if(path==='/api/bootstrap')return json({user:{id:'fixture',name:'Fictional operator',email:'operator@test.invalid',status:'active',emailVerified:true},membership:{companyId:'a',version:1,role:staff?'staff':'owner',status:'active',company:{id:'a',name:'Fictional company',status:'active'}},permissions:staff?['property.read','maintenance.execute']:['property.read','maintenance.manage','members.manage'],destination:staff?'/company/work-orders':'/company/maintenance',csrfToken:'fixture'});
   if(method!=='GET')expect(req.headers()['x-csrf-token']).toBe('fixture');

@@ -46,3 +46,9 @@ Management can search/add/reuse vendor contacts, edit details, archive/restore, 
 Additive migration035 passed disposable validation; no live/preview migration was run. See [the workflow contract](maintenance-vendors.md). Both production builds,212 UI cases plus the final6 focused vendor checks,72 safe server/28 client unit checks,56 disposable maintenance integration checks and the power inventory guard pass. Coverage includes fresh role/company/RLS boundaries, concurrent creates/edits, search totals before pagination, immutable history, audit rollback, Enter search behavior, explicit drafts and committed-response-loss recovery. Live testing is deferred while the user is away from the laptop.
 
 Unchanged contact/link saves preserve source versions and visible business history; hidden immutable retry receipts safely acknowledge a lost response after subsequent changes. Covered by a real database regression.
+
+PR54 is open at5708688. Exact-head CI39189388351passed, CodeRabbit is successful and the unchanged-save finding is resolved. Migration035/release and live account acceptance remain pending; no live/preview database or provider changes were made.
+
+## PF-14 preventive schedules — local, release pending
+
+Migration036 adds management-only recurring property/unit schedules, reviewed request generation, explicit skip with reason, pause/resume, source links and immutable paginated history. Weekly/monthly/quarterly/yearly calendar recurrence retains original day and stored timezone; missed dates remain due. Atomic versioned writes and durable retry receipts prevent duplicate occurrences. Existing work-order assignment/completion/vendor/document/cost flows are reused. No new cloud resource, automatic generation or external provider. Run additive migration during authorized release. Live account acceptance remains deferred.
