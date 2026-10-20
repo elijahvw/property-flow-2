@@ -1,6 +1,6 @@
 # Property Flow product roadmap and feature register
 
-Updated October 20, 2026. Main/deployed baseline: `1945049` (PR57; PRs54–57 merged). Latest successful deployment run 39212763617 was followed by successful Stop run 39214885405. This batch adds unmerged PF-16 inspections, PF-17 unsigned agreement preparation and PF-19 in-app notifications. [Current platform status](mvp-status.md) · [Detailed acceptance backlog](product-backlog.md) · [Monitoring coverage](monitoring-coverage.md) · [Release evidence](dev-release-performance.md). Jira updates remain disabled; historical PF links are references only.
+Updated October 20, 2026. Main/deployed baseline: `1945049` (PR57; PRs54–57 merged). Latest successful deployment run 39212763617 was followed by successful Stop run 39214885405. This [PR59](https://github.com/elijahvw/property-flow-2/pull/59) batch adds unmerged PF-16 inspections, PF-17 unsigned agreement preparation and PF-19 in-app notifications. [Current platform status](mvp-status.md) · [Detailed acceptance backlog](product-backlog.md) · [Monitoring coverage](monitoring-coverage.md) · [Release evidence](dev-release-performance.md). Jira updates remain disabled; historical PF links are references only.
 
 ## Product direction
 

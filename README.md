@@ -6,7 +6,7 @@ A property management application for connected portfolio records, leasing, main
 
 [Platform status](docs/mvp-status.md) is the current summary of implemented features, latest verified deployment, stopped development environment, this PR and remaining acceptance. [Roadmap](docs/product-roadmap.md) tracks stable feature IDs; [backlog](docs/product-backlog.md) retains detailed target acceptance. Jira updates are disabled.
 
-Main/deployed baseline `1945049` includes vendor contacts, preventive maintenance, the source-linked work calendar and private document library. The October 20 PR batch adds management inspections, unsigned agreement preparation and personal in-app notifications with migrations038–040. Those new features await review, merge and deployment. Tests, merged source, deployment and real-account acceptance are distinct.
+Main/deployed baseline `1945049` includes vendor contacts, preventive maintenance, the source-linked work calendar and private document library. The October 20 [PR59](https://github.com/elijahvw/property-flow-2/pull/59) batch adds management inspections, unsigned agreement preparation and personal in-app notifications with migrations038–040. Those new features await review, merge and deployment. Tests, merged source, deployment and real-account acceptance are distinct.
 
 ## Workflow contracts
 

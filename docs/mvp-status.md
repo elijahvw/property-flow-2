@@ -8,7 +8,9 @@ Main is `1945049` ([merged PR57](https://github.com/elijahvw/property-flow-2/pul
 
 [Dev stop run 39214885405](https://github.com/elijahvw/property-flow-2/actions/runs/39214885405) subsequently succeeded on October 19. The user reports the app stopped; it has not been started, deployed or changed in the cloud during this PR preparation. Current AWS resource state and a fresh live health check were not queried. A later Start and complete signed-in acceptance remain separate from the successful deployment/Stop records.
 
-## New batch awaiting review, merge and deployment
+## New batch — PR59 awaiting review, merge and deployment
+
+[PR59](https://github.com/elijahvw/property-flow-2/pull/59) targets main with the following features:
 
 - **PF-16 inspections:** lease move-in/out condition items, retained private evidence, save/submit/review/reopen, immutable comparison and settlement source navigation. Observations never create charges or deduct deposits. Management only. [Contract](lease-inspections.md).
 - **PF-17 agreement preparation:** versioned unsigned document packages, exact intended recorded signers, source-change detection, preparation approval/requested changes/reopen/cancel and retained originals/history. Management approval is not an electronic signature. [Contract](lease-agreements.md).

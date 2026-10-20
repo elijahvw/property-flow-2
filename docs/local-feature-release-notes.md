@@ -1,6 +1,6 @@
 # Feature release notes — current checkpoint October 20, 2026
 
-Current release: PRs54–57 are merged in main `1945049`; deployment run 39212763617 and subsequent Stop run 39214885405 succeeded October 19. This PR packages PF-16/17/19 with additive migrations038→039→040 for user review/merge/deployment. No cloud change is made during preparation. See [platform status](mvp-status.md) for the complete current position. Dated sections below preserve historical validation and rollout statements.
+Current release: PRs54–57 are merged in main `1945049`; deployment run 39212763617 and subsequent Stop run 39214885405 succeeded October 19. This [PR59](https://github.com/elijahvw/property-flow-2/pull/59) packages PF-16/17/19 with additive migrations038→039→040 for user review/merge/deployment. No cloud change is made during preparation. See [platform status](mvp-status.md) for the complete current position. Dated sections below preserve historical validation and rollout statements.
 
 PRs [#44](https://github.com/elijahvw/property-flow-2/pull/44), [#45](https://github.com/elijahvw/property-flow-2/pull/45) and [#46](https://github.com/elijahvw/property-flow-2/pull/46) are confirmed merged. The live UI exposes document and delegated-work controls; scanner activation and full real-role acceptance remain unverified. The October 18 release is prepared locally; cloud rollout/migrations and full real-account acceptance remain pending. Sender-domain/DKIM and controlled inbox delivery are verified. Merge, deployment and acceptance remain separate from validation.
 
