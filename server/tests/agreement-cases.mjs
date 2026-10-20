@@ -394,6 +394,70 @@ export async function agreementCases(t, admin, db, call, app) {
     },
   );
   await t.test(
+    "recorded primary and additional leaseholders keep signer identity across same-company role changes",
+    async () => {
+      const original = await detail(id);
+      assert.equal(original.sourceChanged, false);
+      for (const userId of ["agreement-tenant", "agreement-second"]) {
+        try {
+          for (const role of ["staff", "manager", "owner"]) {
+            await admin.query(
+              'UPDATE "CompanyMembership" SET role=$1 WHERE "userId"=$2',
+              [role, userId],
+            );
+            const c = await ok("manager", "GET", `${base}/context`),
+              d = await detail(id);
+            assert.ok(
+              c.leaseholders.some((p) => p.userId === userId),
+              `${userId} remains a signer as ${role}`,
+            );
+            assert.equal(d.sourceChanged, false);
+            assert.equal(d.blockers.length, 0);
+            assert.deepEqual(
+              d.agreement.source.parties,
+              original.agreement.source.parties,
+            );
+          }
+          await admin.query(
+            'UPDATE "CompanyMembership" SET role=\'resident\' WHERE "userId"=$1',
+            [userId],
+          );
+          for (const update of [
+            'UPDATE "CompanyMembership" SET status=\'disabled\' WHERE "userId"=$1',
+            'UPDATE "CompanyMembership" SET "companyId"=\'b\' WHERE "userId"=$1',
+            "UPDATE \"User\" SET status='disabled' WHERE id=$1",
+          ]) {
+            await admin.query(update, [userId]);
+            const c = await ok("manager", "GET", `${base}/context`),
+              d = await detail(id);
+            assert.ok(!c.leaseholders.some((p) => p.userId === userId));
+            assert.ok(d.blockers.some((b) => b.includes("leaseholder")));
+            assert.equal(
+              (await call("manager", "POST", base, make())).statusCode,
+              400,
+            );
+            await admin.query(
+              'UPDATE "CompanyMembership" SET status=\'active\',"companyId"=\'a\' WHERE "userId"=$1',
+              [userId],
+            );
+            await admin.query(
+              "UPDATE \"User\" SET status='active' WHERE id=$1",
+              [userId],
+            );
+          }
+        } finally {
+          await admin.query(
+            "UPDATE \"CompanyMembership\" SET role='resident',status='active',\"companyId\"='a' WHERE \"userId\"=$1",
+            [userId],
+          );
+          await admin.query("UPDATE \"User\" SET status='active' WHERE id=$1", [
+            userId,
+          ]);
+        }
+      }
+    },
+  );
+  await t.test(
     "lease and replacement-document changes invalidate reviews without replacing old originals",
     async () => {
       await admin.query(

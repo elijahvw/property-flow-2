@@ -32,7 +32,7 @@ Jira updates are disabled. Repository docs and PR evidence are the current track
 
 ## Release-checkout validation
 
-Both production builds passed, along with 121 maintenance/notification,30 leasing and 177 finance disposable PostgreSQL/API/browser checks (328 total), the full 230 UI suite,85 server units (5 other database suites skipped here),28 client units and 88 operations checks. Documentation relative links, diff and Start/Stop inventory guards passed. These results support PR review, not real-account acceptance or a cloud rollout claim. Hosted exact-head CI is checked separately after publication.
+Both production builds passed, along with 122 maintenance/notification,30 leasing and 177 finance disposable PostgreSQL/API/browser checks (329 total), the full 230 UI suite,85 server units (5 other database suites skipped here),28 client units and 88 operations checks. Documentation relative links, diff and Start/Stop inventory guards passed. These results support PR review, not real-account acceptance or a cloud rollout claim. Hosted exact-head CI is checked separately after publication.
 
 ## Historical implementation checkpoints
 

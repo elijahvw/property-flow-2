@@ -174,7 +174,6 @@ async function context(tx: Tx, companyId: string, leaseId: string) {
     user.status === "active" &&
     (!user.membership ||
       (user.membership.companyId === companyId &&
-        user.membership.role === "resident" &&
         user.membership.status === "active"));
   const leaseholders: {
     id: string;
