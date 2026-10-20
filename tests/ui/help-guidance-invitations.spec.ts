@@ -40,9 +40,10 @@ test('public Help Center supports search, connected guides and phone layouts wit
 test('Help search puts the named task first while keeping related guides and clearing filters',async({page})=>{
  await setup(page,{signedIn:false});await page.goto('/help');
  const search=page.getByLabel('Find a guide'), guides=page.locator('.help-directory').getByRole('link');
- await expect(guides).toHaveCount(16);
+ await expect(guides).toHaveCount(17);
  const original=await guides.allTextContents();
  for(const [query,title] of [
+  ['notifications','Read your in-app notifications'],
   ['  RENT  ','Post rent and record a lease payment'],
   ['rent   payment','Post rent and record a lease payment'],
   ['invitation','Send and accept an invitation'],
@@ -55,7 +56,7 @@ test('Help search puts the named task first while keeping related guides and cle
  }
  await search.fill('rent');await expect(guides).toContainText(['Post rent and record a lease payment','Track security deposits']);
  await search.fill('no-such-task-xyz');await expect(page.getByText('No guides match this search. Try a broader task name.')).toBeVisible();
- await search.fill('');await expect(guides).toHaveText(original);await expect(page.getByRole('status').filter({hasText:'16 guides available'})).toBeVisible();
+ await search.fill('');await expect(guides).toHaveText(original);await expect(page.getByRole('status').filter({hasText:'17 guides available'})).toBeVisible();
 });
 test('invitation history paginates and interrupted email retries preserve the exact action',async({page})=>{
  const state=await setup(page);await page.goto('/company/members');await page.getByRole('button',{name:'Next invitations'}).click();await expect(page.getByText('teammate2@test.invalid',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Send or replace'}).click();state.failDelivery=true;await page.getByRole('button',{name:'Send invitation email',exact:true}).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Response interrupted');state.failDelivery=false;await page.getByRole('button',{name:'Retry invitation email',exact:true}).click();expect(state.delivery).toHaveLength(2);expect(state.delivery[0]).toEqual(state.delivery[1]);await expect(page.getByRole('status').filter({hasText:'Email accepted for sending'})).toBeVisible();expect(state.invitationPage).toContain(2);

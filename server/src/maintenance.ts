@@ -1,3 +1,4 @@
+import { publishNotification, type NotificationPublisher } from "./notification-events.js";
 import { companyDay } from "./reports.js";
 import { createHash } from "node:crypto";
 import type {
@@ -81,6 +82,7 @@ export function registerMaintenance(
   db: PrismaClient,
   authenticate: preValidationHookHandler,
   origin: string,
+  publish: NotificationPublisher = publishNotification,
 ) {
   const auth = { preValidation: authenticate };
   const mutate = (request: FastifyRequest) => {
@@ -296,6 +298,7 @@ export function registerMaintenance(
             priority,
             source: resident ? "resident" : "management",
           });
+          await publish(tx, { companyId, actorId: request.principal!.id, kind: "maintenance.created", requestId: row.id, eventKey: row.id });
           return row;
         });
       },
@@ -529,6 +532,7 @@ export function registerMaintenance(
         throw new AccessError(409, "NO_RESIDENT_REQUESTER", "This is a management-created request. Record an internal note instead.");
       const row = await tx.maintenanceUpdate.create({ data: { companyId, requestId: id, content, visibility, createdById: request.principal!.id, ...key }, select: updateSelect });
       await audit(tx, request, companyId, id, "maintenance.update.recorded", { updateId: row.id, visibility });
+      if (visibility === "resident") await publish(tx, { companyId, actorId: request.principal!.id, kind: "maintenance.update", requestId: id, eventKey: row.id });
       const { creator, ...safe } = row;
       return { ...safe, author: creator.name || "Recorded team member" };
     });
@@ -645,6 +649,7 @@ export function registerMaintenance(
             ...(unitLabels ? { unitLabels } : {}),
           },
         );
+        if (previous.status !== status) await publish(tx, { companyId, actorId: request.principal!.id, kind: "maintenance.status", requestId: id, eventKey: `${id}:${expectedVersion + 1}` });
         return tx.maintenanceRequest.findFirstOrThrow({
           where: { id, companyId },
           select,

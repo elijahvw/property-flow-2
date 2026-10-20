@@ -1,5 +1,7 @@
 # Development release performance
 
+Current release checkpoint — October 20: main `1945049` includes merged PRs54–57. [Deploy run 39212763617](https://github.com/elijahvw/property-flow-2/actions/runs/39212763617) passed backend/frontend rollout, migration restore-point gate, readiness/public/auth checks and backend telemetry. [Stop run 39214885405](https://github.com/elijahvw/property-flow-2/actions/runs/39214885405) subsequently succeeded. This PR adds038/039/040 without cloud changes; the user retains review, merge, Start and deployment. Dated performance/preview evidence below is historical; prior preview URLs are not assumed running. [Platform status](mvp-status.md).
+
 Observed deploy #145 (run 38349290930): backend build/push about 69 seconds, ECS stabilization about 187 seconds, frontend build/upload/invalidation about 28 seconds, plus infrastructure and runner setup. This is a historical measured run, not a promise for later releases.
 
 ## Automatic component selection

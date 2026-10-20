@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 # Connected tenant workspace and shared form polish
 
 Development increment, 2026-10-15. Branch: `codex/tenant-workspace`, based on main `e94fe86`. Implements PF-01 plus the user's requested shared UI/date improvements. PF-02 individual lease pages and PF-03 offline contacts remain subsequent work. No schema, hosting, identity-provider or external-provider changes are required.

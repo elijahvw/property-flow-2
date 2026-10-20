@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 # Maintenance paid expense sources
 
 Local continuation of the core overhaul, October 16, 2026. No merge or cloud deployment is authorized.

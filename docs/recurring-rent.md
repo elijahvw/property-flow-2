@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 # Recurring rent and payment history
 
 Development increment on `codex/recurring-rent-billing`, based on merged/deployed main `842c8b04b35e62174a37ad4a25e295758afcb4c9` (PR25). Do not merge or deploy without the user's approval; the user runs deployments.
@@ -36,7 +38,7 @@ No automatic fees, notices, messages, deposits, payment processing, provider con
 
 ## Validation and acceptance
 
-Local checks: client/server builds, 51 safe Node checks (five DB suites run separately), 88 browser fixtures (87 in the initial full run plus the added one-month review regression, with all seven new workflow cases rechecked locally) with mobile/desktop inspection, disposable PostgreSQL finance/reporting/rent/schedules/payment-history integration54, existing leasing13, users21, maintenance9 and access40. The financial suite includes a real browser → Fastify → PostgreSQL committed-response-loss activation/reload/replay. Current exact totals and PR CI are recorded in the PR description. These checks do not claim authenticated dev acceptance.
+Local checks: client/server builds, 51 safe Node checks (five DB suites run separately), 88 browser fixtures (87 in the initial full run plus the added one-month review regression, with all seven new workflow cases rechecked locally) with mobile/desktop inspection, disposable PostgreSQL finance/reporting/rent/schedules/payment-history integration54, existing leasing 13, users21, maintenance9 and access40. The financial suite includes a real browser → Fastify → PostgreSQL committed-response-loss activation/reload/replay. Current exact totals and PR CI are recorded in the PR description. These checks do not claim authenticated dev acceptance.
 
 After approved merge and user-run dev deployment:
 

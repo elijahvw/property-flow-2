@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 # Property records and reports — development quality increment
 
 Property Flow remains in development. The intended first customer is an owner managing their own portfolio through their company, with managers supporting that owner. This change adds real record fields and reports without inventing data or claiming a complete accounting system.
@@ -29,7 +31,7 @@ These reports do not calculate charges, arrears/balances owed, deposits, tax lia
 
 Automated checks cover full-filter totals beyond 50 rows and 32-bit sums, void inclusion/exclusion, date boundaries, empty results, tenant/role isolation, current revocation, timezone boundaries, inclusive lease dates, report limits without silent truncation, exact/safe CSV exports, client snapshot/export consistency and company-change clearing. Property creation covers concurrent replay, changed-payload conflict, committed response loss in a real browser, atomic audit rollback, immutable runtime identity and stale concurrent edits. Unit tests cover details, partial preservation, clearing and older fingerprints.
 
-Local validation passed: both builds; 63 browser fixtures; 46 safe Node checks (34 server/12 client, five isolated DB suites skipped there); isolated finance/report/property14, leasing13, maintenance9, identity/admin21 and authorization/migration40 checks. The final identity-grant migration was rechecked in the property/report, leasing and full authorization harnesses. Desktop/mobile report screenshots were visually inspected.
+Local validation passed: both builds; 63 browser fixtures; 46 safe Node checks (34 server/12 client, five isolated DB suites skipped there); isolated finance/report/property14, leasing 13, maintenance9, identity/admin21 and authorization/migration40 checks. The final identity-grant migration was rechecked in the property/report, leasing and full authorization harnesses. Desktop/mobile report screenshots were visually inspected.
 
 Local validation commands:
 

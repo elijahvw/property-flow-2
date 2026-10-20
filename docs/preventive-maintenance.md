@@ -1,12 +1,14 @@
 # Preventive maintenance — PF-14
 
+PR55 schedules and PR56 calendar are merged/deployed in main `1945049`. Complete real-account acceptance remains pending; see [current status](mvp-status.md).
+
 Management can create recurring maintenance schedules for a property and optional active unit, review the next occurrence, create its ordinary maintenance request, or skip it with a required reason. A request links back to the schedule and the schedule retains its generated requests and skipped dates. Assignment, execution, approval/reopen, private documents, vendor contacts and paid costs use the existing request workflow.
 
 ## Calendar contract
 
 Weekly, monthly, quarterly and yearly intervals use date-only calendar arithmetic. The company timezone is captured on creation and remains explicit even if company settings change. First and optional inclusive last due dates anchor recurrence. Month repeats clamp to the last day of shorter months and recover the original day afterward; leap-day yearly schedules recover February 29 in leap years. Next dates advance from the reviewed occurrence, never from today. There is no silent catch-up or automatic job generation. Management may deliberately create upcoming work early.
 
-Active, paused, finished, due-now, overdue and upcoming views filter before pagination/counts. Due now includes today; overdue is strictly before the plan's local today. Paused plans retain their next date; finished plans have no next date. Edit instructions/category/priority and pause/resume prospectively; existing requests retain their snapshot. To change cadence, dates or location, pause and replace the schedule explicitly. Creating a request advances the schedule, not the request's work status. No external calendar, notifications, service dispatch or payment occurs.
+Active, paused, finished, due-now, overdue and upcoming views filter before pagination/counts. Due now includes today; overdue is strictly before the plan's local today. Paused plans retain their next date; finished plans have no next date. Edit instructions/category/priority and pause/resume prospectively; existing requests retain their snapshot. To change cadence, dates or location, pause and replace the schedule explicitly. Creating a request advances the schedule, not the request's work status. No external calendar, automatic generation, service dispatch or payment occurs. This PF-19 PR additionally publishes an in-app management notice when a reviewed occurrence creates a request; it sends no external message.
 
 ## Integrity and access
 

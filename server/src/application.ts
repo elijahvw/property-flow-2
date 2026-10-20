@@ -1,3 +1,5 @@
+import { registerNotifications } from "./notifications.js";
+import type { NotificationPublisher } from "./notification-events.js";
 import { registerWorkspaceGuide } from "./workspace-guide.js";
 import { registerAccountPasswords } from "./account-passwords.js";
 import { registerInvitations } from "./invitations.js";
@@ -52,6 +54,8 @@ import { registerPreventive } from "./preventive.js";
 import { registerVendors } from "./vendors.js";
 import { registerMaintenance } from "./maintenance.js";
 import { registerPrivateDocuments } from "./private-documents.js";
+import { registerInspections } from "./inspections.js";
+import { registerAgreements } from "./agreements.js";
 import { registerWorkOrders } from "./work-orders.js";
 import type { DocumentScanner } from "./document-scanner.js";
 import { registerMaintenanceCosts } from "./maintenance-costs.js";
@@ -238,16 +242,19 @@ export function registerApplication(
   authenticate: preValidationHookHandler,
   origin: string,
   identityProvider?: IdentityProvider,
-  options: { documentScanner?: DocumentScanner; invitationMailer?: InvitationMailer } = {},
+  options: { documentScanner?: DocumentScanner; invitationMailer?: InvitationMailer; notificationPublisher?: NotificationPublisher } = {},
 ) {
+  registerNotifications(server, db, authenticate, origin);
   registerWorkspaceGuide(server, db, authenticate, origin);
   registerInvitations(server, db, authenticate, origin, identityProvider, options.invitationMailer);
   registerPrivateDocuments(server, db, authenticate, origin, options.documentScanner);
-  registerWorkOrders(server, db, authenticate, origin);
+  registerInspections(server, db, authenticate, origin, options.notificationPublisher);
+  registerAgreements(server, db, authenticate, origin, options.notificationPublisher);
+  registerWorkOrders(server, db, authenticate, origin, options.notificationPublisher);
   registerAccountPasswords(server, db, authenticate, origin, identityProvider);
-  registerMaintenance(server, db, authenticate, origin);
+  registerMaintenance(server, db, authenticate, origin, options.notificationPublisher);
   registerVendors(server, db, authenticate, origin);
-  registerPreventive(server, db, authenticate, origin);
+  registerPreventive(server, db, authenticate, origin, options.notificationPublisher);
   registerWorkCalendar(server, db, authenticate);
   registerDocumentLibrary(server, db, authenticate);
   registerMaintenanceCosts(server, db, authenticate, origin);

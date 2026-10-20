@@ -1,3 +1,4 @@
+import { notificationContext } from "../notification-context";
 import { documentLibraryBack, documentLibraryContext } from "../document-context";
 import { LeaseProration, LeaseTransition } from "../components/LeaseLifecycle";
 import { LeaseTermChanges } from "../components/LeaseTermChanges";
@@ -16,6 +17,9 @@ import { formatDate } from "../dates";
 import { LeaseTerms, LeaseRenewal, type Lease } from "./Leasing";
 import { LeaseHousehold } from "../components/LeaseHousehold";
 import { PrivateDocuments } from "../components/PrivateDocuments";
+import { LeaseInspections, InspectionSettlementContext } from "../components/LeaseInspections";
+import { LeaseAgreements } from "../components/LeaseAgreements";
+import { agreementContext } from "../agreement-context";
 import { LeaseInvitations } from "../components/LeaseInvitations";
 import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "../components/Form";
@@ -51,6 +55,8 @@ function LeaseWorkspace({ id }: { id: string }) {
   const section = [
     "overview",
     "documents",
+    "inspections",
+    "agreements",
     "household",
     "invitations",
     "renewal",
@@ -97,10 +103,12 @@ function LeaseWorkspace({ id }: { id: string }) {
     setDraftLease((previous) => activate ? { ...(previous || lease), status: "active" } : previous || lease);
     setEditing(true);
   };
-  const tab = (value: string) => setParams({ ...context, ...documentLibraryContext(params), section: value });
+  const tab = (value: string) => setParams({ ...context, ...documentLibraryContext(params), ...agreementContext(params), ...notificationContext(params), ...(params.get("inspectionId")?{inspectionId:params.get("inspectionId")!}:{}), section: value });
   const sections = [
           ["overview", "Overview"],
           ["documents", "Documents"],
+          ["inspections", "Inspections"],
+          ["agreements", "Agreements"],
           ["terms", "Terms & changes"],
           ...(can("finance.manage") ? [["proration", "Partial rent"]] : []),
           ["household", "Leaseholders & occupants"],
@@ -404,10 +412,13 @@ function LeaseWorkspace({ id }: { id: string }) {
       {can("finance.manage") &&
         (section === "settlement" || visited.includes("settlement")) && (
           <div hidden={section !== "settlement"}>
+            {section==="settlement"&&params.get("inspectionId")&&<InspectionSettlementContext leaseId={id} inspectionId={params.get("inspectionId")!}/>}
             <LeaseSettlement leaseId={id} />
           </div>
         )}
       {section === "documents" && <PrivateDocuments source="leases" sourceId={id} />}
+      {(section === "inspections" || visited.includes("inspections")) && <div hidden={section !== "inspections"}><LeaseInspections leaseId={id}/></div>}
+      {(section === "agreements" || visited.includes("agreements")) && <div hidden={section !== "agreements"}><LeaseAgreements leaseId={id}/></div>}
       <EditorDialog
         open={editing}
         title="Review lease terms"

@@ -54,6 +54,11 @@ model Company {
 }
 
 model User {
+  notificationEvents NotificationEvent[]
+  inboxNotifications InboxNotification[]
+  notificationActions NotificationAction[]
+  agreementRevisions AgreementRevision[]
+  inspectionRevisions InspectionRevision[]
   preventiveActions PreventiveAction[]
   vendorActions VendorAction[]
   guideState Json?
@@ -215,6 +220,7 @@ model AuditEvent {
 }
 
 model Property {
+  notificationEvents NotificationEvent[]
   preventivePlans PreventivePlan[]
   staffAccess StaffPropertyAccess[]
   propertyType String?
@@ -270,6 +276,7 @@ model ResidentPropertyAssignment {
 
 // Partial calendar_request_targets index is managed by migration037 (unresolved dated requests).
 model MaintenanceRequest {
+  notificationEvents NotificationEvent[]
   preventiveOccurrence PreventiveOccurrence?
   vendorId String?
   vendor Vendor? @relation(fields:[vendorId, companyId], references:[id, companyId], onDelete:Restrict, onUpdate:Restrict, map:"maintenance_vendor_scope")
@@ -463,6 +470,9 @@ model ResidentContact {
 }
 
 model Lease {
+  notificationEvents NotificationEvent[]
+  agreements LeaseAgreement[]
+  inspections LeaseInspection[]
   documents PrivateDocument[]
   @@unique([id, companyId])
  prorations LeaseProration[]
@@ -1013,6 +1023,9 @@ model PrivateDocument {
   @@index([companyId, leaseId, requestId])
 }
 model DocumentVersion {
+  agreementFiles AgreementFile[]
+  inspectionEvidence InspectionEvidence[]
+  @@unique([id,companyId])
   creator User @relation(fields:[createdById],references:[id],onDelete:Restrict,onUpdate:Restrict)
   id String @id @default(cuid())
   companyId String
@@ -1033,6 +1046,109 @@ model DocumentVersion {
   @@unique([documentId,number])
   @@unique([companyId,createdById,submissionKey])
   @@index([companyId,documentId])
+}
+
+model LeaseInspection {
+  notificationEvents NotificationEvent[]
+  id String @id @default(cuid())
+  companyId String
+  leaseId String
+  kind String
+  inspectedOn DateTime @db.Date
+  status String @default("in_progress")
+  version Int @default(1)
+  items Json
+  baselineRevisionId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lease Lease @relation(fields:[leaseId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+  revisions InspectionRevision[] @relation("InspectionHistory")
+  baseline InspectionRevision? @relation("InspectionBaseline",fields:[baselineRevisionId,leaseId,companyId],references:[id,leaseId,companyId],onDelete:Restrict,onUpdate:Restrict)
+  @@unique([id,leaseId,companyId])
+  @@index([companyId,leaseId,createdAt,id])
+}
+
+model LeaseAgreement {
+  notificationEvents NotificationEvent[]
+  id String @id @default(cuid())
+  companyId String
+  leaseId String
+  title String
+  kind String
+  status String @default("preparing")
+  version Int @default(1)
+  package Json
+  source Json
+  sourceHash String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lease Lease @relation(fields:[leaseId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+  revisions AgreementRevision[]
+  @@unique([id,leaseId,companyId])
+  @@index([companyId,leaseId,createdAt,id])
+}
+model AgreementRevision {
+  id String @id @default(cuid())
+  companyId String
+  leaseId String
+  agreementId String
+  version Int
+  action String
+  reason String?
+  snapshot Json
+  actorId String
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  agreement LeaseAgreement @relation(fields:[agreementId,leaseId,companyId],references:[id,leaseId,companyId],onDelete:Restrict,onUpdate:Restrict)
+  actor User @relation(fields:[actorId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  files AgreementFile[]
+  @@unique([id,companyId])
+  @@unique([agreementId,version])
+  @@unique([companyId,actorId,submissionKey])
+  @@index([companyId,agreementId,version])
+}
+model AgreementFile {
+  revisionId String
+  companyId String
+  versionId String
+  revision AgreementRevision @relation(fields:[revisionId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+  original DocumentVersion @relation(fields:[versionId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+  @@id([revisionId,versionId])
+  @@index([companyId,versionId])
+}
+model InspectionRevision {
+  actor User @relation(fields:[actorId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  id String @id @default(cuid())
+  companyId String
+  leaseId String
+  inspectionId String
+  version Int
+  action String
+  reason String?
+  snapshot Json
+  actorId String
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  inspection LeaseInspection @relation("InspectionHistory",fields:[inspectionId,leaseId,companyId],references:[id,leaseId,companyId],onDelete:Restrict,onUpdate:Restrict)
+  comparisons LeaseInspection[] @relation("InspectionBaseline")
+  evidence InspectionEvidence[]
+  @@unique([id,companyId])
+  @@unique([id,leaseId,companyId])
+  @@unique([inspectionId,version])
+  @@unique([companyId,actorId,submissionKey])
+  @@index([companyId,inspectionId,version])
+}
+model InspectionEvidence {
+  revisionId String
+  companyId String
+  itemKey String
+  versionId String
+  revision InspectionRevision @relation(fields:[revisionId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+  original DocumentVersion @relation(fields:[versionId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+  @@id([revisionId,itemKey,versionId])
+  @@index([companyId,versionId])
 }
 
 model WorkOrderAction {
@@ -1110,4 +1226,61 @@ model PreventiveAction {
  actor User @relation(fields:[actorId],references:[id],onDelete:Restrict,onUpdate:Restrict)
  @@unique([companyId,actorId,submissionKey])
  @@index([companyId,planId,createdAt,id])
+}
+
+
+model NotificationEvent {
+ id String @id @default(cuid())
+ companyId String
+ eventKey String
+ kind String
+ actorId String
+ propertyId String
+ sourceType String
+ requestId String?
+ leaseId String?
+ inspectionId String?
+ agreementId String?
+ createdAt DateTime @default(now())
+ actor User @relation(fields:[actorId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+ property Property @relation(fields:[propertyId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+ request MaintenanceRequest? @relation(fields:[requestId,propertyId,companyId],references:[id,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ lease Lease? @relation(fields:[leaseId,propertyId,companyId],references:[id,propertyId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ inspection LeaseInspection? @relation(fields:[inspectionId,leaseId,companyId],references:[id,leaseId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ agreement LeaseAgreement? @relation(fields:[agreementId,leaseId,companyId],references:[id,leaseId,companyId],onDelete:Restrict,onUpdate:Restrict)
+ deliveries InboxNotification[]
+ @@unique([id,companyId])
+ @@unique([companyId,eventKey])
+}
+model InboxNotification {
+ id String @id @default(cuid())
+ companyId String
+ eventId String
+ userId String
+ audience String
+ readAt DateTime?
+ version Int @default(1)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ event NotificationEvent @relation(fields:[eventId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+ user User @relation(fields:[userId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+ actions NotificationAction[]
+ @@unique([eventId,userId])
+ @@unique([id,companyId,userId])
+ @@index([companyId,userId,createdAt,id])
+}
+model NotificationAction {
+ id String @id @default(cuid())
+ companyId String
+ notificationId String
+ userId String
+ action String
+ submissionKey String
+ submissionHash String
+ resultVersion Int
+ changed Boolean
+ createdAt DateTime @default(now())
+ notification InboxNotification @relation(fields:[notificationId,companyId,userId],references:[id,companyId,userId],onDelete:Restrict,onUpdate:Restrict)
+ user User @relation(fields:[userId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+ @@unique([companyId,userId,submissionKey])
 }

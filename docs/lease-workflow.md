@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 > October 17 account policy: new tenants and every leaseholder/occupant require a precreated or existing Auth0 account, including people who have not signed in. Portal access still needs the existing membership/property/role approvals. Earlier references below to recording new participants without an account are superseded. Historical records remain intact. See [resident accounts](resident-contacts.md).
 
 # Connected lease, household and invitation workflow
@@ -49,3 +51,8 @@ Use the existing production builds, full UI suite and disposable PostgreSQL fina
 ## Existing tenant on an existing lease — October 17
 
 Company owners can open an existing lease, choose **Leaseholders & occupants → Add existing tenant**, select an active tenant from the same company's directory, and choose leaseholder or occupant. The existing tenant/account identities are reused. An earlier property assignment is not required: the final owner-authorized transaction connects an existing active resident account to that property and records its assignment audit together with the household record. Unassigned accounts still require normal portal activation. Disabled/transferred accounts remain ineligible. Leaseholder approval continues to gate shared finances; occupants receive no financial authority. Source rent/deposit records and earlier household history are retained. Failed audits roll back the household addition and any new property grant; retry reuses the same committed record.
+
+
+## October 20 feature batch
+
+Lease sections now include [Inspections](lease-inspections.md) and [unsigned Agreements](lease-agreements.md). Exact private document versions, comparison/review history, current source authority and bounded source/return context apply. [Personal notifications](in-app-notifications.md) connect review events to these sections. None signs a lease, grants household access or moves money. Review/merge/deployment/real-account acceptance remain pending for this batch.

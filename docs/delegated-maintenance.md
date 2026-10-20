@@ -1,6 +1,6 @@
-# Delegated maintenance — local increment (PF-12/PF-13)
+# Delegated maintenance — PF-12/PF-13
 
-Foundation merged in [PR #46](https://github.com/elijahvw/property-flow-2/pull/46). Deployment and real-role acceptance remain separately evidenced.
+Foundation merged/deployed in PR46 and retained in main `1945049`. Complete staff/current-assignment/property/revocation acceptance remains open. This PR adds personal in-app assignment/reopen/approval and management-review notices without widening execution authority. [Current status](mvp-status.md).
 
 October 18, 2026: foundation merged; the consolidated staff-access editor and focused due/assignee filters are local refinements. No new deployment, live provider change or user acceptance. Builds on the existing migration029 staff property scope; migration032 adds default-off execution and immutable work events.
 

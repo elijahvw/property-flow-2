@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 # Rent operations
 
 This release connects lease terms to posted rent, manually recorded receipts, durable allocations and a resident ledger. It remains a dev release. No payment processor, email delivery, shared database mutation or deployment is part of implementation.

@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 # CI cleanup without reducing test coverage
 
 Development change based on merged PR27/main `ada0fb5`. The user merges and deploys manually; this change does not alter deployment, app behavior, shared databases, accounts or Auth0. It needs its own PR approval.
@@ -16,6 +18,6 @@ Workflow concurrency is grouped by workflow and PR number (ref fallback), with c
 
 ## Verification
 
-Local validation passed: clean workspace `npm ci`, both builds, 51 safe Node checks (5 database suites skipped there and run separately), 24 Python operations checks, all 96 browser fixtures, and disposable PostgreSQL/API/browser suites: finance61, leasing19, users22, maintenance9 and access40. All eight test commands are identical to the baseline; no test source/config files changed. Inspect the exact-head remote CI and all PR comments/reviews before asking for approval. No hosted-run speedup is promised until measured; package downloads, runner startup and CPU vary. The earlier full-browser download took only part of the 20 seconds of setup, so this change should save overhead rather than make CI instantaneous.
+Local validation passed: clean workspace `npm ci`, both builds, 51 safe Node checks (5 database suites skipped there and run separately), 24 Python operations checks, all 96 browser fixtures, and disposable PostgreSQL/API/browser suites: finance 61, leasing 19, users22, maintenance9 and access40. All eight test commands are identical to the baseline; no test source/config files changed. Inspect the exact-head remote CI and all PR comments/reviews before asking for approval. No hosted-run speedup is promised until measured; package downloads, runner startup and CPU vary. The earlier full-browser download took only part of the 20 seconds of setup, so this change should save overhead rather than make CI instantaneous.
 
 Official references: [npm ci](https://docs.npmjs.com/cli/v11/commands/npm-ci/), [Playwright headless-shell installation](https://playwright.dev/docs/browsers#chromium-headless-shell), [GitHub concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).

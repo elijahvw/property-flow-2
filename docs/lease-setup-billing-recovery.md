@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 # Lease setup, billing recovery and connected people navigation
 
 Development increment, 2026-10-15. Branch `codex/lease-setup-billing-recovery`, based on deployed main `70f6d55` (PR26). No deployment, shared database, account or identity-provider changes are performed by this implementation. Merge requires user approval; deployment is user-run. Domain setup is explicitly on hold.

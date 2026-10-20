@@ -1,10 +1,11 @@
+import { publishNotification, type NotificationPublisher } from "./notification-events.js";
 import type { FastifyInstance, preValidationHookHandler, FastifyRequest } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
 import { AccessError, permissions } from './access.js';
 import { assignmentId, opaqueUserId } from './application.js';
 import { audit, boundedText, choice, conflict, input, mutation, page, sameSubmission, scoped, submission, version, type Tx } from './operational.js';
 const safeSelect={id:true,propertyId:true,title:true,description:true,priority:true,category:true,targetOn:true,status:true,version:true,executionStatus:true,property:{select:{name:true}},unit:{select:{label:true}}} as const;
-export function registerWorkOrders(server:FastifyInstance,db:PrismaClient,authenticate:preValidationHookHandler,origin:string) {
+export function registerWorkOrders(server:FastifyInstance,db:PrismaClient,authenticate:preValidationHookHandler,origin:string,publish:NotificationPublisher=publishNotification) {
   const auth={preValidation:authenticate}, denied=()=>new AccessError(404,'NOT_FOUND','Assigned work not found.');
   const management=(request:FastifyRequest)=>permissions(request.principal!).includes('maintenance.manage');
   const authority=(request:FastifyRequest)=>management(request)?'maintenance.manage' as const:'maintenance.execute' as const;
@@ -78,6 +79,12 @@ export function registerWorkOrders(server:FastifyInstance,db:PrismaClient,authen
       const event=await tx.workOrderAction.create({data:{companyId,requestId:id,actorId:request.principal!.id,action,note,...key}});
       await audit(tx,request,companyId,id,'maintenance.work.changed',{action,eventId:event.id,from:row.executionStatus,to:executionStatus,previousAssigneeId:row.assigneeId,assigneeId:action==='assign'?assigneeId??null:row.assigneeId});
       if(status!==row.status)await audit(tx,request,companyId,id,'maintenance.status.changed',{from:row.status,to:status});
+      const eventInput={companyId,actorId:request.principal!.id,requestId:id,eventKey:event.id};
+      if(action==='assign'&&assigneeId)await publish(tx,{...eventInput,kind:'work.assigned'});
+      if(action==='reopen')await publish(tx,{...eventInput,kind:'work.reopened'});
+      if(action==='approve')await publish(tx,{...eventInput,kind:'work.approved'});
+      if(action==='submit')await publish(tx,{...eventInput,kind:'work.review'});
+      if(status!==row.status)await publish(tx,{...eventInput,kind:'maintenance.status'});
       return {version:row.version+1};
     });
   });

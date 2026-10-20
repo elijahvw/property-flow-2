@@ -1,3 +1,4 @@
+import { NotificationBell, NotificationReturnLink } from "./components/NotificationNavigation";
 import { ContextHelp } from "./components/ContextHelp";
 import { WorkspaceGuide } from "./components/WorkspaceGuide";
 import { recordBrowserEvent } from "./browser-telemetry";
@@ -20,6 +21,7 @@ import { NavigationIcon } from "./components/NavigationIcon";
 import { EmailVerification } from "./components/EmailVerification";
 import "./App.css";
 
+const Notifications = lazy(() => import("./pages/Notifications").then(module=>({default:module.Notifications})));
 const Help = lazy(() => import("./pages/Help").then(module=>({default:module.Help})));
 const Companies = lazy(() => import("./pages/Workspace").then(module => ({ default: module.Companies })));
 const CompanyDetail = lazy(() => import("./pages/Workspace").then(module => ({ default: module.CompanyDetail })));
@@ -147,7 +149,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                 r.path.startsWith("/platform/") ||
                 /members|settings/.test(r.path)
                   ? "Administration"
-                  : ["/account","/help"].includes(r.path)
+                  : r.section === "Account"
                     ? "Account"
                     : /finances|reports|rent|deposits/.test(r.path)
                       ? "Money"
@@ -163,6 +165,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                   <NavLink
                     key={r.path}
                     to={r.path}
+                    end={r.path === "/account"}
                     className={({isActive})=>isActive||(r.path==="/company/maintenance"&&(location.pathname.startsWith("/company/vendors")||location.pathname.startsWith("/company/preventive")||location.pathname==="/company/work-calendar"))||(r.path==="/company/residents"&&location.pathname.startsWith("/company/tenants/"))?"active":undefined}
                     onClick={() => setMenuOpen(false)}
                   >
@@ -204,6 +207,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             <span>{route?.title || route?.section || "Workspace"}</span>
           </div>
           {data?.permissions.includes("property.read") && <PropertySearch />}
+          {data?.permissions.includes("notification.read") && <NotificationBell/>}
           <ContextHelp/>
           <span className="badge">Development</span>
         </header>
@@ -213,6 +217,7 @@ function Shell({ children }: { children: React.ReactNode }) {
               {error}
             </p>
           )}
+          <NotificationReturnLink/>
           <EmailVerification />
           <Suspense fallback={<section className="status-panel" role="status">Loading workspace…</section>}>{children}</Suspense>
         </main>
@@ -293,6 +298,7 @@ function Pages() {
     "/resident/deposits": <Deposits resident />,
     "/resident/rent": <Rent resident />,
     "/company/reports": <Reports />,
+    "/account/notifications": <Notifications/>,
     "/account": <Account />,
     "/help": <Help/>,
   };

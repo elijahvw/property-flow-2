@@ -1,3 +1,4 @@
+import { publishNotification, type NotificationPublisher } from "./notification-events.js";
 import type {
   FastifyInstance,
   FastifyRequest,
@@ -79,6 +80,7 @@ export function registerPreventive(
   db: PrismaClient,
   authenticate: preValidationHookHandler,
   origin: string,
+  publish: NotificationPublisher = publishNotification,
 ) {
   const auth = { preValidation: authenticate };
   const run = <T>(
@@ -488,6 +490,7 @@ export function registerPreventive(
             preventivePlanId: id,
             dueOn: dueOn.toISOString().slice(0, 10),
           });
+        if (request) await publish(tx, { companyId, actorId: r.principal!.id, kind: "maintenance.created", requestId: request.id, eventKey: request.id });
         const occurrence = await tx.preventiveOccurrence.create({
           data: {
             companyId,

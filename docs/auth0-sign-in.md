@@ -1,5 +1,7 @@
 # Auth0 sign-in and account setup
 
+October 20 status: existing Auth0 sign-in/account setup is deployed. Complete staff/resident acceptance and W11 branded password-email setup remain open; no password/setup email or provider change is authorized by this PR. Dated proposed provider settings below remain proposals unless separately evidenced. [Acceptance log](workflow-acceptance-2026-10-18.md).
+
 Prepared locally October 17, 2026. The user chose the existing Auth0-hosted Universal Login features and declined a paid Auth0 custom login domain. These are proposed provider settings; no live setting is applied by the app deployment or by this document.
 
 ## Existing-feature login settings

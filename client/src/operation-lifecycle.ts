@@ -1,4 +1,7 @@
 export type OperationName =
+  | "notification.state"
+  | 'agreement.save' | 'agreement.review'
+  | 'inspection.save' | 'inspection.review'
   | 'preventive.save' | 'preventive.occurrence'
   | 'vendor.save' | 'maintenance.vendor'
   | 'document.upload' | 'document.scan' | 'document.download' | 'document.archive'

@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 # Personal profiles, company details and role clarity
 
 Implemented in the local PF-07 review batch on October 16, 2026. The user confirmed on October 16, 2026 that Staff keeps read-only property access; no broader operational permissions are authorized.
