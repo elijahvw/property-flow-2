@@ -1,3 +1,41 @@
+# Property Flow platform status
+
+Verified October 20, 2026 from current main, GitHub PR/deployment records and local release checks. This is the current status entry point; dated implementation checkpoints below are historical. The [roadmap](product-roadmap.md) tracks scope and the [acceptance log](workflow-acceptance-2026-10-18.md) retains unfinished real-account testing.
+
+## Current release and operating state
+
+Main is `1945049` ([merged PR57](https://github.com/elijahvw/property-flow-2/pull/57)). PRs54–57 are merged: vendor contacts, preventive schedules, maintenance calendar and private document library. [Deploy Dev run 39212763617](https://github.com/elijahvw/property-flow-2/actions/runs/39212763617) successfully rolled out the matching backend/frontend and passed database readiness, public/authentication checks and hosted backend metrics/logs/traces on October 19. The release contains migrations035–037.
+
+[Dev stop run 39214885405](https://github.com/elijahvw/property-flow-2/actions/runs/39214885405) subsequently succeeded on October 19. The user reports the app stopped; it has not been started, deployed or changed in the cloud during this PR preparation. Current AWS resource state and a fresh live health check were not queried. A later Start and complete signed-in acceptance remain separate from the successful deployment/Stop records.
+
+## New batch awaiting review, merge and deployment
+
+- **PF-16 inspections:** lease move-in/out condition items, retained private evidence, save/submit/review/reopen, immutable comparison and settlement source navigation. Observations never create charges or deduct deposits. Management only. [Contract](lease-inspections.md).
+- **PF-17 agreement preparation:** versioned unsigned document packages, exact intended recorded signers, source-change detection, preparation approval/requested changes/reopen/cancel and retained originals/history. Management approval is not an electronic signature. [Contract](lease-agreements.md).
+- **PF-19 in-app notifications:** personal inbox/header unread count, read/type filters, complete authorized totals, read/unread, safe retry and exact source/return links for maintenance, assigned work, inspections and agreement reviews. Current role/property/source access applies to every count/open/replay. No external email/SMS or scheduled reminders. [Contract](in-app-notifications.md).
+
+Apply additive migrations038→039→040 through the existing reviewed backend rollout and deploy the matching client/API. No new service, task, provider or infrastructure configuration is needed. Source events, versions, audit, original evidence and retry identities remain durable and company scoped.
+
+## Implemented platform foundation
+
+Owners/managers have connected properties, units, tenants/accounts/households, leases/renewals/terms/proration, rent posting and recurring schedules, manual receipts/allocations/credits, deposits/refunds/settlement, cash reports/CSV, maintenance assignment/execution/review, vendors, preventive work, calendar and private documents/library. Staff default to read-only properties; explicit execution is limited to their current assignment/property. Resident self-service exposes only authorized rental/financial/request/profile records; occupants do not inherit leaseholder finances. Auth0 identity, company authority and portal approval stay separate. Invitations, verification/setup recovery, Help, explicit page-only drafts and source navigation are connected.
+
+## Remaining scope and readiness
+
+The platform is a substantial development product with connected operating workflows; it is not fully accepted for production. Staff/leaseholder/occupant journeys and remaining owner/manager financial, export, draft/recovery and administration scenarios remain unchecked in the live acceptance log. Auth0 password-email branding remains open; SES is sandbox-only. No new support request, setup email, password request or provider activation is part of this batch.
+
+Electronic signatures, conversations, scheduled/external notifications, resident document sharing/uploads, full as-of accounting/reconciliation, imports, vacancy/applications and company entitlements remain future or partial scope. Stripe subscriptions and payment collection stay last. Backend telemetry passed the last deployment check; role-complete browser telemetry, infrastructure collection, synthetics and controlled incident/restore acceptance retain their documented gaps. Tests, merged code, deployment and user acceptance are different evidence states.
+
+Jira updates are disabled. Repository docs and PR evidence are the current tracking source. No production-readiness percentage or completion date is claimed.
+
+## Release-checkout validation
+
+Both production builds passed, along with 121 maintenance/notification,30 leasing and 177 finance disposable PostgreSQL/API/browser checks (328 total), the full 230 UI suite,85 server units (5 other database suites skipped here),28 client units and 88 operations checks. Documentation relative links, diff and Start/Stop inventory guards passed. These results support PR review, not real-account acceptance or a cloud rollout claim. Hosted exact-head CI is checked separately after publication.
+
+## Historical implementation checkpoints
+
+The following records preserve their original dates, branch names, test counts and limitations. Their “current” or “not deployed” statements refer to those dates, not the platform state above.
+
 > Current checkpoint — 2026-10-15: PR28 was approved and manually merged by the user at `fbc82f5`. Continue PR29 / `codex/deposits-move-in` in `prelogin-users`. This increment implements reviewed refundable deposit requirements/revisions, durable manual receipts with one linked cash source, current held/uncollected balances, corrections, resident visibility and dual-identifier CSV. Other property tabs now use nested property workspace routes. See [scope and acceptance](security-deposits.md). Tests use disposable local data only. PR27 deployment completion remains unverified; this increment is not deployed. User approves merges and performs deployments. No shared/live DB/account changes, messages/providers, Stripe or domain setup. Earlier checkpoints are historical.
 
 > Current checkpoint — 2026-10-15: PR27 is merged at `ada0fb5`; the user is deploying manually, with completion/acceptance not yet verified. Continue `codex/ci-cleanup` in `prelogin-users`. CI cleanup keeps every test and required check, consolidates install with backend-aligned locked versions, downloads only the used headless shell and cancels superseded runs. See [CI scope](ci-cleanup.md) and [roadmap](product-roadmap.md) for completed capabilities and the proposed next feature order. New PR merge requires approval. No deployment, shared/live DB/account changes or domain setup. Earlier checkpoints are historical.

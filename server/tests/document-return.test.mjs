@@ -4,6 +4,13 @@ import Fastify from 'fastify';
 import {safeReturnTo} from '../dist/access.js';
 import {registerSessions} from '../dist/sessions.js';
 const paths=[
+ '/account/notifications?status=unread&type=maintenance&page=2',
+ '/resident/maintenance/request?noticeReturn=inbox&noticeStatus=unread&noticeType=maintenance&noticePage=2',
+ '/company/leases/lease?noticeReturn=inbox&noticeStatus=all&noticeType=agreements&noticePage=1&section=agreements&agreementId=agreement',
+ '/company/leases/lease?section=agreements&agreementId=agreement&agreementQ=renewal+copy&agreementStatus=reviewed&agreementPage=2',
+ '/company/leases/lease?section=documents&agreementId=agreement&documentId=document&agreementQ=renewal+copy&agreementStatus=reviewed&agreementPage=2',
+ '/company/leases/lease?section=inspections&inspectionId=inspection',
+ '/company/leases/lease?section=settlement&inspectionId=inspection',
  '/company/documents?q=report+file&source=maintenance&status=archived&scan=pending&propertyId=home&page=2',
  '/company/maintenance/request?library=1&documentId=document&library_q=report+file&library_source=maintenance&library_status=all&library_scan=pending&library_propertyId=home&library_page=2',
  '/company/leases/lease?library=1&documentId=document&section=documents&library_q=lease&library_source=leases&library_page=2',

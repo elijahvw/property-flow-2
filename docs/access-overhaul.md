@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 > Monitoring update — 2026-10-15: Datadog/RUM deployment instructions below are historical. The current replacement and credential handling are documented in [ECS and Grafana Cloud monitoring](open-observability.md). Browser cookie/CSRF and application authorization boundaries remain unchanged.
 
 ## Automatic Users and Companies follow-up — 2026-10-14

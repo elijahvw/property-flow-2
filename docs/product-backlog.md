@@ -1,6 +1,6 @@
 # Property Flow implementation backlog
 
-Status reconciled October 17, 2026 against main `3a68657` and the current local batch. PF IDs are stable planning IDs, not GitHub issue numbers. The [running feature register](product-roadmap.md#running-feature-register) is authoritative for current status and next scope; this document retains detailed acceptance and historical baselines. PF-01–10 are merged, PF-11/13/18/20/27 are partial, and PF-23/24 are continuous. Historical baseline descriptions below are not claims that delivered functionality is still absent. [Research](tenantcloud-workflows.md) distinguishes public product evidence from our recommendations.
+Status reconciled October 20, 2026 against main/deployed `1945049` and this feature batch. The [roadmap](product-roadmap.md) and [platform status](mvp-status.md) separate implemented, merged, deployed and accepted scope. Acceptance bullets below include the full target capability and must not be read as completed unless explicitly evidenced. PF-16 management inspections, PF-17 unsigned preparation and PF-19 in-app notifications are implemented in this unmerged batch; signatures/external delivery remain future. PF IDs are stable references; Jira updates are disabled.
 
 Each item is an epic to split into bounded PRs. Dependencies are prerequisites, not reasons to delay unrelated work. P1 completes core operating jobs; P2 broadens coverage; P3 commercializes/connects providers. PF-23/PF-24 accompany every increment. Use the roadmap's build sequence rather than sorting solely by priority.
 
@@ -150,6 +150,8 @@ Acceptance:
 
 ### PF-13 · Work orders and vendor contacts — P1
 
+Current delivery: Implemented on main: intake, work assignment/review, vendor contacts and paid-expense links; external dispatch, estimates/payables and full acceptance remain open.
+
 Audience: owner/manager, assigned authorized staff and tenant requester. Dependencies: PF-12; attachments require PF-15.
 
 Acceptance:
@@ -160,6 +162,8 @@ Acceptance:
 - Filter property/unit/status/assignee/target date; test duplicate submissions, competing updates and authorized mobile use. Board layout can follow a working list/detail flow.
 
 ### PF-14 · Preventive work and task calendar — P2
+
+Current delivery: Merged/deployed #55/#56: reviewed recurring requests and source-derived month calendar. Automatic generation/external sync remain outside scope; real-account acceptance is pending.
 
 Audience: owner/manager and assigned staff. Dependencies: PF-13; lease deadlines can use PF-10 independently.
 
@@ -173,6 +177,8 @@ Acceptance:
 
 ### PF-15 · Private documents and attachments — P1 foundation
 
+Current delivery: Merged/deployed: private PostgreSQL originals, immutable versions, ClamAV quarantine/scan, management library and source download. Larger private object storage, explicit sharing/resident uploads and retention operations remain future.
+
 Audience: management and explicitly authorized tenant/staff. Dependencies: reviewed private-storage scope; PF-12 delegated authority.
 
 Acceptance:
@@ -183,6 +189,8 @@ Acceptance:
 
 ### PF-16 · Move-in/out inspections — P2
 
+Current delivery: This PR implements management-only structured inspections, retained evidence, reviewed completion/reopen, comparison and settlement navigation. Staff/resident participation and signatures remain future. See [contract](lease-inspections.md).
+
 Audience: owner/manager, assigned staff and authorized tenant. Dependencies: PF-15 and unit/lease context.
 
 Acceptance:
@@ -191,6 +199,8 @@ Acceptance:
 - Create reviewed maintenance/settlement references without automatic deposit deductions or duplicate expenses.
 
 ### PF-17 · Agreements and signature lifecycle — P2
+
+Current delivery: This PR implements management-only versioned unsigned preparation, exact document/signers, source freshness and review/correction. Sending/signing/decline/expiry/webhooks/signed originals remain unimplemented. See [contract](lease-agreements.md).
 
 Audience: management and named tenant signers. Dependencies: PF-15/PF-11 and reviewed provider scope.
 
@@ -210,6 +220,8 @@ Acceptance:
 - Mobile/accessibility/loading/retry/source-freshness behavior works for multiple leases, no current home and revoked access without stale private content.
 
 ### PF-19 · Messages, notifications and controlled reminders — P2
+
+Current delivery: This PR implements atomic in-app source events, fixed recipients, own inbox/unread state, safe read/open replay and current source access. Conversations, scheduled reminders, preferences and external provider delivery remain future. External delivery must use a separately reviewed outbox; the current synchronous in-app event transaction is not an external delivery queue. See [contract](in-app-notifications.md).
 
 Audience: management, scoped staff and tenant. Dependencies: PF-12/source events; attachments require PF-15.
 

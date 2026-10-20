@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 # PF-07 · Itemized move-out settlement
 
 Implemented locally for user review on October 16, 2026. This batch is not deployed. The preview is at `http://127.0.0.1:5090`; open an exact lease and choose **Move-out & settlement**. See [PF-06 accounting](deposit-applications-refunds.md) for the underlying disposition and refund records.
@@ -10,7 +12,7 @@ The server preview computes every amount from the current sources. Confirmation 
 
 Finalization atomically records the reviewed PF-06 deposit applications, pauses the reviewed active schedules, saves an immutable settlement version and writes audits. Applications use the current company business date; the actual move-out date is a separate recorded fact. No refund cash entry is created. Existing financial IDs and allocations remain intact.
 
-A saved review does not end the lease, change the household, waive debt or send money. Follow-up links lead to actual deposit refunds, payment refunds/collections and lease-end terms. Coordinated occupancy/end/renewal transitions remain PF-10. Statutory deadlines, notices, interest, inspection uploads and e-signatures are outside this initial scope; no jurisdiction defaults are invented.
+A saved review does not end the lease, change the household, waive debt or send money. Follow-up links lead to actual deposit refunds, payment refunds/collections and lease-end terms. Coordinated occupancy/end/renewal transitions remain PF-10. This PR adds management inspection/evidence/comparison links through [lease inspections](lease-inspections.md), without automatic financial application. Statutory deadlines, notices, interest and e-signatures remain outside scope; no jurisdiction defaults are invented.
 
 ## Versions, sources and corrections
 

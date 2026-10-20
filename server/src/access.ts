@@ -1,6 +1,7 @@
 export const COMPANY_ROLES = ["owner", "manager", "staff", "resident"] as const;
 export type CompanyRole = (typeof COMPANY_ROLES)[number];
 export type Permission =
+  | "notification.read"
   | "platform.manage"
   | "property.read"
   | "property.write"
@@ -27,6 +28,7 @@ export type Principal = {
 };
 const grants: Record<CompanyRole, Permission[]> = {
   owner: [
+    "notification.read",
     "property.read",
     "property.write",
     "company.manage",
@@ -36,9 +38,9 @@ const grants: Record<CompanyRole, Permission[]> = {
     "lease.manage",
     "finance.manage",
   ],
-  manager: ["property.read", "property.write", "resident.assignment.manage", "maintenance.manage", "lease.manage", "finance.manage"],
-  staff: ["property.read"],
-  resident: ["resident.self"],
+  manager: ["notification.read", "property.read", "property.write", "resident.assignment.manage", "maintenance.manage", "lease.manage", "finance.manage"],
+  staff: ["property.read", "notification.read"],
+  resident: ["resident.self", "notification.read"],
 };
 export function permissions(user: Principal): Permission[] {
   if (user.status !== "active" || user.emailVerified === false) return [];
@@ -98,7 +100,9 @@ export function safeReturnTo(value: unknown): string {
     if (url.pathname.split("/").some(segment => /[\\/%?#\s]/.test(decodeURIComponent(segment)) || [".",".."].includes(decodeURIComponent(segment))) || /(?:^|\/)(?:\.|%2e){1,2}(?:\/|$)/i.test(value.split("?")[0])) return "/dashboard";
     const allowed = new Set(["propertyId","unitId","leaseId","residentId","contactId","tenantId","tenantContact","tenantProperty","tenantAccess","tenantRental","tenantRecords","leaseReturn","section","status","access","rental","records","attention","approvals","view","age","kind","dateFrom","dateTo","statementFrom","new"]);
     for(const key of ["q","page","due","priority","workStatus","assignee","month","day","planId","vendorId","calendarMonth","calendarDay","calendarProperty","calendarKind","calendarPage"])allowed.add(key);
-    for(const key of ["source","scan","library","documentId","library_q","library_source","library_status","library_scan","library_propertyId","library_page"])allowed.add(key);
+    for(const key of ["source","scan","library","documentId","inspectionId","library_q","library_source","library_status","library_scan","library_propertyId","library_page"])allowed.add(key);
+    for(const key of ["agreementId","agreementQ","agreementStatus","agreementPage"])allowed.add(key);
+    for(const key of ["noticeReturn","noticeStatus","noticeType","noticePage","type"])allowed.add(key);
     const query = new URLSearchParams();
     for (const [key,item] of url.searchParams) if (allowed.has(key) && item.length <= 200 && !/[\\\x00-\x1f\x7f]/.test(item)) query.set(key,item);
     return url.pathname + (query.size ? `?${query}` : "");

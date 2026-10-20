@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 # PF-06: deposit applications and actual manual refunds
 
 Implemented locally after PF-05, for user testing before a batched cloud release. No cloud migration, deployment, bank action or provider refund is authorized by this implementation.

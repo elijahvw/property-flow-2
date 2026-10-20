@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 # Workflow audit and performance tests
 
 October 17, 2026. Local implementation; application deployment and user acceptance remain separate. This batch builds on the unified Auth0 accounts in PR #44. Jira tracking is disabled.

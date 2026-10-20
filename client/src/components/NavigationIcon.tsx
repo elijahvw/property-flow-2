@@ -39,7 +39,7 @@ export function NavigationIcon({ path }: { path: string }) {
     <>
       <path d="m14 5 5 5M3 21l9-9m-2-7 3-3 8 8-3 3-4-1-3-3z" />
     </>
-  ) : path.includes("account") ? (
+  ) : path.includes("notifications") ? (<><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></>) : path.includes("account") ? (
     <>
       <circle cx="12" cy="8" r="4" />
       <path d="M4 22v-2a8 8 0 0 1 16 0v2" />

@@ -1,3 +1,5 @@
+import { notificationCases } from "./notification-cases.mjs";
+import { publishNotification } from "../dist/notification-events.js";
 import { newFixturePage } from "./browser-fixture.mjs";
 import test from 'node:test';
 import {randomUUID} from 'node:crypto';
@@ -18,6 +20,8 @@ import {documentLibraryCases} from './document-library-cases.mjs';
 import {calendarCases} from './calendar-cases.mjs';
 import {preventiveCases} from './preventive-cases.mjs';
 import {vendorCases} from './vendor-cases.mjs';
+import {inspectionCases} from './inspection-cases.mjs';
+import {agreementCases} from './agreement-cases.mjs';
 import {AccessError} from '../dist/access.js';
 import {maintenanceCostCases} from './maintenance-cost-cases.mjs';
 const url=process.env.TEST_MAINTENANCE_DATABASE_URL;
@@ -41,7 +45,12 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  for(const [id,company] of [['home','a'],['foreign-home','b']])await admin.query('INSERT INTO "Property" (id,name,address,city,state,zip,"companyId","updatedAt") VALUES ($1,$1,\'street\',\'city\',\'state\',\'zip\',$2,NOW())',[id,company]);
  await admin.query('INSERT INTO "ResidentPropertyAssignment" ("companyId","propertyId","userId") VALUES (\'a\',\'home\',\'resident\'),(\'a\',\'home\',\'other\')');
  const scanControl={fail:false};
- const app=Fastify();t.after(()=>app.close());const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(app,db,auth,'https://app.test',undefined,{documentScanner:async bytes=>{if(scanControl.gate)await scanControl.gate();if(scanControl.fail)throw new AccessError(503,'SCANNER_UNAVAILABLE','Test scanner unavailable');return bytes.includes(Buffer.from('EICAR'))?'rejected':'clean';}});
+ const notificationControl={enabled:false};
+ const app=Fastify();
+ // Match production's safe AccessError envelope so browser recovery tests see
+ // the actual actionable message instead of Fastify's generic HTTP label.
+ app.setErrorHandler((error,_request,reply)=>error instanceof AccessError?reply.code(error.statusCode).send({error:error.message,code:error.code}):reply.send(error));
+ t.after(()=>app.close());const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(app,db,auth,'https://app.test',undefined,{notificationPublisher:async(tx,input)=>{if(notificationControl.enabled)await publishNotification(tx,input);},documentScanner:async bytes=>{if(scanControl.gate)await scanControl.gate();if(scanControl.fail)throw new AccessError(503,'SCANNER_UNAVAILABLE','Test scanner unavailable');return bytes.includes(Buffer.from('EICAR'))?'rejected':'clean';}});
  const call=async(user,method,path,payload,extra={})=>{
  if(payload&&method==='PATCH'&&path.startsWith('/api/company/maintenance/')&&!Object.hasOwn(payload,'expectedVersion'))payload={...payload,expectedVersion:(await admin.query('SELECT version FROM "MaintenanceRequest" WHERE id=$1',[path.split('/').pop()])).rows[0]?.version||1};
  if(payload&&method==='PATCH'&&path.startsWith('/api/platform/companies/')&&!Object.hasOwn(payload,'expectedVersion'))payload={...payload,expectedVersion:(await db.company.findUnique({where:{id:path.split('/').pop()}}))?.version};
@@ -226,7 +235,7 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
     }})),options);
     const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;
    }});
-   const gatedApp=Fastify();const gatedAuth=await registerSessions(gatedApp,gatedDb,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(gatedApp,gatedDb,gatedAuth,'https://app.test');
+   const gatedApp=Fastify();const gatedAuth=await registerSessions(gatedApp,gatedDb,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(gatedApp,gatedDb,gatedAuth,'https://app.test',undefined,{notificationPublisher:async()=>{}});
    let maintenance,suspension;
    try{
     const reviewedPayload=method==='PATCH'&&path.startsWith('/api/company/maintenance/')?{...payload,expectedVersion:(await admin.query('SELECT version FROM "MaintenanceRequest" WHERE id=$1',[id])).rows[0].version}:payload;
@@ -299,4 +308,7 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  await t.test('preventive maintenance schedules',async sub=>preventiveCases(sub,admin,db,call,app));
  await t.test('connected work calendar',async sub=>calendarCases(sub,admin,call,app));
  await t.test('private document library',async sub=>documentLibraryCases(sub,admin,call,app));
+ await t.test('lease inspections and retained comparison',async sub=>inspectionCases(sub,admin,db,call,app));
+ await t.test('unsigned agreement preparation and review',async sub=>agreementCases(sub,admin,db,call,app));
+ await t.test('durable scoped in-app notifications',async sub=>{notificationControl.enabled=true;await notificationCases(sub,admin,db,call,app);});
 });

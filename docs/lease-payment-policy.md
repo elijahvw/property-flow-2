@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 # Lease payment policy and collections
 
 Branch `codex/lease-payment-policies`, based on main `5750db6` (merged PR24). Development only; merge approval and user-run deployment remain required.

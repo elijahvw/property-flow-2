@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 # PF-04 · Tenant statements
 
 The user confirmed PR #36 merged/deployed and authorized the next roadmap phase, including UI improvements. This increment connects a per-lease statement to the lease overview, tenant lease cards, management rent accounts and resident rent accounts. It works for offline contacts and shared leaseholders using the existing lease identity and financial sources.

@@ -1,6 +1,8 @@
 # Jira work tracking
 
-Established October 17, 2026. Jira is the actionable development/status tracker; the repository roadmap remains the product/evidence register. The Atlassian connector can now read and update the dedicated project.
+Jira tracking was disabled by the user on October17, 2026. Do not read/create/update/synchronize Jira during ordinary development unless explicitly requested. Repository [platform status](mvp-status.md), [roadmap](product-roadmap.md), feature contracts, local handoff and PR evidence are authoritative. Historical Jira links and the identity map preserve references; they create no tracking obligation.
+
+The setup/workflow below is a historical record and does not authorize current Jira access.
 
 ## Start here
 

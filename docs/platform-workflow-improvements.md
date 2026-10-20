@@ -1,6 +1,6 @@
 # Platform workflow improvements — October 18, 2026
 
-Implementation of the approved [platform audit](platform-audit-2026-10-17.md). PR #48 was deployed as `3d1a247`; migrations033/034 applied successfully. Dedicated live-company acceptance is in progress. Existing preview data, open drafts, accounts, financial history and older worktrees are preserved.
+Implementation of the approved [platform audit](platform-audit-2026-10-17.md). PR #48 was deployed as `3d1a247`; migrations033/034 applied successfully. Dedicated live-company acceptance is deferred with the app stopped; see [current status](mvp-status.md). Existing preview data, open drafts, accounts, financial history and older worktrees are preserved.
 
 ## Invitations and people (A01–A04)
 
@@ -22,7 +22,7 @@ Activation references: [SES SendEmail](https://docs.aws.amazon.com/ses/latest/AP
 
 ## Walkthrough and Help (A05–A06)
 
-`/help` and its 15 task guides are public and searchable. Task links respect a signed-in user's permissions. Main navigation, contextual Help and invitation recovery connect to these guides. Content lives beside the product, using existing routes and components; no CMS, assistant service or new account system is introduced.
+`/help` and its 17 task guides in this PR are public and searchable. Task links respect a signed-in user's permissions. Main navigation, contextual Help and invitation recovery connect to these guides. Content lives beside the product, using existing routes and components; no CMS, assistant service or new account system is introduced.
 
 The optional first-login walkthrough derives destinations from fresh server-side grants: platform administration, management, read-only staff, delegated staff and residents. Progress, dismissal and completion persist on the current User, scoped to workspace/company/role and guide version. Concurrent changes return a reloadable conflict; identical retries are harmless. It never grants authority. Users can skip immediately, continue working, or resume/replay through Help. Completing property or lease setup does not repeatedly show a completed prerequisite.
 
@@ -32,7 +32,7 @@ The optional first-login walkthrough derives destinations from fresh server-side
 - Overview hides zero-count attention rows and shows actual billing issues, overdue maintenance and completion reviews with matching filters. Existing company/timezone/source boundaries remain.
 - Draft leases connect household, rent setup and activation. Established leases retain their details-first workspace and show only real outstanding approvals.
 - Cash-entry intent directs lease rent and deposits to their own ledgers. Other income is the manual default; legacy unlinked historical rent remains explicitly labeled. Recorded receipts still produce one linked cash source. Deposits choose a lease directly instead of detouring through rent.
-- Maintenance supports unresolved due/today/upcoming/unscheduled and assignee filters, names the assignee and links review queues. Internal/shared updates, staff assignment boundaries and reviewed completion remain distinct. External maintenance notifications/vendor management are future scope.
+- Maintenance supports unresolved due/today/upcoming/unscheduled and assignee filters, names the assignee and links review queues. Internal/shared updates, staff assignment boundaries and reviewed completion remain distinct. Vendor contacts, schedules/calendar and private library are merged/deployed in `1945049`. In-app workflow notifications join this PR; external maintenance delivery remains future scope.
 - Private-document pages report scanner configuration. Configured uploads automatically invoke scanning after the original is saved. A failed scan leaves that original quarantined with a scan-only retry; no duplicate upload is required. Retained versions are collapsed by default. A configured executable is not evidence of healthy definitions.
 - Reports offer month/last-month/year presets and links to existing balances, deposits and statements. Generated/exported snapshots and exact financial sources remain unchanged. Platform activity has server-side event filters, pagination and complete matching totals; provider discovery remains automatic pending evidence that it needs tuning.
 
@@ -49,7 +49,7 @@ Live owner and manager acceptance has succeeded. Dedicated acceptance remains fo
 
 ## Local validation evidence
 
-Both production builds pass. The complete browser fixture run passed189 cases, then21 affected cases including the new last-page invitation regression passed (193 distinct UI cases overall, including mobile property navigation). Disposable database runners passed294 checks:45 identity/invitation/guidance/activity,42 maintenance/documents/delegation,30 leasing/staff scope and177 financial/household/renewal/settlement cases. These include real browser-to-API operations with simulated identity/email/scanner boundaries, lost commit responses, competing writes, stale reviews, revocation and read-only residents. Release server72/client25 unit checks and88 operations checks passed. Five DB suites skip deliberately in the unit-only command and run through their isolated runners. `git diff --check` is clean.
+Both production builds pass. The complete browser fixture run passed189 cases, then21 affected cases including the new last-page invitation regression passed (193 distinct UI cases overall, including mobile property navigation). Disposable database runners passed294 checks:45 identity/invitation/guidance/activity,42 maintenance/documents/delegation,30 leasing/staff scope and 177 financial/household/renewal/settlement cases. These include real browser-to-API operations with simulated identity/email/scanner boundaries, lost commit responses, competing writes, stale reviews, revocation and read-only residents. Release server72/client25 unit checks and 88 operations checks passed. Five DB suites skip deliberately in the unit-only command and run through their isolated runners. `git diff --check` is clean.
 
 Visual inspection covered the desktop walkthrough and mobile Help article; responsive/keyboard regressions cover operating forms and navigation. Automated tests and migrations use disposable databases. No preview/customer database was used by tests. A separately authorized controlled inbox delivery test succeeded; live owner/manager acceptance and clean/EICAR scanner outcomes now pass; remaining role, recovery and downloaded-file checks are recorded in the acceptance log.
 

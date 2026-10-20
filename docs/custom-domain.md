@@ -1,5 +1,7 @@
 # Development custom domain
 
+October 20 evidence: the configured domain HTTPS gate and public/authentication checks passed in deployment run 39212763617 at `1945049`. The application was stopped afterward. The procedure below is retained for configuration/renewal/recovery; it is not a request to repeat activation or change live settings. Complete signed-in/browser telemetry acceptance remains separately tracked. [Current status](mvp-status.md).
+
 The development application uses `https://propertyflow.saasapps.cloud` on the existing CloudFront distribution `E3S4MA6ULWWKE6` (`drfbeumseaytt.cloudfront.net`). This is the requested configuration; DNS validation, CloudFront activation and live acceptance must be verified separately. The user performs GoDaddy, AWS and Auth0 setup manually for this feature.
 
 ## Configuration retained by deployments

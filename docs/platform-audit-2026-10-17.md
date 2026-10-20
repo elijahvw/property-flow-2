@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 # Property Flow platform audit and proposed work
 
 October 17, 2026. Proposal only. No product changes, invitation sends, access changes, migrations, merges, deployments or live configuration changes were made for this audit.

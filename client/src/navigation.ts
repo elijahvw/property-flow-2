@@ -1,4 +1,5 @@
 export type Capability =
+  | "notification.read"
   | "platform.manage"
   | "property.read"
   | "property.write"
@@ -116,6 +117,7 @@ export const routes: {
     permission: "resident.self",
     section: "Resident",
   },
+  { path: "/account/notifications", title: "Notifications", permission: "notification.read", section: "Account" },
   { path: "/account", title: "My profile", section: "Account" },
   { path: "/help", title: "Help", section: "Account" },
 ];

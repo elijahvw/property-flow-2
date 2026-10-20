@@ -1,4 +1,6 @@
-# Local feature release notes — October 17, 2026
+# Feature release notes — current checkpoint October 20, 2026
+
+Current release: PRs54–57 are merged in main `1945049`; deployment run 39212763617 and subsequent Stop run 39214885405 succeeded October 19. This PR packages PF-16/17/19 with additive migrations038→039→040 for user review/merge/deployment. No cloud change is made during preparation. See [platform status](mvp-status.md) for the complete current position. Dated sections below preserve historical validation and rollout statements.
 
 PRs [#44](https://github.com/elijahvw/property-flow-2/pull/44), [#45](https://github.com/elijahvw/property-flow-2/pull/45) and [#46](https://github.com/elijahvw/property-flow-2/pull/46) are confirmed merged. The live UI exposes document and delegated-work controls; scanner activation and full real-role acceptance remain unverified. The October 18 release is prepared locally; cloud rollout/migrations and full real-account acceptance remain pending. Sender-domain/DKIM and controlled inbox delivery are verified. Merge, deployment and acceptance remain separate from validation.
 
@@ -16,7 +18,7 @@ Local tests use disposable PostgreSQL and fictional browser/scanner fixtures. No
 - Compact mobile navigation; meaningful attention queues; focused maintenance due/assignee filters; cash-entry intent; direct deposit setup; report date presets/source links; paginated administration activity; automatic configured document scans with quarantine recovery.
 - Additive migrations033/034, dedicated restricted SES task role, verified branded sender and private maintained ClamAV sidecar. AWS requested more information before production recipient approval; verified sandbox recipient testing remains available. Preview data was preserved; deployment/migrations remain pending. [Full contract and release prerequisites](platform-workflow-improvements.md).
 
-Validation: both production builds, the189-case UI suite plus final targeted/pagination regressions,291 disposable database integration checks,97 Node unit checks and85 operations checks passed for the release. A real controlled Gmail received the sender delivery test with the correct signing domain and TLS. Dedicated live account/invitation/scanner/telemetry acceptance remains open. No tests used customer/preview databases.
+Validation: both production builds, the189-case UI suite plus final targeted/pagination regressions,291 disposable database integration checks,97 Node unit checks and 85 operations checks passed for the release. A real controlled Gmail received the sender delivery test with the correct signing domain and TLS. Dedicated live account/invitation/scanner/telemetry acceptance remains open. No tests used customer/preview databases.
 
 ## Development power controls
 
@@ -29,7 +31,7 @@ Changed forms now ask whether to keep editing, close without saving, or save a d
 
 Unsubmitted tenant/profile/financial reviews no longer write browser storage. Already-submitted requests retain separate recovery journals with their exact payload and retry identity. Interrupted submissions offer Close & keep recovery, lock the attempted form data and block draft reset; closing cannot rotate their key. Selecting a different record asks before replacing a saved draft, and preserves an interrupted request until recovery. Closing never reverses a completed write. User-management sections preserve each other’s unfinished changes after independent saves. Read-only account/picker dialogs close without draft controls. Existing authorization, financial sources and history remain unchanged. No migration or infrastructure change; development power inventory validation passes.
 
-Validation: client production build, 28 client unit checks,205 browser fixture cases and294 disposable database integration checks, including new close/Escape/discard/refresh/storage/source-version tests. PR52 merged3cfb816; exact-head CI39146821948 and frontend deployment39147366107passed. Public Chrome smoke passed; signed-in draft and broader role acceptance remain pending in [the workflow log](workflow-acceptance-2026-10-18.md).
+Validation: client production build, 28 client unit checks,205 browser fixture cases and 294 disposable database integration checks, including new close/Escape/discard/refresh/storage/source-version tests. PR52 merged3cfb816; exact-head CI39146821948 and frontend deployment39147366107passed. Public Chrome smoke passed; signed-in draft and broader role acceptance remain pending in [the workflow log](workflow-acceptance-2026-10-18.md).
 
 
 ## October 18 — Help search task relevance (PR53 merged, deployed and verified live)
@@ -60,3 +62,19 @@ Management can review next active schedule occurrences and unresolved request ta
 ## PF-15 private document library — local, release pending
 
 Documents now provides a management-only company directory across lease and maintenance attachments. Search title/latest filename/property/request; filter source, property, archive and latest scan result before complete counts/paging. Results open the exact retained source document with versions expanded and preserve return filters across source/lease sections. No file is copied, downloaded, scanned or shared by listing. New versions' scan results remain distinct from older cleared originals. Existing source workflows retain fresh authorization and quarantine controls. No new migration/resource/provider; stacked after the connected calendar (#56).
+
+## PF-16 lease inspections — local, release pending
+
+October 19, 2026: lease workspaces now include management move-in/out inspections with structured condition items, exact cleared evidence versions, completion review and reasoned reopening. Immutable revisions retain originals and reviewed comparisons after later corrections. Completed move-out reports carry inspection context into settlement; no financial entry is created automatically. Failed submissions retain inputs/retry identity; explicit drafts remain page-only. Migration038 adds scoped inspection/revision/evidence tables. No push, hosted migration, deployment, cloud-resource change or user acceptance. [Contract](lease-inspections.md).
+
+
+## PF-17 agreement preparation — local, release pending
+
+October 19, 2026: Lease → Agreements prepares retained document versions, intended recorded leaseholders/company signers and frozen lease details for management review. Save/version, submit, approve, request changes, reasoned reopen and cancellation retain immutable originals/history. Lease, signer and document changes invalidate current review; no upload or approval is presented as a signature. Explicit page-only editor drafts and durable submitted-request recovery are distinct. Migration039 adds company-scoped preparation/revision/original-link tables. No push/deployment/live migration, signature provider activation, invitation or financial change. [Contract](lease-agreements.md).
+
+
+## October 19 implementation / October 20 PR batch — PF-19 in-app notifications
+
+Personal company inbox and header unread count connect maintenance intake/status/requester-visible updates, preventive generated requests, staff assignment/completion review and inspection/agreement preparation review. Filter, page, mark read/unread, open the current authorized source and return with inbox context. Read state is personal, versioned and safely retryable after a lost response. Current company/role/property/source access controls all totals and opens; private notes/file contents are absent.
+
+Additive migration040 follows038/039; immutable source events, recipient identities and exact action receipts use forced company/own-inbox RLS. Publication shares the source transaction and audit. No cloud resources, external delivery, scheduled reminders or conversations were activated. Matching API/client rollout, hosted migrations, push/deployment and live role acceptance remain deferred. [Behavior, boundaries and validation](in-app-notifications.md).

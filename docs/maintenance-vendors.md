@@ -1,6 +1,6 @@
 # Vendor contacts and maintenance links — PF-13
 
-Local feature increment, October 18, 2026. Migration035 and release are pending. Live account testing is deferred at the user's request.
+PR54 is merged and included in deployed main `1945049` (October 19 workflow evidence). Migration035 belongs to that release. Complete real-account acceptance remains deferred; see [current status](mvp-status.md).
 
 ## Complete operating job
 

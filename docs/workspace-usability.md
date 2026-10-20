@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 # Workspace usability and resident profiles
 
 This change builds on merged/deployed main `85535b3` (PR20). It is a development branch. Merge requires Elijah's approval; Elijah runs deployments. No live database, Auth0 account, grant, or deployment was changed while implementing it.

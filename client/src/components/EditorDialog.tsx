@@ -32,6 +32,7 @@ export function EditorDialog({
   onSaveDraft,
   draftable = true,
   hasChanges = false,
+  changeVersion = 0,
   children,
   busy = false,
 }: {
@@ -43,6 +44,7 @@ export function EditorDialog({
   onSaveDraft?: (recovery?: boolean) => void;
   draftable?: boolean;
   hasChanges?: boolean;
+  changeVersion?: number;
   children: ReactNode;
   busy?: boolean;
 }) {
@@ -64,6 +66,13 @@ export function EditorDialog({
   const [dirty, setDirty] = useState(false),
     [confirming, setConfirming] = useState(false),
     [savedDraft, setSavedDraft] = useState(false);
+  const previousChange = useRef(changeVersion);
+  useEffect(() => {
+    // Structural edits (such as removing an observation) have no native input
+    // event. A new edit must invalidate an explicitly retained draft too.
+    if (open && draftable && previousChange.current !== changeVersion) setDirty(true);
+    previousChange.current = changeVersion;
+  }, [changeVersion, open, draftable]);
   const retained = useRef(false),
     baseline = useRef(new Map<Element, string>()),
     reviewed = useRef(false),

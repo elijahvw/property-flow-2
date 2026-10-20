@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 # Current account policy — October 17, 2026
 
 The user replaced the optional-account policy below. New tenants and every new lease participant require one Auth0 account, prepared from Property Flow before recording their participation. Existing User + exact Identity issuer/subject remains the only account representation; ResidentContact stores company-owned business details and references that account through userId. Invitations reference the same existing account through accountId; they are access/onboarding records, never another account type.

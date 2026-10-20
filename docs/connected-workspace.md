@@ -1,3 +1,5 @@
+> Status reconciled October 20, 2026: use [current platform status](mvp-status.md) and [the roadmap](product-roadmap.md) for delivery and remaining scope. Dated branch/release/test/limitation statements below are historical checkpoints, not the current deployment or acceptance state. No historical pass is promoted to real-account acceptance.
+
 # Connected workspace — development UX overhaul
 
 The user confirmed PR22/dev main9922af3 works but described the app as disconnected and clunky. Their concrete example was a prominent “Start a new lease” reset action above the save button. They requested modern workflows, easier navigation and a real dashboard. The implementation stays in dev; user approval is required before merge, and the user runs deployments.

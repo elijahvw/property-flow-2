@@ -1,8 +1,6 @@
-# Private documents — local foundation (PF-15)
+# Private documents — PF-15
 
-Foundation merged in [PR #46](https://github.com/elijahvw/property-flow-2/pull/46). Deployment, scanner activation and real-role acceptance require separate evidence.
-
-October 18, 2026: the foundation is merged; scanner configuration visibility, automatic post-upload scans and collapsed version history are local refinements. The user selected private uploads and deferred deployment. No live storage, scanner or provider configuration was changed.
+Foundation, scanner refinements and private library are merged/deployed (#46/#48/#49/#57), most recently in `1945049`. Live sample clean/rejected uploads passed; final downloaded-file receipt and full role acceptance remain unverified. This PR connects exact retained originals to inspections and unsigned agreement preparation; it grants no new sharing rights. [Current release evidence](mvp-status.md).
 
 Owners/managers upload PDF, PNG, JPEG and UTF-8 text originals to an exact lease or maintenance request. Lease workspace → Documents and maintenance detail → Private documents provide upload, versions, scan, download and archive/restore. Upload never shares a document. Residents and staff have no document authority in this increment, including assigned maintenance staff. Explicit recipient sharing and resident uploads remain future work.
 
