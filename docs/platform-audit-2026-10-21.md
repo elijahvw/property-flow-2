@@ -1,9 +1,9 @@
 # Property Flow platform audit — October 21, 2026
 
-October 22 continuation: [the authorized feature batch](feature-batch-2026-10-22.md) adds maintenance replies, named resident sharing, durable selected task drafts, and manual vacancy/application conversion with migrations041–044. It also closes the cross-route navigation and exact-unit handoff gaps described below. Historical October 21 validation remains separate from the new batch evidence. The combined working tree is not pushed or deployed.
+October 22 continuation: [the authorized feature batch](feature-batch-2026-10-22.md) adds maintenance replies, named resident sharing, durable selected task drafts, manual vacancy/application conversion and owner-controlled rental listings with migrations041–045. It also closes the cross-route navigation and exact-unit handoff gaps described below. The combined work is published in [PR60](https://github.com/elijahvw/property-flow-2/pull/60); hosted CI remains pending. It is not merged, deployed or user accepted; the user handles merge and deployment. Historical October 21 validation remains separate from the new batch evidence.
 
 
-This is the current audit register for the authorized full front/backend review. It starts from merged source `75d5342` (PR59) and preserves the connected application, source identities, financial history and access model already built locally. October 21 changes are local until separately reviewed/merged/deployed. Last documented deployed release is `1945049`; current cloud state, provider configuration and real-account acceptance were not queried or changed.
+This is the current audit register for the authorized full front/backend review. It starts from merged source `75d5342` (PR59) and preserves the connected application, source identities, financial history and access model already built locally. October 21 changes are included in PR60, with review, merge, deployment and real-account acceptance still pending. Last documented deployed release is `1945049`; current cloud state, provider configuration and real-account acceptance were not queried or changed.
 
 The application has substantial operating workflows. Production readiness still needs evidence across real roles, deployment, incident recovery and providers. Neither a new navigation item nor a passing fixture establishes that evidence.
 

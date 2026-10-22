@@ -1,8 +1,10 @@
 # Property Flow platform status
 
-Source reconciled October 22, 2026 from checked-out merged `75d5342` (PR59). Deployment evidence below remains the last documented October 19 observation; current cloud state was not queried. October 21 local audit changes and production evidence gates are in the [audit register](platform-audit-2026-10-21.md). This is the current status entry point; dated implementation checkpoints below are historical. The [roadmap](product-roadmap.md) tracks scope and the [acceptance log](workflow-acceptance-2026-10-18.md) retains unfinished real-account testing.
+Source reconciled October 22, 2026 from checked-out merged `75d5342` (PR59). Deployment evidence below remains the last documented October 19 observation; current cloud state was not queried. October 21 audit changes, published with the October 22 batch in [PR60](https://github.com/elijahvw/property-flow-2/pull/60), and production evidence gates are in the [audit register](platform-audit-2026-10-21.md). This is the current status entry point; dated implementation checkpoints below are historical. The [roadmap](product-roadmap.md) tracks scope and the [acceptance log](workflow-acceptance-2026-10-18.md) retains unfinished real-account testing.
 
-## October 22 feature batch — local, release and acceptance pending
+## October 22 feature batch — published in PR60, merge/release/acceptance pending
+
+[PR60](https://github.com/elijahvw/property-flow-2/pull/60) is open at implementation head `90471a3`; hosted CI remains pending. The work is not merged, deployed or user accepted. The user handles merge and deployment.
 
 Maintenance request replies with management in-app notices, named resident document sharing/receipt, durable account-owned lease/renewal/inspection task drafts, and manual vacancy/readiness, owner-controlled rental listings and inquiry/application-to-draft-lease workflows are implemented and validated in the cloud workspace. These additions reuse existing sources and role boundaries. Before the owner-listing refinement, the full client suite passed 277/277 and the three disposable database suites passed 368/368; the owner-listing correction subsequently passed 25 focused UI, 55 disposable leasing/API and 28 client unit checks plus both builds, preserving all 63 preview business-table fingerprints. Apply additive migrations041–045 with the matching client/API only during the authorized release; undeployed PR59 also needs038–040. [Batch, checks and remaining work](feature-batch-2026-10-22.md).
 

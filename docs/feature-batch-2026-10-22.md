@@ -1,6 +1,6 @@
 # Resident service and vacancy/application batch — October 22, 2026
 
-Status: local implementation in the managed cloud workspace; not pushed, merged, deployed or user accepted. The existing October 21 audit changes remain part of this working tree. This record supersedes only the new batch scope and validation, not historical release evidence.
+Status: published in [PR60](https://github.com/elijahvw/property-flow-2/pull/60), implementation head `90471a3`, including the October 21 audit and additive migrations041–045. Hosted CI remains pending. The work is not merged, deployed or user accepted; the user handles merge and deployment. Personal account identifiers, personal filesystem paths and the historical AWS account reference were removed from current documents before publication; repository history was not rewritten. This record supersedes only the new batch scope and validation, not historical release evidence.
 
 ## User outcomes and sources
 
