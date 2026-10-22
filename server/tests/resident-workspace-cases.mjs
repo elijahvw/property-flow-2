@@ -65,8 +65,8 @@ export async function residentWorkspaceCases(t, admin, call, app) {
       await expect(page.getByRole('region',{name:'Tenant balance overview'})).toContainText('$750.01');
       await expect(page.getByRole('region',{name:'Tenant balance overview'})).toContainText('$750.50');
       await page.screenshot({path:'/tmp/propertyflow-tenant-workspace-desktop.png',fullPage:true});
-      await page.getByRole('link',{name:'Open rent ledger for Current apartment'}).click();
-      await expect(page.getByRole('heading',{name:'Rent ledger',exact:true})).toBeVisible();
+      await page.getByRole('link',{name:'View rent and payments for Current apartment'}).click();
+      await expect(page.getByRole('heading',{name:'Rent & payments',exact:true})).toBeVisible();
       await page.getByRole('link',{name:'Back to tenant'}).click();
       await expect(page).toHaveURL(/tenants\/[^?]+\?q=Jordan/);
       await page.setViewportSize({width:390,height:844});

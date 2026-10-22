@@ -19,6 +19,7 @@ const templates: Record<string, string> = {
   "maintenance.created": "New maintenance request",
   "maintenance.status": "Maintenance status changed",
   "maintenance.update": "New maintenance update",
+  "maintenance.reply": "New resident maintenance reply",
   "work.assigned": "Work assigned to you",
   "work.reopened": "Your assigned work was reopened",
   "work.approved": "Your completed work was approved",

@@ -5,12 +5,14 @@ import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 const cwd = fileURLToPath(new URL('../', import.meta.url));
 const docker = (...args) => execFileSync('docker', args, { encoding: 'utf8' }).trim();
 const pause = () => new Promise(resolve => setTimeout(resolve, 100));
 const image = docker('image', 'inspect', 'postgres:17-alpine', '--format', '{{.Id}}');
 const password = randomUUID();
-let container, vite;
+let container, vite, browserDirectory;
 try {
   container = docker('run', '--detach', '--pull', 'never', '--name', `pf-maintenance-${randomUUID()}`,
     '--tmpfs', '/var/lib/postgresql/data:rw', '--publish', '127.0.0.1::5432',
@@ -29,7 +31,12 @@ try {
   const reserve = createServer();reserve.listen(0, '127.0.0.1');await once(reserve, 'listening');
   const port = reserve.address().port;await new Promise(resolve => reserve.close(resolve));
   const origin = `http://127.0.0.1:${port}`;
-  vite = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'client', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { cwd, stdio: 'ignore' });
+  // Concurrent disposable runners and the persistent preview must not rewrite
+  // one another's optimized dependency cache. This directory belongs to this run.
+  browserDirectory = await mkdtemp(`${tmpdir()}/pf-maintenance-browser-`);
+  const browserConfig = `${browserDirectory}/vite.config.mjs`;
+  await writeFile(browserConfig, `import base from ${JSON.stringify(new URL('../client/vite.config.ts', import.meta.url).href)};\nexport default {...base, cacheDir:${JSON.stringify(browserDirectory + '/cache')}};\n`);
+  vite = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'client', '--config', browserConfig, '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { cwd, stdio: 'ignore' });
   vite.on('error', error => console.error(error.message));
   ready = false;
   for (let attempt = 0; attempt < 150; attempt++) {
@@ -49,4 +56,5 @@ try {
 } finally {
   if (vite && vite.exitCode === null) { const stopped = once(vite, 'exit');vite.kill('SIGTERM');await stopped; }
   if (container) docker('rm', '--force', container);
+  if (browserDirectory) await rm(browserDirectory, { recursive: true, force: true });
 }

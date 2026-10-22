@@ -14,6 +14,7 @@ import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "../components/Form";
 import { MaintenanceCosts } from "../components/MaintenanceCosts";
+import { MaintenanceConversation } from "../components/MaintenanceConversation";
 import { PrivateDocuments } from "../components/PrivateDocuments";
 import { PreventiveSource } from "../components/PreventiveSource";
 import { MaintenanceVendor } from "../components/MaintenanceVendor";
@@ -785,7 +786,7 @@ function RequestDetail({ id, resident }: { id: string; resident: boolean }) {
               {!row.activity.length && <p>No recorded activity available.</p>}
             </section>
           </div>
-          <RequestUpdates endpoint={endpoint} resident={resident} canShare={row.residentUpdatesAvailable === true} />
+          <MaintenanceConversation key={endpoint} endpoint={endpoint} resident={resident} canShare={row.residentUpdatesAvailable === true} />
           {!resident && <PreventiveSource requestId={id}/>}
           {!resident && <MaintenanceVendor requestId={id} changed={r.reload} />}
           {!resident && can("finance.manage") && <MaintenanceCosts requestId={id} propertyId={row.propertyId} />}
@@ -898,69 +899,5 @@ function RequestDetail({ id, resident }: { id: string; resident: boolean }) {
         </>
       )}
     </>
-  );
-}
-
-function RequestUpdates({ endpoint, resident, canShare }: { endpoint: string; resident: boolean; canShare: boolean }) {
-  const [cursor, setCursor] = useState(""),
-    [adding, setAdding] = useState(false),
-    [submissionKey, setSubmissionKey] = useState(() => crypto.randomUUID()),
-    [success, setSuccess] = useState("");
-  const updates = useResource<{
-    items: { id: string; content: string; visibility: string; author: string; createdAt: string }[];
-    nextCursor: string | null;
-  }>(`${endpoint}/updates${cursor ? `?${new URLSearchParams({ cursor })}` : ""}`, true, true);
-  return (
-    <section className="panel maintenance-updates" aria-label="Request updates">
-      <div className="section-heading">
-        <h2>{resident ? "Updates from your property team" : "Progress updates"}</h2>
-        {!resident && <button onClick={() => { setSuccess(""); setAdding(true); }}>Add update</button>}
-      </div>
-      <p className="help">{resident ? "Shared updates for this request. For emergencies, contact local emergency services." : "Keep a record of visits, progress and follow-up. Internal notes stay with your management team. Updates do not send email or text messages."}</p>
-      {success && <p role="status" className="notice">{success}</p>}
-      {updates.error && updates.data && <Loading error={updates.error} retry={updates.reload} />}
-      {!updates.data ? <Loading error={updates.error} retry={updates.reload} /> : <>
-        {!updates.data.items.length ? <p>{resident ? "No shared updates yet." : "No progress updates recorded yet."}</p> :
-          <ol className="maintenance-update-list">
-            {updates.data.items.map(update => <li key={update.id}>
-              <div className="section-heading">
-                <strong>{update.author}</strong>
-                {!resident && <span className={`status-pill ${update.visibility === "internal" ? "" : "active"}`}>{update.visibility === "internal" ? "Internal note" : "Resident-visible update"}</span>}
-              </div>
-              <span className="cell-detail">{formatActivityTime(update.createdAt)}</span>
-              <p className="preserve-lines">{update.content}</p>
-            </li>)}
-          </ol>}
-        <div className="actions">
-          {cursor && <button className="secondary" onClick={() => setCursor("")}>Latest updates</button>}
-          {updates.data.nextCursor && <button className="secondary" onClick={() => setCursor(updates.data!.nextCursor!)}>Older updates</button>}
-        </div>
-      </>}
-      {!resident && <EditorDialog open={adding} title="Add maintenance update" onClose={() => setAdding(false)} onDiscard={() => { setAdding(false); setSubmissionKey(crypto.randomUUID()); }}>
-        <Form key={submissionKey} operation="maintenance.update" label="Record update" feedbackText="Maintenance update recorded."
-          secondaryActions={<DraftReset reset={() => setSubmissionKey(crypto.randomUUID())} />}
-          submit={async form => {
-            await api(`${endpoint}/updates`, { method: "POST", body: { content: form.get("content"), visibility: form.get("visibility"), submissionKey } });
-            setAdding(false);
-            setSubmissionKey(crypto.randomUUID());
-            setSuccess("Update recorded.");
-            setCursor("");
-            updates.reload();
-          }}>
-          <fieldset className="form-section">
-            <legend>Update and audience</legend>
-            <label>Who can see this update?
-              <select name="visibility" aria-label="Update audience" defaultValue="internal">
-                <option value="internal">Management team only</option>
-                {canShare && <option value="resident">Resident requester and management team</option>}
-              </select>
-            </label>
-            <p className="help">{canShare ? "Shared updates are visible only to the resident who submitted this request, while they retain property access. They do not notify the resident." : "This management-created request has no resident requester. Its updates stay internal."}</p>
-            <label>Update (required)<textarea name="content" aria-label="Update text" required maxLength={4000} rows={6} /></label>
-          </fieldset>
-          <p className="help">Review the audience before saving. Recorded updates and their audience are retained; add a follow-up to correct an earlier update.</p>
-        </Form>
-      </EditorDialog>}
-    </section>
   );
 }

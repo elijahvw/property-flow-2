@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon --exec ts-node src/bootstrap.ts",
+    "dev": "tsx watch src/bootstrap.ts",
     "build": "npx prisma generate && tsc -p tsconfig.json",
     "db:migrate": "npx prisma migrate deploy",
     "start": "npm run db:migrate && node scripts/provision-runtime.mjs && node dist/bootstrap.js"
@@ -29,22 +29,21 @@
     "@opentelemetry/sdk-metrics": "2.12.0",
     "@opentelemetry/sdk-node": "0.223.0",
     "@opentelemetry/sdk-trace-base": "2.12.0",
-    "@prisma/adapter-pg": "^7.4.1",
-    "@prisma/client": "^7.4.1",
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
     "dotenv": "^16.4.5",
     "fastify": "^5.12.7",
     "openid-client": "^6.8.8",
     "pg": "^8.19.0",
-    "prisma": "^7.4.1"
+    "prisma": "^7.10.1"
   },
   "devDependencies": {
     "@types/node": "^20.16.1",
     "@types/pg": "^8.18.0",
-    "nodemon": "^3.1.4",
-    "ts-node": "^10.9.2",
+    "tsx": "^4.23.15",
     "typescript": "^5.5.4"
   },
   "engines": {
-    "node": ">=22"
+    "node": "^22.12.0 || >=24.0.0"
   }
 }

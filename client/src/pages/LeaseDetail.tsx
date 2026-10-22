@@ -27,6 +27,7 @@ import { dollars } from "../money";
 import { leaseContext, leaseDirectoryPath } from "../lease-links";
 import { TenantReturnLink } from "../components/TenantReturnLink";
 import { statementPath } from "../statement";
+import "./LeaseDetailNavigation.css";
 
 export function LeaseDetail() {
   const { leaseId = "" } = useParams(),
@@ -63,7 +64,7 @@ function LeaseWorkspace({ id }: { id: string }) {
     "settlement",
     "terms",
     "proration",
-  ].includes(params.get("section") || "")
+  ].filter(value => can("finance.manage") || !["proration", "settlement"].includes(value)).includes(params.get("section") || "")
     ? params.get("section")!
     : params.has("onboarding")
       ? "household"
@@ -104,20 +105,28 @@ function LeaseWorkspace({ id }: { id: string }) {
     setEditing(true);
   };
   const tab = (value: string) => setParams({ ...context, ...documentLibraryContext(params), ...agreementContext(params), ...notificationContext(params), ...(params.get("inspectionId")?{inspectionId:params.get("inspectionId")!}:{}), section: value });
-  const sections = [
-          ["overview", "Overview"],
-          ["documents", "Documents"],
-          ["inspections", "Inspections"],
-          ["agreements", "Agreements"],
-          ["terms", "Terms & changes"],
-          ...(can("finance.manage") ? [["proration", "Partial rent"]] : []),
-          ["household", "Leaseholders & occupants"],
-          ["invitations", "Invitations & approvals"],
-          ["renewal", "Renewal"],
-          ...(can("finance.manage")
-            ? [["settlement", "Move-out & settlement"]]
-            : []),
-        ];
+  const sectionGroups = [
+    { title: "Lease details", items: [
+      ["overview", "Overview"],
+      ["terms", "Terms & changes"],
+      ...(can("finance.manage") ? [["proration", "Partial rent"]] : []),
+    ] },
+    { title: "People & access", items: [
+      ["household", "Leaseholders & occupants"],
+      ["invitations", "Invitations & approvals"],
+    ] },
+    { title: "Documents & condition", items: [
+      ["documents", "Documents"],
+      ["agreements", "Agreements"],
+      ["inspections", "Inspections"],
+    ] },
+    { title: "Renewal & move-out", items: [
+      ["renewal", "Renewal"],
+      ...(can("finance.manage") ? [["settlement", "Move-out & settlement"]] : []),
+    ] },
+  ];
+  const currentGroup = sectionGroups.find(group => group.items.some(([value]) => value === section))!;
+  const currentSection = currentGroup.items.find(([value]) => value === section)![1];
   const source = (module: string) =>
     `/company/${module}?${new URLSearchParams({ ...context, leaseId: id, leaseReturn: id })}`;
   return (
@@ -151,19 +160,27 @@ function LeaseWorkspace({ id }: { id: string }) {
           {r.error} <button onClick={r.reload}>Refresh lease</button>
         </p>
       )}
-      <label className="lease-section-select">Lease section<select aria-label="Lease section" value={section} onChange={event=>tab(event.target.value)}>{sections.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
-      <nav className="lease-section-nav" aria-label="Lease sections">
-        {sections.map(([value, label]) => (
-          <button
-            key={value}
-            className={section === value ? "" : "secondary"}
-            aria-current={section === value ? "page" : undefined}
-            onClick={() => tab(value)}
-          >
-            {label}
-          </button>
+      <label className="lease-section-select">Lease section<select aria-label="Lease section" value={section} onChange={event=>tab(event.target.value)}>{sectionGroups.map(group => <optgroup key={group.title} label={group.title}>{group.items.map(([value,label])=><option key={value} value={value}>{label}</option>)}</optgroup>)}</select></label>
+      <nav className="lease-task-navigation" aria-label="Lease sections">
+        {sectionGroups.map(group => (
+          <div className="lease-task-group" key={group.title} role="group" aria-label={group.title}>
+            <p>{group.title}</p>
+            {group.items.map(([value, label]) => (
+              <button
+                key={value}
+                className="secondary"
+                aria-current={section === value ? "page" : undefined}
+                aria-controls="lease-section-content"
+                onClick={() => tab(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         ))}
       </nav>
+      <p className="lease-section-location" role="status" aria-atomic="true">{currentGroup.title}<span aria-hidden="true"> / </span><strong>{currentSection}</strong></p>
+      <div id="lease-section-content" role="region" aria-label={currentSection}>
       {section === "overview" && (
         <div className="lease-overview">
           {lease.status === "draft" && (
@@ -295,7 +312,7 @@ function LeaseWorkspace({ id }: { id: string }) {
             {can("finance.manage") && (
               <>
                 <section className="panel">
-                  <h2>Rent & billing</h2>
+                  <h2>Rent & payments</h2>
                   <p className="lease-overview-value">
                     {lease.overview?.scheduleStatus === "active"
                       ? "Recurring billing active"
@@ -307,7 +324,7 @@ function LeaseWorkspace({ id }: { id: string }) {
                     Review charges, received payments and the shared lease
                     balance.
                   </p>
-                  <Link to={source("rent")}>Open rent & billing</Link>
+                  <Link to={source("rent")}>Open rent & payments</Link>
                 </section>
                 <section className="panel">
                   <h2>Security deposit</h2>
@@ -419,6 +436,7 @@ function LeaseWorkspace({ id }: { id: string }) {
       {section === "documents" && <PrivateDocuments source="leases" sourceId={id} />}
       {(section === "inspections" || visited.includes("inspections")) && <div hidden={section !== "inspections"}><LeaseInspections leaseId={id}/></div>}
       {(section === "agreements" || visited.includes("agreements")) && <div hidden={section !== "agreements"}><LeaseAgreements leaseId={id}/></div>}
+      </div>
       <EditorDialog
         open={editing}
         title="Review lease terms"

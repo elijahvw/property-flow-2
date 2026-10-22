@@ -1,0 +1,35 @@
+.editor-dialog:has(.property-finder) { width: min(720px, calc(100vw - 2rem)); }
+.property-finder-query { padding-bottom: 1.25rem; border-bottom: 1px solid #dfe7e3; }
+.property-finder-query label { margin-bottom: .5rem; }
+.property-finder-input { display: flex; align-items: center; gap: .5rem; }
+.property-finder-input input { min-width: 0; }
+.property-finder-input input::-webkit-search-cancel-button { display: none; }
+.property-finder-query .help { margin: .65rem 0 0; }
+.property-finder-results { min-height: 12rem; padding: 1rem 0; }
+.property-finder-empty { padding: 2rem 1rem; text-align: center; background: #f5f8f6; border-radius: 10px; }
+.property-finder-empty h3 { margin-bottom: .5rem; }
+.property-finder-empty p { max-width: 28rem; margin: 0 auto; font-size: .9rem; }
+.property-finder-count { margin: 0 0 .5rem; font-size: .85rem; font-weight: 600; }
+.property-finder-list { margin: 0; max-height: min(45vh, 30rem); overflow-y: auto; }
+.property-finder-list a { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem .75rem; border-radius: 7px; text-decoration: none; }
+.property-finder-list li + li { border-top: 1px solid #e7ece8; }
+.property-finder-list a:hover, .property-finder-list a:focus-visible { background: #eaf3ee; }
+.property-finder-list a > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.property-finder-address { display: block; color: #53685e; font-size: .85rem; margin-top: .25rem; }
+.property-finder-open { color: #53685e; font-size: .8rem; white-space: nowrap; }
+.property-finder-footer { display: flex; justify-content: space-between; align-items: center; gap: .75rem; border-top: 1px solid #dfe7e3; padding-top: 1rem; }
+.property-finder-footer .help { font-size: .75rem; }
+@media(max-width:600px) {
+  .property-finder-results { min-height: 10rem; }
+  .property-finder-list a { padding: .85rem .35rem; }
+  .property-finder-open { display: none; }
+  .property-finder-footer { align-items: start; flex-direction: column; }
+}
+/* Compact location text keeps the search action reachable on small screens. */
+.topbar-location { overflow: hidden; }
+.topbar-location > a { flex-shrink: 0; }
+@media(max-width:600px) {
+  .topbar-location > :not([aria-current="page"]) { display: none; }
+  .topbar-location > [aria-current="page"] { font-weight: 600; }
+}
+.workspace-main h1[tabindex="-1"]:focus { outline: none; }

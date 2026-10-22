@@ -1,0 +1,38 @@
+.page-editor {
+  max-width: 1040px;
+  margin: 0 auto;
+  border: 1px solid #dce5df;
+  border-radius: 14px;
+  background: #fff;
+}
+.page-editor > .editor-heading {
+  position: static;
+  border-radius: 14px 14px 0 0;
+  align-items: flex-start;
+}
+.page-editor .editor-heading h1 {
+  font-size: clamp(1.6rem, 3vw, 2.15rem);
+  margin: 0;
+}
+.page-editor .editor-body {
+  padding: clamp(1rem, 3vw, 2rem);
+}
+.page-editor > .editor-body .workflow-form .form-actions {
+  position: static;
+  z-index: auto;
+  background: #fff;
+  margin: 1.4rem 0 0;
+  padding: 1rem 0;
+  box-shadow: none;
+}
+.workflow-form > .form-error-summary {
+  scroll-margin-top: 6rem;
+}
+.editor-dialog.page-editor-confirmation {
+  width: min(620px, calc(100vw - 32px));
+}
+@media (max-width: 700px) {
+  .page-editor > .editor-heading { flex-wrap: wrap; }
+  .page-editor .editor-heading button { width: 100%; }
+  .page-editor .editor-body .form-grid { grid-template-columns: 1fr; }
+}

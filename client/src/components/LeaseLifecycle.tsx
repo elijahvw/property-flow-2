@@ -306,7 +306,7 @@ function ProrationWorkspace({
             ) : d.existing ? (
               <p className="notice">
                 This month already has {recordReference(d.existing.reference)}.
-                Review the rent ledger before making a separately recorded
+                Review rent and payments before making a separately recorded
                 charge or credit difference.
               </p>
             ) : d.lease.status === "draft" ? (
@@ -331,7 +331,7 @@ function ProrationWorkspace({
               <Link
                 to={`/company/rent?leaseId=${encodeURIComponent(lease.id)}&leaseReturn=${encodeURIComponent(lease.id)}`}
               >
-                Open rent ledger →
+                Open rent & payments →
               </Link>
             </div>
             <p className="help">

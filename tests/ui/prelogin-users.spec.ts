@@ -2,6 +2,8 @@ import { test, expect, Page } from "@playwright/test";
 async function fixture(page: Page, { verified = true, platform = true } = {}) {
   const state = {
     verified,
+    verifyOnNextStatus: false,
+    verificationChecks: 0,
     people: [] as any[],
     imports: 0,
     membershipRequests: [] as any[],
@@ -103,8 +105,14 @@ async function fixture(page: Page, { verified = true, platform = true } = {}) {
         return json({ id: "auth0|created" });
       }
       if (path.endsWith("/profile")) { state.people[0].name = req.postDataJSON().name; return json({id:state.people[0].id,name:state.people[0].name}); }
-      if (path.endsWith("/verification-status"))
+      if (path.endsWith("/verification-status")) {
+        state.verificationChecks++;
+        if (state.verifyOnNextStatus) {
+          state.verified = true;
+          state.verifyOnNextStatus = false;
+        }
         return json({ emailVerified: state.verified });
+      }
       if (path.endsWith("/verification"))
         return json({ message: "Verification email requested." });
       if ((path.endsWith("/password-setup") || path.endsWith("/password-reset")))
@@ -227,12 +235,15 @@ test("verification status refresh updates profile and dismisses persistent remin
     .getByRole("button", { name: "I verified my email — check status" })
     .click();
   await expect(page.getByText(/Your email is still unverified/)).toBeVisible();
-  state.verified = true;
+  // Verification changes when the explicit check reaches the provider fixture.
+  // An unrelated window-focus refresh must not hide the button before the click.
+  state.verifyOnNextStatus = true;
   await page
     .getByRole("button", { name: "I verified my email — check status" })
     .click();
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
   await expect(page.locator(".account-identity-card").getByText("Verified",{exact:true})).toBeVisible();
+  expect(state.verificationChecks).toBe(2);
 });
 test("new-account retry keeps submission key and a new account gets a fresh key", async ({
   page,

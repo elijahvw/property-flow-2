@@ -1,6 +1,6 @@
 import { invitationMailer } from "./invitation-email.js";
 import { registerRentBillingWorker } from "./rent-billing-worker.js";
-import fastify, { type FastifyError } from "fastify";
+import fastify from "fastify";
 import {
   registerTelemetry,
   recordRequestError,
@@ -12,7 +12,7 @@ import { prisma } from "./lib/prisma.js";
 import { registerSessions, readAuthConfig } from "./sessions.js";
 import { MAX_USER_ID_BYTES, registerApplication } from "./application.js";
 import { identityProvider } from "./identity-provider.js";
-import { AccessError } from "./access.js";
+import { registerRequestErrors } from "./request-errors.js";
 
 dotenv.config();
 const server = fastify({
@@ -33,61 +33,7 @@ const server = fastify({
     },
   },
 });
-server.setErrorHandler((failure, request, reply) => {
-  const error = (
-    failure instanceof Error ? failure : new Error("REQUEST_FAILED")
-  ) as FastifyError;
-  const code = (error as any).code;
-  const status =
-    error instanceof AccessError
-      ? error.statusCode
-      : error.statusCode === 413
-        ? 413
-      : error.statusCode === 429
-        ? 429
-        : code === "P2025"
-          ? 404
-          : ["P2002", "P2034"].includes(code)
-            ? 409
-            : error.validation
-              ? 400
-              : 503;
-  const message =
-    error instanceof AccessError
-      ? error.message
-      : status === 413
-        ? "The upload exceeds the allowed size. Choose a file up to 5 MB."
-      : status === 429
-        ? "Too many sign-in attempts. Please wait a minute."
-        : status === 404
-          ? "Record not found."
-          : status === 409
-            ? "The record changed or conflicts with an existing record. Refresh and try again."
-            : status === 400
-              ? "Check the submitted fields."
-              : "The service is temporarily unavailable. Please try again.";
-  const safeCode =
-    error instanceof AccessError ? error.code : `REQUEST_${status}`;
-  const safeFrames = (error.stack || "")
-    .split("\n")
-    .filter((line) => /^\s+at /.test(line))
-    .slice(0, 12)
-    .join("\n");
-  request.log.warn(
-    {
-      code: safeCode,
-      errorType: error.name,
-      status,
-      requestId: request.id,
-      ...(status >= 500 ? { stack: safeFrames } : {}),
-    },
-    "Request failed",
-  );
-  if (status >= 500) recordRequestError(request, safeCode, error.name);
-  reply
-    .status(status)
-    .send({ error: message, code: safeCode, requestId: request.id });
-});
+registerRequestErrors(server, recordRequestError);
 registerTelemetry(server);
 server.get("/", async () => ({ status: "ok" }));
 server.get("/api/health", async () => ({ status: "ok" }));

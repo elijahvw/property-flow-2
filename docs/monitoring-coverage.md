@@ -1,5 +1,8 @@
 # Monitoring coverage and rollout
 
+October 22 local batch adds closed browser operation names for availability/application saves, transitions and conversion; document sharing/receipt; saved task operations; and maintenance replies. Existing API traces and transactional audit accompany source writes. RUM uses static path vocabulary and redacts record IDs/query strings; private form/contact/message data stays out of operation labels. These are source-level signals only. Hosted browser ingestion, useful alert thresholds, end-to-end incident delivery and restore/rollback evidence remain unverified. No collector/provider or cloud configuration was changed.
+
+
 October 20 release reconciliation: main `1945049` deployment run 39212763617 passed hosted backend metrics/logs/traces and public/authentication checks; Stop run 39214885405 subsequently succeeded. App/source definitions below remain useful, but October17 alert states and collector observations are historical. Complete current browser-role ingestion, infrastructure/synthetic/incident/restore acceptance is not inferred from deployment. This PR adds bounded inspection/agreement/notification operation signals without activating providers or new cloud resources. [Current status](mvp-status.md).
 
 Reviewed October 17, 2026. Scope: Property Flow dev, Grafana stack `slimpillar2069`. No app deployment, Terraform apply, preview restart, preview database changes or new credentials were performed. Existing local changes remain intact.

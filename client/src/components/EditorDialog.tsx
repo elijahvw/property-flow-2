@@ -11,6 +11,8 @@ import {
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useFeedback } from "./Feedback";
+import { useEditorNavigationGuard } from "./PageLeaveGuard";
+import "./EditorDialog.css";
 
 const EditorContext = createContext<{
   busy: boolean;
@@ -18,11 +20,14 @@ const EditorContext = createContext<{
   completed: (form?: HTMLFormElement) => void;
   uncertain: boolean;
   recovery: (id: string, active: boolean) => void;
-}>({ busy: false, register: () => {}, completed: () => {}, uncertain: false, recovery: () => {} });
+  durable:(id:string,adapter:{element:{current:HTMLElement|null};save:()=>Promise<unknown>}|null)=>void;
+  draftSaved:(element?:HTMLElement)=>void;
+}>({ busy: false, register: () => {}, completed: () => {}, uncertain: false, recovery: () => {},durable:()=>{},draftSaved:()=>{} });
 export const useEditorBusy = () => useContext(EditorContext);
 
-// Only an explicit draft save keeps an editor mounted after closing. Its state,
-// files and reviewed versions stay in memory on this page; nothing is replayed.
+// Dialogs retain edits after an explicit draft save. Page editors also retain
+// them when browser Back returns to their directory. State stays in memory on
+// this page; nothing is replayed.
 export function EditorDialog({
   open,
   title,
@@ -35,6 +40,8 @@ export function EditorDialog({
   changeVersion = 0,
   children,
   busy = false,
+  presentation = "dialog",
+  backLabel = "Back to leases",
 }: {
   open: boolean;
   title: string;
@@ -47,8 +54,11 @@ export function EditorDialog({
   changeVersion?: number;
   children: ReactNode;
   busy?: boolean;
+  presentation?: "dialog" | "page";
+  backLabel?:string;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null),
+  const dialog = useRef<HTMLElement | null>(null),
+    pageConfirmation = useRef<HTMLDialogElement>(null),
     titleId = useId(),
     descriptionId = useId();
   const [visited, setVisited] = useState(open),
@@ -66,11 +76,20 @@ export function EditorDialog({
   const [dirty, setDirty] = useState(false),
     [confirming, setConfirming] = useState(false),
     [savedDraft, setSavedDraft] = useState(false);
+  const [persisting,setPersisting]=useState(false),[draftError,setDraftError]=useState("");
+  const durableAdapters=useRef(new Map<string,{element:{current:HTMLElement|null};save:()=>Promise<unknown>}>()),persisted=useRef(false);
+  const durable=useCallback((id:string,adapter:{element:{current:HTMLElement|null};save:()=>Promise<unknown>}|null)=>{if(adapter)durableAdapters.current.set(id,adapter);else durableAdapters.current.delete(id);},[]);
+  const closingAdapter=useRef<{element:{current:HTMLElement|null};save:()=>Promise<unknown>}|null>(null);
+  const releaseNavigation=useRef<()=>void>(()=>{});
   const previousChange = useRef(changeVersion);
+  const structuralDirty = useRef(false);
   useEffect(() => {
     // Structural edits (such as removing an observation) have no native input
     // event. A new edit must invalidate an explicitly retained draft too.
-    if (open && draftable && previousChange.current !== changeVersion) setDirty(true);
+    if (open && draftable && previousChange.current !== changeVersion) {
+      structuralDirty.current = true;
+      setDirty(true);
+    }
     previousChange.current = changeVersion;
   }, [changeVersion, open, draftable]);
   const retained = useRef(false),
@@ -98,7 +117,7 @@ export function EditorDialog({
   };
   const changed = (event: { target: EventTarget | null }) => {
     if (event.target instanceof HTMLInputElement && event.target.type === "search") return;
-    if (draftable) setDirty(previous => previous || reviewed.current || fields().some(field =>
+    if (draftable) setDirty(structuralDirty.current || reviewed.current || fields().some(field =>
       baseline.current.has(field) && baseline.current.get(field) !== fieldValue(field)));
   };
   const completed = useCallback((form?: HTMLFormElement) => {
@@ -110,14 +129,17 @@ export function EditorDialog({
         if (form.contains(field)) baseline.current.set(field, fieldValue(field));
     } else baseline.current.clear();
     reviewed.current = false;
+    structuralDirty.current = false;
     const remaining = !!form && current.some(field => baseline.current.has(field) &&
       baseline.current.get(field) !== fieldValue(field));
     setDirty(remaining);
     if (!remaining) {
+      releaseNavigation.current();
       setSavedDraft(false);
       retained.current = false;
     }
   }, []);
+  const draftSaved=useCallback((element?:HTMLElement)=>{const current=fields(),adapters=[...durableAdapters.current.values()];for(const field of current)if(!element||element.contains(field)||!adapters.some(adapter=>adapter.element.current?.contains(field)))baseline.current.set(field,fieldValue(field));const remaining=current.some(field=>baseline.current.has(field)&&baseline.current.get(field)!==fieldValue(field));reviewed.current=false;structuralDirty.current=false;setDirty(remaining);retained.current=true;persisted.current=true;setSavedDraft(true);if(!remaining)releaseNavigation.current();},[]);
   const discard = () => {
     if (uncertain) return;
     completed();
@@ -132,8 +154,10 @@ export function EditorDialog({
     (onSaveDraft || onClose)(true);
     notify("Interrupted request kept for recovery. Retry the original request before starting another.");
   };
-  const saveDraft = () => {
+  const saveDraft = async () => {
     if (uncertain) { keepRecovery(); return; }
+    const adapter=confirming?closingAdapter.current:[...durableAdapters.current.values()].find(item=>!!item.element.current?.getClientRects().length);
+    if(adapter){setPersisting(true);setDraftError("");try{await adapter.save();draftSaved(adapter.element.current||undefined);setConfirming(false);(onSaveDraft||onClose)();notify("Task draft saved. Reopen it from Saved drafts after signing in.");}catch(error){setDraftError(error instanceof Error?error.message:"Unable to save this task draft.");}finally{setPersisting(false);}return;}
     retained.current = true;
     // Keep the original baseline: submitting one section later must still
     // recognize unfinished values in the other sections of a saved draft.
@@ -146,6 +170,7 @@ export function EditorDialog({
   };
   const requestClose = () => {
     if (blocked) return;
+    closingAdapter.current=[...durableAdapters.current.values()].find(item=>!!item.element.current?.getClientRects().length)||null;
     if (uncertain || (draftable && (dirty || (hasChanges && !retained.current)))) setConfirming(true);
     else if (retained.current) (onSaveDraft || onClose)();
     else discard();
@@ -159,17 +184,48 @@ export function EditorDialog({
       return next;
     });
   }, []);
-  const blocked = busy || busyForms.size > 0;
+  const blocked = busy || busyForms.size > 0 || persisting;
+  releaseNavigation.current=useEditorNavigationGuard({
+    active: visited && (dirty || (hasChanges&&!retained.current) || (savedDraft&&!persisted.current) || uncertain || blocked),
+    busy: blocked,
+    uncertain,
+  });
   useEffect(() => {
     if (open) setVisited(true);
-    else if (!retained.current) { setVisited(false); baseline.current.clear(); reviewed.current = false; setDirty(false); setSavedDraft(false); setConfirming(false); }
+    // Browser Back can return a page editor to its directory without using its
+    // close control. Keep that in-memory form available on the same page.
+    else if (presentation === "page" && visited && (dirty || uncertain || retained.current)) {
+      retained.current = true;
+      if (!uncertain) setSavedDraft(true);
+      setConfirming(false);
+    }
+    else if (!retained.current) { setVisited(false); baseline.current.clear(); reviewed.current = false; structuralDirty.current = false; setDirty(false); setSavedDraft(false); setConfirming(false); }
   }, [open]);
   useLayoutEffect(() => { if (!open || !visited) return; capture(); const observer = new MutationObserver(capture); if (dialog.current) observer.observe(dialog.current,{childList:true,subtree:true}); return () => observer.disconnect(); }, [open,visited]);
+  useLayoutEffect(() => {
+    const node = pageConfirmation.current;
+    if (presentation !== "page" || !open || !confirming || !node) return;
+    node.showModal();
+    const old = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      if (node.open) node.close();
+      document.body.style.overflow = old;
+    };
+  }, [confirming, open, presentation]);
   useLayoutEffect(() => { if (confirming) keepEditing.current?.focus(); }, [confirming]);
-  useEffect(() => { if (!uncertain && (!open || !(dirty || hasChanges))) return; const warn = (event:BeforeUnloadEvent) => { event.preventDefault(); }; window.addEventListener('beforeunload',warn); return () => window.removeEventListener('beforeunload',warn); }, [open,dirty,hasChanges,uncertain]);
+  useEffect(() => { if (!uncertain && !(dirty || (open && hasChanges&&!retained.current) || (savedDraft&&!persisted.current) || blocked)) return; const warn = (event:BeforeUnloadEvent) => { event.preventDefault(); }; window.addEventListener('beforeunload',warn); return () => window.removeEventListener('beforeunload',warn); }, [open,dirty,hasChanges,uncertain,savedDraft,blocked]);
   useEffect(() => {
     const node = dialog.current;
     if (!node || !visited) return;
+    if (presentation === "page") {
+      if (open) {
+        node.scrollIntoView({ block: "start" });
+        node.querySelector<HTMLElement>("h1")?.focus({ preventScroll: true });
+      }
+      return;
+    }
+    if (!(node instanceof HTMLDialogElement)) return;
     const opener =
       document.activeElement instanceof HTMLElement
         ? document.activeElement
@@ -187,37 +243,31 @@ export function EditorDialog({
       if (node.open) node.close();
       if (opener?.isConnected) opener.focus();
     };
-  }, [open, visited]);
+  }, [open, visited, presentation]);
   const previousTitle = useRef(title);
   useLayoutEffect(() => {
     const changed = previousTitle.current !== title;
     previousTitle.current = title;
     const node = dialog.current;
-    if (changed && open && node?.open) {
+    if (changed && open && node && (presentation === "page" || (node instanceof HTMLDialogElement && node.open))) {
       node.scrollTop = 0;
       node
-        .querySelector<HTMLElement>(".editor-heading h2")
+        .querySelector<HTMLElement>(".editor-heading h1, .editor-heading h2")
         ?.focus({ preventScroll: true });
     }
-  }, [title, open]);
+  }, [title, open, presentation]);
   if (!visited) return null;
-  return createPortal(
-    <dialog
-      ref={dialog}
-      className="editor-dialog"
-      aria-labelledby={titleId}
-      aria-describedby={description ? descriptionId : undefined}
-      onCancel={(event) => {
-        event.preventDefault();
-        if (!blocked) { if (confirming) setConfirming(false); else requestClose(); }
-      }}
-    >
+  const confirmationTitle = uncertain ? "Recover the submitted request" : "Close without saving changes?";
+  const confirmationContents = <>
+    <h3>{confirmationTitle}</h3>
+    <p id={`${titleId}-close-help`}>{uncertain ? "The response was interrupted and the request may already be saved. Keep its original details and retry identity to avoid creating it twice. Closing keeps recovery available on this page; it does not create a new draft." : closingAdapter.current ? "Keep editing, discard this form’s unfinished changes, or save this task to your account. You can resume it from Saved drafts after signing in again. Closing does not undo a request that was already submitted." : "Keep editing, discard this form’s unfinished changes, or explicitly save a draft for this page. Closing does not undo a request that was already submitted."}</p>
+    <div className="actions"><button ref={keepEditing} type="button" onClick={() => setConfirming(false)}>Keep editing</button>{uncertain ? <button type="button" className="secondary" onClick={keepRecovery}>Close &amp; keep recovery</button> : <><button type="button" className="secondary" onClick={discard}>Close without saving</button><button type="button" className="secondary" onClick={saveDraft}>Save draft &amp; close</button></>}</div>
+  </>;
+  const contents = <>
       <div className="editor-heading">
         <div>
-          <p className="eyebrow">Property Flow</p>
-          <h2 id={titleId} tabIndex={-1}>
-            {title}
-          </h2>
+          <p className="eyebrow">{presentation === "page" ? "Lease setup" : "Property Flow"}</p>
+          {presentation === "page" ? <h1 id={titleId} tabIndex={-1}>{title}</h1> : <h2 id={titleId} tabIndex={-1}>{title}</h2>}
         </div>
         {!confirming && <button
           type="button"
@@ -225,31 +275,61 @@ export function EditorDialog({
           disabled={blocked}
           onClick={requestClose}
         >
-          Close
+          {presentation === "page" ? backLabel : "Close"}
         </button>}
       </div>
-      {confirming && <section className="editor-body" role="alertdialog" aria-label={uncertain ? "Recover the submitted request" : "Close without saving changes?"} aria-describedby={`${titleId}-close-help`}>
-        <h3>{uncertain ? "Recover the submitted request" : "Close without saving changes?"}</h3>
-        <p id={`${titleId}-close-help`}>{uncertain ? "The response was interrupted and the request may already be saved. Keep its original details and retry identity to avoid creating it twice. Closing keeps recovery available on this page; it does not create a new draft." : "Keep editing, discard this form’s unfinished changes, or explicitly save a draft for this page. Closing does not undo a request that was already submitted."}</p>
-        <div className="actions"><button ref={keepEditing} type="button" onClick={() => setConfirming(false)}>Keep editing</button>{uncertain ? <button type="button" className="secondary" onClick={keepRecovery}>Close &amp; keep recovery</button> : <><button type="button" className="secondary" onClick={discard}>Close without saving</button><button type="button" className="secondary" onClick={saveDraft}>Save draft &amp; close</button></>}</div>
-      </section>}
+      {confirming && presentation === "dialog" && <section className="editor-body" role="alertdialog" aria-label={confirmationTitle} aria-describedby={`${titleId}-close-help`}>{confirmationContents}</section>}
       <div className="editor-body" hidden={confirming}
         onFocusCapture={capture} onInputCapture={changed} onChangeCapture={changed}
         onSubmitCapture={() => { if (draftable) { reviewed.current = true; setDirty(true); } }}>
-        {savedDraft && <p className="help">Saved draft · available only while this page stays open.</p>}
+        {savedDraft && <p className="help">{persisted.current?"Task draft saved. Available from Saved drafts after signing in.":"Saved draft · available only while this page stays open."}</p>}
+        {draftError&&<p role="alert" className="notice error">{draftError}</p>}
         {description && (
           <p id={descriptionId} className="help">
             {description}
           </p>
         )}
-        <EditorContext.Provider value={{ busy: blocked, register, completed, uncertain, recovery }}>
+        <EditorContext.Provider value={{ busy: blocked, register, completed, uncertain, recovery,durable,draftSaved }}>
           <fieldset disabled={blocked} className="editor-contents">
             {children}
           </fieldset>
         </EditorContext.Provider>
         {uncertain ? <div className="actions"><button type="button" className="secondary" disabled={blocked} onClick={keepRecovery}>Close &amp; keep recovery</button></div> : draftable && (dirty || (hasChanges && !retained.current)) && <div className="actions"><button type="button" className="secondary" disabled={blocked} onClick={saveDraft}>Save as draft</button></div>}
       </div>
-    </dialog>,
+    </>;
+  if (presentation === "page") return <><section
+    ref={node => { dialog.current = node; }}
+    className="page-editor"
+    role="region"
+    aria-labelledby={titleId}
+    aria-describedby={description ? descriptionId : undefined}
+    hidden={!open}
+  >{contents}</section>{open && confirming && createPortal(<dialog
+    ref={pageConfirmation}
+    className="editor-dialog page-editor-confirmation"
+    role="alertdialog"
+    aria-label={confirmationTitle}
+    aria-describedby={`${titleId}-close-help`}
+    onCancel={event => { event.preventDefault(); setConfirming(false); }}
+    onKeyDown={event => {
+      if (event.key !== "Tab") return;
+      const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
+      const first = buttons[0], last = buttons[buttons.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }}
+  ><div className="editor-body">{confirmationContents}</div></dialog>, document.body)}</>;
+  return createPortal(
+    <dialog
+      ref={node => { dialog.current = node; }}
+      className="editor-dialog"
+      aria-labelledby={titleId}
+      aria-describedby={description ? descriptionId : undefined}
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!blocked) { if (confirming) setConfirming(false); else requestClose(); }
+      }}
+    >{contents}</dialog>,
     document.body,
   );
 }

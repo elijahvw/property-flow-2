@@ -1,10 +1,11 @@
+import {TaskDraftPanel,useTaskDraft,type TaskDraft} from "./TaskDraft";
 import { useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api";
 import { useResource } from "../useResource";
 import { formatDate } from "../dates";
 import { Form } from "./Form";
-import { EditorDialog } from "./EditorDialog";
+import { EditorDialog,useEditorBusy } from "./EditorDialog";
 import { DateField } from "./DateField";
 import "./LeaseInspections.css";
 
@@ -644,7 +645,9 @@ function InspectionEditor({
   itemsChanged,
   saved,
   denied,
+  initialTask,
 }: {
+  initialTask?:TaskDraft;
   draft: { row: Inspection | null; key: string };
   endpoint: string;
   baselines: Baseline[];
@@ -653,15 +656,27 @@ function InspectionEditor({
   denied: () => void;
 }) {
   const [items, setItems] = useState<Item[]>(
-    () => draft.row?.items || [blank()],
+    () => initialTask?.values.items ? (initialTask.values.items as Omit<Item,"evidenceVersionIds">[]).map(item=>({...item,evidenceVersionIds:draft.row?.items.find(current=>current.key===item.key)?.evidenceVersionIds||[]})) : draft.row?.items || [blank()],
   );
-  const [kind, setKind] = useState(draft.row?.kind || "move_in");
+  const [kind, setKind] = useState(String(initialTask?.values.kind||draft.row?.kind||"move_in"));
   const documents = useResource<Documents>(
     endpoint.replace(/\/inspections$/, "/documents"),
     true,
     true,
   );
   const frozen = useRef<Record<string, unknown> | null>(null);
+  const editor=useEditorBusy();
+  const container=useRef<HTMLDivElement>(null),leaseId=endpoint.split("/")[4];
+  const leaseInfo=useResource<{propertyId:string}>(`/api/company/leases/${encodeURIComponent(leaseId)}`,true,true);
+  const readText=()=>{
+    const form=container.current?.querySelector<HTMLFormElement>("form[data-task-values]");
+    if(!form)throw new Error("Open inspection observations before saving a task draft.");
+    const data=new FormData(form);
+    for(const item of items){const selected=data.getAll(`${item.key}-evidence`).map(String).sort(),original=[...(draft.row?.items.find(row=>row.key===item.key)?.evidenceVersionIds||[])].sort();if(JSON.stringify(selected)!==JSON.stringify(original))throw new Error("Task drafts save observation text. Save observations first to retain changes to linked evidence.");}
+    return {leaseId,...(draft.row?{inspectionId:draft.row.id}:{}),kind,inspectedOn:String(data.get("inspectedOn")||""),baselineRevisionId:String(data.get("baselineRevisionId")||""),items:items.map(item=>({key:item.key,area:String(data.get(`${item.key}-area`)||""),item:String(data.get(`${item.key}-item`)||""),condition:String(data.get(`${item.key}-condition`)||"not_checked"),notes:String(data.get(`${item.key}-notes`)||"")}))};
+  };
+  const task=useTaskDraft({kind:"inspection",propertyId:initialTask?.propertyId||leaseInfo.data?.propertyId||"",sourceId:leaseId,initial:initialTask,element:container,readValues:readText,disabled:!!frozen.current||!(initialTask?.propertyId||leaseInfo.data?.propertyId)});
+
   const options =
     documents.data?.items.flatMap((doc) =>
       doc.versions
@@ -672,11 +687,15 @@ function InspectionEditor({
         })),
     ) || [];
   return (
+    <div ref={container}><TaskDraftPanel task={task}/>
+    {task.record&&!task.record.stale&&<label className="checkbox-label"><input type="checkbox" checked={task.acknowledged} onChange={e=>task.setAcknowledged(e.target.checked)}/>I reviewed these observation details against the current inspection before saving.</label>}
     <Form
+      taskValues
       operation="inspection.save"
       label="Save observations"
       feedbackText="Inspection observations saved."
       submit={async (data) => {
+        if(task.record&&!frozen.current&&!task.acknowledged)throw new Error("Review the restored observation details and confirm the review before saving.");
         const body = frozen.current || {
           ...(draft.row
             ? { action: "edit", expectedVersion: draft.row.version }
@@ -694,13 +713,16 @@ function InspectionEditor({
             notes: String(data.get(`${i.key}-notes`)),
             evidenceVersionIds: data.getAll(`${i.key}-evidence`).map(String),
           })),
-          submissionKey: draft.key,
+          submissionKey: task.record?.actionKey || draft.key,
         };
         try {
+          if(task.record&&!frozen.current){await task.review();const savedTask=await task.save(readText());if(savedTask.stale)throw new Error("Source records changed after review. Review the current inspection before saving.");body.submissionKey=savedTask.actionKey;}
           const result = await api<{ inspectionId: string }>(
             `${endpoint}${draft.row ? `/${draft.row.id}` : ""}`,
             { method: "POST", body },
           );
+          editor.completed();
+          void task.finish();
           saved(result.inspectionId);
         } catch (e) {
           if (e instanceof ApiError && [403, 404].includes(e.status)) denied();
@@ -730,7 +752,7 @@ function InspectionEditor({
             aria-label="Inspection date"
             name="inspectedOn"
             required
-            defaultValue={draft.row?.inspectedOn.slice(0, 10) || ""}
+            defaultValue={String(initialTask?.values.inspectedOn ?? draft.row?.inspectedOn.slice(0,10) ?? "")}
           />
         </label>
       </div>
@@ -740,7 +762,7 @@ function InspectionEditor({
           <select
             aria-label="Reviewed move-in baseline"
             name="baselineRevisionId"
-            defaultValue={draft.row?.baselineRevisionId || ""}
+            defaultValue={String(initialTask?.values.baselineRevisionId ?? draft.row?.baselineRevisionId ?? "")}
           >
             <option value="">No reviewed move-in record selected</option>
             {baselines.map((b) => (
@@ -878,6 +900,17 @@ function InspectionEditor({
       >
         Add condition item
       </button>
-    </Form>
+    </Form></div>
   );
+}
+
+export function SavedInspectionTask({task,saved}:{task:TaskDraft;saved:(id:string)=>void}){
+ const endpoint=`/api/company/leases/${encodeURIComponent(task.sourceId!)}/inspections`,directory=useResource<Directory>(endpoint,true,true);
+ if(!directory.data)return <p role={directory.error?"alert":"status"}>{directory.error||"Loading inspection sources…"}</p>;
+ return task.values.inspectionId?<SavedInspectionEdit task={task} endpoint={endpoint} baselines={directory.data.baselines} saved={saved}/>:<InspectionEditor draft={{row:null,key:task.actionKey}} initialTask={task} endpoint={endpoint} baselines={directory.data.baselines} itemsChanged={()=>{}} saved={saved} denied={()=>window.location.reload()}/>;
+}
+function SavedInspectionEdit({task,endpoint,baselines,saved}:{task:TaskDraft;endpoint:string;baselines:Baseline[];saved:(id:string)=>void}){
+ const source=useResource<Detail>(`${endpoint}/${encodeURIComponent(String(task.values.inspectionId))}`,true,true);
+ if(!source.data)return <p role={source.error?"alert":"status"}>{source.error||"Loading the current inspection…"}</p>;
+ return <InspectionEditor draft={{row:source.data.inspection,key:task.actionKey}} initialTask={task} endpoint={endpoint} baselines={baselines} itemsChanged={()=>{}} saved={saved} denied={()=>window.location.reload()}/>;
 }

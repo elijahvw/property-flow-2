@@ -51,7 +51,8 @@ export async function residentPortalCases(t, admin, call, app, { lease, today })
       const writes = [];
       await page.route('**/api/**', async route => {
         const req = route.request(), url = new URL(req.url());
-        if (!['GET', 'HEAD'].includes(req.method()) && url.pathname !== '/api/account/guide') writes.push(`${req.method()} ${url.pathname}`);
+        // Walkthrough progress and bounded telemetry do not mutate business records.
+        if (!['GET', 'HEAD'].includes(req.method()) && !['/api/account/guide', '/api/telemetry'].includes(url.pathname)) writes.push(`${req.method()} ${url.pathname}`);
         const response = await app.inject({ method: req.method(), url: url.pathname + url.search,
           headers: { ...req.headers(), origin: 'https://app.test', cookie: '__Host-pf-session=token-resident' },
           ...(req.postData() ? { payload: req.postData() } : {}) });
@@ -77,7 +78,7 @@ export async function residentPortalCases(t, admin, call, app, { lease, today })
           if (width === 390 && path.includes('/deposits')) await page.screenshot({ path: '/tmp/propertyflow-resident-deposit-read-only-mobile.png', fullPage: true });
         }
       }
-      assert.deepEqual(writes, [], 'Viewing resident records must never submit a mutation');
+      assert.deepEqual(writes, [], 'Viewing resident records must never submit a business mutation');
     } finally { await browser.close(); }
   });
 }

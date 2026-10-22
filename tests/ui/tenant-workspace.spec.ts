@@ -41,8 +41,8 @@ test('tenant deep links, source ledgers and directory filters survive refresh an
   for(const amount of ['$750.01','$30.02','$750.50','$749.50'])await expect(metrics).toContainText(amount);
   await expect(metrics).toContainText('October 15, 2026');
   await expect(page.getByRole('region',{name:'Tenant leases'})).toContainText('January 1, 2026');
-  await page.getByRole('link',{name:'Open rent ledger for Apartment 1'}).click();
-  await expect(page.getByRole('heading',{name:'Rent ledger',exact:true})).toBeVisible();
+  await page.getByRole('link',{name:'View rent and payments for Apartment 1'}).click();
+  await expect(page.getByRole('heading',{name:'Rent & payments',exact:true})).toBeVisible();
   await page.getByRole('link',{name:'Back to tenant'}).click();
   await page.reload();
   await page.getByRole('link',{name:'All tenants',exact:true}).click();
@@ -137,7 +137,7 @@ test('active, unverified and disabled portal filters remain distinct and survive
  state.profile.user.emailVerified=false;
  await page.goto('/company/residents/auth0%7Ctenant?access=verification');
  await expect(page.getByText('Verification needed',{exact:true})).toBeVisible();
- await page.getByRole('link',{name:'Open rent ledger for Apartment 1'}).click();
+ await page.getByRole('link',{name:'View rent and payments for Apartment 1'}).click();
  await page.getByRole('link',{name:'Back to tenant'}).click();
  await page.getByRole('link',{name:'All tenants',exact:true}).click();
  await expect(filter).toHaveValue('verification');
@@ -151,7 +151,7 @@ test('property and rental filters match the same association and survive a tenan
  state.otherProfiles.push({...state.profile,userId:'tenant-2',contactName:'Taylor Smith',user:{...state.profile.user,name:'Taylor Smith',email:'taylor@test.invalid'},rentals:[{...relationship,leaseId:'home-current',status:'current',startsOn:'2026-01-01',endsOn:null}]} as any);
  await page.goto('/company/residents');await page.getByLabel('Property',{exact:true}).selectOption('home');await page.getByLabel('Rental relationship',{exact:true}).selectOption('current');
  await expect(page.getByRole('link',{name:'Jordan Rivera',exact:true})).toHaveCount(0);await expect(page.getByRole('link',{name:'Taylor Smith',exact:true})).toBeVisible();
- await page.getByLabel('Property',{exact:true}).selectOption('garden');await expect(page.getByRole('link',{name:'Garden Apartments Unit 2',exact:true})).toHaveAttribute('href',/tenantProperty=garden.*tenantRental=current/);await page.getByRole('link',{name:'Jordan Rivera',exact:true}).click();await page.getByRole('link',{name:'Open rent ledger for Apartment 1'}).click();await page.getByRole('link',{name:'Back to tenant'}).click();await page.getByRole('link',{name:'All tenants',exact:true}).click();
+ await page.getByLabel('Property',{exact:true}).selectOption('garden');await expect(page.getByRole('link',{name:'Garden Apartments Unit 2',exact:true})).toHaveAttribute('href',/tenantProperty=garden.*tenantRental=current/);await page.getByRole('link',{name:'Jordan Rivera',exact:true}).click();await page.getByRole('link',{name:'View rent and payments for Apartment 1'}).click();await page.getByRole('link',{name:'Back to tenant'}).click();await page.getByRole('link',{name:'All tenants',exact:true}).click();
  await expect(page.getByLabel('Property',{exact:true})).toHaveValue('garden');await expect(page.getByLabel('Rental relationship',{exact:true})).toHaveValue('current');
  await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
 });

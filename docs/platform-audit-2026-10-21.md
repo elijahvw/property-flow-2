@@ -1,0 +1,64 @@
+# Property Flow platform audit — October 21, 2026
+
+October 22 continuation: [the authorized feature batch](feature-batch-2026-10-22.md) adds maintenance replies, named resident sharing, durable selected task drafts, and manual vacancy/application conversion with migrations041–044. It also closes the cross-route navigation and exact-unit handoff gaps described below. Historical October 21 validation remains separate from the new batch evidence. The combined working tree is not pushed or deployed.
+
+
+This is the current audit register for the authorized full front/backend review. It starts from merged source `75d5342` (PR59) and preserves the connected application, source identities, financial history and access model already built locally. October 21 changes are local until separately reviewed/merged/deployed. Last documented deployed release is `1945049`; current cloud state, provider configuration and real-account acceptance were not queried or changed.
+
+The application has substantial operating workflows. Production readiness still needs evidence across real roles, deployment, incident recovery and providers. Neither a new navigation item nor a passing fixture establishes that evidence.
+
+## Scope and method
+
+Reviewed shell/routing/search, property and tenant directories, resident home, lease setup and task sections, form/dirty/error behavior, rent/deposit/cash terminology, source/history navigation, server authorization/RLS, account/company revocation races, expected versions, safe request errors, dependency trees and local test/runtime setup. Public AppFolio, Buildium, TenantCloud and DoorLoop documentation informs product comparisons; W3C and Nielsen Norman Group inform interaction choices. No competitor account/trial, customer data, provider message or production resource was accessed.
+
+- [Product findings and source-linked comparisons](product-experience-audit-2026-10-21.md)
+- [Forms review and implementation](forms-audit-2026-10-21.md)
+- [Backend evidence and remaining gates](backend-audit-2026-10-21.md)
+- [Dependency review and exact package changes](dependency-audit-2026-10-21.md)
+- [Browser, preview and privacy evidence](production-audit-validation-2026-10-21.md)
+- [Running roadmap](product-roadmap.md) and [detailed acceptance](product-backlog.md)
+
+## Findings and local response
+
+| Finding | User impact | Local response / remaining acceptance |
+| --- | --- | --- |
+| Search/query and record lists blend together | Unclear search scope and where to act | Property finder has distinct query, initial guidance, result count/list and full-directory destination. Portfolio filters and results use separate named panels; one clear-filter action. Keyboard/mobile and no-record/no-match/error states are covered. Apply the pattern to other directories only where the task benefits. |
+| Route titles/highlights and focus vary by entry path | Wrong current section, abrupt transitions, interrupted filtering | Resolve task titles/breadcrumbs for property-scoped and detail routes; one active resident destination; preserve query-only focus; intentional heading focus/scroll on page changes; mobile navigation closes predictably. Router 7 uses synchronous history updates for controlled URL-backed filters to prevent lost typed characters. |
+| Ten equally weighted lease sections | Routine and occasional work compete | Group lease details, people/access, documents/condition and renewal/move-out. Preserve exact section URLs, source links, permissions and mounted drafts. Unauthorized financial section requests fall back to accessible overview. |
+| Long lease setup uses stacked modal context | Hard to compare, navigate and review fields | Lease creation uses a main-page editor with URL state, visible close/back behavior and preserved current-page input/retry identity. Short confirmations/edits retain accessible native dialogs. Invalid collapsed fields expand; actionable errors receive focus. Further renewal/settlement presentation and durable drafts remain defined work. Cross-route browser history and imperative navigation are not globally blocked; this remains a production gate. |
+| Dirty guards warn after reverted edits / errors are distant | Unnecessary interruptions and hard recovery | Compare current field values to opening/saved values; keep unfinished sibling forms protected. Error summary scrolls/focuses visibly. Pending/uncertain submissions retain their original recovery contract. |
+| Rent ledger / My rent / Rent & balances describe one task | Users must learn internal accounting vocabulary | Use Rent & payments across navigation, headings, links and Help. Ledger remains a valid source/export concept. Keep cash activity, deposits, recorded receipts and online collection semantically separate. |
+| Resident home repeats navigation | Little guidance on what to do or where records live | Service cards explain real rent/deposit/maintenance/profile tasks. Exact authorized lease summaries show due-now, upcoming posted charges and unapplied payment credit separately, with statement/source links; occupants never inherit leaseholder financial totals. Real invitation-to-resident acceptance remains required. |
+| Raw event identifiers become prose | Awkward labels and inconsistent history | Explicit human labels for tenant/account/company access events; unknown events have a neutral fallback. Stored audit source codes remain unchanged. |
+| Legacy company/access paths lack actor/company transaction fences | Revocation can race an access operation | Fence current actor and company before fresh authority reads; use scoped member operations, fence target companies and require reviewed member versions. Isolated PostgreSQL tests cover mutation/list/assignment versus account/membership/company revocation. |
+| Framework input errors become service outages | Misleading retry instructions and noisy outage telemetry | Preserve correct 400/413/415/429 statuses, use safe task-neutral messages and reserve outage signals for server failures. Real HTTP-injection regressions cover parser/content-type/body-limit/rate-limit failures and response privacy. |
+| Locked packages include published vulnerabilities | Avoidable release/development exposure | Review and update both workspace and standalone Docker-backend locks, validate supported Node/runtime requirements and test the resulting app. Remove broad development host allowlisting; explicit remote-preview configuration remains available. See dependency audit for exact final evidence. |
+| Browser fixtures proxy API to their own port | Recursive requests, descriptor exhaustion and unreliable tests | Move fixture web server to5012 while retaining API proxy5011. System Chromium and disposable loopback PostgreSQL are used in this managed workspace. |
+| Planning docs retain obsolete account/release instructions | Future work can regress the current product | Reconcile PR59 as merged source, retain deployment/acceptance uncertainty, replace obsolete account-free participation acceptance with the unified-account/independent portal-access contract. Preserve stable PF IDs and historical evidence. |
+
+## Shared interaction contract
+
+Use a full page for work requiring several sections, comparison or sustained review; dialogs for a short focused edit or consequential confirmation; inline controls for small contextual changes. Use a visible task heading, grouped fields, explicit required/optional guidance, understandable errors and a clear saved outcome. Reveal technical IDs and secondary/archive actions only when useful. Never rotate a submitted retry key to recover an ambiguous response.
+
+Search controls explain their scope; results identify matching records and their count. A shortcut finder opens a record; a directory supports reviewing/filtering multiple records. Filters keep focus while results update. Record links retain the selected property/lease and source/return context. Dates use month names; money uses exact USD cents and explains its basis.
+
+Plain English is professional and specific: record a payment received, view account history, review a statement, prepare an agreement, approve access, submit completion for review. Preparation is not signing; a read notification is not acknowledgement; a recorded payment is not a settled bank transfer.
+
+## Production evidence gate and advanced work
+
+The remaining local draft gap is cross-route browser Back/Forward or imperative navigation unmounting an in-memory form; ordinary links, refresh/tab close and return to the same lease directory are protected. Complete router-level blocking and exact-unit setup handoff under PF-02/23 before treating long-form recovery as production accepted. Production deployment also needs encrypted origin transport and a separately scoped migration task; see the backend audit. These are explicit release gates, not completed work.
+
+1. Accept full owner/manager/staff/leaseholder/occupant jobs in two companies, including denied/changed access, empty/upcoming/ended records and failure/retry/correction paths. Keep the [existing live checklist](workflow-acceptance-2026-10-18.md) as the acceptance record.
+2. Review and deploy matching API/client plus outstanding PR59 migrations038–040 through existing Start/Stop/release controls. This audit adds no schema or cloud resource. Verify actual signed-in behavior, source downloads/exports and real browser telemetry; do not promote fixture results to deployment evidence.
+3. Prove backup restoration, rollback, actionable alert delivery, synthetic critical journeys and measured representative capacity. Resolve remaining [monitoring coverage](monitoring-coverage.md), document scanning/download and provider/identity setup evidence.
+4. Complete resident document sharing/acknowledgement and maintenance replies with explicit grants, privacy and immutable sources (PF-15/18/19). Design durable drafts with expiry/current-access checks; finish complex renewal/settlement page work (PF-02/07/10/23).
+5. Add validated imports/reconciliation and explicitly defined historical reporting (PF-20/25), then vacancy/application conversion and provider-backed signatures (PF-17/21). Preserve accounts, tenancy identity and financial sources throughout.
+6. Commercial entitlements/team delegation require server enforcement and support procedures (PF-12/22). Subscriptions and resident payment collection stay last (PF-26) with consent, deduplicated signed webhooks, settlement/returns/disputes and reconciliation.
+
+No prices, completion dates or production-readiness percentages are invented. The roadmap separates implemented, merged, deployed and accepted work.
+
+## Validation and reproducibility
+
+Browser evidence: the frozen 252-case broad run passed248 and exposed four failures; the isolated39-case rerun passed all39, including those four. Two test-only refresh races were corrected; no application patch was needed for the two first-load failures. All252 distinct scenarios have passing final-source evidence across those runs; the initial broad run is not described as green. Details and traces are maintained in the [validation evidence](production-audit-validation-2026-10-21.md). The stable-source client production build passes; the real server compiler passes with the actual matching generated client. Safe units pass (88 server, five database-suite skips; 28 client), operations checks pass (88) and the development power inventory guard passes. Real PostgreSQL access51, users/API/browser45, maintenance122, leasing30 and financial177 checks pass (425 total). The final financial run includes complete source totals, corrections, household/occupant boundaries, concurrent writes and lost-response browser recovery. The resident read-only assertion excludes the existing bounded telemetry/walkthrough endpoints while still forbidding every business mutation. All four full/production workspace/standalone-backend dependency scans report zero known vulnerabilities; installed Vite host rejection and TypeScript watch startup/restart checks also pass. Only fresh disposable test databases and clearly fictional local preview data are permitted. Local checks cannot prove a cloud deployment, restore, external message delivery or real-account acceptance.
+
+The managed workspace blocks the standard Prisma schema-engine download domain. Client generation uses matching official Prisma WASM/internal generator tooling in `/tmp` with `skipDownload:true` and the standard generated-client output, followed by the real TypeScript compiler and real PostgreSQL/API tests. No fake engine, model or skipped type check is substituted. The ordinary CLI build path must also run in release CI with its allowed engine download/cache.

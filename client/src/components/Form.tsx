@@ -15,6 +15,7 @@ export function Form({
   secondaryActions,
   reviewOnly = false,
   recovering = false,
+  taskValues = false,
 }: {
   children: React.ReactNode;
   submit: (data: FormData) => Promise<void>;
@@ -25,6 +26,7 @@ export function Form({
   secondaryActions?: React.ReactNode;
   reviewOnly?: boolean;
   recovering?: boolean;
+  taskValues?: boolean;
 }) {
   const notify = useFeedback();
   const editor = useEditorBusy(),
@@ -36,6 +38,10 @@ export function Form({
   // unsubmitted draft. After a lost response, freeze exactly the attempted data.
   const [uncertain, setUncertain] = useState(recovering);
   const retryData = useRef<FormData | null>(null);
+  const errorSummary = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (error) errorSummary.current?.focus();
+  }, [error]);
   useEffect(() => {
     editor.recovery(formId, uncertain);
     return () => editor.recovery(formId, false);
@@ -47,6 +53,16 @@ export function Form({
   return (
     <form
       className="workflow-form"
+      data-task-values={taskValues||undefined}
+      onInvalidCapture={event => {
+        // Optional sections stay compact, but a field requiring attention must
+        // be visible before the browser tries to focus it.
+        let section = event.target instanceof HTMLElement ? event.target.closest("details") : null;
+        while (section) {
+          section.open = true;
+          section = section.parentElement?.closest("details") || null;
+        }
+      }}
       onSubmit={async (event) => {
         event.preventDefault();
         if (busy || editor.busy) return;
@@ -105,6 +121,11 @@ export function Form({
         }
       }}
     >
+      {error && (
+        <p ref={errorSummary} className="notice error form-error-summary" role="alert" tabIndex={-1}>
+          {error}
+        </p>
+      )}
       <fieldset disabled={busy || editor.busy}>
         <fieldset disabled={uncertain && !!retryData.current}>{children}</fieldset>
         <div className="actions form-actions">
@@ -115,11 +136,6 @@ export function Form({
         </div>
       </fieldset>
       {uncertain && <p className="notice">This request may already be saved. Retry with the original details before starting another record.</p>}
-      {error && (
-        <p className="notice error" role="alert">
-          {error}
-        </p>
-      )}
     </form>
   );
 }

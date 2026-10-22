@@ -6,7 +6,9 @@ A property management application for connected portfolio records, leasing, main
 
 [Platform status](docs/mvp-status.md) is the current summary of implemented features, latest verified deployment, stopped development environment, this PR and remaining acceptance. [Roadmap](docs/product-roadmap.md) tracks stable feature IDs; [backlog](docs/product-backlog.md) retains detailed target acceptance. Jira updates are disabled.
 
-Main/deployed baseline `1945049` includes vendor contacts, preventive maintenance, the source-linked work calendar and private document library. The October 20 [PR59](https://github.com/elijahvw/property-flow-2/pull/59) batch adds management inspections, unsigned agreement preparation and personal in-app notifications with migrations038–040. Those new features await review, merge and deployment. Tests, merged source, deployment and real-account acceptance are distinct.
+The October 22 local batch adds separate vacancy/readiness and owner-controlled rental listings, inquiry/application review and draft-lease conversion, resident maintenance replies, named shared lease documents and saved lease/renewal/inspection tasks. It includes additive migrations041–045 and remains unpushed, undeployed and unaccepted. [Batch scope, checks and next work](docs/feature-batch-2026-10-22.md).
+
+Merged source `75d5342` includes PR59 inspections, unsigned agreement preparation and personal in-app notifications (migrations038–040). Last documented deployment remains `1945049`; the development environment was subsequently stopped, and current cloud state was not queried here. The October 21 [full platform audit](docs/platform-audit-2026-10-21.md) adds local usability, navigation/form, access-race/error and dependency improvements. [Updated roadmap](docs/product-roadmap.md) separates local changes, merged source, deployment and real-account acceptance.
 
 ## Workflow contracts
 

@@ -1,0 +1,66 @@
+.availability-workspace { min-width: 0; }
+.availability-workspace .page-heading-row { gap: 1.5rem; }
+.availability-workspace .page-heading-row > .actions { flex-wrap: wrap; justify-content: flex-end; }
+.availability-draft { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
+.availability-draft p { margin: 0; }
+.availability-filter-panel { margin-bottom: 1.5rem; }
+.availability-filters { display: grid; grid-template-columns: minmax(12rem, 1.4fr) repeat(4, minmax(9rem, 1fr)); gap: 1rem; }
+.availability-filters label { margin-bottom: .75rem; font-size: .85rem; }
+.availability-unit-filter { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; font-size: .85rem; color: #50636d; }
+.availability-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+.availability-summary > div { background: #fff; border: 1px solid #dce6e1; padding: 1.25rem; border-radius: 12px; }
+.availability-summary h2 { margin-bottom: .3rem; }
+.availability-summary p { font-size: .8rem; margin-bottom: 1rem; }
+.availability-summary dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 0; }
+.availability-summary .availability-pair-counts, .availability-summary .availability-readiness-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.availability-summary dl > div { display: flex; flex-direction: column-reverse; align-items: flex-start; gap: .35rem; }
+.availability-summary dt { font-size: .78rem; color: #52685d; }
+.availability-summary dd { margin: 0; color: #193e31; font-size: 1.8rem; font-weight: 700; line-height: 1.15; }
+.availability-summary > .help { grid-column: 1 / -1; margin: 0; }
+.availability-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 0; }
+.availability-card { background: #fff; border: 1px solid #dce6e1; border-radius: 12px; padding: 1.25rem; min-width: 0; }
+.availability-unit-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+.availability-property { font-size: .8rem; color: #53675e; text-decoration: none; }
+.availability-unit-heading h3 { margin: .3rem 0 0; font-size: 1.15rem; overflow-wrap: anywhere; }
+.availability-unit-heading h3 a { text-decoration: none; }
+.availability-tag { display: inline-flex; border: 1px solid #d5e0db; background: #f2f6f3; color: #3e5549; border-radius: 5px; padding: .2rem .5rem; font-size: .73rem; font-weight: 600; white-space: nowrap; }
+.availability-tag.occupancy-occupied { color: #295474; background: #edf4f9; border-color: #d3e2ed; }
+.availability-tag.occupancy-future { color: #624e82; background: #f4f0fa; border-color: #e0d8ed; }
+.availability-tag.readiness-turnover { color: #815c20; background: #fff6e8; border-color: #eeddbb; }
+.availability-tag.readiness-unavailable { color: #6c4b4b; background: #f9f1f0; border-color: #e8d8d5; }
+.availability-tag.listing-listed { color: #1e5b3e; background: #eaf6ef; border-color: #b9ddc8; }
+.availability-tag.listing-not-listed { color: #52615a; background: #f2f4f2; border-color: #d9e0da; }
+.availability-card-details { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+.availability-rental-listing { grid-column: 1 / -1; }
+.availability-card-details h4 { margin: 0 0 .65rem; font-size: .8rem; color: #52685d; font-weight: 600; }
+.availability-card-details p { font-size: .85rem; margin: .5rem 0; overflow-wrap: anywhere; }
+.availability-card-details .help { font-size: .75rem; }
+.availability-lease a, .availability-lease span { display: block; }
+.availability-lease span { color: #61756a; font-size: .78rem; margin-top: .3rem; }
+.availability-notes { white-space: pre-wrap; }
+.availability-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; border-top: 1px solid #e6ece8; margin-top: 1rem; padding-top: 1rem; font-size: .8rem; }
+.availability-card-actions button { font-size: .8rem; padding: .4rem .65rem; min-height: 38px; }
+.availability-pagination { display: flex; gap: 1rem; justify-content: space-between; align-items: center; margin: 1.5rem 0; font-size: .85rem; }
+.availability-unit-picker ul { display: grid; gap: .5rem; max-height: 45vh; overflow-y: auto; margin: 1rem 0; }
+.availability-unit-picker li button { display: flex; flex-direction: column; align-items: flex-start; gap: .2rem; width: 100%; text-align: left; padding: .75rem; }
+.availability-unit-picker li span { font-size: .8rem; font-weight: 400; color: #53685e; }
+.availability-listing-review { display: grid; gap: .75rem; margin: 0 0 1.25rem; padding: 1rem; border: 1px solid #dce6e1; background: #f7f9f7; border-radius: 8px; }
+.availability-listing-review > div { display: grid; grid-template-columns: minmax(8rem, 1fr) minmax(0, 1.5fr); gap: .75rem; }
+.availability-listing-review dt { color: #53675e; font-size: .82rem; }
+.availability-listing-review dd { margin: 0; font-size: .9rem; font-weight: 600; overflow-wrap: anywhere; }
+@media(max-width:1100px) { .availability-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .availability-list { grid-template-columns: 1fr; } .availability-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media(max-width:600px) {
+  .availability-workspace .page-heading-row > .actions { justify-content: flex-start; }
+  .availability-filters { grid-template-columns: 1fr; gap: .25rem; }
+  .availability-summary { grid-template-columns: 1fr; }
+  .availability-summary dl { gap: .65rem; }
+  .availability-summary dt { font-size: .72rem; }
+  .availability-card { padding: 1rem; }
+  .availability-unit-heading { gap: .6rem; flex-wrap: wrap; }
+  .availability-card-details { grid-template-columns: 1fr; gap: .75rem; }
+  .availability-card-actions { gap: .8rem; }
+  .availability-pagination { gap: .5rem; font-size: .75rem; }
+  .availability-pagination button { padding: .45rem .6rem; font-size: .8rem; }
+  .availability-listing-review > div { grid-template-columns: 1fr; gap: .2rem; }
+}
+.availability-tag.readiness-unreviewed { color: #5c665f; background: #eff2ef; border-color: #d9dfd9; }

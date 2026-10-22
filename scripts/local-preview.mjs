@@ -338,6 +338,34 @@ try {
   if (restoreFile && !(await admin.query(`SELECT 1 FROM information_schema.columns WHERE table_name='Invitation' AND column_name='accountId'`)).rowCount) {
     await admin.query(readFileSync(root + "server/prisma/migrations/202610170030_resident_identity_accounts/migration.sql", "utf8"));
   }
+  // Preview dumps predate different feature batches and do not contain Prisma's
+  // migration ledger. Each additive migration is atomic, so its schema marker
+  // lets an existing dump advance without replaying migrations or replacing data.
+  if (restoreFile) {
+    const upgrades = [
+      ["202610170031_private_documents", { relation: 'public."PrivateDocument"' }],
+      ["202610170032_delegated_maintenance", { table: "CompanyMembership", column: "maintenanceExecution" }],
+      ["202610180033_invitation_workflows", { table: "Invitation", column: "submissionKey" }],
+      ["202610180034_workspace_guidance", { table: "User", column: "guideState" }],
+      ["202610180035_maintenance_vendors", { relation: 'public."Vendor"' }],
+      ["202610180036_preventive_maintenance", { relation: 'public."PreventivePlan"' }],
+      ["202610180037_calendar_target_dates", { relation: "public.calendar_request_targets" }],
+      ["202610190038_lease_inspections", { relation: 'public."LeaseInspection"' }],
+      ["202610190039_agreement_preparation", { relation: 'public."LeaseAgreement"' }],
+      ["202610190040_in_app_notifications", { relation: 'public."NotificationEvent"' }],
+      ["202610220041_maintenance_conversations", { table: "MaintenanceUpdate", column: "authorType" }],
+      ["202610220042_document_sharing", { relation: 'public."DocumentShare"' }],
+      ["202610220043_task_drafts", { relation: 'public."TaskDraft"' }],
+      ["202610220044_vacancy_applications", { relation: 'public."UnitAvailability"' }],
+      ["202610220045_rental_listing_intent", { table: "UnitAvailability", column: "forRent" }],
+    ];
+    for (const [name, marker] of upgrades) {
+      const present = marker.relation
+        ? (await admin.query("SELECT to_regclass($1) IS NOT NULL AS present", [marker.relation])).rows[0].present
+        : (await admin.query("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=$1 AND column_name=$2", [marker.table, marker.column])).rowCount > 0;
+      if (!present) await admin.query(readFileSync(root + `server/prisma/migrations/${name}/migration.sql`, "utf8"));
+    }
+  }
   const runtimePassword = randomUUID();
   const statement = (
     await admin.query(

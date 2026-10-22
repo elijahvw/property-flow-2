@@ -9,6 +9,7 @@ import { ContactInvitationReview } from "../components/ContactInvitation";
 import { Address, PropertyAddressFields } from "../components/Address";
 import { RecordIdentity } from "../components/RecordIdentity";
 import { ResidentLeaseInvitations } from "../components/LeaseInvitations";
+import { ResidentRentSummary } from "../components/ResidentRentSummary";
 import { LeaseInvitationReview } from "../components/LeaseInvitationReview";
 import {
   UserProvisioning,
@@ -17,6 +18,7 @@ import {
 import { DraftReset } from "../components/DraftReset";
 import { PropertyFields } from "../components/PropertyFields";
 import { EditorDialog } from "../components/EditorDialog";
+import "./WorkspaceExperience.css";
 import { UserActivity, ActivityLog } from "../components/UserActivity";
 import React, { useEffect, useState } from "react";
 import { useUserDirectory } from "../useUserDirectory";
@@ -719,17 +721,9 @@ function PropertyDirectory() {
           {propertySuccess}
         </p>
       )}
-      <section
-        className="panel directory-panel"
-        aria-label="Property directory"
-      >
-        <div className="section-heading">
-          <h2>Property directory</h2>
-          <span className="badge">
-            {r.data
-              ? `${r.data.length} ${r.data.length === 1 ? "property" : "properties"}`
-              : "Loading…"}
-          </span>
+      <section className="panel property-filter-panel" aria-labelledby="property-filter-heading">
+        <div className="section-heading"><div><h2 id="property-filter-heading">Find a property</h2><p className="help">Search your portfolio or choose the work you need to review.</p></div>
+          {(query || view !== "all") && <button className="text-button" onClick={() => { const next = new URLSearchParams(params); next.delete("q"); next.delete("view"); setParams(next, {replace:true}); }}>Clear filters</button>}
         </div>
         <div className="directory-toolbar">
           <label className="directory-search">
@@ -761,8 +755,13 @@ function PropertyDirectory() {
               )}
             </select>
           </label>
-          <span className="directory-count" role="status">
-            {rows ? `${rows.length} shown` : "Loading properties…"}
+        </div>
+      </section>
+      <section className="panel directory-panel property-results-panel" aria-label="Property directory">
+        <div className="section-heading">
+          <h2>{query || view !== "all" ? "Matching properties" : "Property directory"}</h2>
+          <span className="directory-count" role="status" aria-live="polite">
+            {rows && r.data ? `${rows.length} of ${r.data.length} ${r.data.length === 1 ? "property" : "properties"}` : "Loading properties…"}
           </span>
         </div>
         {r.error && <LoadState error={r.error} retry={r.reload} />}
@@ -786,11 +785,6 @@ function PropertyDirectory() {
                 ? "Try a different search or property view."
                 : "Add a property to begin organizing its units, people and work."}
             </p>
-            {(query || view !== "all") && (
-              <button className="secondary" onClick={() => setParams({})}>
-                Clear filters
-              </button>
-            )}
           </div>
         ) : (
           <div className="table-wrap">
@@ -1260,17 +1254,19 @@ export function Resident() {
   );
   return (
     <>
-      <header className="page-heading">
+      <header className="page-heading resident-home-heading">
         <p className="eyebrow">Resident</p>
         <h1>My rental</h1>
         <p>View your rental records and updates from your property team.</p>
-        <nav className="actions" aria-label="Resident services">
-          <Link className="button secondary" to="/resident/rent">View rent & payments</Link>
-          <Link className="button secondary" to="/resident/deposits">View security deposit</Link>
-          <Link className="button secondary" to="/resident/maintenance">Maintenance requests</Link>
-          <Link className="button secondary" to="/account">My profile</Link>
-        </nav>
       </header>
+      <ResidentRentSummary />
+      <nav className="resident-service-grid" aria-label="Resident services">
+        <div><Link to="/resident/rent">View rent & payments</Link><p>Check charges, recorded payments and your balance. Find your payment instructions.</p></div>
+        <div><Link to="/resident/maintenance">Maintenance requests</Link><p>Report a problem and follow updates from your property team.</p></div>
+        <div><Link to="/resident/documents">Shared documents</Link><p>Read files your property team has shared with you and confirm receipt.</p></div>
+        <div><Link to="/resident/deposits">View security deposit</Link><p>Review your deposit requirement, receipts and any recorded returns.</p></div>
+        <div><Link to="/account">My profile</Link><p>Keep your contact details and emergency contact up to date.</p></div>
+      </nav>
       {!r.data ? (
         <LoadState error={r.error} retry={r.reload} />
       ) : r.data.length ? (
@@ -1289,11 +1285,6 @@ export function Resident() {
           </p>
         </section>
       )}
-      <p className="help">
-        Use My requests for maintenance and{" "}
-        <Link to="/resident/rent">My rent</Link> for your charges, payments, and
-        balance.
-      </p>
       <ResidentLeaseInvitations />
     </>
   );

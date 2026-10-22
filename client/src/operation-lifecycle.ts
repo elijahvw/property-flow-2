@@ -1,4 +1,5 @@
 export type OperationName =
+  | "application.save" | "application.transition" | "application.convert" | "availability.save" | "document.share" | "document.receipt" | "document.revoke" | "draft.save" | "draft.delete" | "draft.resume" | "maintenance.reply"
   | "notification.state"
   | 'agreement.save' | 'agreement.review'
   | 'inspection.save' | 'inspection.review'

@@ -1,7 +1,8 @@
 import { formatDate } from "../dates";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api, ApiError } from "../api";
 import { Form } from "./Form";
+import {useEditorBusy} from "./EditorDialog";
 export type LeaseReviewData = {
   payload: Record<string, unknown>;
   property: string;
@@ -23,13 +24,19 @@ export function LeaseReview({
   storageKey,
   back,
   saved,
+  prepare,
+  finished,
 }: {
   review: LeaseReviewData;
   storageKey: string;
   back: () => void;
   saved: (row: { id: string }) => void;
+  prepare?:(payload:Record<string,unknown>)=>Promise<Record<string,unknown>>;
+  finished?:()=>Promise<void>;
 }) {
+  const editor=useEditorBusy();
   const [pending, setPending] = useState(!!leasePending(storageKey));
+  const attempt=useRef<LeaseReviewData|null>(leasePending(storageKey));
   const p = review.payload;
   return (
     <Form
@@ -38,14 +45,18 @@ export function LeaseReview({
       operation="lease.create"
       successText="Lease recorded."
       submit={async () => {
-        sessionStorage.setItem(storageKey, JSON.stringify(review));
+        const prepared=attempt.current||{...review,payload:prepare?await prepare(p):p};
+        attempt.current=prepared;
+        sessionStorage.setItem(storageKey, JSON.stringify(prepared));
         setPending(true);
         try {
           const row = await api<{ id: string }>("/api/company/leases", {
             method: "POST",
-            body: p,
+            body: prepared.payload,
           });
           sessionStorage.removeItem(storageKey);
+          editor.completed();
+          void finished?.();
           saved(row);
         } catch (error) {
           if (
@@ -54,6 +65,7 @@ export function LeaseReview({
           ) {
             sessionStorage.removeItem(storageKey);
             setPending(false);
+            attempt.current=null;
           }
           throw error;
         }
@@ -105,7 +117,7 @@ export function LeaseReview({
         {p.previousLeaseId
           ? "This creates a linked draft. End the previous lease before activating the renewal; its existing rent history stays unchanged."
           : "Creating an active lease reserves this unit. A draft can be reviewed and activated later."}{" "}
-        Recurring billing is enabled separately from the rent ledger. This
+        Recurring billing is enabled separately in Rent & payments. This
         record does not create or sign a legal agreement.
       </p>
       {!!p.residentContactId&&<p className="help">This connects the tenant to this property. An active linked resident account receives property access; shared financial access follows the approved leaseholder role. A profile without an account remains available for tracking.</p>}

@@ -47,7 +47,7 @@ test('lease setup selects the only property and opens its choices without a redu
  await page.goto('/company/leases');await page.getByRole('button',{name:'Record a lease',exact:true}).click();
  await expect(page.getByLabel('Property for new lease')).toHaveValue('home');
  await expect(page.getByLabel('Unit for new lease')).toBeVisible();
- await expect(page.getByText('Each tenant has one Auth0 account;', {exact:false})).toBeVisible();
+ await expect(page.getByText('Each tenant has one sign-in account.', {exact:false})).toBeVisible();
  expect(state.keys).toHaveLength(0);
 });
 test('unit search keeps typing responsive and batches the API query',async({page})=>{

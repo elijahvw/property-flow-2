@@ -13,9 +13,11 @@ import {PrismaPg} from '@prisma/adapter-pg';
 import {registerApplication} from '../dist/application.js';
 import {registerSessions,digest} from '../dist/sessions.js';
 import {permissions} from '../dist/access.js';
+import {maintenanceConversationCases} from './maintenance-conversation-cases.mjs';
 import {maintenanceUpdateCases} from './maintenance-update-cases.mjs';
 import {privateDocumentCases} from './private-document-cases.mjs';
 import {workOrderCases} from './work-order-cases.mjs';
+import {documentSharingCases} from './document-sharing-cases.mjs';
 import {documentLibraryCases} from './document-library-cases.mjs';
 import {calendarCases} from './calendar-cases.mjs';
 import {preventiveCases} from './preventive-cases.mjs';
@@ -52,6 +54,7 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  app.setErrorHandler((error,_request,reply)=>error instanceof AccessError?reply.code(error.statusCode).send({error:error.message,code:error.code}):reply.send(error));
  t.after(()=>app.close());const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(app,db,auth,'https://app.test',undefined,{notificationPublisher:async(tx,input)=>{if(notificationControl.enabled)await publishNotification(tx,input);},documentScanner:async bytes=>{if(scanControl.gate)await scanControl.gate();if(scanControl.fail)throw new AccessError(503,'SCANNER_UNAVAILABLE','Test scanner unavailable');return bytes.includes(Buffer.from('EICAR'))?'rejected':'clean';}});
  const call=async(user,method,path,payload,extra={})=>{
+ if(payload&&method==='PATCH'&&path.startsWith('/api/company/members/')&&!Object.hasOwn(payload,'expectedVersion'))payload={...payload,expectedVersion:(await db.companyMembership.findUnique({where:{userId:decodeURIComponent(path.split('/').pop())}}))?.version};
  if(payload&&method==='PATCH'&&path.startsWith('/api/company/maintenance/')&&!Object.hasOwn(payload,'expectedVersion'))payload={...payload,expectedVersion:(await admin.query('SELECT version FROM "MaintenanceRequest" WHERE id=$1',[path.split('/').pop()])).rows[0]?.version||1};
  if(payload&&method==='PATCH'&&path.startsWith('/api/platform/companies/')&&!Object.hasOwn(payload,'expectedVersion'))payload={...payload,expectedVersion:(await db.company.findUnique({where:{id:path.split('/').pop()}}))?.version};
  return app.inject({method,url:path,headers:{...(user?{cookie:`__Host-pf-session=token-${user}`} : {}),origin:'https://app.test','x-csrf-token':'csrf',...extra},...(payload?{payload}:{})});};
@@ -170,6 +173,7 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
   const relocated=(await call('owner','GET',`/api/company/maintenance/${row.id}`)).json();assert.equal(relocated.version,3);assert.deepEqual(relocated.activity[0].changes.unitId,{from:'Apartment 1',to:'Property-wide'});
  });
  await t.test('maintenance progress updates',async updateTest=>maintenanceUpdateCases(updateTest,admin,db,call,app,id));
+ await t.test('resident maintenance conversations',async sub=>{notificationControl.enabled=true;try{await maintenanceConversationCases(sub,admin,db,call,app,id);}finally{notificationControl.enabled=false;}});
  await t.test('maintenance paid expense sources',async costTest=>maintenanceCostCases(costTest,admin,db,call,app,id));
  await t.test('portfolio counts use complete company records and respect role boundaries',async()=>{
   const owner=(await call('owner','GET','/api/company/property-directory')).json();assert.equal(owner.items.length,1);assert.equal(owner.items[0].id,'home');assert.equal(owner.items[0].activeUnits,1);assert.equal(owner.items[0].occupiedUnits,0);assert.equal(owner.items[0].openMaintenance,(await admin.query(`SELECT count(*)::int n FROM "MaintenanceRequest" WHERE "companyId"='a' AND status IN ('open','in_progress')`)).rows[0].n);
@@ -310,5 +314,6 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  await t.test('private document library',async sub=>documentLibraryCases(sub,admin,call,app));
  await t.test('lease inspections and retained comparison',async sub=>inspectionCases(sub,admin,db,call,app));
  await t.test('unsigned agreement preparation and review',async sub=>agreementCases(sub,admin,db,call,app));
+ await t.test('named resident document sharing',async sub=>documentSharingCases(sub,admin,db,call));
  await t.test('durable scoped in-app notifications',async sub=>{notificationControl.enabled=true;await notificationCases(sub,admin,db,call,app);});
 });

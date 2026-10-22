@@ -1,16 +1,20 @@
 # Property Flow platform status
 
-Verified October 20, 2026 from current main, GitHub PR/deployment records and local release checks. This is the current status entry point; dated implementation checkpoints below are historical. The [roadmap](product-roadmap.md) tracks scope and the [acceptance log](workflow-acceptance-2026-10-18.md) retains unfinished real-account testing.
+Source reconciled October 22, 2026 from checked-out merged `75d5342` (PR59). Deployment evidence below remains the last documented October 19 observation; current cloud state was not queried. October 21 local audit changes and production evidence gates are in the [audit register](platform-audit-2026-10-21.md). This is the current status entry point; dated implementation checkpoints below are historical. The [roadmap](product-roadmap.md) tracks scope and the [acceptance log](workflow-acceptance-2026-10-18.md) retains unfinished real-account testing.
+
+## October 22 feature batch — local, release and acceptance pending
+
+Maintenance request replies with management in-app notices, named resident document sharing/receipt, durable account-owned lease/renewal/inspection task drafts, and manual vacancy/readiness, owner-controlled rental listings and inquiry/application-to-draft-lease workflows are implemented and validated in the cloud workspace. These additions reuse existing sources and role boundaries. Before the owner-listing refinement, the full client suite passed 277/277 and the three disposable database suites passed 368/368; the owner-listing correction subsequently passed 25 focused UI, 55 disposable leasing/API and 28 client unit checks plus both builds, preserving all 63 preview business-table fingerprints. Apply additive migrations041–045 with the matching client/API only during the authorized release; undeployed PR59 also needs038–040. [Batch, checks and remaining work](feature-batch-2026-10-22.md).
 
 ## Current release and operating state
 
-Main is `1945049` ([merged PR57](https://github.com/elijahvw/property-flow-2/pull/57)). PRs54–57 are merged: vendor contacts, preventive schedules, maintenance calendar and private document library. [Deploy Dev run 39212763617](https://github.com/elijahvw/property-flow-2/actions/runs/39212763617) successfully rolled out the matching backend/frontend and passed database readiness, public/authentication checks and hosted backend metrics/logs/traces on October 19. The release contains migrations035–037.
+Last documented deployed release is `1945049` ([merged PR57](https://github.com/elijahvw/property-flow-2/pull/57)). PRs54–57 are merged: vendor contacts, preventive schedules, maintenance calendar and private document library. [Deploy Dev run 39212763617](https://github.com/elijahvw/property-flow-2/actions/runs/39212763617) successfully rolled out the matching backend/frontend and passed database readiness, public/authentication checks and hosted backend metrics/logs/traces on October 19. The release contains migrations035–037.
 
-[Dev stop run 39214885405](https://github.com/elijahvw/property-flow-2/actions/runs/39214885405) subsequently succeeded on October 19. The user reports the app stopped; it has not been started, deployed or changed in the cloud during this PR preparation. Current AWS resource state and a fresh live health check were not queried. A later Start and complete signed-in acceptance remain separate from the successful deployment/Stop records.
+[Dev stop run 39214885405](https://github.com/elijahvw/property-flow-2/actions/runs/39214885405) subsequently succeeded on October 19. The user reports the app stopped; it has not been started, deployed or changed in the cloud during this audit. Current AWS resource state and a fresh live health check were not queried. A later Start and complete signed-in acceptance remain separate from the successful deployment/Stop records.
 
-## New batch — PR59 awaiting review, merge and deployment
+## Merged source — PR59, deployment and acceptance unverified
 
-[PR59](https://github.com/elijahvw/property-flow-2/pull/59) targets main with the following features:
+[PR59](https://github.com/elijahvw/property-flow-2/pull/59) is merged at `75d5342` with the following features:
 
 - **PF-16 inspections:** lease move-in/out condition items, retained private evidence, save/submit/review/reopen, immutable comparison and settlement source navigation. Observations never create charges or deduct deposits. Management only. [Contract](lease-inspections.md).
 - **PF-17 agreement preparation:** versioned unsigned document packages, exact intended recorded signers, source-change detection, preparation approval/requested changes/reopen/cancel and retained originals/history. Management approval is not an electronic signature. [Contract](lease-agreements.md).
@@ -24,13 +28,13 @@ Owners/managers have connected properties, units, tenants/accounts/households, l
 
 ## Remaining scope and readiness
 
-The platform is a substantial development product with connected operating workflows; it is not fully accepted for production. Staff/leaseholder/occupant journeys and remaining owner/manager financial, export, draft/recovery and administration scenarios remain unchecked in the live acceptance log. Auth0 password-email branding remains open; SES is sandbox-only. No new support request, setup email, password request or provider activation is part of this batch.
+The platform is a substantial development product with connected operating workflows; it is not fully accepted for production. Staff/leaseholder/occupant journeys and remaining owner/manager financial, export, draft/recovery and administration scenarios remain unchecked in the live acceptance log. Auth0 password-email branding remains open; SES is sandbox-only. No support request, setup email, password request or provider activation was performed by this audit.
 
 Electronic signatures, conversations, scheduled/external notifications, resident document sharing/uploads, full as-of accounting/reconciliation, imports, vacancy/applications and company entitlements remain future or partial scope. Stripe subscriptions and payment collection stay last. Backend telemetry passed the last deployment check; role-complete browser telemetry, infrastructure collection, synthetics and controlled incident/restore acceptance retain their documented gaps. Tests, merged code, deployment and user acceptance are different evidence states.
 
 Jira updates are disabled. Repository docs and PR evidence are the current tracking source. No production-readiness percentage or completion date is claimed.
 
-## Release-checkout validation
+## Historical PR59 release-checkout validation
 
 Both production builds passed, along with 122 maintenance/notification,30 leasing and 177 finance disposable PostgreSQL/API/browser checks (329 total), the full 230 UI suite,85 server units (5 other database suites skipped here),28 client units and 88 operations checks. Documentation relative links, diff and Start/Stop inventory guards passed. These results support PR review, not real-account acceptance or a cloud rollout claim. Hosted exact-head CI is checked separately after publication.
 
@@ -72,7 +76,7 @@ Units/leases PR #17 CI initially exposed a stale-edit fixture race; its reload a
 
 ## Units and lease records checkpoint — 2026-10-14
 
-Worktree `/Users/elijahward/Documents/ChatGPT/Property Flow/units-leases`, branch `codex/units-leases-mvp`, based on deployed main `143432db915e4aff9d999260e24febdfbfa45897`. Existing maintenance/source worktrees were preserved. User authorized continued feature work while offline; merge and further deployment still require approval.
+Worktree `<project>/units-leases`, branch `codex/units-leases-mvp`, based on deployed main `143432db915e4aff9d999260e24febdfbfa45897`. Existing maintenance/source worktrees were preserved. User authorized continued feature work while offline; merge and further deployment still require approval.
 
 Owners/managers can create, rename, archive and restore property units; staff retain read-only unit access. Owners/managers can create and edit draft/active/ended lease records for currently active accepted residents assigned to that property, with start/end dates and exact integer-cent monthly rent in USD. End dates are inclusive record dates; open-ended records are allowed except for ended status. Unit/resident identity is immutable on an existing lease. Status is manually maintained, not inferred occupancy, signed-contract validity or payment status. There is one manually active lease per unit, enforced by a PostgreSQL partial unique index; drafts/ended history remain available. Leases do not grant resident access or automatically restore assignments. Manager history survives resident revocation/transfer; ended records remain editable afterward.
 
@@ -84,7 +88,7 @@ Limits: USD-only internal records, one primary resident per record, manually mai
 
 ## Approved development release and manual acceptance setup
 
-PR16 merged at `143432d`. Deploy Dev run **38510462932** completed successfully from that exact main revision, with frontend/backend rebuild and `run_terraform=never`: https://github.com/elijahvw/property-flow-2/actions/runs/38510462932. AWS account 800754316001, us-east-1, one running stable ECS task; running app image digest matches the SHA-tagged release, ALB target healthy. Public homepage, DB readiness, unauthenticated bootstrap 401, API 404 and frontend deep-link smoke checks pass. App: https://drfbeumseaytt.cloudfront.net. This verifies rollout/public smoke only, not real owner/manager/resident acceptance. User has no test accounts yet and will perform a manual pass before providing emails for automation.
+PR16 merged at `143432d`. Deploy Dev run **38510462932** completed successfully from that exact main revision, with frontend/backend rebuild and `run_terraform=never`: https://github.com/elijahvw/property-flow-2/actions/runs/38510462932. Development AWS account in us-east-1, one running stable ECS task; running app image digest matches the SHA-tagged release, ALB target healthy. Public homepage, DB readiness, unauthenticated bootstrap 401, API 404 and frontend deep-link smoke checks pass. App: https://drfbeumseaytt.cloudfront.net. This verifies rollout/public smoke only, not real owner/manager/resident acceptance. User has no test accounts yet and will perform a manual pass before providing emails for automation.
 
 Create seven distinct verified login identities in two test companies, using the existing platform administrator to create companies and assign initial owners:
 - Company A: owner, manager, staff, resident A1, resident A2.
@@ -143,7 +147,7 @@ Maintenance commit `c7aef20` retains validated harness `1cf022e` (source `496a66
 
 ## Bounded maintenance requests — 2026-10-14
 
-Implemented on `maintenance-requests-mvp` in `/Users/elijahward/Documents/Codex/2026-10-13/task-7/maintenance-requests`, starting from committed assignment head `940c905`. The source's dirty harness was left untouched; final harness commit `496a663caf65706a54460022fb0021afdc0466d0` was safely cherry-picked as `1cf022e`. The assignment author is separately correcting opaque Auth0 subject validation; that upcoming dependency must be integrated before publication. Maintenance never validates authenticated subject IDs with the property/request ID whitelist.
+Implemented on `maintenance-requests-mvp` in the isolated maintenance checkout, starting from committed assignment head `940c905`. The source's dirty harness was left untouched; final harness commit `496a663caf65706a54460022fb0021afdc0466d0` was safely cherry-picked as `1cf022e`. The assignment author is separately correcting opaque Auth0 subject validation; that upcoming dependency must be integrated before publication. Maintenance never validates authenticated subject IDs with the property/request ID whitelist.
 
 Resident creation accepts only propertyId, title (1–160 characters), description (1–4000), and priority low/normal/high. Company and requester come from the session. Resident list returns only their own requests for currently assigned properties; owner/manager list returns company history, with status/property filters. Staff and platform-only users have no maintenance access. Statuses open/in_progress/resolved permit any transition, including reopening; repeated same-status updates do not create audit changes. Creation and actual status changes are audited without copying request descriptions into audit detail. Minimal responses contain request fields and property name, without requester email/identity or company identifiers. All mutations require same Origin and session CSRF token, independently of the shared session middleware.
 
@@ -216,7 +220,7 @@ The strengthened PostgreSQL cases are **authored and syntax-checked, not execute
 
 ## Resident property assignment slice — 2026-10-14
 
-Implemented on `resident-property-assignments` from clean owner-onboarding `cb80edeb93eeec2275671eb0f2c21b0b9df2f26e`, in an isolated local clone at `/Users/elijahward/Documents/Codex/2026-10-13/task-5/resident-assignments`. The reviewed source checkout and its Git metadata were not modified. No ancestor/repository AGENTS.md was found. No push, merge, deployment, infrastructure provision, package installation, migration application, or existing database operation occurred. Stop here for independent review before publication.
+Implemented on `resident-property-assignments` from clean owner-onboarding `cb80edeb93eeec2275671eb0f2c21b0b9df2f26e`, in an isolated local clone. The reviewed source checkout and its Git metadata were not modified. No ancestor/repository AGENTS.md was found. No push, merge, deployment, infrastructure provision, package installation, migration application, or existing database operation occurred. Stop here for independent review before publication.
 
 ### Completed behavior
 
@@ -293,18 +297,19 @@ The reviewer found the dual-role invitation compatibility defect described above
 
 CI now installs Chromium (with Linux dependencies) and runs `npx playwright test -c playwright.onboarding.config.ts --reporter=line,junit` in the existing lint-and-test job. `PLAYWRIGHT_JUNIT_OUTPUT_FILE=test-results/onboarding.xml` feeds the existing report artifact/upload steps. The focused config starts only a localhost Vite server; all API calls are intercepted fixtures. No additional service, database or deployment is needed for this suite. Workflow wiring is source-reviewed only; no remote CI run was dispatched.
 
-The original implementation temporarily used this exact root dependency symlink in the task worktree:
+The original implementation temporarily used a root dependency symlink in the task worktree (portable placeholder shown below):
 
 ```sh
-ln -s /Users/elijahward/Documents/Codex/2026-10-12/existing-saas-foundations-project-best-use/work/auth-overhaul/node_modules node_modules
+# Replace /path/to/dependency-checkout with an existing local checkout.
+ln -s /path/to/dependency-checkout/node_modules node_modules
 ```
 
-That symlink supplied React, TypeScript, Vite, Playwright and the previously generated Prisma client. Chromium was already installed under `/Users/elijahward/Library/Caches/ms-playwright/chromium-1208` (headless shell also cached). No package installation or browser download was performed. The symlink was removed before the original clean handoff, explaining why a reviewer without dependencies could not rerun Node/Playwright tests.
+That symlink supplied React, TypeScript, Vite, Playwright and the previously generated Prisma client. Chromium was already installed in the local Playwright browser cache (headless shell also cached). No package installation or browser download was performed. The symlink was removed before the original clean handoff, explaining why a reviewer without dependencies could not rerun Node/Playwright tests.
 
 For this follow-up, dependencies were copied into an ordinary ignored worktree directory using macOS APFS cloning, preserving the source dependency tree:
 
 ```sh
-cp -cR /Users/elijahward/Documents/Codex/2026-10-12/existing-saas-foundations-project-best-use/work/auth-overhaul/node_modules node_modules
+cp -cR /path/to/dependency-checkout/node_modules node_modules
 ```
 
 This ignored directory is retained for local review. For a fresh checkout without that cache, use Node 22, install from the root lockfile, generate Prisma client using only a dummy build URL, and install Chromium. These preparation commands do not run migrations or require a live database:
@@ -335,4 +340,4 @@ Follow-up results: 21 Node tests, 12 browser fixture tests, both TypeScript chec
 
 ## Historical release evidence
 
-The earlier audit record is `/Users/elijahward/Documents/Codex/2026-10-13/task/PROPERTYFLOW-MVP-STATUS.md`. Its parent-supplied evidence confirms successful development deployment of PR12 merge `d4760b32718da5b9e8b5a6a8e6bc51dbcc15979f`: [Deploy Dev run 38497232143](https://github.com/elijahvw/property-flow-2/actions/runs/38497232143), and [PR CI run 38495106759](https://github.com/elijahvw/property-flow-2/actions/runs/38495106759). Those are historical results, not a fresh verification or a deployment of this slice. Authenticated acceptance remains outstanding; production deployment is not claimed.
+The earlier audit record is kept outside the repository. Its parent-supplied evidence confirms successful development deployment of PR12 merge `d4760b32718da5b9e8b5a6a8e6bc51dbcc15979f`: [Deploy Dev run 38497232143](https://github.com/elijahvw/property-flow-2/actions/runs/38497232143), and [PR CI run 38495106759](https://github.com/elijahvw/property-flow-2/actions/runs/38495106759). Those are historical results, not a fresh verification or a deployment of this slice. Authenticated acceptance remains outstanding; production deployment is not claimed.

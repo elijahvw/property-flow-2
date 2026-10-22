@@ -87,9 +87,9 @@ test('management-created requests offer internal updates only and fit a phone vi
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
 });
 
-test('residents read only shared progress and cannot record updates',async({page})=>{
+test('residents see only shared conversation and no management update controls',async({page})=>{
  const state=await fixture(page);state.rows.push(sample());state.updates.push({id:'private',content:'Private management estimate.',visibility:'internal',author:'Manager',createdAt:'2026-10-16T13:00:00Z'},{id:'shared',content:'The visit is planned for Friday.',visibility:'resident',author:'Manager',createdAt:'2026-10-16T14:00:00Z'});await page.goto('/resident/maintenance/request');
- await expect(page.getByRole('heading',{name:'Updates from your property team',exact:true})).toBeVisible();await expect(page.getByText('The visit is planned for Friday.',{exact:true})).toBeVisible();await expect(page.getByText('Private management estimate.',{exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Add update',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('heading',{name:'Conversation with your property team',exact:true})).toBeVisible();await expect(page.getByText('The visit is planned for Friday.',{exact:true})).toBeVisible();await expect(page.getByText('Private management estimate.',{exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Add update',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'Send reply',exact:true})).toBeVisible();
 });
 
 test('revoked request access clears update content and the open private draft',async({page})=>{

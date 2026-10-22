@@ -270,7 +270,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
           {resident ? "My rental" : "Money · Rent operations"}
         </p>
         <h1>
-          {leaseId ? "Rent ledger" : resident ? "My rent" : "Rent & balances"}
+          {"Rent & payments"}
         </h1>
         <p>
           {resident
@@ -579,7 +579,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                                   })
                                 }
                               >
-                                Open ledger →
+                                View rent & payments →
                               </Link>
                               <Link to={statementPath(a.lease.id, resident, { ...statementContext(params), statementFrom: "rent", ...(propertyId ? { propertyId } : {}) })}>View statement →</Link>
                             </div>

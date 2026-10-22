@@ -55,6 +55,7 @@ test('paid expense review retains an interrupted link and opens its exact financ
   await page.getByRole('button', { name: 'Link expense', exact: true }).click(); await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible(); await page.getByRole('button', { name: 'Close', exact: true }).click();await page.getByRole('button',{name:/^(Save draft & close|Close & keep recovery)$/,exact:true}).click();
   await page.getByRole('button', { name: 'Link existing expense', exact: true }).click(); await expect(page.getByRole('group', { name: 'Review selected expense' })).toContainText('$45.05'); await page.getByRole('button', { name: 'Link expense', exact: true }).click();
   await expect(page.locator('.cost-total')).toContainText('$45.05'); expect(state.links.length).toBe(1); expect(state.posts[0]).toEqual(state.posts[1]);
+  expect(await page.evaluate(() => { const event = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(event); return event.defaultPrevented; })).toBe(false);
   await page.getByRole('link', { name: 'TX-102 · View transaction →', exact: true }).click(); await expect(page).toHaveURL(/entryId=e2/); await expect(page.getByRole('heading', { name: 'Maple House · expense · $45.05', exact: true })).toBeVisible(); await expect(page.getByText('Boiler repair', { exact: true })).toHaveCount(0);
   await page.getByRole('link', { name: '← Back to maintenance request', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Kitchen tap leak', exact: true })).toBeVisible();
 });

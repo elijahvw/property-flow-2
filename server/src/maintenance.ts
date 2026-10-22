@@ -40,6 +40,7 @@ const updateSelect = {
   id: true,
   content: true,
   visibility: true,
+  authorType: true,
   createdAt: true,
   creator: { select: { name: true } },
 } as const;
@@ -320,8 +321,8 @@ export function registerMaintenance(
           orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 51,
         });
         return page(rows.map(row => {
-          const { creator, ...safe } = row;
-          return { ...safe, author: resident ? "Property team" : creator?.name || "Recorded team member" };
+          const { creator, authorType, ...safe } = row;
+          return { ...safe, author: resident ? authorType === "resident" ? "You" : "Property team" : creator?.name || (authorType === "resident" ? "Resident requester" : "Recorded team member") };
         }));
       });
     });
@@ -525,7 +526,7 @@ export function registerMaintenance(
       const previous = await tx.maintenanceUpdate.findFirst({ where: { companyId, createdById: request.principal!.id, submissionKey: key.submissionKey }, select: { ...updateSelect, submissionHash: true } });
       if (previous) {
         sameSubmission(previous.submissionHash, key.submissionHash);
-        const { creator, submissionHash: _hash, ...safe } = previous;
+        const { creator, authorType: _authorType, submissionHash: _hash, ...safe } = previous;
         return { ...safe, author: creator.name || "Recorded team member" };
       }
       if (visibility === "resident" && !(await residentUpdatesAvailable(tx, companyId, id)))
@@ -533,7 +534,7 @@ export function registerMaintenance(
       const row = await tx.maintenanceUpdate.create({ data: { companyId, requestId: id, content, visibility, createdById: request.principal!.id, ...key }, select: updateSelect });
       await audit(tx, request, companyId, id, "maintenance.update.recorded", { updateId: row.id, visibility });
       if (visibility === "resident") await publish(tx, { companyId, actorId: request.principal!.id, kind: "maintenance.update", requestId: id, eventKey: row.id });
-      const { creator, ...safe } = row;
+      const { creator, authorType: _authorType, ...safe } = row;
       return { ...safe, author: creator.name || "Recorded team member" };
     });
   });
