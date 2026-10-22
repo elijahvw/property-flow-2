@@ -1,6 +1,6 @@
 # Property Flow implementation backlog
 
-Status reconciled October 20, 2026 against main/deployed `1945049` and this feature batch. The [roadmap](product-roadmap.md) and [platform status](mvp-status.md) separate implemented, merged, deployed and accepted scope. Acceptance bullets below include the full target capability and must not be read as completed unless explicitly evidenced. PF-16 management inspections, PF-17 unsigned preparation and PF-19 in-app notifications are implemented in this unmerged batch; signatures/external delivery remain future. PF IDs are stable references; Jira updates are disabled.
+Status reconciled October 21, 2026 against merged source `75d5342` (PR59). Last documented deployment remains `1945049`; current live state was not queried. PF-16 management inspections, PF-17 unsigned preparation and PF-19 in-app notifications are merged; deployment/acceptance remain unverified. October 21 audit refinements are local. The [audit and release gates](platform-audit-2026-10-21.md), [roadmap](product-roadmap.md) and [platform status](mvp-status.md) separate these evidence states. PF IDs are stable; Jira is disabled. Acceptance below describes target outcomes, not a claim of completion.
 
 Each item is an epic to split into bounded PRs. Dependencies are prerequisites, not reasons to delay unrelated work. P1 completes core operating jobs; P2 broadens coverage; P3 commercializes/connects providers. PF-23/PF-24 accompany every increment. Use the roadmap's build sequence rather than sorting solely by priority.
 
@@ -30,20 +30,19 @@ Acceptance:
 - Directory/rent/deposit links open that exact lease and preserve property context. No silent selection of another lease.
 - Tenant projection excludes management actions/notes; staff gain no financial access through the new route.
 
-### PF-03 · Offline contacts and verified portal linking — P1
+### PF-03 · Resident accounts and independently approved portal access — P1, foundation merged (#44/#48)
 
-Audience: owner/manager and prospective/current tenant. Dependencies: PF-01/PF-02 surfaces and additive migration design.
+Audience: owner/manager and prospective/current tenant. Dependencies: PF-01/PF-02 and Auth0 exact issuer/subject identity. Historical offline-contact checkpoints describe the migration path; they do not authorize account-free new participation. The current unified-account contract in [resident contacts](resident-contacts.md) and AGENTS.md governs.
 
-Baseline: contact fields are on CompanyMembership; Lease.residentId references User. A user currently has one company membership. Recording a primary leaseholder and granting portal access are coupled. PF-03a now adds a company-owned contact identity bridge/backfill and dual writes without switching authorization or forms; see [contract and rollout](resident-contacts.md). The current PF-03b review adds offline primary leaseholder forms and, at the user’s explicit request, optional invitations and verified same-profile linking.
-
-Delivered foundation: contact identity/backfill and compatibility. Current review: contact/lease creation UI with connected optional invitations and verified linking, as requested by the user. Preserve existing source IDs/history or provide explicit migration mappings; do not rebuild financial records.
+Delivered: legacy contacts/source IDs retained; new tenants and every new leaseholder/occupant require an existing or precreated Auth0 account. Account preparation, contact details, company/property authority, owner approval, portal activation and first sign-in are separate states. New participation does not require a prior sign-in.
 
 Acceptance:
-- Add an offline tenant and record a lease/manual rent/deposit without sending an invitation or creating an identity-provider user.
-- Preview/confirm invitation; verified acceptance links the intended company/contact. Email matching alone never grants authority or merges identities.
-- Duplicate suggestions require review. Merging contacts cannot silently combine money or household liability.
-- Revoking portal access retains business history. Former tenants remain searchable under an explicit archive policy.
-- Test backfill/retry/rollback, concurrent linking, changed email, existing membership elsewhere and revoked invitation. Multi-company login membership is a separate design, not an assumed side effect.
+- Create or select the intended account before tenant/household creation; retries reuse its exact identity and never create a second account after response loss.
+- Record tenancy and manual financial activity without automatically sending a message or granting portal authority. Explain account-ready, awaiting approval, invitation pending, verified acceptance and portal-active states in plain English.
+- Preview and approve the exact recipient/account/lease role before invitation. Email matching alone never links identities or grants access.
+- Retain existing contact/lease/financial source IDs and immutable history. Duplicate reconciliation is reviewed; it never combines liability or money silently.
+- Revocation retains authorized business history and clears private browser data. Occupants have no financial access; new leaseholders need explicit owner approval.
+- Test provider failure, lost-response account preparation, changed email, membership elsewhere, expired/revoked invitation, concurrent acceptance and cross-company denial. Complete real-provider/real-account acceptance separately from fixture tests.
 
 ## Financial and lease completion
 
@@ -126,7 +125,7 @@ Acceptance:
 
 Audience: owner/manager and tenant participants. Dependencies: PF-03/PF-05/PF-08 contracts.
 
-User-directed initial slice accompanies PF-02: one shared lease ledger, leaseholder/occupant roster, effective dates, owner-controlled additions/removals/primary contact, leaseholder invitation requests with owner approval for every new resident, and current linked leaseholder financial access. Existing primary residents are backfilled without replacing leases or money. Additional residents can be recorded without logins. Guarantor/dependent-specific models, full contact migration, separately allocated liability and recurring-term transitions remain future scope.
+User-directed initial slice accompanies PF-02: one shared lease ledger, leaseholder/occupant roster, effective dates, owner-controlled additions/removals/primary contact, leaseholder invitation requests with owner approval for every new resident, and current linked leaseholder financial access. Existing primary residents are backfilled without replacing leases or money. Additional residents require prepared/existing accounts but need not have signed in or received portal authority. Guarantor/dependent-specific models, full contact migration, separately allocated liability and recurring-term transitions remain future scope.
 
 Acceptance:
 - Distinguish responsible tenant, occupant/dependent, guarantor and emergency contact with effective dates and sharing rights.
@@ -177,7 +176,7 @@ Acceptance:
 
 ### PF-15 · Private documents and attachments — P1 foundation
 
-Current delivery: Merged/deployed: private PostgreSQL originals, immutable versions, ClamAV quarantine/scan, management library and source download. Larger private object storage, explicit sharing/resident uploads and retention operations remain future.
+Current delivery: Merged/deployed private originals, immutable versions, ClamAV quarantine/scan, management library and source download. October 22 local migration042 adds explicit exact-version sharing to named eligible residents, current-access checked download, revocation/history and optional receipt. Larger private object storage, resident uploads/staff sharing and retention operations remain future. See [sharing contract](resident-document-sharing.md).
 
 Audience: management and explicitly authorized tenant/staff. Dependencies: reviewed private-storage scope; PF-12 delegated authority.
 
@@ -221,7 +220,7 @@ Acceptance:
 
 ### PF-19 · Messages, notifications and controlled reminders — P2
 
-Current delivery: This PR implements atomic in-app source events, fixed recipients, own inbox/unread state, safe read/open replay and current source access. Conversations, scheduled reminders, preferences and external provider delivery remain future. External delivery must use a separately reviewed outbox; the current synchronous in-app event transaction is not an external delivery queue. See [contract](in-app-notifications.md).
+Current delivery: This PR implements atomic in-app source events, fixed recipients, own inbox/unread state, safe read/open replay and current source access. October 22 local migration041 adds requester replies in the existing shared timeline and atomic management reply notices. Scheduled reminders, preferences and external provider delivery remain future. External delivery must use a separately reviewed outbox; the current synchronous in-app event transaction is not an external delivery queue. See [contract](in-app-notifications.md).
 
 Audience: management, scoped staff and tenant. Dependencies: PF-12/source events; attachments require PF-15.
 
@@ -245,13 +244,15 @@ Acceptance:
 
 ### PF-21 · Vacancy, prospects and applications — P2
 
+Current delivery: October 22 local migrations044–045 implement manually reviewed readiness, lease-derived vacancy/coverage, separate owner-controlled rental listings, inquiries, tour/follow-up tasks, applications/decision history and approved conversion to existing/prepared account, tenant contact and real linked draft lease. Release and real-account acceptance remain pending. Public intake, fees, provider screening/syndication, richer readiness-history drilldowns and consent/retention/export operations remain open. [Contract](vacancy-applications.md).
+
 Audience: management, scoped leasing staff and applicant. Dependencies: PF-03/PF-11; private files use PF-15.
 
 Acceptance:
-- Availability distinguishes vacant/occupied/future occupancy/unavailable/turnover using lease dates plus explicit operational exceptions.
+- Vacancy and current/upcoming leases come from recorded lease coverage. Readiness (Ready/Turnover in progress/Unavailable) is separate. All units default to Not listed for rent; only a current owner may explicitly list or remove a rental listing. Readiness saves and new or ended leases never automatically list units.
 - Inquiry → tour/task → application → review decision → approved contact/lease conversion preserves source identity; retries never duplicate people/leases.
 - Sensitive applicant data has narrower authority/retention than normal contact records.
-- Manual applications/availability first. Listings/syndication/screening require separate consent/provider scope.
+- Manual applications, readiness and owner listing intent first. Public listing delivery, syndication and screening require separate consent/provider scope.
 - Optional insurance/utility responsibilities become lease-linked evidence/tasks after private documents. A checkbox never implies provider verification.
 
 ### PF-22 · Company plans, usage and subscription lifecycle — P3
@@ -268,6 +269,8 @@ Acceptance:
 - Cover date boundaries/timezones, overrides, concurrent limit use and platform revocation. Prices/charge automation remain undecided.
 
 ### PF-23 · UI/UX acceptance in every increment — P1 continuous
+
+Current local increment: migration043 stores allowlisted new-lease, renewal and inspection tasks for the current user/company, with 30-day expiry, fresh source/role checks, stale-source review and stable final-action keys. Cross-route protection covers changed editors; exact-unit lease handoff is preserved. Files and other editors remain outside durable task scope. [Contract](task-drafts.md).
 
 Acceptance:
 - Directory → exact detail → action → confirmation → return works for each source; copied URLs/browser back preserve meaningful context/filters.
@@ -326,3 +329,16 @@ Acceptance:
 ## Definition of ready for the next PR
 
 Select one bounded slice; document the user outcome, existing sources, additive schema/API changes, role/property rules, monetary/event contract, meaningful regressions and acceptance. Update backlog/handoff with evidence as work lands. Keep merged, deployed and accepted states separate. The user approves merges and deploys manually; passing tests do not grant that approval.
+
+## October 21 audit acceptance refinements — existing PF IDs
+
+- **PF-02/23:** distinguish global property navigation from directory filtering; separate query/results regions, report complete matching counts, preserve filter focus and query context, and show exactly one current sidebar destination. Group lease sections by purpose and support direct URLs/mobile selectors.
+- **PF-02/07/10/23:** complex lease creation uses a main-page form; short edits/confirmations may use dialogs. Preserve retry identity and inputs after errors, reveal invalid collapsed fields, focus actionable errors and protect leaving unfinished work. Page-local drafts must never be described as durable recovery. Supported Save for later tasks now use the explicit account-owned server-draft contract; this does not expand to every editor. Finish renewal/settlement presentation after the shared contract is accepted.
+- **PF-18:** home connects authorized rental/financial/request state to exact sources. A failed balance source never becomes zero or disables working maintenance/profile services. Occupants see no financial totals.
+- **PF-23:** use Rent & payments for the task; account history/statement for detail; security deposits and cash activity remain distinct. Human event labels never expose internal separators/codes as prose.
+- **PF-03/12/27:** legacy company/access operations use fresh transaction-fenced authority, expected versions and explicit scope. Prove revocation races with isolated PostgreSQL tests. Framework request errors keep accurate HTTP statuses and safe messages.
+- **PF-24/27:** production builds and fixture tests run with reviewed dependencies and both workspace/standalone backend locks. Verify deployment, real-role browser telemetry, restore/rollback and provider delivery independently; no clean-scan or production-ready claim from source review alone.
+
+Detailed findings, evidence, current local fixes and outstanding acceptance: [full audit](platform-audit-2026-10-21.md).
+
+PF-02 contextual setup follow-up: opening lease creation from a unit's history must preselect that exact eligible unit, retain property/unit/directory return filters, and explain when the unit is unavailable. The current explicit review shows the selected unit; do not treat a filtered directory as proof of correct form preselection.

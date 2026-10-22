@@ -13,6 +13,7 @@ datasource db {
 }
 
 model Company {
+  taskDrafts TaskDraft[]
   preventivePlans PreventivePlan[]
   preventiveActions PreventiveAction[]
   preventiveOccurrences PreventiveOccurrence[]
@@ -54,6 +55,10 @@ model Company {
 }
 
 model User {
+  taskDrafts TaskDraft[]
+  receivedDocumentShares DocumentShare[] @relation("DocumentShareRecipient")
+  createdDocumentShares DocumentShare[] @relation("DocumentShareCreator")
+  documentShareActions DocumentShareAction[] @relation("DocumentShareActor")
   notificationEvents NotificationEvent[]
   inboxNotifications InboxNotification[]
   notificationActions NotificationAction[]
@@ -220,6 +225,7 @@ model AuditEvent {
 }
 
 model Property {
+  taskDrafts TaskDraft[]
   notificationEvents NotificationEvent[]
   preventivePlans PreventivePlan[]
   staffAccess StaffPropertyAccess[]
@@ -385,6 +391,7 @@ model MaintenanceCost {
 }
 
 model MaintenanceUpdate {
+  authorType String @default("team")
   id String @id @default(cuid())
   companyId String
   requestId String
@@ -470,6 +477,7 @@ model ResidentContact {
 }
 
 model Lease {
+  documentShares DocumentShare[]
   notificationEvents NotificationEvent[]
   agreements LeaseAgreement[]
   inspections LeaseInspection[]
@@ -526,6 +534,8 @@ model Lease {
 }
 
 model LeaseParticipant {
+  documentShares DocumentShare[]
+  @@unique([id, leaseId, companyId])
   contactId String?
   contact ResidentContact? @relation(fields: [contactId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Restrict)
   @@index([companyId, contactId])
@@ -1008,6 +1018,8 @@ model LeaseTransition {
 }
 
 model PrivateDocument {
+  shares DocumentShare[]
+  @@unique([id, leaseId, companyId])
   lease Lease? @relation(fields:[leaseId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
   request MaintenanceRequest? @relation(fields:[requestId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
   id String @id @default(cuid())
@@ -1023,6 +1035,8 @@ model PrivateDocument {
   @@index([companyId, leaseId, requestId])
 }
 model DocumentVersion {
+  shares DocumentShare[]
+  @@unique([id, documentId, companyId])
   agreementFiles AgreementFile[]
   inspectionEvidence InspectionEvidence[]
   @@unique([id,companyId])
@@ -1284,3 +1298,182 @@ model NotificationAction {
  user User @relation(fields:[userId],references:[id],onDelete:Restrict,onUpdate:Restrict)
  @@unique([companyId,userId,submissionKey])
 }
+
+// Append these models. Add arrays to existing models as shown below.
+model DocumentShare {
+  id String @id @default(cuid())
+  companyId String
+  leaseId String
+  documentId String
+  documentVersionId String
+  participantId String
+  recipientId String
+  createdById String
+  submissionKey String
+  submissionHash String
+  version Int @default(1)
+  sharedAt DateTime @default(now())
+  revokedAt DateTime?
+  receivedAt DateTime?
+  lease Lease @relation(fields:[leaseId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+  document PrivateDocument @relation(fields:[documentId,leaseId,companyId],references:[id,leaseId,companyId],onDelete:Restrict,onUpdate:Restrict)
+  documentVersion DocumentVersion @relation(fields:[documentVersionId,documentId,companyId],references:[id,documentId,companyId],onDelete:Restrict,onUpdate:Restrict)
+  participant LeaseParticipant @relation(fields:[participantId,leaseId,companyId],references:[id,leaseId,companyId],onDelete:Restrict,onUpdate:Restrict)
+  recipient User @relation("DocumentShareRecipient",fields:[recipientId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  creator User @relation("DocumentShareCreator",fields:[createdById],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  actions DocumentShareAction[]
+  @@unique([id,companyId])
+  @@unique([companyId,createdById,submissionKey])
+  @@index([companyId,leaseId,documentId,sharedAt,id])
+  @@index([companyId,recipientId,sharedAt,id])
+}
+model DocumentShareAction {
+  id String @id @default(cuid())
+  companyId String
+  shareId String
+  actorId String
+  action String
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  share DocumentShare @relation(fields:[shareId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+  actor User @relation("DocumentShareActor",fields:[actorId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  @@unique([companyId,actorId,submissionKey])
+  @@index([companyId,shareId,createdAt,id])
+}
+// Existing model additions:
+// User: receivedDocumentShares DocumentShare[] @relation("DocumentShareRecipient")
+// User: createdDocumentShares DocumentShare[] @relation("DocumentShareCreator")
+// User: documentShareActions DocumentShareAction[] @relation("DocumentShareActor")
+// Lease: documentShares DocumentShare[]
+// LeaseParticipant: documentShares DocumentShare[]
+// LeaseParticipant: @@unique([id,leaseId,companyId])
+// PrivateDocument: shares DocumentShare[]
+// PrivateDocument: @@unique([id,leaseId,companyId])
+// DocumentVersion: shares DocumentShare[]
+// DocumentVersion: @@unique([id,documentId,companyId])
+
+
+// Add taskDrafts TaskDraft[] to Company, User and Property.
+model TaskDraft {
+  id String @id @default(cuid())
+  companyId String
+  userId String
+  propertyId String
+  kind String
+  sourceId String?
+  sourceVersions Json
+  values Json
+  context Json
+  title String
+  actionKey String
+  version Int @default(1)
+  submissionKey String
+  submissionHash String
+  lastMutationKey String?
+  lastMutationHash String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime
+  company Company @relation(fields:[companyId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  user User @relation(fields:[userId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  property Property @relation(fields:[propertyId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+  @@unique([companyId,userId,submissionKey])
+  @@index([companyId,userId,expiresAt,updatedAt,id])
+}
+
+
+// Append standalone scalar-ID models; SQL migration supplies existing-source
+// composite foreign keys. No inverse fields on central models are required.
+model UnitAvailability {
+  forRent Boolean @default(false)
+  listedAt DateTime?
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  unitId String
+  status String @default("unreviewed")
+  availableOn DateTime? @db.Date
+  notes String @default("")
+  version Int @default(1)
+  updatedById String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([companyId,unitId])
+  @@index([companyId,propertyId,status])
+}
+model LeasingProspect {
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  unitId String?
+  name String
+  email String
+  phone String?
+  desiredMoveIn DateTime? @db.Date
+  notes String @default("")
+  status String @default("open")
+  version Int @default(1)
+  createdById String
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([id,propertyId,companyId])
+  @@unique([companyId,createdById,submissionKey])
+  @@index([companyId,propertyId,status,createdAt,id])
+}
+model ProspectFollowUp {
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  prospectId String
+  kind String
+  title String
+  dueOn DateTime @db.Date
+  notes String @default("")
+  status String @default("open")
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([companyId,prospectId,dueOn,id])
+}
+model RentalApplication {
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  unitId String
+  prospectId String
+  notes String @default("")
+  status String @default("draft")
+  version Int @default(1)
+  contactId String?
+  leaseId String? @unique
+  createdById String
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([id,propertyId,companyId])
+  @@unique([companyId,createdById,submissionKey])
+  @@index([companyId,propertyId,status,createdAt,id])
+  @@index([companyId,prospectId])
+}
+model AdmissionsEvent {
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  entityType String
+  entityId String
+  action String
+  actorId String
+  version Int
+  submissionKey String
+  submissionHash String
+  snapshot Json
+  createdAt DateTime @default(now())
+  @@unique([companyId,actorId,submissionKey])
+  @@index([companyId,entityType,entityId,createdAt,id])
+}
+// registration: import { registerVacancyApplications } from './vacancy-applications.js';
+// registerVacancyApplications(server,db,authenticate,origin,identityProvider);

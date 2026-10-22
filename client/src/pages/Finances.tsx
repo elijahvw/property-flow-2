@@ -115,7 +115,7 @@ function LedgerWorkspace() {
           Record income received and expenses paid, in USD. These records do not
           collect payments. Use{" "}
           <Link to={propertyLink("/company/rent", filters.propertyId)}>
-            Rent & balances
+            Rent & payments
           </Link>{" "}
           to record lease payments and track balances owed. Record refundable
           deposits in{" "}
@@ -223,7 +223,7 @@ function LedgerWorkspace() {
               Memo (optional)
               <textarea name="memo" maxLength={500} />
             </label>
-            {kind==="income"&&<p className="help">Rent received for a saved lease belongs in <Link to={propertyLink("/company/rent",filters.propertyId)}>Rent & balances</Link>. An unlinked historical rent entry does not change a lease balance.</p>}
+            {kind==="income"&&<p className="help">Rent received for a saved lease belongs in <Link to={propertyLink("/company/rent",filters.propertyId)}>Rent & payments</Link>. An unlinked historical rent entry does not change a lease balance.</p>}
             <p className="help">
               To correct a saved amount, void the entry and record a
               replacement. Your original history is retained.
@@ -345,7 +345,7 @@ function LedgerWorkspace() {
                           )}
                         >
                           Linked deposit receipt{" "}
-                          {recordReference(entry.depositReceipt.reference)} · View deposit ledger
+                          {recordReference(entry.depositReceipt.reference)} · View deposit history
                           →
                         </Link>
                       </p>
@@ -355,7 +355,7 @@ function LedgerWorkspace() {
                         <Link
                           to={`/company/rent?leaseId=${encodeURIComponent(entry.leaseId)}`}
                         >
-                          Linked rent payment · View lease ledger →
+                          Linked rent payment · View rent & payments →
                         </Link>
                       </p>
                     )}

@@ -264,7 +264,7 @@ function DepositDirectory({ resident }: { resident: boolean }) {
                 <p>
                   {resident
                     ? "Your owner or manager records the agreed deposit requirement and receipts."
-                    : "Open a lease's rent ledger and choose Set up deposit. A requirement can be due before move-in."}
+                    : "Open Rent & payments for the lease and choose Set up deposit. A requirement can be due before move-in."}
                 </p>
               </div>
             ) : (
@@ -361,7 +361,7 @@ function DepositDirectory({ resident }: { resident: boolean }) {
                 { leaseId },
               )}
             >
-              View rent ledger
+              View rent & payments
             </Link>
           </p>
         </EditorDialog>

@@ -6,6 +6,7 @@ type RequestKind =
   | "maintenance.created"
   | "maintenance.status"
   | "maintenance.update"
+  | "maintenance.reply"
   | "work.assigned"
   | "work.reopened"
   | "work.approved"
@@ -62,6 +63,8 @@ export const publishNotification: NotificationPublisher = async (tx, input) => {
     if (["maintenance.status", "maintenance.update"].includes(kind)) {
       audience = "requester";
       recipientId = row.requesterId;
+      // Before management intake existed, creation audits had no source field.
+      // Match the existing resident conversation policy for those retained requests.
       // Management-created work has no resident requester delivery contract.
       const creation = await tx.auditEvent.findFirst({
         where: { companyId, targetId: row.id, action: "maintenance.created" },
@@ -69,7 +72,7 @@ export const publishNotification: NotificationPublisher = async (tx, input) => {
       });
       if (
         !creation ||
-        (creation.detail as { source?: string } | null)?.source !== "resident"
+        (creation.detail as { source?: string } | null)?.source === "management"
       )
         return;
     } else if (

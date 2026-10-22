@@ -1,3 +1,7 @@
+import { registerMaintenanceConversations } from "./maintenance-conversations.js";
+import { registerDocumentSharing } from "./document-sharing.js";
+import { registerTaskDrafts } from "./task-drafts.js";
+import { registerVacancyApplications } from "./vacancy-applications.js";
 import { registerNotifications } from "./notifications.js";
 import type { NotificationPublisher } from "./notification-events.js";
 import { registerWorkspaceGuide } from "./workspace-guide.js";
@@ -174,6 +178,7 @@ export async function serializable<T>(db: PrismaClient, run: (tx: Tx) => Promise
   }
 }
 async function activeCompany(tx: Tx, id: string) {
+  await tx.$queryRaw`SELECT id FROM "Company" WHERE id=${id} FOR SHARE`;
   const company = await tx.company.findUnique({ where: { id } });
   if (!company) throw new AccessError(404, "NOT_FOUND", "Company not found.");
   if (company.status !== "active")
@@ -253,6 +258,10 @@ export function registerApplication(
   registerWorkOrders(server, db, authenticate, origin, options.notificationPublisher);
   registerAccountPasswords(server, db, authenticate, origin, identityProvider);
   registerMaintenance(server, db, authenticate, origin, options.notificationPublisher);
+  registerMaintenanceConversations(server, db, authenticate, origin, options.notificationPublisher);
+  registerDocumentSharing(server, db, authenticate, origin);
+  registerTaskDrafts(server, db, authenticate, origin);
+  registerVacancyApplications(server, db, authenticate, origin, identityProvider);
   registerVendors(server, db, authenticate, origin);
   registerPreventive(server, db, authenticate, origin, options.notificationPublisher);
   registerWorkCalendar(server, db, authenticate);
@@ -287,6 +296,14 @@ export function registerApplication(
   const serial = <T>(request: FastifyRequest, run: (tx: Tx) => Promise<T>, membershipMayBeEstablished = false) =>
     serializable(db,
       async (tx) => {
+        // Legacy administration/assignment routes use the same authority fence as
+        // scoped operations. A queued revocation or company suspension must
+        // finish before authorization is read again, including on a retry.
+        if (request.method === "GET")
+          await tx.$queryRaw`SELECT id FROM "User" WHERE id=${request.principal!.id} FOR SHARE`;
+        else await lockTarget(tx, request.principal!.id);
+        if (request.principal!.membership?.companyId)
+          await tx.$queryRaw`SELECT id FROM "Company" WHERE id=${request.principal!.membership.companyId} FOR SHARE`;
         const current = await tx.user.findUnique({
           where: { id: request.principal!.id },
           include: { membership: { include: { company: true } } },
@@ -348,7 +365,7 @@ export function registerApplication(
 
   server.get("/api/platform/users", auth, async (request) => {
     platform(request);
-    return db.user.findMany({
+    return serial(request, tx => tx.user.findMany({
       orderBy: { email: "asc" },
       select: {
         id: true,
@@ -362,7 +379,7 @@ export function registerApplication(
         companyId: true,
         role: true,
       },
-    });
+    }));
   });
   server.put<{ Params: { userId: string } }>(
     "/api/platform/users/:userId/membership",
@@ -518,14 +535,13 @@ export function registerApplication(
 
   registerCompanyProfile(server,db,authenticate,origin);
   server.get("/api/company/members", auth, async (request) => {
-    const companyId = scope(request, "members.manage");
-    return db.companyMembership.findMany({
+    return scoped(db, request, "members.manage", (tx, companyId) => tx.companyMembership.findMany({
       where: { companyId },
       select: {
         ...membershipAccessSelect, user: { select: { id: true, name: true, email: true, status: true } },
       },
       orderBy: { createdAt: "asc" },
-    });
+    }));
   });
   server.patch<{ Params: { userId: string } }>(
     "/api/company/members/:userId",
@@ -549,7 +565,7 @@ export function registerApplication(
         });
         if (!member || member.companyId !== companyId)
           throw new AccessError(404, "NOT_FOUND", "Member not found.");
-        if (Object.hasOwn(body, "expectedVersion") && body.expectedVersion !== member.version)
+        if (!Object.hasOwn(body, "expectedVersion") || body.expectedVersion !== member.version)
           throw new AccessError(409, "STALE_MEMBERSHIP", "This person's access changed. Close and reopen their record before saving.");
         if (member.role === "owner")
           throw new AccessError(

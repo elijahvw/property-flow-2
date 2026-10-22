@@ -1,5 +1,7 @@
 import { newFixturePage } from "./browser-fixture.mjs";
 import {fixtureIdentities} from "./fixture-identities.mjs";
+import {taskDraftCases} from './task-draft-cases.mjs';
+import {vacancyApplicationCases} from './vacancy-application-cases.mjs';
 import {renewalCases} from "./renewal-cases.mjs";
 import {staffPropertyAccessCases} from "./staff-property-access-cases.mjs";
 import test from 'node:test';
@@ -200,11 +202,13 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
    await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Leases',exact:true}).click();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await page.getByLabel('Unit for new lease').selectOption(browserUnit[0].id);
    const candidates=(await call('owner','GET','/api/company/properties/home/residents?includeContacts=true')).json();const primary=candidates.find(p=>p.userId==='resident');assert.ok(primary);await page.getByLabel('Primary resident').selectOption(primary.contactId||primary.userId);
    await page.getByLabel('New lease start date').fill('2026-11-01');await page.getByLabel('New lease end date',{exact:true}).fill('2027-10-31');await page.getByLabel('New lease monthly rent (USD)').fill('1250.50');
-   await page.getByRole('button',{name:'Review lease',exact:true}).click();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();assert.equal(keys.lease[0],keys.lease[1]);
+   await page.getByRole('button',{name:'Review lease',exact:true}).click();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page).toHaveURL(/\/company\/leases\/[^/?]+\?onboarding=household/);await expect(page.getByRole('region',{name:'Record a lease',exact:true})).not.toBeVisible();assert.equal(keys.lease[0],keys.lease[1]);
    assert.equal((await admin.query(`SELECT count(*)::int n FROM "Lease" WHERE "unitId"=$1`,[browserUnit[0].id])).rows[0].n,1);
    assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='lease.created' AND "targetId" IN (SELECT id FROM "Lease" WHERE "unitId"=$1)`,[browserUnit[0].id])).rows[0].n,1);
   }finally{await browser.close();}
  });
  await t.test('staff property access',async scopeTest=>staffPropertyAccessCases(scopeTest,admin,call,db,app));
  await t.test('linked lease renewals',async renewalTest=>renewalCases(renewalTest,admin,call,db));
+ await t.test('vacancies and rental applications',async applicationTest=>vacancyApplicationCases(applicationTest,admin,call,app,db));
+ await t.test('durable personal task drafts',async draftTest=>taskDraftCases(draftTest,admin,call,db));
 });

@@ -95,7 +95,7 @@ export function Statement({ resident = false }: { resident?: boolean }) {
             ←{" "}
             {params.get("statementFrom") === "lease" && !resident
               ? "Back to lease workspace"
-              : "Back to rent ledger"}
+              : "Back to rent & payments"}
           </Link>
           {!resident && <TenantReturnLink />}
           <Link to={resident?`/resident/leases/${encodeURIComponent(leaseId)}/terms`:`/company/leases/${encodeURIComponent(leaseId)}?section=terms`}>Lease terms & changes →</Link>

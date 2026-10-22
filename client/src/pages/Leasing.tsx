@@ -1,3 +1,4 @@
+import {TaskDraftPanel,useTaskDraft,readLeaseDraft,type TaskDraft} from "../components/TaskDraft";
 import { useEditorSelection } from "../useEditorSelection";
 import { useDebouncedValue } from "../useDebouncedValue";
 import { TenantForm,type TenantContact } from "../components/TenantForm";
@@ -384,8 +385,13 @@ function LeaseList() {
   const { data: auth, can } = useAuth();
   const { propertyId: pathPropertyId } = useParams();
   const [params, setParams] = useSearchParams();
-  const [adding, setAdding] = useState(params.get("new") === "lease"),
-    [selected, setSelected, selectedOpen, saveSelectedDraft] = useEditorSelection<Lease | null>(null),
+  const adding = params.get("new") === "lease";
+  const setAdding = (open: boolean) => setParams(previous => {
+    const next = new URLSearchParams(previous);
+    if (open) next.set("new", "lease"); else next.delete("new");
+    return next;
+  }, { replace: !open });
+  const [selected, setSelected, selectedOpen, saveSelectedDraft] = useEditorSelection<Lease | null>(null),
     [renewing, setRenewing, renewingOpen, saveRenewingDraft] = useEditorSelection<Lease | null>(null);
   const contextId = pathPropertyId || params.get("propertyId") || "",
     unitId = params.get("unitId") || "",
@@ -442,6 +448,7 @@ function LeaseList() {
   };
   return (
     <>
+      <div hidden={adding}>
       {contextId && <PropertyNavigation id={contextId} />}
       <header className="page-heading page-heading-row"><div>
         <p className="eyebrow">Leasing</p>
@@ -489,7 +496,9 @@ function LeaseList() {
           ))}
         </div>
       </header>
+      </div>
       <EditorDialog
+        presentation="page"
         open={adding}
         title="Record a lease"
         description="Choose the property, unit, and resident, then add the lease terms."
@@ -506,8 +515,9 @@ function LeaseList() {
         ) : (
           <>
             <label>
-              Property for new lease
+              Property
               <select
+                aria-label="Property for new lease"
                 value={propertyId}
                 onChange={(e) => {
                   const id = e.target.value;
@@ -537,13 +547,13 @@ function LeaseList() {
                 <LeaseCreate
                   propertyId={id}
                   initialContactId={params.get("contactId") || undefined}
+                  initialUnitId={unitId || undefined}
                   propertyName={
                     properties.data!.find((p) => p.id === id)?.name ||
                     "Property"
                   }
                   saved={(row) => {
                     reload();
-                    setAdding(false);
                     navigate(
                       `/company/leases/${encodeURIComponent(row.id)}?onboarding=household`,
                     );
@@ -554,6 +564,7 @@ function LeaseList() {
           </>
         )}
       </EditorDialog>
+      <div hidden={adding}>
       <section className="panel">
         <div className="section-heading">
           <h2>
@@ -740,7 +751,7 @@ function LeaseList() {
                                 <Link
                                   to={`/company/rent?leaseId=${encodeURIComponent(lease.id)}`}
                                 >
-                                  Rent ledger →
+                                  Rent &amp; payments →
                                 </Link>
                                 {leasePending(
                                   `pf:lease-renewal:${auth?.user.id}:${auth?.membership?.companyId}:${lease.id}`,
@@ -861,6 +872,7 @@ function LeaseList() {
           </Form>
         </EditorDialog>
       )}
+      </div>
     </>
   );
 }
@@ -868,11 +880,15 @@ export function LeaseCreate({
   propertyId,
   propertyName,
   initialContactId,
+  initialUnitId,
+  initialTask,
   saved,
 }: {
   propertyId: string;
   propertyName: string;
   initialContactId?:string;
+  initialUnitId?:string;
+  initialTask?:TaskDraft;
   saved: (row: { id:string }) => void;
 }) {
   const auth = useAuth().data,
@@ -880,7 +896,8 @@ export function LeaseCreate({
   const [review, setReview] = useState<LeaseReviewData | null>(() =>
     leasePending(storageKey),
   );
-  const [key, setKey] = useState(() => crypto.randomUUID()),
+  const container=useRef<HTMLDivElement>(null);
+  const [key, setKey] = useState(() => initialTask?.actionKey || crypto.randomUUID()),
     [unitCursor, setUnitCursor] = useState("");
   const [unitOptions, setUnitOptions] = useState<Unit[]>([]);
   const units = useResource<Records<Unit>>(
@@ -890,11 +907,14 @@ export function LeaseCreate({
   const residents=useResource<Candidate[]>(`/api/company/properties/${encodeURIComponent(propertyId)}/residents?includeContacts=true`);
   const [tenantFormRevision,setTenantFormRevision]=useState(0);
   const [addingTenant,setAddingTenant]=useState(false),[newTenant,setNewTenant]=useState<TenantContact|null>(null);
-  const [selectedTenant,setSelectedTenant]=useState<string|null>(initialContactId||null);
+  const [selectedTenant,setSelectedTenant]=useState<string|null>(String(initialTask?.values.residentContactId||initialTask?.values.residentId||initialContactId||"")||null);
   const choices:Candidate[]=[...(residents.data||[]),...(newTenant&&!residents.data?.some(p=>p.contactId===newTenant.id)?[{userId:newTenant.userId,contactId:newTenant.id,name:newTenant.name,email:newTenant.email}]:[])];
   const requestedTenant=selectedTenant??(choices.length===1?(choices[0].contactId||choices[0].userId||""):"");
   const selectedTenantId=choices.some(p=>(p.contactId||p.userId)===requestedTenant)?requestedTenant:"";
   const candidateName=(p:Candidate)=>p.name||p.membership?.user.name||p.email||p.membership?.user.email||"Tenant";
+  const [selectedUnit,setSelectedUnit]=useState<string|null>(String(initialTask?.values.unitId||initialUnitId||"")||null);
+  const task=useTaskDraft({kind:"lease_create",propertyId,initial:initialTask,element:container,disabled:!!leasePending(storageKey),readValues:()=>readLeaseDraft(container.current,choices.find(p=>(p.contactId||p.userId)===selectedTenantId)?.contactId)});
+  const acceptExactUnit=(unit:Unit)=>setUnitOptions(previous=>previous.some(row=>row.id===unit.id)?previous:[...previous,unit]);
   // Browsing options must never remount a pending draft or change its retry identity.
   // Keep already-seen choices so the selected unit survives an independent page load.
   useEffect(() => {
@@ -907,7 +927,9 @@ export function LeaseCreate({
       });
   }, [units.data]);
   return (
-    <>
+    <div ref={container}>
+      {!review && <TaskDraftPanel task={task}/>}
+      {selectedUnit&&!unitOptions.some(unit=>unit.id===selectedUnit)&&<ExactLeaseUnit id={selectedUnit} propertyId={propertyId} loaded={acceptExactUnit}/>}
       <EditorDialog open={addingTenant} title="Add tenant for this lease" onSaveDraft={()=>setAddingTenant(false)} onClose={()=>{setAddingTenant(false);setTenantFormRevision(v=>v+1);residents.reload();}}><TenantForm key={tenantFormRevision} saved={row=>{setNewTenant(row);setSelectedTenant(row.id);setAddingTenant(false);residents.reload();}} cancel={()=>setAddingTenant(false)}/></EditorDialog>
       <div className="prerequisite-links">
         <Link
@@ -922,7 +944,7 @@ export function LeaseCreate({
           Manage units for this property
         </Link>
       </div>
-      <p className="help">Choose an existing tenant or add one here. Each tenant has one Auth0 account; activating portal access is optional.</p><button type="button" className="secondary" onClick={()=>setAddingTenant(true)}>Add tenant for this lease</button>
+      <p className="help">Choose an existing tenant or add one here. Each tenant has one sign-in account. Portal access is optional.</p><button type="button" className="secondary" onClick={()=>setAddingTenant(true)}>Add tenant for this lease</button>
       <ol className="lease-setup-progress" aria-label="Lease setup progress">
         <li aria-current={!review?"step":undefined}>1. Rental and terms</li>
         <li aria-current={review?"step":undefined}>2. Review and record</li>
@@ -947,6 +969,8 @@ export function LeaseCreate({
               {review && (
                 <LeaseReview
                   review={review}
+                  prepare={task.beforeCommit}
+                  finished={task.finish}
                   storageKey={storageKey}
                   back={() => setReview(null)}
                   saved={(row) => {
@@ -959,6 +983,7 @@ export function LeaseCreate({
               <div hidden={!!review}>
                 <Form
                   key={key}
+                  taskValues
                   operation="page.data.load"
                   secondaryActions={
                     <DraftReset reset={() => setKey(crypto.randomUUID())} />
@@ -966,6 +991,8 @@ export function LeaseCreate({
                   reviewOnly
                   label="Review lease"
                   submit={async (form) => {
+                    if(!unitOptions.some(u=>u.id===form.get("unitId")))throw new Error("Choose a currently available unit before reviewing this lease.");
+                    await task.review();
                     setReview({
                       property: propertyName,
                       unit:
@@ -981,7 +1008,7 @@ export function LeaseCreate({
                         endsOn: form.get("endsOn") || null,
                         monthlyRent: form.get("monthlyRent"),
                         status: form.get("status"),
-                        submissionKey: key,
+                        submissionKey: task.record?.actionKey || key,
                         rentDueDay: Number(form.get("rentDueDay")),
                         graceDays: Number(form.get("graceDays")),
                         paymentInstructions:
@@ -992,8 +1019,9 @@ export function LeaseCreate({
                 >
                   <div className="form-grid">
                     <label>
-                      Unit for new lease
-                      <select name="unitId" required>
+                      Unit
+                      <select name="unitId" aria-label="Unit for new lease" required value={selectedUnit===null?(unitOptions[0]?.id||""):unitOptions.some(u=>u.id===selectedUnit)?selectedUnit:""} onChange={e=>setSelectedUnit(e.target.value)}>
+                        <option value="">Choose a unit</option>
                         {unitOptions.map((u) => (
                           <option key={u.id} value={u.id}>
                             {u.label}
@@ -1014,7 +1042,8 @@ export function LeaseCreate({
                     </label>
                   </div>
                   {initialContactId&&!choices.some(p=>p.contactId===initialContactId)&&!selectedTenantId&&<p role="alert">This tenant is not eligible for the selected property. Review their record or choose another tenant explicitly.</p>}
-                  <LeaseTerms prefix="New lease" />
+                  {selectedUnit&&!unitOptions.some(u=>u.id===selectedUnit)&&<p role="alert">The selected unit is not among the current active choices. Load additional units or choose another unit explicitly.</p>}
+                  <LeaseTerms prefix="New lease" draftValues={initialTask?.values}/>
                   <p className="help">
                     One active lease is allowed per unit. Review the details,
                     then select Review lease before saving.
@@ -1034,7 +1063,7 @@ export function LeaseCreate({
           change={setUnitCursor}
         />
       )}
-    </>
+    </div>
   );
 }
 export function LeaseTerms({
@@ -1042,11 +1071,13 @@ export function LeaseTerms({
   value,
   draftOnly = false,
   lockPaymentTerms = !!value?.hasTermHistory,
+  draftValues,
 }: {
   prefix: string;
   value?: Lease;
   draftOnly?: boolean;
   lockPaymentTerms?:boolean;
+  draftValues?:Record<string,unknown>;
 }) {
   const endDateHelpId = useId();
   return (
@@ -1056,20 +1087,20 @@ export function LeaseTerms({
         <p className="help">Start date and monthly rent are required. Dates use the month name, day and year.</p>
         <div className="form-grid">
           <label>
-            {prefix} start date
+            Start date
             <DateField
               name="startsOn" aria-label={`${prefix} start date`}
               required
-              defaultValue={value?.startsOn.slice(0, 10)}
+              defaultValue={draftValues?.startsOn!==undefined?String(draftValues.startsOn):value?.startsOn.slice(0, 10)}
             />
           </label>
           <div>
             <label>
-              {prefix} end date
+              End date (optional)
               <DateField
                 name="endsOn" aria-label={`${prefix} end date`}
                 aria-describedby={endDateHelpId}
-                defaultValue={value?.endsOn?.slice(0, 10)}
+                defaultValue={draftValues?.endsOn!==undefined?String(draftValues.endsOn):value?.endsOn?.slice(0, 10)}
               />
             </label>
             <p className="help" id={endDateHelpId}>
@@ -1077,9 +1108,10 @@ export function LeaseTerms({
             </p>
           </div>
           <label>
-            {prefix} monthly rent (USD)
+            Monthly rent (USD)
             <input
               name="monthlyRent"
+              aria-label={`${prefix} monthly rent (USD)`}
               readOnly={lockPaymentTerms}
               type="number"
               min="0"
@@ -1087,15 +1119,16 @@ export function LeaseTerms({
               step="0.01"
               required
               defaultValue={
-                value ? (value.rentCents / 100).toFixed(2) : undefined
+                draftValues?.monthlyRent!==undefined?String(draftValues.monthlyRent):value ? (value.rentCents / 100).toFixed(2) : undefined
               }
             />
           </label>
           <label>
-            {prefix} status
+            Lease status
             <select
               name="status"
-              defaultValue={draftOnly ? "draft" : value?.status || "draft"}
+              aria-label={`${prefix} status`}
+              defaultValue={draftOnly ? "draft" : String(draftValues?.status||value?.status||"draft")}
               disabled={draftOnly}
             >
               <option value="draft">Draft</option>
@@ -1106,14 +1139,14 @@ export function LeaseTerms({
         </div>
       </fieldset>
       {lockPaymentTerms&&<p className="notice">Use Terms &amp; changes to review future payment terms. This form manages dates and the recorded lease setup.</p>}
-      <PaymentTerms prefix={prefix} value={value} locked={lockPaymentTerms} />
+      <PaymentTerms prefix={prefix} value={value} locked={lockPaymentTerms} draftValues={draftValues}/>
     </>
   );
 }
 
-function PaymentTerms({ prefix, value,locked=false }: { prefix: string; value?: Lease;locked?:boolean }) {
-  const [due, setDue] = useState(value?.rentDueDay ?? 1),
-    [grace, setGrace] = useState(String(value?.graceDays ?? 0));
+function PaymentTerms({ prefix, value,locked=false,draftValues }: { prefix: string; value?: Lease;locked?:boolean;draftValues?:Record<string,unknown> }) {
+  const [due, setDue] = useState(Number(draftValues?.rentDueDay ?? value?.rentDueDay ?? 1)),
+    [grace, setGrace] = useState(String(draftValues?.graceDays ?? value?.graceDays ?? 0));
   const preview = new Date("2026-11-01T00:00:00Z");
   preview.setUTCDate(Math.min(due, 30));
   const through = new Date(preview);
@@ -1132,9 +1165,10 @@ function PaymentTerms({ prefix, value,locked=false }: { prefix: string; value?: 
       <legend>Rent payment terms</legend>
       <div className="form-grid">
         <label>
-          {prefix} rent due day
+          Rent due day
           <select
             name="rentDueDay"
+            aria-label={`${prefix} rent due day`}
             value={due}
             onChange={(e) => setDue(Number(e.target.value))}
           >
@@ -1146,9 +1180,10 @@ function PaymentTerms({ prefix, value,locked=false }: { prefix: string; value?: 
           </select>
         </label>
         <label>
-          {prefix} grace period (days after due date)
+          Grace period (days after due date)
           <input
             name="graceDays"
+            aria-label={`${prefix} grace period (days after due date)`}
             type="number"
             required
             min="0"
@@ -1170,11 +1205,12 @@ function PaymentTerms({ prefix, value,locked=false }: { prefix: string; value?: 
         {formatDate(after.toISOString())}.
       </p>
       <label>
-        {prefix} payment instructions shared with resident (optional)
+        Payment instructions shared with the resident (optional)
         <textarea
           name="paymentInstructions"
+          aria-label={`${prefix} payment instructions shared with resident (optional)`}
           maxLength={1000}
-          defaultValue={value?.paymentInstructions || ""}
+          defaultValue={String(draftValues?.paymentInstructions ?? value?.paymentInstructions ?? "")}
           placeholder="How and where to send manually recorded payments"
         />
       </label>
@@ -1188,9 +1224,11 @@ function PaymentTerms({ prefix, value,locked=false }: { prefix: string; value?: 
 
 export function LeaseRenewal({
   previous,
+  initialTask,
   saved,
 }: {
   previous: Lease;
+  initialTask?:TaskDraft;
   saved: (row: { id:string }) => void;
 }) {
   const auth = useAuth().data,
@@ -1198,7 +1236,9 @@ export function LeaseRenewal({
   const [review, setReview] = useState<LeaseReviewData | null>(() =>
     leasePending(storageKey),
   );
-  const [key] = useState(() => crypto.randomUUID());
+  const [key] = useState(() => initialTask?.actionKey || crypto.randomUUID());
+  const container=useRef<HTMLDivElement>(null);
+  const task=useTaskDraft({kind:"lease_renewal",propertyId:previous.propertyId,sourceId:previous.id,initial:initialTask,element:container,disabled:!!leasePending(storageKey),readValues:()=>readLeaseDraft(container.current)});
   const start = new Date(previous.endsOn!);
   start.setUTCDate(start.getUTCDate() + 1);
   const proposed = {
@@ -1208,7 +1248,8 @@ export function LeaseRenewal({
     status: "draft",
   };
   return (
-    <>
+    <div ref={container}>
+      {!review && <TaskDraftPanel task={task}/>}
       <ol className="lease-setup-progress" aria-label="Lease renewal progress">
         <li aria-current={!review?"step":undefined}>1. Next-term details</li>
         <li aria-current={review?"step":undefined}>2. Review renewal draft</li>
@@ -1217,6 +1258,8 @@ export function LeaseRenewal({
       {review && (
         <LeaseReview
           review={review}
+          prepare={task.beforeCommit}
+          finished={task.finish}
           storageKey={storageKey}
           back={() => setReview(null)}
           saved={saved}
@@ -1224,10 +1267,12 @@ export function LeaseRenewal({
       )}
       <div hidden={!!review}>
         <Form
+          taskValues
           operation="page.data.load"
           reviewOnly
           label="Review renewal"
-          submit={async (f) =>
+          submit={async (f) => {
+            await task.review();
             setReview({
               property: previous.property.name,
               unit: previous.unit.label,
@@ -1245,10 +1290,10 @@ export function LeaseRenewal({
                 graceDays: Number(f.get("graceDays")),
                 paymentInstructions: f.get("paymentInstructions") || null,
                 status: "draft",
-                submissionKey: key,
+                submissionKey: task.record?.actionKey || key,
               },
-            })
-          }
+            });
+          }}
         >
           <p>
             {previous.property.name} · {previous.unit.label} ·{" "}
@@ -1259,9 +1304,17 @@ export function LeaseRenewal({
             term starting afterward. This does not end the previous lease or
             stop its rent schedule.
           </p>
-          <LeaseTerms prefix="Renewal" value={proposed} draftOnly lockPaymentTerms={false} />
+          <LeaseTerms prefix="Renewal" value={proposed} draftOnly lockPaymentTerms={false} draftValues={initialTask?.values}/>
         </Form>
       </div>
-    </>
+    </div>
   );
+}
+
+function ExactLeaseUnit({id,propertyId,loaded}:{id:string;propertyId:string;loaded:(unit:Unit)=>void}){
+ const r=useResource<Unit>(`/api/company/units/${encodeURIComponent(id)}`,true,true);
+ useEffect(()=>{if(r.data?.id===id&&r.data.propertyId===propertyId&&r.data.status==="active")loaded(r.data);},[r.data,id,propertyId]);
+ if(r.error)return <p role="alert">The selected unit could not be loaded. {r.error} <button type="button" onClick={r.reload}>Try again</button></p>;
+ if(r.data?.id&&(r.data.propertyId!==propertyId||r.data.status!=="active"))return <p role="alert">The selected unit is not active at this property. Choose an eligible unit explicitly.</p>;
+ return null;
 }

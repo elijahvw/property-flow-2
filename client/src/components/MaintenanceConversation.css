@@ -1,0 +1,11 @@
+.maintenance-conversation-list { list-style: none; padding: 0; margin: 1.25rem 0; }
+.maintenance-conversation-list li { border-top: 1px solid #dce5df; padding: 1rem 0; overflow-wrap: anywhere; }
+.maintenance-conversation-list .section-heading { margin-bottom: .25rem; gap: .5rem; }
+.maintenance-conversation-list time { font-size: .8rem; color: #60766a; }
+.maintenance-conversation-list p { margin: .6rem 0 0; }
+.maintenance-reply-form { margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid #dce5df; }
+.maintenance-reply-form textarea[readonly] { background: #f3f6f3; }
+@media(max-width:700px) {
+ .maintenance-conversation > .section-heading { align-items: flex-start; flex-direction: column; }
+ .maintenance-conversation-list .section-heading { flex-wrap: wrap; }
+}

@@ -1,9 +1,10 @@
 import { TenantInvitation } from "./TenantInvitation";
 import { Address } from "./Address";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { api, ApiError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { Form } from "./Form";
+import {useEditorBusy} from "./EditorDialog";
 export type TenantContact = {
   id: string;
   userId: string | null;
@@ -61,6 +62,13 @@ const groups = [
     ],
   },
 ] as const;
+function OptionalTenantSection({ title, initialOpen, children }: { title: string; initialOpen: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(initialOpen);
+  return <details className="editor-section" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
+    <summary>{title} · optional</summary>
+    {children}
+  </details>;
+}
 export function TenantForm({
   value,
   saved,
@@ -72,6 +80,7 @@ export function TenantForm({
   saved: (row: TenantContact) => void;
   cancel?: () => void;
 }) {
+  const editor=useEditorBusy();
   const { data: auth, can } = useAuth(),
     storageKey = `pf:tenant-draft:${auth?.user.id}:${auth?.membership?.companyId}:${value?.id ?? "new"}`;
   const [initial] = useState(() => {
@@ -201,6 +210,7 @@ export function TenantForm({
                 },
               );
               sessionStorage.removeItem(storageKey);
+              editor.completed();
               if (!value && review.invitePortal === "yes") setCreated(row);
               else finish(row);
             } catch (e) {
@@ -345,6 +355,7 @@ export function TenantForm({
               the linked account’s sign-in email.
             </p>
           )}
+          <p className="help">{value ? "Full name is required. Add or update the contact details you have." : "Full name and contact email are required. Add other details when you have them."}</p>
           {groups.map((group, index) => {
             const content = (
               <fieldset
@@ -437,15 +448,14 @@ export function TenantForm({
                 </div>
               </fieldset>
             );
-            return index === 1 ? (
-              <details
+            return index > 0 ? (
+              <OptionalTenantSection
                 key={group.title}
-                className="editor-section"
-                open={!!(initial?.draft.addressLine1 || value?.addressLine1)}
+                title={group.title}
+                initialOpen={group.fields.some(([name]) => !!draft[name])}
               >
-                <summary>Mailing address · optional</summary>
                 {content}
-              </details>
+              </OptionalTenantSection>
             ) : (
               <div key={group.title}>{content}</div>
             );

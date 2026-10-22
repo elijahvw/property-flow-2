@@ -1,0 +1,10 @@
+.document-sharing { margin-top:1rem; border-top:1px solid #d8e2e4; padding-top:1rem; }
+.document-sharing>summary { cursor:pointer; font-weight:650; color:#145d50; padding:.5rem 0; }
+.document-sharing-body { padding-top:1rem; }
+.document-share-list { display:grid; gap:.9rem; }
+.document-share-list>li { padding:1rem; border:1px solid #d8e2e4; border-radius:8px; background:#f8fbfa; }
+.document-share-list p { margin:.4rem 0; }
+.document-share-list ol { list-style:decimal; padding-left:1.3rem; }
+.document-share-review { padding:.8rem; background:#edf6f2; border-left:3px solid #126b5c; }
+.document-sharing h4 { margin:.8rem 0; }
+@media(max-width:650px){.document-sharing .form-grid {grid-template-columns:1fr;}.document-share-list>li{padding:.8rem;}}

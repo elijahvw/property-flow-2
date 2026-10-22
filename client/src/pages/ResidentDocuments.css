@@ -1,0 +1,10 @@
+.resident-document-search { display:flex; gap:1rem; align-items:end; margin-bottom:1.25rem; }
+.resident-document-search label { flex:1; margin:0; max-width:42rem; }
+.resident-document-list { display:grid; gap:1rem; }
+.resident-document-card { display:grid; grid-template-columns:minmax(0,1fr) minmax(15rem,.8fr); gap:1.5rem; padding:1.2rem; border:1px solid #d8e2e4; border-radius:10px; }
+.resident-document-card h3 { font-size:1.12rem; margin-bottom:.5rem; }
+.resident-document-card p { margin:.4rem 0; overflow-wrap:anywhere; }
+.resident-document-actions { display:grid; gap:1rem; align-content:start; }
+.resident-document-actions .workflow-form { padding:0; border:0; }
+.resident-document-actions .form-actions { margin-top:.5rem; }
+@media(max-width:700px){.resident-document-card{grid-template-columns:1fr;gap:.8rem;padding:1rem;}.resident-document-search{align-items:stretch;flex-direction:column;}.resident-document-actions button{width:100%;}}
