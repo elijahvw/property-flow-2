@@ -16,9 +16,9 @@ export function NavigationIcon({ path }: { path: string }) {
     <>
       <path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8" />
     </>
-  ) : /users|residents|members/.test(path) ? (
+  ) : /users|residents|members|impersonation/.test(path) ? (
     people
-  ) : /finances|rent|deposits/.test(path) ? (
+  ) : /finances|rent|deposits|subscription|plans/.test(path) ? (
     <>
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <circle cx="12" cy="12" r="3" />

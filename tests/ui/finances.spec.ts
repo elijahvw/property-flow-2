@@ -98,3 +98,61 @@ test('an uncertain submitted transaction cannot be discarded or given a fresh ke
  await expect(page.getByLabel('Amount (USD)')).toHaveValue('1234.56');await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();
  expect(state.keys).toHaveLength(2);expect(state.keys[0]).toBe(state.keys[1]);expect(state.entries).toHaveLength(1);
 });
+
+test('cash entry pairs money details, marks native requirements and retains exact recovery after rejection',async({page})=>{
+ const state=await fixture(page);let reject=true,releaseRejection=()=>{};
+ const rejectionGate=new Promise<void>(resolve=>{releaseRejection=resolve;});
+ await page.route('**/api/company/finances',async route=>{
+  if(route.request().method()!=='POST'||!reject)return route.fallback();
+  await rejectionGate;return route.fulfill({status:400,json:{error:'Review the amount in this fictional fixture.'}});
+ });
+ await page.goto('/company/finances');await page.getByRole('button',{name:'Record a transaction',exact:true}).click();
+ const editor=page.getByRole('dialog',{name:'Record a transaction',exact:true});
+ await editor.getByLabel('What are you recording?',{exact:true}).selectOption('expense');
+ await editor.getByLabel('Transaction property',{exact:true}).selectOption('second');
+ await editor.getByLabel('Date received or paid',{exact:true}).fill('2026-10-14');
+ await editor.getByLabel('Amount (USD)',{exact:true}).fill('123.45');
+ await editor.getByLabel('Category',{exact:true}).selectOption('utilities');
+ await editor.getByLabel('Memo (optional)',{exact:true}).fill('Fictional paid utility bill');
+ await expect(editor.locator('.financial-required')).toHaveCount(3);
+ await expect(editor.getByLabel('Amount (USD)',{exact:true})).toHaveJSProperty('required',true);
+ await expect(editor.locator('label[for="finance-category"] select')).toHaveCount(1);
+ for(const [size,width,height] of [['desktop',1365,900],['mobile',390,844]] as const){
+  await page.setViewportSize({width,height});
+  const date=await editor.getByLabel('Date received or paid',{exact:true}).boundingBox(),amount=await editor.getByLabel('Amount (USD)',{exact:true}).boundingBox();
+  expect(date).not.toBeNull();expect(amount).not.toBeNull();
+  if(size==='desktop')expect(Math.abs(date!.y-amount!.y)).toBeLessThan(2);else expect(amount!.y).toBeGreaterThan(date!.y+date!.height);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await expect(editor.getByRole('button',{name:'Record transaction',exact:true})).toBeInViewport({ratio:1});
+  await page.screenshot({path:`/tmp/propertyflow-cash-entry-${size}-after.png`});
+  if(size==='desktop'){
+   await editor.getByLabel('Memo (optional)',{exact:true}).focus();
+   await page.keyboard.press('Tab');await page.keyboard.press('Tab');await page.keyboard.press('Tab');
+   const draft=editor.getByRole('button',{name:'Save as draft',exact:true});
+   await expect(draft).toBeFocused();await expect(draft).toBeInViewport({ratio:1});
+   const bounds=await editor.boundingBox(),draftBounds=await draft.boundingBox();
+   expect(draftBounds!.y+draftBounds!.height).toBeLessThanOrEqual(bounds!.y+bounds!.height);
+   await page.screenshot({path:'/tmp/propertyflow-cash-entry-desktop-draft-focused.png'});
+   await page.keyboard.press('Enter');await expect(editor).not.toBeVisible();expect(state.entries).toHaveLength(0);
+   await page.getByRole('button',{name:'Record a transaction',exact:true}).click();
+   await expect(editor.getByLabel('Amount (USD)',{exact:true})).toHaveValue('123.45');
+   await expect(editor.getByLabel('Memo (optional)',{exact:true})).toHaveValue('Fictional paid utility bill');
+  }
+ }
+ await editor.getByRole('button',{name:'Record transaction',exact:true}).click();
+ await expect(editor.getByLabel('What are you recording?',{exact:true})).toBeDisabled();
+ await expect(editor.getByLabel('What are you recording?',{exact:true})).toHaveValue('expense');releaseRejection();
+ await expect(editor.getByRole('alert')).toContainText('Review the amount');await expect(editor.getByRole('alert')).toBeFocused();
+ await expect(editor.getByLabel('Amount (USD)',{exact:true})).toHaveValue('123.45');
+ await expect(editor.getByLabel('Memo (optional)',{exact:true})).toHaveValue('Fictional paid utility bill');
+ for(const [size,width,height] of [['desktop',1365,900],['mobile',390,844]] as const){
+  await page.setViewportSize({width,height});await expect(editor.getByRole('alert')).toBeInViewport({ratio:1});
+  await page.screenshot({path:`/tmp/propertyflow-cash-entry-${size}-error-after.png`});
+ }
+ reject=false;state.lose=true;await editor.getByRole('button',{name:'Record transaction',exact:true}).click();
+ await expect(editor.getByRole('alert')).toBeVisible();await expect(editor.getByLabel('Amount (USD)',{exact:true})).toBeDisabled();
+ await expect(editor.getByLabel('What are you recording?',{exact:true})).toBeDisabled();
+ await editor.getByRole('button',{name:'Record transaction',exact:true}).click();await expect(editor).not.toBeVisible();
+ expect(state.entries).toHaveLength(1);expect(state.keys).toHaveLength(2);expect(state.keys[0]).toBe(state.keys[1]);
+ expect(state.entries[0]).toMatchObject({propertyId:'second',occurredOn:'2026-10-14',amount:'123.45',kind:'expense',category:'utilities',memo:'Fictional paid utility bill'});
+});

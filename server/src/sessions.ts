@@ -6,7 +6,8 @@ import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
 import * as oidc from "openid-client";
 import { synchronizeIdentity } from "./identity-sync.js";
-import { AccessError, safeReturnTo } from "./access.js";
+import { AccessError, COMPANY_ROLES, permissions, safeReturnTo } from "./access.js";
+import { companyFeatures, memberRouteFeatures, requireFeatures } from "./company-features.js";
 
 export const digest = (value: string) =>
   createHash("sha256").update(value).digest("hex");
@@ -163,6 +164,7 @@ export async function registerSessions(
           where: { tokenHash: digest(token) },
           include: {
             user: { include: { membership: { include: { company: true } } } },
+            impersonatedUser: { include: { membership: { include: { company: true } } } },
           },
         })
       : null;
@@ -184,10 +186,48 @@ export async function registerSessions(
     }
     // Current membership/status is read every time. Session grants never cache roles.
     request.principal = session.user;
+    request.sessionActor = session.user;
     request.appSession = session;
-    const verificationAllowed = ["/api/auth/logout", "/api/bootstrap", "/api/account", "/api/account/verification", "/api/account/verification-status"].includes(request.url.split("?")[0]);
+    const pathname = request.url.split("?")[0];
+    const exiting = pathname === "/api/auth/logout" || (pathname === "/api/impersonation" && request.method === "DELETE");
+    const contextId = session.impersonatedUserId && session.impersonationExpiresAt
+      ? `${encodeURIComponent(session.impersonatedUserId)}:${session.impersonationExpiresAt.toISOString()}` : "";
+    // Every tab must acknowledge its effective identity. A stale tab may never
+    // silently submit a draft or display a response under another identity.
+    if (pathname !== "/api/bootstrap" && !exiting && (request.headers["x-impersonation-id"] ?? "") !== contextId)
+      throw new AccessError(409, "IMPERSONATION_CONTEXT_CHANGED", "Your viewing account changed. Reload to continue.");
+    if (session.impersonatedUserId) {
+      const target = session.impersonatedUser;
+      const membership = target?.membership;
+      const unavailable = !permissions(session.user).includes("platform.impersonate") ||
+        !session.impersonationExpiresAt || session.impersonationExpiresAt.getTime() <= Date.now() ||
+        !target || target.status !== "active" || !target.emailVerified || !!target.platformRole ||
+        membership?.status !== "active" || membership.company.status !== "active" ||
+        !COMPANY_ROLES.includes(membership.role as typeof COMPANY_ROLES[number]) ||
+        membership.companyId !== session.impersonationCompanyId || membership.version !== session.impersonationMembershipVersion;
+      request.impersonation = {
+        actor: { id: session.user.id, name: session.user.name, email: session.user.email },
+        expiresAt: session.impersonationExpiresAt!, contextId, readOnly: true, unavailable,
+      };
+      // Exit always uses the signed-in actor, even after target/actor revocation.
+      // Bootstrap retains a disabled target projection so its exit banner works.
+      if (!exiting && target) request.principal = { ...target, platformRole: null };
+      if (!exiting && pathname !== "/api/bootstrap") {
+        if (unavailable)
+          throw new AccessError(403, "IMPERSONATION_UNAVAILABLE", "This impersonation expired or access changed. Return to your account to continue.");
+        if (!["GET", "HEAD", "OPTIONS"].includes(request.method) && pathname !== "/api/telemetry")
+          throw new AccessError(403, "IMPERSONATION_READ_ONLY", "Impersonation is read-only. Return to your account before making changes.");
+      }
+    }
+    const verificationAllowed = exiting || ["/api/bootstrap", "/api/account", "/api/account/verification", "/api/account/verification-status"].includes(pathname);
     if (session.user.emailVerified === false && !verificationAllowed)
       throw new AccessError(403, "EMAIL_VERIFICATION_REQUIRED", "Verify your email before using your assigned workspace.");
+    const membership = request.principal!.membership;
+    if (!exiting && membership?.status === "active") {
+      request.companyFeatures = await companyFeatures(db, membership.companyId);
+      if (!request.impersonation?.unavailable)
+        requireFeatures(request.companyFeatures, memberRouteFeatures(request.routeOptions.url ?? pathname, membership.role), request.method);
+    }
     if (session.idleExpiresAt.getTime() - Date.now() < IDLE_MS - 60000) {
       await db.session.updateMany({
         where: { tokenHash: session.tokenHash },
@@ -340,9 +380,13 @@ export async function registerSessions(
         }),
         db.auditEvent.create({
           data: {
-            actorId: request.principal!.id,
+            actorId: request.sessionActor!.id,
             action: "session.revoked",
             requestId: request.id,
+            ...(request.appSession!.impersonatedUserId ? {
+              targetId: request.appSession!.impersonatedUserId,
+              detail: { impersonation: true },
+            } : {}),
           },
         }),
       ]);

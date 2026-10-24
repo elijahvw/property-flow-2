@@ -51,7 +51,9 @@ export async function residentPortalCases(t, admin, call, app, { lease, today })
       const writes = [];
       await page.route('**/api/**', async route => {
         const req = route.request(), url = new URL(req.url());
-        if (!['GET', 'HEAD'].includes(req.method()) && url.pathname !== '/api/account/guide') writes.push(`${req.method()} ${url.pathname}`);
+        // Walkthrough progress and the exact telemetry intake do not mutate
+        // rental records; every other non-read API request remains forbidden.
+        if (!['GET', 'HEAD'].includes(req.method()) && !['/api/account/guide', '/api/telemetry'].includes(url.pathname)) writes.push(`${req.method()} ${url.pathname}`);
         const response = await app.inject({ method: req.method(), url: url.pathname + url.search,
           headers: { ...req.headers(), origin: 'https://app.test', cookie: '__Host-pf-session=token-resident' },
           ...(req.postData() ? { payload: req.postData() } : {}) });

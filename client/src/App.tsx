@@ -19,9 +19,15 @@ import { PropertySearch } from "./components/PropertySearch";
 import { FeedbackProvider } from "./components/Feedback";
 import { NavigationIcon } from "./components/NavigationIcon";
 import { EmailVerification } from "./components/EmailVerification";
+import { ImpersonationBanner } from "./components/ImpersonationBanner";
+import { ProspectReturnLink } from "./components/ProspectReturnLink";
+import { availableFeatureRoute, CompanyFeatureBoundary } from "./company-features";
 import "./App.css";
 
 const Notifications = lazy(() => import("./pages/Notifications").then(module=>({default:module.Notifications})));
+const PlatformPlans = lazy(() => import("./pages/PlatformPlans").then(module=>({default:module.PlatformPlans})));
+const CompanySubscription = lazy(() => import("./components/CompanySubscription").then(module=>({default:module.CompanySubscriptionPage})));
+const Impersonation = lazy(() => import("./pages/Impersonation").then(module=>({default:module.Impersonation})));
 const Help = lazy(() => import("./pages/Help").then(module=>({default:module.Help})));
 const Companies = lazy(() => import("./pages/Workspace").then(module => ({ default: module.Companies })));
 const CompanyDetail = lazy(() => import("./pages/Workspace").then(module => ({ default: module.CompanyDetail })));
@@ -36,6 +42,11 @@ const Audit = lazy(() => import("./pages/Workspace").then(module => ({ default: 
 const Overview = lazy(() => import("./pages/Overview").then(module => ({ default: module.Overview })));
 const PropertyResidents = lazy(() => import("./pages/PropertyResidents").then(module => ({ default: module.PropertyResidents })));
 const Reports = lazy(() => import("./pages/Reports").then(module => ({ default: module.Reports })));
+const Availability = lazy(() => import("./pages/Availability").then(module => ({ default: module.Availability })));
+const UnitImports = lazy(() => import("./pages/UnitImports").then(module => ({ default: module.UnitImports })));
+const Prospects = lazy(() => import("./pages/Prospects").then(module => ({ default: module.Prospects })));
+const SharedDocuments = lazy(() => import("./pages/SharedDocuments").then(module => ({ default: module.SharedDocuments })));
+const ExpenseImports = lazy(() => import("./pages/ExpenseImports").then(module => ({ default: module.ExpenseImports })));
 const Statement = lazy(() => import("./pages/Statement").then(module => ({ default: module.Statement })));
 const ResidentProfiles = lazy(() => import("./pages/ResidentProfiles").then(module => ({ default: module.ResidentProfiles })));
 const ResidentDetail = lazy(() => import("./pages/ResidentDetail").then(module => ({ default: module.ResidentDetail })));
@@ -120,7 +131,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           <span className="brand-mark">P</span>Property Flow
         </Link>
         <p className="workspace-label">
-          {platformWorkspace&&user?.platformRole === "owner"
+          {platformWorkspace&&(user?.platformRole === "owner" || user?.platformRole === "support")
             ? "Platform workspace"
             : data?.membership?.company.name || "Your workspace"}
         </p>
@@ -144,14 +155,14 @@ function Shell({ children }: { children: React.ReactNode }) {
             "Administration",
             "Account",
           ].map((group) => {
-            const links = visibleRoutes(data?.permissions || []).filter((r) => {
+            const links = visibleRoutes(data?.permissions || []).filter(r => availableFeatureRoute(r.path, data?.companyFeatures, data?.membership?.role)).filter((r) => {
               const section =
                 r.path.startsWith("/platform/") ||
                 /members|settings/.test(r.path)
                   ? "Administration"
                   : r.section === "Account"
                     ? "Account"
-                    : /finances|reports|rent|deposits/.test(r.path)
+                    : /finances|reports|rent|deposits|imports\/expenses/.test(r.path)
                       ? "Money"
                       : /leases|maintenance|work-orders|documents/.test(r.path)
                         ? "Operations"
@@ -182,8 +193,8 @@ function Shell({ children }: { children: React.ReactNode }) {
             <>
               <strong>{user.name || user.email}</strong>
               <span>
-                {platformWorkspace&&user.platformRole === "owner"
-                  ? "Platform owner"
+                {platformWorkspace&&(user.platformRole === "owner" || user.platformRole === "support")
+                  ? user.platformRole === "support" ? "Platform support" : "Platform owner"
                   : companyRoleLabel || "Access pending"}
               </span>
               <button className="secondary" onClick={signOut}>
@@ -206,8 +217,8 @@ function Shell({ children }: { children: React.ReactNode }) {
             <span aria-hidden="true">/</span>
             <span>{route?.title || route?.section || "Workspace"}</span>
           </div>
-          {data?.permissions.includes("property.read") && <PropertySearch />}
-          {data?.permissions.includes("notification.read") && <NotificationBell/>}
+          {data?.permissions.includes("property.read") && availableFeatureRoute("/company/properties", data.companyFeatures) && <PropertySearch />}
+          {data?.permissions.includes("notification.read") && availableFeatureRoute("/account/notifications", data.companyFeatures, data.membership?.role) && <NotificationBell/>}
           <ContextHelp/>
           <span className="badge">Development</span>
         </header>
@@ -218,8 +229,9 @@ function Shell({ children }: { children: React.ReactNode }) {
             </p>
           )}
           <NotificationReturnLink/>
+          <ProspectReturnLink/>
           <EmailVerification />
-          <Suspense fallback={<section className="status-panel" role="status">Loading workspace…</section>}>{children}</Suspense>
+          <Suspense fallback={<section className="status-panel" role="status">Loading workspace…</section>}><CompanyFeatureBoundary>{children}</CompanyFeatureBoundary></Suspense>
         </main>
         <footer className="app-footer">
           Property Flow · A clearer place to manage your properties
@@ -279,8 +291,11 @@ function Pages() {
   }, [rumLocation.pathname]);
   const pages: Record<string, React.ReactNode> = {
     "/platform/companies": <Companies />,
+    "/platform/plans": <PlatformPlans />,
+    "/company/subscription": <CompanySubscription />,
     "/platform/users": <People />,
     "/platform/audit": <Audit />,
+    "/platform/impersonation": <Impersonation />,
     "/company/overview": <Overview />,
     "/company/properties": <Properties />,
     "/company/members": <Team />,
@@ -298,6 +313,11 @@ function Pages() {
     "/resident/deposits": <Deposits resident />,
     "/resident/rent": <Rent resident />,
     "/company/reports": <Reports />,
+    "/company/availability": <Availability />,
+    "/company/imports/units": <UnitImports />,
+    "/company/prospects": <Prospects />,
+    "/resident/documents": <SharedDocuments />,
+    "/company/imports/expenses": <ExpenseImports />,
     "/account/notifications": <Notifications/>,
     "/account": <Account />,
     "/help": <Help/>,
@@ -484,6 +504,7 @@ export default function App() {
       <BrowserRouter>
         <AuthProvider>
           <FeedbackProvider>
+            <ImpersonationBanner/>
             <Pages />
             <WorkspaceGuide/>
           </FeedbackProvider>

@@ -4,6 +4,7 @@ import { useFeedback } from "./Feedback";
 import { useEditorBusy } from "./EditorDialog";
 import { monitorOperation } from "../operations";
 import type { OperationName } from "../operation-lifecycle";
+import "./FormLayout.css";
 
 export function Form({
   children,
@@ -36,6 +37,12 @@ export function Form({
   // unsubmitted draft. After a lost response, freeze exactly the attempted data.
   const [uncertain, setUncertain] = useState(recovering);
   const retryData = useRef<FormData | null>(null);
+  const errorSummary = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!error) return;
+    errorSummary.current?.focus({ preventScroll: true });
+    errorSummary.current?.scrollIntoView({ block: "nearest" });
+  }, [error]);
   useEffect(() => {
     editor.recovery(formId, uncertain);
     return () => editor.recovery(formId, false);
@@ -105,8 +112,13 @@ export function Form({
         }
       }}
     >
+      {error && <div ref={errorSummary} className="workflow-error-summary notice error" role="alert" tabIndex={-1} aria-labelledby={`${formId}-error-title`}>
+        <strong id={`${formId}-error-title`}>We couldn’t complete this request</strong>
+        <p>{error}</p>
+        {uncertain && <p>This request may already be saved. Retry with the original details before starting another record.</p>}
+      </div>}
       <fieldset disabled={busy || editor.busy}>
-        <fieldset disabled={uncertain && !!retryData.current}>{children}</fieldset>
+        <fieldset className="workflow-fields" disabled={uncertain && !!retryData.current}>{children}</fieldset>
         <div className="actions form-actions">
           <fieldset disabled={uncertain}>{secondaryActions}</fieldset>
           <span className="action-spacer" />
@@ -114,12 +126,7 @@ export function Form({
           {saved && <span role="status">{successText}</span>}
         </div>
       </fieldset>
-      {uncertain && <p className="notice">This request may already be saved. Retry with the original details before starting another record.</p>}
-      {error && (
-        <p className="notice error" role="alert">
-          {error}
-        </p>
-      )}
+      {uncertain && !error && <p className="notice">This request may already be saved. Retry with the original details before starting another record.</p>}
     </form>
   );
 }

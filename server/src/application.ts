@@ -1,4 +1,14 @@
 import { registerNotifications } from "./notifications.js";
+import { registerImpersonation } from "./impersonation.js";
+import { registerCompanyBilling } from "./company-billing.js";
+import { registerCompanyUsage } from "./company-usage.js";
+import { registerHistoricalCashReports } from "./historical-cash-reports.js";
+import { registerUnitAvailability } from "./unit-availability.js";
+import { registerUnitImports } from "./unit-imports.js";
+import { registerProspects } from "./prospects.js";
+import { registerLeaseDocumentShares } from "./lease-document-shares.js";
+import { registerExpenseImports } from "./expense-imports.js";
+import { companyFeatures, requireFeatures, routeFeatures, type CompanyFeatures } from "./company-features.js";
 import type { NotificationPublisher } from "./notification-events.js";
 import { registerWorkspaceGuide } from "./workspace-guide.js";
 import { registerAccountPasswords } from "./account-passwords.js";
@@ -72,6 +82,15 @@ type UserWithAccess = Prisma.UserGetPayload<{
 declare module "fastify" {
   interface FastifyRequest {
     principal?: UserWithAccess;
+    sessionActor?: UserWithAccess;
+    companyFeatures?: CompanyFeatures;
+    impersonation?: {
+      actor: { id: string; name: string | null; email: string };
+      expiresAt: Date;
+      contextId: string;
+      readOnly: true;
+      unavailable: boolean;
+    };
     appSession?: Session;
     dbUser?: any;
   }
@@ -224,6 +243,7 @@ export async function tenantTransaction<T>(
 ): Promise<T> {
   return db.$transaction(async (tx) => {
     if (actor) {
+      await tx.$queryRaw`SELECT id FROM "Company" WHERE id=${companyId} FOR SHARE`;
       const current = await tx.user.findUnique({
         where: { id: actor.id },
         include: { membership: { include: { company: true } } },
@@ -231,6 +251,7 @@ export async function tenantTransaction<T>(
       if (!current)
         throw new AccessError(403, "ACCESS_DENIED", "Access is unavailable.");
       companyScope(current, actor.permission, companyId);
+      requireFeatures(await companyFeatures(tx, companyId), ["properties"], actor.permission === "property.write" ? "POST" : "GET");
     }
     await tx.$queryRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
     return run(tx);
@@ -244,6 +265,15 @@ export function registerApplication(
   identityProvider?: IdentityProvider,
   options: { documentScanner?: DocumentScanner; invitationMailer?: InvitationMailer; notificationPublisher?: NotificationPublisher } = {},
 ) {
+  registerImpersonation(server, db, origin, authenticate);
+  registerCompanyBilling(server, db, authenticate, origin);
+  registerCompanyUsage(server, db, authenticate);
+  registerHistoricalCashReports(server, db, authenticate);
+  registerUnitAvailability(server, db, authenticate, origin);
+  registerUnitImports(server, db, authenticate, origin);
+  registerProspects(server, db, authenticate, origin);
+  registerLeaseDocumentShares(server, db, authenticate, origin);
+  registerExpenseImports(server, db, authenticate, origin);
   registerNotifications(server, db, authenticate, origin);
   registerWorkspaceGuide(server, db, authenticate, origin);
   registerInvitations(server, db, authenticate, origin, identityProvider, options.invitationMailer);
@@ -306,6 +336,13 @@ export function registerApplication(
             "ACCESS_CHANGED",
             "Your access changed. Refresh to continue.",
           );
+        const required = routeFeatures(request.routeOptions.url ?? request.url);
+        if (current.membership && required.length) {
+          const companyId = current.membership.companyId;
+          await tx.$queryRaw`SELECT id FROM "Company" WHERE id=${companyId} FOR SHARE`;
+          request.companyFeatures = await companyFeatures(tx, companyId);
+          requireFeatures(request.companyFeatures, required, request.method);
+        }
         return run(tx);
       },
     );
@@ -339,9 +376,11 @@ export function registerApplication(
         platformRole: u.platformRole,
       },
       membership: u.membership ? {companyId:u.membership.companyId,version:u.membership.version,role:u.membership.role,status:u.membership.status,company: {id:u.membership.company.id,name:u.membership.company.name,status:u.membership.company.status}} : null,
-      permissions: permissions(u),
-      destination: defaultDestination(u),
+      permissions: request.impersonation?.unavailable ? [] : permissions(u),
+      destination: request.impersonation?.unavailable ? "/access" : defaultDestination(u),
       csrfToken: request.appSession!.csrfToken,
+      impersonation: request.impersonation ?? null,
+      companyFeatures: request.companyFeatures ?? null,
     };
   });
 

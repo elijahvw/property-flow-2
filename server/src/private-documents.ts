@@ -5,6 +5,7 @@ import { AccessError } from './access.js';
 import { assignmentId } from './application.js';
 import { audit, boundedText, conflict, input, mutation, sameSubmission, scoped, submission, version, type Tx } from './operational.js';
 import { documentScanner, type DocumentScanner } from './document-scanner.js';
+import { revokeDocumentShares } from './lease-document-shares.js';
 export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
 const metadata = { id:true, number:true, filename:true, mediaType:true, byteLength:true, sha256:true, scanStatus:true, scannedAt:true, createdAt:true } as const;
 export function validateDocument(filename: unknown, mediaType: unknown, base64: unknown) {
@@ -113,6 +114,7 @@ export function registerPrivateDocuments(server:FastifyInstance,db:PrismaClient,
         if(!!doc.archivedAt===archived)return {version:doc.version};
         if(doc.version!==expectedVersion)throw conflict();
         const row=await tx.privateDocument.update({where:{id:doc.id},data:{archivedAt:archived?new Date():null,version:{increment:1}},select:{version:true}});
+        if(archived && source==='leases')await revokeDocumentShares(tx,request,companyId,doc.id);
         await audit(tx,request,companyId,doc.id,archived?'document.archived':'document.restored',{});return row;
       });
     });

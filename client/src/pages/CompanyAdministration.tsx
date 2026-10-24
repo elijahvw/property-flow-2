@@ -6,6 +6,7 @@ import { api } from "../api";
 import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "../components/Form";
+import { PlatformCompanySubscription } from "../components/CompanySubscription";
 export type CompanyProfile = {
   id: string;
   name: string;
@@ -437,6 +438,7 @@ function CompanyRecord() {
           </dl>
         </>
       </section>
+      <PlatformCompanySubscription companyId={c.id}/>
       <section className="panel">
         <h2>People and owner setup</h2>
         <p>

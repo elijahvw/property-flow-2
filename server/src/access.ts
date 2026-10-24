@@ -3,6 +3,8 @@ export type CompanyRole = (typeof COMPANY_ROLES)[number];
 export type Permission =
   | "notification.read"
   | "platform.manage"
+  | "platform.impersonate"
+  | "subscription.read"
   | "property.read"
   | "property.write"
   | "company.manage"
@@ -29,6 +31,7 @@ export type Principal = {
 const grants: Record<CompanyRole, Permission[]> = {
   owner: [
     "notification.read",
+    "subscription.read",
     "property.read",
     "property.write",
     "company.manage",
@@ -45,7 +48,7 @@ const grants: Record<CompanyRole, Permission[]> = {
 export function permissions(user: Principal): Permission[] {
   if (user.status !== "active" || user.emailVerified === false) return [];
   const result: Permission[] =
-    user.platformRole === "owner" ? ["platform.manage"] : [];
+    user.platformRole === "owner" ? ["platform.manage", "platform.impersonate"] : user.platformRole === "support" ? ["platform.impersonate"] : [];
   const m = user.membership;
   if (
     m?.status === "active" &&
@@ -55,6 +58,9 @@ export function permissions(user: Principal): Permission[] {
     result.push(...grants[m.role as CompanyRole]);
     if (m.role === "staff" && m.maintenanceExecution === true) result.push("maintenance.execute");
   }
+  // A suspended company still needs its active owner to review SaaS invoices
+  // and recover its subscription without opening property operations.
+  if (m?.status === "active" && m.company.status !== "active" && m.role === "owner") result.push("subscription.read");
   return result;
 }
 export class AccessError extends Error {
@@ -103,8 +109,35 @@ export function safeReturnTo(value: unknown): string {
     for(const key of ["source","scan","library","documentId","inspectionId","library_q","library_source","library_status","library_scan","library_propertyId","library_page"])allowed.add(key);
     for(const key of ["agreementId","agreementQ","agreementStatus","agreementPage"])allowed.add(key);
     for(const key of ["noticeReturn","noticeStatus","noticeType","noticePage","type"])allowed.add(key);
+    for(const key of ["subscriptionTab", "invoiceId"])allowed.add(key);
+    for(const key of ["asOf", "compareFrom", "compareTo", "importId"])allowed.add(key);
+    for(const key of ["prospectId", "stage"])allowed.add(key);
+    for(const key of ["history", "historyFrom", "historyTo", "historyAsOf", "historyProperty", "historyCompareFrom", "historyCompareTo", "entryId"])allowed.add(key);
+    const maintenanceReturn = /^\/(?:company|resident)\/maintenance(?:\/[^/]+)?$/.test(url.pathname) || /^\/company\/properties\/[^/]+\/maintenance(?:\/[^/]+)?$/.test(url.pathname);
+    const prospectHandoff = /^\/company\/(?:residents(?:\/[^/]+)?|tenants\/[^/]+|leases(?:\/[^/]+(?:\/statement)?)?|rent|deposits)$/.test(url.pathname)
+      || /^\/company\/properties\/[^/]+\/(?:residents|leases|rent|deposits)$/.test(url.pathname);
+    const tenantDetail = /^\/company\/(?:residents|tenants)\/[^/]+$/.test(url.pathname);
+    const tenantDirectory = url.pathname === "/company/residents" || tenantDetail;
+    const tenantId = url.searchParams.get("tenantId");
+    const tenantOrigin = prospectHandoff && !!tenantId && tenantId.length <= 200 && !/[\\\x00-\x1f\x7f]/.test(tenantId);
+    const prospectId = url.searchParams.get("prospectId");
+    const prospectOrigin = prospectHandoff && !!prospectId && prospectId.length <= 200 && !/[\\\x00-\x1f\x7f]/.test(prospectId);
     const query = new URLSearchParams();
-    for (const [key,item] of url.searchParams) if (allowed.has(key) && item.length <= 200 && !/[\\\x00-\x1f\x7f]/.test(item)) query.set(key,item);
+    for (const [key,item] of url.searchParams) {
+      const pageCursor = ((maintenanceReturn || tenantDirectory) && (key === "cursor" || key === "before"))
+        || (tenantDetail && (key === "rentalCursor" || key === "rentalBefore"))
+        || (tenantOrigin && ["tenantCursor", "tenantBefore", "tenantHistoryCursor", "tenantHistoryBefore"].includes(key));
+      const tenantFilter = tenantOrigin && (key === "tenantQ" || key === "tenantSection" && item === "rentals");
+      const nestedMaintenance = maintenanceReturn && key === "nested" && item === "true";
+      const prospectPage = url.pathname === "/company/prospects" && key === "cursor";
+      const prospectFilter = prospectOrigin && !!item && (
+        ["prospectQ", "prospectProperty", "prospectCursor"].includes(key) ||
+        key === "prospectStage" && ["inquiry", "tour", "application", "review", "approved", "declined", "withdrawn", "converted"].includes(item) ||
+        key === "prospectDue" && ["overdue", "today", "upcoming"].includes(item)
+      );
+      const leaseOnboarding = /^\/company\/leases\/[^/]+$/.test(url.pathname) && key === "onboarding" && item === "household";
+      if ((allowed.has(key) || pageCursor || tenantFilter || nestedMaintenance || prospectPage || prospectFilter || leaseOnboarding) && item.length <= (pageCursor ? 512 : 200) && !/[\\\x00-\x1f\x7f]/.test(item) && (!pageCursor || /^[A-Za-z0-9_-]+$/.test(item))) query.set(key,item);
+    }
     return url.pathname + (query.size ? `?${query}` : "");
   } catch { return "/dashboard"; }
 }
@@ -112,10 +145,14 @@ export function defaultDestination(user: Principal) {
   const p = permissions(user);
   return p.includes("platform.manage")
     ? "/platform/companies"
+    : p.includes("platform.impersonate")
+      ? "/platform/impersonation"
     : p.includes("property.read")
       ? "/company/overview"
       : p.includes("resident.self")
         ? "/resident"
+        : p.includes("subscription.read")
+          ? "/company/subscription"
         : "/access";
 }
 

@@ -60,6 +60,7 @@ async function fixture(page:Page,role='manager'){
         items: [],
         groups: [],
       });
+  if(p==='/api/company/maintenance/directory')return json({companyId:state.company,items:[],total:0,statusCounts:{open:0,in_progress:0,resolved:0},pageSize:50,nextCursor:null,previousCursor:null});
   if(p==='/api/company/maintenance')return json([]);
   return json([]);
  });return state;

@@ -4,6 +4,8 @@
 
 # Connected lease, household and invitation workflow
 
+October 24 PF-21/PF-23 source-return continuation is locally complete: exact prospect/pipeline context survives tenant/account/lease setup, saved sources, tabs/history and reauthentication, with a fixed-path Back to prospect. Full 290/290 browser, real 35/35 and builds/units/focused checks pass; original identity/access/review/version/retry rules remain unchanged. Dated fixture/import diagnoses are retained. The preferred-unit advisory fix is a separate locally complete slice: both builds/units pass and reviewed recovery/display fixes preserve the retained review/payload/key after units archive and reject older option metadata. Focused browser 17/17 plus existing 25/25 and real leasing/API 40/40 pass; its complete browser run passes 307/307 (6.1m, exit 0), with no new migration. Release/real-role acceptance remains pending and tours remain unselected. [Completed source-return contract](roadmap-continuation-2026-10-24.md#checkpoint-8--pf-21pf-23-prospect-source-return-loop-locally-validated).
+
 Development increment, 2026-10-15, branch `codex/lease-households` based on the tested tenant/forms PR #33 (`7207bb9`). This implements PF-02 and the initial shared-household portion of PF-11 following the user's explicit request to bring household support and a coherent onboarding/renewal flow forward. Merge and dev deployment remain manual and user-approved.
 
 ## Workflow
@@ -51,7 +53,6 @@ Use the existing production builds, full UI suite and disposable PostgreSQL fina
 ## Existing tenant on an existing lease — October 17
 
 Company owners can open an existing lease, choose **Leaseholders & occupants → Add existing tenant**, select an active tenant from the same company's directory, and choose leaseholder or occupant. The existing tenant/account identities are reused. An earlier property assignment is not required: the final owner-authorized transaction connects an existing active resident account to that property and records its assignment audit together with the household record. Unassigned accounts still require normal portal activation. Disabled/transferred accounts remain ineligible. Leaseholder approval continues to gate shared finances; occupants receive no financial authority. Source rent/deposit records and earlier household history are retained. Failed audits roll back the household addition and any new property grant; retry reuses the same committed record.
-
 
 ## October 20 feature batch
 

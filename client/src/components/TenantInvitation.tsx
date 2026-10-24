@@ -1,9 +1,11 @@
 import { InvitationDelivery, type InvitationResult } from "./InvitationDelivery";
-import { useState } from "react";
-import { api } from "../api";
+import { useEffect, useState } from "react";
+import { api, ApiError } from "../api";
 import { useResource } from "../useResource";
 import { Form } from "./Form";
 import { formatDate } from "../dates";
+import { useAuth } from "../context/AuthContext";
+import { tenantEditorScope, tenantLeasingWriteBlock, tenantPortalAvailabilityNote, useTenantAttemptContext, useTenantEditorRecord } from "../tenant-write-access";
 export type ContactInvitationState = {
   id: string;
   version?: number;
@@ -36,20 +38,30 @@ type InviteContact = {
     };
   }[];
 };
-export function TenantInvitation({
+type TenantInvitationProps = { contactId: string; done?: () => void };
+export function TenantInvitation(props: TenantInvitationProps) {
+  const { data } = useAuth();
+  return <TenantInvitationWorkspace key={`${props.contactId}:${tenantEditorScope(data)}`} {...props}/>;
+}
+function TenantInvitationWorkspace({
   contactId,
   done,
-}: {
-  contactId: string;
-  done?: () => void;
-}) {
+}: TenantInvitationProps) {
+  const { data: auth } = useAuth();
+  const context = useTenantAttemptContext(auth);
+  const writeBlock = tenantLeasingWriteBlock(auth?.companyFeatures), portalNote = tenantPortalAvailabilityNote(auth?.companyFeatures);
   const r = useResource<InviteContact>(
     `/api/company/resident-contacts/${encodeURIComponent(contactId)}`,
   );
   const [submissionKey,setSubmissionKey] = useState(() => crypto.randomUUID());
   const [link, setLink] = useState<InvitationResult | null>(null);
-  if (link) return <InvitationDelivery initial={link} reviewAccess={()=>{setLink(null);setSubmissionKey(crypto.randomUUID());r.reload();}} done={()=>{setLink(null);setSubmissionKey(crypto.randomUUID());r.reload();done?.();}}/>;
-  if (!r.data)
+  const record = useTenantEditorRecord(r, `${contactId}:${tenantEditorScope(auth)}`);
+  const [reviewed, setReviewed] = useState<InviteContact | null>(null);
+  useEffect(() => { if (!reviewed && record && !r.loading) setReviewed(record); }, [reviewed, record, r.loading]);
+  const denied = [401, 403, 404].includes(r.errorStatus || 0);
+  const person = denied ? undefined : reviewed || record;
+  if (link && !denied) return <InvitationDelivery initial={link} reviewAccess={()=>{setLink(null);setSubmissionKey(crypto.randomUUID());r.reload();}} done={()=>{setLink(null);setSubmissionKey(crypto.randomUUID());r.reload();done?.();}}/>;
+  if (!person)
     return (
       <div>
         {r.error ? (
@@ -61,7 +73,6 @@ export function TenantInvitation({
         )}
       </div>
     );
-  const person = r.data;
   if (person.portal)
     return <p>This account already has portal access configured. Manage its access from the tenant record.</p>;
   if (!person.email || person.status !== "active")
@@ -71,21 +82,28 @@ export function TenantInvitation({
       </p>
     );
   return (
-    <Form
+    <>
+    {writeBlock && <p className="notice" role="status">{writeBlock}</p>}
+    {portalNote && <p className="help">{portalNote}</p>}
+    {r.error && <p role="alert">{r.error} Refresh the invitation review before creating a link. <button type="button" className="secondary" onClick={r.reload}>Retry invitation review</button></p>}
+    <fieldset disabled={!!writeBlock || !!r.error || (!reviewed && r.loading)} className="editor-contents"><Form
       key={JSON.stringify([person.version, person.leases])}
       secondaryActions={
-        <button type="button" className="secondary" onClick={r.reload}>
+        <button type="button" className="secondary" onClick={() => { setReviewed(null); setSubmissionKey(crypto.randomUUID()); r.reload(); }}>
           Refresh invitation review
         </button>
       }
       label="Create invitation link"
       operation="invitation.create"
-      submit={async () =>
-        setLink(
-          await api(
+      submit={async () => {
+        if (!context.current()) throw new Error("Reload the workspace before creating this invitation.");
+        if (writeBlock) throw new Error(writeBlock);
+        if (r.error) throw new Error("Refresh the invitation review before creating a link.");
+        const result = await api<InvitationResult>(
             `/api/company/resident-contacts/${encodeURIComponent(contactId)}/invitations`,
             {
               method: "POST",
+              expectedCompanyId: context.companyId,
               body: {
                 expectedVersion: person.version,
                 submissionKey,
@@ -98,9 +116,10 @@ export function TenantInvitation({
                 })),
               },
             },
-          ),
-        )
-      }
+          );
+        if (!context.current()) throw new ApiError("Your account or company changed before the invitation result was acknowledged.", 409, "TENANT_CONTEXT_CHANGED", true);
+        setLink(result);
+      }}
     >
       <h3>Invite {person.name}</h3>
       <p>
@@ -143,6 +162,7 @@ export function TenantInvitation({
       <p className="help">
         Review this access first. You can then send an email invitation or share a private link. Portal access starts only after the tenant signs in and accepts.
       </p>
-    </Form>
+    </Form></fieldset>
+    </>
   );
 }

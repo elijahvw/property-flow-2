@@ -1,4 +1,5 @@
 import { test, expect, Page } from "@playwright/test";
+import { tenantDirectoryFixture, tenantRentalHistoryFixture } from "./tenant-directory-fixture";
 
 async function fixture(page: Page, role = "manager") {
   const state = {
@@ -51,6 +52,11 @@ async function fixture(page: Page, role = "manager") {
           zip: "28202",
         },
       ]);
+    if (path === "/api/company/resident-profiles/directory" || path === "/api/company/resident-profiles/resident/rentals") {
+      state.profileLoads++;
+      const profile = {userId:"resident",status:"active",version:state.version,contactName:state.name,contactPhone:state.phone,user:{name:"Jane Resident",email:"jane@test.invalid",status:"active",emailVerified:true}};
+      return json(path.endsWith("/directory") ? tenantDirectoryFixture([profile],req.url(),{companyId:"a"}) : tenantRentalHistoryFixture(profile,[],req.url(),{companyId:"a"}));
+    }
     if (path.startsWith("/api/company/resident-profiles")) {
       state.profileLoads++;
       if (req.method() === "PATCH") {

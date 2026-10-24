@@ -2,6 +2,8 @@ import { test, expect, Page } from "@playwright/test";
 async function fixture(page: Page, { verified = true, platform = true } = {}) {
   const state = {
     verified,
+    remoteVerified: verified,
+    verificationChecks: [] as boolean[],
     people: [] as any[],
     imports: 0,
     membershipRequests: [] as any[],
@@ -103,8 +105,15 @@ async function fixture(page: Page, { verified = true, platform = true } = {}) {
         return json({ id: "auth0|created" });
       }
       if (path.endsWith("/profile")) { state.people[0].name = req.postDataJSON().name; return json({id:state.people[0].id,name:state.people[0].name}); }
-      if (path.endsWith("/verification-status"))
+      if (path.endsWith("/verification-status")) {
+        expect(req.method()).toBe("POST");
+        state.verificationChecks.push(state.remoteVerified);
+        // The real status endpoint synchronizes the provider result into the
+        // saved account. Bootstrap/focus reads retain that cached value until
+        // this explicit operation runs.
+        state.verified = state.remoteVerified;
         return json({ emailVerified: state.verified });
+      }
       if (path.endsWith("/verification"))
         return json({ message: "Verification email requested." });
       if ((path.endsWith("/password-setup") || path.endsWith("/password-reset")))
@@ -227,12 +236,21 @@ test("verification status refresh updates profile and dismisses persistent remin
     .getByRole("button", { name: "I verified my email — check status" })
     .click();
   await expect(page.getByText(/Your email is still unverified/)).toBeVisible();
-  state.verified = true;
+  expect(state.verificationChecks).toEqual([false]);
+  state.remoteVerified = true;
+  await Promise.all([
+    page.waitForResponse(response => new URL(response.url()).pathname === "/api/bootstrap"),
+    page.evaluate(() => window.dispatchEvent(new Event("focus"))),
+  ]);
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+  expect(state.verified).toBe(false);
+  expect(state.verificationChecks).toEqual([false]);
   await page
     .getByRole("button", { name: "I verified my email — check status" })
     .click();
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
   await expect(page.locator(".account-identity-card").getByText("Verified",{exact:true})).toBeVisible();
+  expect(state.verificationChecks).toEqual([false, true]);
 });
 test("new-account retry keeps submission key and a new account gets a fresh key", async ({
   page,

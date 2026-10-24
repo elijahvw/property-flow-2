@@ -38,6 +38,7 @@ export function LeaseReview({
       operation="lease.create"
       successText="Lease recorded."
       submit={async () => {
+        const wasRecovering = pending || !!leasePending(storageKey);
         sessionStorage.setItem(storageKey, JSON.stringify(review));
         setPending(true);
         try {
@@ -49,18 +50,20 @@ export function LeaseReview({
           saved(row);
         } catch (error) {
           if (
-            error instanceof ApiError &&
+            !wasRecovering && error instanceof ApiError && !error.submissionUncertain &&
+            !["IMPERSONATION_CONTEXT_CHANGED", "SUBMISSION_MISMATCH"].includes(error.code) &&
             [400, 403, 404, 409].includes(error.status)
           ) {
             sessionStorage.removeItem(storageKey);
             setPending(false);
           }
+          if (error instanceof ApiError && ["IMPERSONATION_CONTEXT_CHANGED", "SUBMISSION_MISMATCH"].includes(error.code)) error.submissionUncertain = true;
           throw error;
         }
       }}
     >
       <p className="eyebrow">
-        Review lease · nothing is saved until you confirm
+        {pending ? "Review lease · checking previous save" : "Review lease · nothing is saved until you confirm"}
       </p>
       <dl className="lease-review-summary">
         <div>

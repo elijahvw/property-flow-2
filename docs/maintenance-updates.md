@@ -2,6 +2,20 @@
 
 # Maintenance progress updates
 
+## October 24 continuation · Requester replies 048 locally validated
+
+After the combined local 047 baseline passed, resident replies on their own maintenance request were implemented and locally validated through 048. Server/Prisma and client builds, safe units (108 passes/eight expected database-suite skips), all 11 client unit files, roadmap 34/34 and maintenance 131/131 pass. Focused maintenance browser checks pass 14/14, plus one overlapping 390px viewport recheck; these do not replace the earlier full 260-case 047 baseline. Independent review has no remaining actionable issues. It is local only; no merge, live migration, deployment or real-account acceptance is established. The dated October 16 contract and evidence below describe the existing team-update foundation.
+
+The original resident requester can add shared text replies in the existing request timeline. Current verified account, resident membership, company, requester identity, property assignment and maintenance/resident-portal feature checks apply before both writes and exact retries; support impersonation remains read-only. The server fixes the shared audience and accepts no recipient, role, status or URL from the composer. Team-only notes remain filtered before resident pagination/cursor lookup. Management-created requests do not gain a resident conversation or portal grant.
+
+Additive 048 retains immutable `authorType` as `team` or `requester`; existing updates remain `team`, and the database requires requester updates to use resident-visible audience and match the original request's requester/company. The request's original `requesterId` is immutable. Creation-time provenance survives later membership/role changes. Resident timelines distinguish “You” and “Property team” without exposing staff identities, author type/IDs or submission metadata; management retains actual requester/source context.
+
+Replies append rather than edit/delete history. A follow-up on a resolved request leaves its status/version unchanged until management uses the existing status/work-review workflow; replying never changes assignment, work acceptance or money. Text, source audit and fixed management in-app notices commit atomically. Company/author submission keys and exact payload fingerprints, including fixed resident audience/requester author type, prevent duplicate replies/notices or management-key reuse across concurrency and lost responses. Current requester/property/company/source-history checks precede receipt lookup. Uncertain writes preserve the original disabled payload for retry, with existing page-only draft/discard semantics. A correction is another reply.
+
+The distinct `maintenance.reply` event selects current eligible company management in the source transaction, excludes the actor and links back to the request. It copies no reply text into notification records. Disabled/read-only notifications do not block an authorized reply or imply delivery. No staff reply grant, arbitrary conversation, attachment, email/SMS or new provider is included. The fixed `maintenance.reply` outcome/duration operation and sanitized HTTP/error signals cover replies; team updates retain `maintenance.update`. Immutable `maintenance.reply.recorded` audit stores update ID/audience, without reply text. Telemetry excludes private reply text and identities. See [the contract, logs and rendered evidence](roadmap-continuation-2026-10-24.md#checkpoint-4--requester-maintenance-replies-048-locally-validated).
+
+## October 16 foundation checkpoint
+
 Local continuation of the core workspace overhaul, October 16, 2026. No cloud deployment or merge is authorized.
 
 ## Workflow

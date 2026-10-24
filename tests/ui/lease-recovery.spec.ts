@@ -70,6 +70,7 @@ async function fixture(page: Page, platform = false) {
     leasePosts: [] as any[],
     reposts: [] as any[],
     loseLease: false,
+    denyLease: false,
     loseRepost: false,
     current: null as any,
     parent,
@@ -131,6 +132,7 @@ async function fixture(page: Page, platform = false) {
       if (req.method() === "POST") {
         const body = req.postDataJSON();
         state.leasePosts.push(body);
+        if (state.denyLease) return json({ error: "Lease changes are temporarily unavailable for this account.", code: "FORBIDDEN" }, 403);
         let row = state.rows.find(
           (r) => r.submissionKey === body.submissionKey,
         );
@@ -462,6 +464,41 @@ test("lease review retains editable details and recovers a lost save after reloa
     .click();
   await expect(page.getByRole("dialog")).not.toBeVisible();
   expect(state.leasePosts[0]).toEqual(state.leasePosts[1]);
+  expect(state.rows).toHaveLength(2);
+});
+test("a denied recovery keeps the uncertain original lease save until access is restored", async ({ page }) => {
+  const state = await fixture(page);
+  await page.goto("/company/leases");
+  await page.getByRole("button", { name: "Record a lease", exact: true }).click();
+  await page.getByLabel("Property for new lease").selectOption("home");
+  await page.getByLabel("Unit for new lease").selectOption("unit-2");
+  await page.getByLabel("New lease start date").fill("2027-01-01");
+  await page.getByLabel("New lease monthly rent (USD)").fill("1200.00");
+  await page.getByRole("button", { name: "Review lease", exact: true }).click();
+  state.loseLease = true;
+  await page.getByRole("button", { name: "Create lease record", exact: true }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  expect(state.rows).toHaveLength(2); // The response was lost after the fixture committed.
+  const original = state.leasePosts[0];
+  state.denyLease = true;
+  await page.reload();
+  await page.getByRole("button", { name: "Resume lease review · Maple House" }).click();
+  await expect(page.getByText("Review lease · checking previous save", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Create lease record", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("temporarily unavailable");
+  await expect(page.getByRole("button", { name: "Back to lease details" })).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toContainText("Maple House · Apartment 2");
+  expect(state.leasePosts[1]).toEqual(original);
+  expect(state.rows).toHaveLength(2);
+  // A denial before receipt lookup says nothing about the earlier commit.
+  await page.reload();
+  await page.getByRole("button", { name: "Resume lease review · Maple House" }).click();
+  await expect(page.getByRole("dialog")).toContainText("A previous save may have succeeded");
+  state.denyLease = false;
+  await page.getByRole("button", { name: "Create lease record", exact: true }).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  expect(state.leasePosts).toHaveLength(3);
+  expect(state.leasePosts[2]).toEqual(original);
   expect(state.rows).toHaveLength(2);
 });
 test("renewal review carries forward context, stays a draft and preserves retry identity across reload", async ({

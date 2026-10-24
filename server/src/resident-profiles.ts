@@ -5,6 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 import { AccessError } from "./access.js";
 import { opaqueUserId } from "./application.js";
 import { registerResidentWorkspace } from "./resident-workspace.js";
+import { readTenantDirectory, readTenantRentals, tenantDirectoryQuery, tenantRentalQuery } from "./tenant-directory.js";
 import {
   audit,
   boundedText,
@@ -64,6 +65,18 @@ export function registerResidentProfiles(
       contactDirectory(tx, companyId),
     ),
   );
+  server.get("/api/company/resident-profiles/directory", auth, (request) => {
+    const query = tenantDirectoryQuery(request.query as Record<string, unknown>);
+    return scoped(db, request, "resident.assignment.manage", (tx, companyId) =>
+      readTenantDirectory(tx, companyId, request.principal!.id, query),
+    );
+  });
+  server.get<{ Params: { userId: string } }>("/api/company/resident-profiles/:userId/rentals", auth, (request) => {
+    const id = opaqueUserId(request.params.userId), query = tenantRentalQuery(request.query as Record<string, unknown>);
+    return scoped(db, request, "resident.assignment.manage", (tx, companyId) =>
+      readTenantRentals(tx, companyId, request.principal!.id, { kind: "resident", id }, query),
+    );
+  });
   server.get<{ Params: { userId: string } }>(
     "/api/company/resident-profiles/:userId",
     auth,

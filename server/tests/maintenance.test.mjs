@@ -14,6 +14,9 @@ import {registerApplication} from '../dist/application.js';
 import {registerSessions,digest} from '../dist/sessions.js';
 import {permissions} from '../dist/access.js';
 import {maintenanceUpdateCases} from './maintenance-update-cases.mjs';
+import {residentMaintenanceUpdateCases} from './resident-maintenance-update-cases.mjs';
+import {notificationPreferenceCases} from './notification-preference-cases.mjs';
+import {maintenanceDirectoryCases} from './maintenance-directory-cases.mjs';
 import {privateDocumentCases} from './private-document-cases.mjs';
 import {workOrderCases} from './work-order-cases.mjs';
 import {documentLibraryCases} from './document-library-cases.mjs';
@@ -311,4 +314,7 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  await t.test('lease inspections and retained comparison',async sub=>inspectionCases(sub,admin,db,call,app));
  await t.test('unsigned agreement preparation and review',async sub=>agreementCases(sub,admin,db,call,app));
  await t.test('durable scoped in-app notifications',async sub=>{notificationControl.enabled=true;await notificationCases(sub,admin,db,call,app);});
+ await t.test('requester-authored shared maintenance replies',async sub=>residentMaintenanceUpdateCases(sub,admin,db,call));
+ await t.test('personal future notification preferences',async sub=>notificationPreferenceCases(sub,admin,db,call));
+ await t.test('bounded complete maintenance directories',async sub=>maintenanceDirectoryCases(sub,admin,db,call,app));
 });

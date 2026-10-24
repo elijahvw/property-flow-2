@@ -2,6 +2,7 @@ import { newFixturePage } from "./browser-fixture.mjs";
 import {workspaceGuideCases} from "./workspace-guide-cases.mjs";
 import {invitationWorkflowCases} from "./invitation-workflow-cases.mjs";
 import {residentAccountCases} from "./resident-account-cases.mjs";
+import {tenantFormRecoveryCases} from "./tenant-form-recovery-cases.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -1345,5 +1346,6 @@ test(
       assert.equal((await call('platform','GET','/api/platform/audit?page=-1')).statusCode,400);
     });
     await t.test("resident identity lifecycle", sub=>residentAccountCases(sub,db,admin,call,provider,remote,()=>({create:createCalls,setup:setupCalls,verification:verificationCalls})));
+    await t.test("tenant leasing controls and interrupted form recovery", {skip:!process.env.TEST_USERS_BROWSER_URL}, sub=>tenantFormRecoveryCases(sub, {admin,db,call,app,provider,remote,counts:()=>({create:createCalls,setup:setupCalls,verification:verificationCalls}),invitationDeliveries}));
   },
 );

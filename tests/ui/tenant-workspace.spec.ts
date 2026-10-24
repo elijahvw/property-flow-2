@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { tenantDirectoryFixture, tenantRentalHistoryFixture } from './tenant-directory-fixture';
 
 async function fixture(page: Page, role = 'owner') {
   const rent = {outstandingCents:'75001',afterGraceCents:'75001',creditCents:'3002',upcomingCents:'0',withinGraceCents:'0',dueTodayCents:'0'};
@@ -12,7 +13,9 @@ async function fixture(page: Page, role = 'owner') {
     if(p==='/api/bootstrap')return json({user:{id:role,email:role+'@test.invalid',status:'active',emailVerified:true},membership:{companyId:'a',role:state.role,status:'active',version:1,company:{name:'Oak & Elm Properties',status:'active'}},permissions:['owner','manager'].includes(state.role)?['property.read','resident.assignment.manage','lease.manage','finance.manage',...(state.role==='owner'?['members.manage']:[])]:state.role==='staff'?['property.read']:state.role==='resident'?['resident.self']:['platform.manage'],csrfToken:'fixture'});
     if(p==='/api/company/properties')return json([{id:'home',name:'Maple House'}]);
     if(p==='/api/company/properties/home')return json({id:'home',name:'Maple House'});
+    if(p==='/api/company/resident-profiles/directory')return json(tenantDirectoryFixture([profile,...state.otherProfiles],req.url(),{companyId:'a',today:'2026-10-15',timezone:'America/New_York'}));
     if(p==='/api/company/resident-profiles')return json([profile,...state.otherProfiles]);
+    if(p==='/api/company/resident-profiles/auth0%7Ctenant/rentals'||p==='/api/company/resident-profiles/auth0|tenant/rentals')return state.profileStatus===200?json(tenantRentalHistoryFixture(profile,(profile as any).rentals||state.workspace.leases,req.url(),{companyId:'a',today:state.workspace.businessDate,timezone:state.workspace.timezone})):json({error:'Tenant access unavailable'},state.profileStatus);
     if(p.endsWith('/workspace'))return state.financialStatus===200?json(state.workspace):json({error:'Tenant financial information unavailable'},state.financialStatus);
     if(p==='/api/company/resident-profiles/auth0%7Ctenant'||p==='/api/company/resident-profiles/auth0|tenant'){
       if(state.profileStatus!==200)return json({error:'Tenant access unavailable'},state.profileStatus);

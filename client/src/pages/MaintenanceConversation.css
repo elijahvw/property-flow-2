@@ -1,0 +1,16 @@
+.maintenance-requester-reply {
+  border-left: 3px solid var(--brand, #17655d);
+  padding-left: 1rem !important;
+  background: var(--surface-alt, #f0f4f5);
+}
+.maintenance-updates .conversation-kind {
+  color: var(--muted, #5a6f79);
+  font-size: .8rem;
+  font-weight: 500;
+}
+.maintenance-updates .conversation-resolved { margin-top: 1rem; }
+.maintenance-updates .section-heading > button { flex-shrink: 0; }
+@media (max-width: 700px) {
+  .maintenance-updates > .section-heading { align-items: flex-start; gap: .75rem; }
+  .maintenance-requester-reply { padding-left: .8rem !important; }
+}

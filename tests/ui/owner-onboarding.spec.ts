@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { tenantDirectoryFixture, tenantRentalHistoryFixture } from './tenant-directory-fixture';
 
 // Isolated browser UI contracts: mocked same-origin JSON, no real authentication,
 // database, Auth0, or deployment. Server authorization is covered separately.
@@ -22,6 +23,8 @@ async function fixture(page: Page, auth: ReturnType<typeof bootstrap> | null = b
     const path = new URL(route.request().url()).pathname;
     const json = (value: unknown, status = 200) => route.fulfill({status, json: value});
     if (path === '/api/bootstrap') return json(auth || {error:'Unauthorized'}, auth ? 200 : 401);
+    if (path === '/api/company/resident-profiles/directory') return json(tenantDirectoryFixture(tenant?[{...tenant,contactId:tenant.id}]:[],route.request().url(),{companyId:auth?.membership?.companyId||'company-a'}));
+    if (path === '/api/company/resident-contacts/contact-a/rentals') return tenant?json(tenantRentalHistoryFixture(tenant,tenant.rentals||[],route.request().url(),{companyId:auth?.membership?.companyId||'company-a'})):json({error:'Tenant unavailable'},404);
     if (path === '/api/company/properties') {
       if (route.request().method() === 'POST') { records.properties.push({id:'property-a', ...route.request().postDataJSON()}); return json(records.properties[0]); }
       return records.propertyFail ? json({error:'Property fixture unavailable'}, 503) : json(records.properties);

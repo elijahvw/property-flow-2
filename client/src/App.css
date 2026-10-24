@@ -76,6 +76,28 @@
 .workspace-main {
   min-width: 0;
 }
+.impersonation-banner {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 2.5rem;
+  background: #fff3d6;
+  border-bottom: 2px solid #b87917;
+  color: #563a10;
+}
+.impersonation-banner p { margin: .3rem 0 0; overflow-wrap: anywhere; }
+.impersonation-banner .help { color: #654b25; }
+.impersonation-banner button { flex-shrink: 0; }
+.impersonation-filters { display: flex; align-items: end; gap: 1rem; flex-wrap: wrap; }
+.impersonation-filters label:first-child { flex: 1; min-width: 12rem; }
+@media (max-width: 700px) {
+  .impersonation-banner { padding: 1rem; flex-direction: column; align-items: stretch; }
+  .impersonation-filters { display: block; }
+}
 .topbar {
   height: 68px;
   display: flex;
@@ -775,6 +797,8 @@ button, .button { border-radius: 6px; }
 .tenant-row-action { font-size: .78rem; white-space: nowrap; text-decoration: none; font-weight: 500; }
 .tenant-load-state > a { display: inline-block; margin-bottom: 1.5rem; }
 .tenant-directory-panel > .notice { margin: 1rem; }
+.tenant-directory-feedback { margin: .85rem 1.4rem; }
+.tenant-directory-pagination { padding: 1rem 1.4rem; border-top: 1px solid var(--border, #dce5e0); }
 @media (min-width: 1440px) { .tenant-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); } .tenant-metrics > div:nth-child(n) { border-bottom: 0; border-right: 1px solid #e6ebe7; } .tenant-metrics > div:last-child { border-right: 0; } }
 @media (max-width: 1100px) { .tenant-content-grid { grid-template-columns: minmax(0, 1fr); } .tenant-secondary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; } .tenant-secondary .panel { margin: 0; } .tenant-record-header { flex-wrap: wrap; } .tenant-record-header > button { margin-left: auto; } }
 @media (max-width: 600px) {

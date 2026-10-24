@@ -15,7 +15,7 @@ const routes=[
  ['lease','/api/company/leases/perf-lease-1'],
  ['rent','/api/company/rent'],
  ['deposits','/api/company/deposits'],
- ['maintenance','/api/company/maintenance'],
+ ['maintenance','/api/company/maintenance/directory'],
 ];
 export const options={
   scenarios:{management:{executor:'constant-vus',vus:5,duration:'20s',gracefulStop:'5s'}},

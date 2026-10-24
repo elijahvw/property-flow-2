@@ -42,7 +42,7 @@ export function registerOverview(
           select: { id: true },
           orderBy: [{ name: "asc" }, { id: "asc" }],
         });
-        const occupied = grants.includes("lease.manage")
+        const occupied = grants.includes("lease.manage") && request.companyFeatures?.leasing !== "disabled"
           ? await tx.unit.groupBy({
               by: ["propertyId"],
               where: {
@@ -60,14 +60,14 @@ export function registerOverview(
               _count: true,
             })
           : null;
-        const drafts = grants.includes("lease.manage")
+        const drafts = grants.includes("lease.manage") && request.companyFeatures?.leasing !== "disabled"
           ? await tx.lease.groupBy({
               by: ["propertyId"],
               where: { companyId, status: "draft" },
               _count: true,
             })
           : null;
-        const maintenance = grants.includes("maintenance.manage")
+        const maintenance = grants.includes("maintenance.manage") && request.companyFeatures?.maintenance !== "disabled"
           ? await tx.maintenanceRequest.groupBy({
               by: ["propertyId"],
               where: { companyId, status: { in: ["open", "in_progress"] } },
@@ -158,8 +158,8 @@ export function registerOverview(
           }),
         };
         const management: Record<string, unknown> = {};
-        if(grants.includes("members.manage"))management.residentApprovals={pendingCount:await tx.invitation.count({where:{companyId,...(propertyId?{propertyId}:{}),leaseId:{not:null},approvedAt:null,acceptedAt:null,revokedAt:null,expiresAt:{gt:new Date()},lease:{status:{in:["draft","active"]},OR:[{endsOn:null},{endsOn:{gte:date}}]}}})};
-        if (grants.includes("lease.manage")) {
+        if(grants.includes("members.manage") && request.companyFeatures?.leasing !== "disabled" && request.companyFeatures?.resident_portal !== "disabled")management.residentApprovals={pendingCount:await tx.invitation.count({where:{companyId,...(propertyId?{propertyId}:{}),leaseId:{not:null},approvedAt:null,acceptedAt:null,revokedAt:null,expiresAt:{gt:new Date()},lease:{status:{in:["draft","active"]},OR:[{endsOn:null},{endsOn:{gte:date}}]}}})};
+        if (grants.includes("lease.manage") && request.companyFeatures?.leasing !== "disabled") {
           const active = {
               ...where,
               status: "active",
@@ -170,12 +170,12 @@ export function registerOverview(
               startsOn: { lte: date },
               OR: [{ endsOn: null }, { endsOn: { gte: date } }],
             };
-          const [rent] = await tx.$queryRaw<{ amount: bigint }[]>(
+          const rent = request.companyFeatures?.finances !== "disabled" ? (await tx.$queryRaw<{ amount: bigint }[]>(
             Prisma.sql`SELECT COALESCE(SUM(COALESCE((SELECT t."rentCents" FROM "LeaseTermChange" t WHERE t."companyId"=l."companyId" AND t."leaseId"=l.id AND t."effectiveOn"<=${date} AND NOT EXISTS(SELECT 1 FROM "LeaseTermCancellation" x WHERE x."changeId"=t.id AND x."companyId"=l."companyId") ORDER BY t."effectiveOn" DESC,t.id DESC LIMIT 1),l."rentCents")),0)::bigint amount FROM "Lease" l JOIN "Unit" u ON u.id=l."unitId" AND u."companyId"=l."companyId" WHERE l."companyId"=${companyId} AND l.status='active' AND u.status='active' AND l."startsOn"<=${date} AND (l."endsOn" IS NULL OR l."endsOn">=${date}) ${propertyId ? Prisma.sql`AND l."propertyId"=${propertyId}` : Prisma.empty}`,
-          );
+          ))[0] : null;
           management.leases = {
             inEffectCount: await tx.lease.count({ where: inEffect }),
-            monthlyRentCents: String(rent.amount),
+            ...(rent ? { monthlyRentCents: String(rent.amount) } : {}),
             draftCount: await tx.lease.count({
               where: { ...where, status: "draft" },
             }),
@@ -213,7 +213,7 @@ export function registerOverview(
             }),
           };
         }
-        if (grants.includes("maintenance.manage")) {
+        if (grants.includes("maintenance.manage") && request.companyFeatures?.maintenance !== "disabled") {
           const open = { ...where, status: { in: ["open", "in_progress"] } };
           management.maintenance = {
             openCount: await tx.maintenanceRequest.count({ where: open }),
@@ -237,7 +237,7 @@ export function registerOverview(
             }),
           };
         }
-        if (grants.includes("finance.manage")) {
+        if (grants.includes("finance.manage") && request.companyFeatures?.finances !== "disabled" && request.companyFeatures?.leasing !== "disabled") {
           management.billingIssues={count:await tx.rentSchedule.count({where:{...where,status:"active",lastErrorCode:{not:null}}})};
           management.rentCollections = await rentCollections(tx,companyId,today,propertyId);
           const from = today.slice(0, 7) + "-01";

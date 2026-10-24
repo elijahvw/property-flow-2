@@ -1,16 +1,20 @@
 import { leasePath } from "../lease-links";
 import { formatDate } from "../dates";
 import { TenantForm } from "../components/TenantForm";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { tenantPath, contactPath, tenantDirectorySearch, tenantLedgerContext } from "../tenant-links";
+import { prospectContext } from "../prospect-context";
+import { useDebouncedValue } from "../useDebouncedValue";
+import type { RentalAssociation } from "../components/TenantRentalHistory";
 import { tenantPortalState } from "../tenant-status";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
 import { Invitations } from "./Workspace";
 import { Form } from "../components/Form";
+import { hasTenantSaveRecovery, tenantEditorScope, tenantLeasingWriteBlock, useTenantAttemptContext, useTenantEditorRecord } from "../tenant-write-access";
 
 export type Profile = {
   userId: string;
@@ -45,42 +49,34 @@ export function ResidentProfiles() {
   if (params.get("residentId")) return <Navigate replace to={tenantPath(params.get("residentId")!, params)} />;
   return (
     <Directory
-      key={`${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}`}
+      key={tenantEditorScope(data)}
     />
   );
 }
-type DirectoryProfile = Omit<Profile, "userId" | "user"> & {
+type DirectoryProfile = {
+  kind: "contact" | "resident";
+  id: string;
   userId: string | null;
-  user: Profile["user"] | null;
-  contactId?: string;
-  recordStatus?: string;
-  portalState?: string;
-  name?: string;
-  email?: string | null;
-  phone?: string | null;
-  canArchive?: boolean;
-  rentals?: {
-    leaseId: string;
-    propertyId: string;
-    propertyName: string;
-    unitLabel: string;
-    role: string;
-    status: string;
-    startsOn: string;
-    endsOn: string | null;
-  }[];
+  contactId: string | null;
+  name: string; email: string | null; phone: string | null;
+  contactName: string | null; contactPhone: string | null;
+  recordStatus: string; status: string; portalState: string; version: number;
+  user: Profile["user"] | null; canArchive: boolean;
+  rentals: RentalAssociation[]; rentalCount: number;
+};
+type TenantDirectory = {
+  companyId: string; today: string; timezone: string;
+  items: DirectoryProfile[]; total: number; pageSize: number;
+  nextCursor: string | null; previousCursor: string | null;
+  properties: { id: string; name: string }[];
 };
 function Directory() {
   const navigate = useNavigate();
   const [adding, setAdding] = useState(false),
     [inviteInitially, setInviteInitially] = useState(false),
-    [formRevision, setFormRevision] = useState(0);
+    [formRevision, setFormRevision] = useState(0),
+    [setupStarted, setSetupStarted] = useState(false);
   const [params, setParams] = useSearchParams();
-  const r = useResource<DirectoryProfile[]>(
-    "/api/company/resident-profiles",
-    true,
-    true,
-  );
   const query = params.get("q") || "",
     access = [
       "active",
@@ -92,39 +88,47 @@ function Directory() {
       ? params.get("access")!
       : "all";
 
-  const { can } = useAuth();
+  const { can, data: auth, refreshUser } = useAuth();
+  const writeBlock = tenantLeasingWriteBlock(auth?.companyFeatures);
   const property = params.get("propertyId") || "",
-    rental = params.get("rental") || "all";
-  const propertyChoices = [
-    ...new Map(
-      r.data
-        ?.flatMap((p) => p.rentals || [])
-        .map((r) => [r.propertyId, r.propertyName]),
-    ).entries(),
-  ].sort((a, b) => a[1].localeCompare(b[1]));
-  const rows = r.data?.filter(
-    (p) =>
-      `${p.contactName || p.name || ""} ${p.user?.name || ""} ${p.email || p.user?.email || ""} ${p.phone || p.contactPhone || ""} ${(p.rentals || []).map((r) => `${r.propertyName} ${r.unitLabel}`).join(" ")}`
-        .toLowerCase()
-        .includes(query.trim().toLowerCase()) &&
-      (access === "all" || tenantPortalState(p) === access) &&
-      (rental === "unassigned"
-        ? !property && !p.rentals?.length
-        : (!property && rental === "all") ||
-          (p.rentals || []).some(
-            (r) =>
-              (!property || r.propertyId === property) &&
-              (rental === "all" || r.status === rental),
-          )) &&
-      (p.recordStatus || "active") ===
-        (params.get("records") === "archived" ? "archived" : "active"),
-  );
+    rental = params.get("rental") || "all",
+    records = params.get("records") === "archived" ? "archived" : "",
+    cursor = params.get("cursor") || "", before = params.get("before") || "";
+  const search = useDebouncedValue(query.trim()), settled = search === query.trim();
+  const r = useResource<TenantDirectory>(`/api/company/resident-profiles/directory?${new URLSearchParams(Object.entries({ q: search, access: access === "all" ? "" : access, propertyId: property, rental: rental === "all" ? "" : rental, records, cursor, before }).filter(([, value]) => value))}`, true, true);
+  const [metadata, setMetadata] = useState<{ companyId: string; properties: TenantDirectory["properties"] } | null>(null);
+  const [metadataMismatch, setMetadataMismatch] = useState(false);
+  const [refreshingWorkspace, setRefreshingWorkspace] = useState(false);
+  const summary = useRef<HTMLSpanElement>(null), intentionalPage = useRef<string | null>(null);
+  const companyChanged = metadataMismatch || (!!r.data && r.data.companyId !== auth?.membership?.companyId);
+  const denied = r.errorStatus === 401 || r.errorStatus === 403;
+  const directory = !companyChanged && !r.error ? r.data : undefined;
+  const rows = directory?.items;
+  const propertyChoices = !companyChanged && !denied && metadata && metadata.companyId === auth?.membership?.companyId ? metadata.properties : [];
+  const metadataReady = !!metadata && metadata.companyId === auth?.membership?.companyId && !companyChanged && !denied;
+  useEffect(() => {
+    if (companyChanged || denied) { setMetadata(null); return; }
+    if (r.data && r.data.companyId === auth?.membership?.companyId) setMetadata({ companyId: r.data.companyId, properties: r.data.properties });
+  }, [r.data, companyChanged, denied, auth?.membership?.companyId]);
+  useEffect(() => {
+    if (r.error || companyChanged || (intentionalPage.current && intentionalPage.current !== `${cursor}:${before}`)) intentionalPage.current = null;
+    if (!directory || r.loading || intentionalPage.current !== `${cursor}:${before}`) return;
+    intentionalPage.current = null; summary.current?.focus({ preventScroll: true }); summary.current?.scrollIntoView({ block: "nearest" });
+  }, [directory, r.loading, r.error, cursor, before, companyChanged]);
   const filter = (key: string, value: string) => {
+    intentionalPage.current = null;
     const next = new URLSearchParams(tenantDirectorySearch(params));
+    next.delete("cursor"); next.delete("before");
     if (value && value !== "all") next.set(key, value);
     else next.delete(key);
     setParams(next, { replace: true });
   };
+  const page = (direction?: "cursor" | "before", token?: string) => {
+    const next = new URLSearchParams(tenantDirectorySearch(params)); next.delete("cursor"); next.delete("before");
+    if (direction && token) next.set(direction, token);
+    intentionalPage.current = `${next.get("cursor") || ""}:${next.get("before") || ""}`; setParams(next);
+  };
+  const historyParams = new URLSearchParams(tenantDirectorySearch(params)); historyParams.set("section", "rentals");
   return (
     <div className="tenant-directory-page">
       <header className="page-heading page-heading-row">
@@ -135,8 +139,10 @@ function Directory() {
         </div>
         <div className="actions">
           <button
+            disabled={!!writeBlock || denied || companyChanged}
             onClick={() => {
-              setInviteInitially(false);
+              if (!setupStarted) setInviteInitially(false);
+              setSetupStarted(true);
               setAdding(true);
             }}
           >
@@ -145,23 +151,28 @@ function Directory() {
           {can("members.manage") && (
             <button
               className="secondary"
+              disabled={!!writeBlock || denied || companyChanged}
               onClick={() => {
-                setInviteInitially(true);
+                if (!setupStarted) setInviteInitially(true);
+                setSetupStarted(true);
                 setAdding(true);
               }}
             >
               Invite tenant
             </button>
           )}
+          {writeBlock && !denied && !companyChanged && (setupStarted || hasTenantSaveRecovery(auth)) && !adding && <button className="secondary" onClick={() => { setSetupStarted(true); setAdding(true); }}>Resume tenant setup</button>}
         </div>
       </header>
-      <EditorDialog
+      {writeBlock && <p className="notice" role="status">{writeBlock}</p>}
+      {!denied && !companyChanged && <EditorDialog
         open={adding}
         title="Add tenant"
         onSaveDraft={() => setAdding(false)}
         description="Save one account and tenant profile. You can activate portal access separately."
         onClose={() => {
           setAdding(false);
+          setSetupStarted(false);
           setFormRevision((v) => v + 1);
           r.reload();
         }}
@@ -171,16 +182,18 @@ function Directory() {
           inviteInitially={inviteInitially}
           saved={(row) => {
             setAdding(false);
+            setSetupStarted(false);
             r.reload();
-            navigate(contactPath(row.id));
+            navigate(contactPath(row.id, params));
           }}
-          cancel={() => setAdding(false)}
+          cancel={() => { setAdding(false); setSetupStarted(false); }}
         />
-      </EditorDialog>
+      </EditorDialog>}
       <section
         className="panel tenant-directory-panel"
         aria-label="Tenant directory"
       >
+        {!settled && <p className="tenant-directory-feedback help" role="status">Updating search…</p>}
         <div className="tenant-directory-toolbar">
           <label className="tenant-search">
             Find resident
@@ -199,9 +212,10 @@ function Directory() {
               onChange={(e) => filter("propertyId", e.target.value)}
             >
               <option value="">All properties</option>
-              {propertyChoices.map(([id, name]) => (
-                <option key={id} value={id}>
-                  {name}
+              {property && !propertyChoices.some(item => item.id === property) && <option value={property}>Selected property</option>}
+              {propertyChoices.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
                 </option>
               ))}
             </select>
@@ -253,21 +267,26 @@ function Directory() {
               <option value="archived">Archived records</option>
             </select>
           </label>
-          <span className="directory-count" role="status">
-            {rows
-              ? `${rows.length} ${rows.length === 1 ? "tenant" : "tenants"}`
-              : "Loading tenants…"}
+          <span className="directory-count" role="status" ref={summary} tabIndex={-1}>
+            {directory
+              ? `${directory.total} ${directory.total === 1 ? "tenant" : "tenants"} · ${directory.items.length} shown on this page`
+              : r.loading && !companyChanged ? "Loading tenants…" : "Tenant count unavailable"}
           </span>
         </div>
+        <p className="tenant-directory-feedback help">Property and rental relationship filters use the same recorded lease relationship. Previews show up to three rentals; open Rental history for the complete list.</p>
+        {companyChanged ? <div className="notice error" role="alert"><p>Your company workspace changed. Reload before viewing this tenant directory.</p><button disabled={refreshingWorkspace} onClick={async () => { setRefreshingWorkspace(true); try { await refreshUser(); setMetadataMismatch(false); r.reload(); } finally { setRefreshingWorkspace(false); } }}>{refreshingWorkspace ? "Reloading workspace…" : "Reload workspace"}</button></div> : <>
+        {directory && r.loading && <p className="tenant-directory-feedback help" role="status">Refreshing tenants…</p>}
         {r.error && (
           <p role="alert" className="notice error">
             {r.error}{" "}
             <button className="secondary" onClick={r.reload}>
               Try again
             </button>
+            {(cursor || before) && <button className="secondary" disabled={r.loading || !settled} onClick={() => page()}>Return to first tenant page</button>}
           </p>
         )}
-        {!r.data ? (
+        {r.error && !metadataReady && !denied && auth?.membership?.companyId && <TenantFilterMetadata companyId={auth.membership.companyId} loaded={setMetadata} mismatch={setMetadataMismatch}/>}
+        {!directory ? (
           !r.error && <p role="status">Loading residents…</p>
         ) : !rows?.length ? (
           <div className="empty-state">
@@ -286,7 +305,7 @@ function Directory() {
                   : "Add a tenant without a login, then record their lease. Portal access can be arranged separately."}
             </p>
             {(query || property || rental !== "all" || access !== "all") && (
-              <button className="secondary" onClick={() => setParams({})}>
+              <button className="secondary" onClick={() => setParams(prospectContext(params))}>
                 Clear filters
               </button>
             )}
@@ -318,7 +337,7 @@ function Directory() {
                       : tenantPath(p.userId!, params),
                     portal = tenantPortalState(p);
                   return (
-                    <tr key={p.contactId || p.userId}>
+                    <tr key={`${p.kind}:${p.id}`}>
                       <td>
                         <div className="tenant-person">
                           <span
@@ -386,6 +405,7 @@ function Directory() {
                               No lease association recorded
                             </span>
                           )}
+                          {p.rentalCount > 0 && <p className="help">{p.rentalCount} recorded {p.rentalCount === 1 ? "rental" : "rentals"}{p.rentalCount > p.rentals.length ? ` · ${p.rentals.length} shown` : ""}{" · "}<Link to={p.contactId ? contactPath(p.contactId, historyParams) : tenantPath(p.userId!, historyParams)}>View all rentals</Link></p>}
                         </div>
                       </td>
                       <td data-label="Portal access">
@@ -421,6 +441,13 @@ function Directory() {
             </table>
           </div>
         )}
+        {directory && <nav className="tenant-directory-pagination actions" aria-label="Tenant directory pages">
+          <button className="secondary" disabled={r.loading || !settled || !directory.previousCursor} onClick={() => page("before", directory.previousCursor!)}>Previous tenants</button>
+          <span>{directory.pageSize} tenants per page</span>
+          <button className="secondary" disabled={r.loading || !settled || !directory.nextCursor} onClick={() => page("cursor", directory.nextCursor!)}>Next tenants</button>
+          {(cursor || before) && <button className="secondary" disabled={r.loading || !settled} onClick={() => page()}>First tenant page</button>}
+        </nav>}
+        </>}
       </section>
       {can("members.manage") && (
         <details className="panel directory-support">
@@ -434,15 +461,26 @@ function Directory() {
     </div>
   );
 }
+function TenantFilterMetadata({ companyId, loaded, mismatch }: { companyId: string; loaded: (value: { companyId: string; properties: TenantDirectory["properties"] }) => void; mismatch: (value: boolean) => void }) {
+  const resource = useResource<TenantDirectory>("/api/company/resident-profiles/directory", true);
+  useEffect(() => {
+    if (!resource.data) return;
+    if (resource.data.companyId !== companyId) { mismatch(true); return; }
+    loaded({ companyId, properties: resource.data.properties });
+  }, [resource.data, companyId, loaded, mismatch]);
+  return resource.error ? <p className="tenant-directory-feedback help" role="alert">Property choices are unavailable. The selected filter is kept. <button className="secondary" onClick={resource.reload}>Retry property choices</button></p> : <p className="tenant-directory-feedback help" role="status">Loading property choices. The selected page and filters are kept.</p>;
+}
 export function ResidentEditor({ id, close, mode = "contact", open = true, onSaveDraft }: { id: string; close: () => void; mode?: "contact" | "access"; open?: boolean; onSaveDraft?: () => void }) {
-  const { can } = useAuth();
+  const { can, data: auth } = useAuth();
+  const context = useTenantAttemptContext(auth);
+  const writeBlock = mode === "contact" ? tenantLeasingWriteBlock(auth?.companyFeatures) : null;
   const helpId = useId();
   const [accessEditing, setAccessEditing] = useState(mode === "access");
   const endpoint = `/api/company/resident-profiles/${encodeURIComponent(id)}`;
   const r = useResource<ResidentProfileDetail>(endpoint);
   const [draft, setDraft] = useState<Profile>();
   const [editing, setEditing] = useState(true);
-  const person = r.data;
+  const person = useTenantEditorRecord(r, `${id}:${tenantEditorScope(auth)}`);
   useEffect(() => { if (person && !draft) setDraft(person); }, [person, draft]);
   return (
     <EditorDialog
@@ -480,6 +518,7 @@ export function ResidentEditor({ id, close, mode = "contact", open = true, onSav
             <h3>Contact information</h3>
             {!editing && (
               <button
+                disabled={!!writeBlock}
                 onClick={() => {
                   setDraft(person);
                   setEditing(true);
@@ -490,18 +529,24 @@ export function ResidentEditor({ id, close, mode = "contact", open = true, onSav
             )}
           </div>
           {editing && draft ? (
-            <Form
+            <>
+            {writeBlock && <p className="notice" role="status">{writeBlock}</p>}
+            <fieldset disabled={!!writeBlock} className="editor-contents"><Form
               key={draft.version}
               label="Save resident profile"
               operation="membership.update"
               submit={async (form) => {
+                if (!context.current()) throw new Error("Reload the workspace before changing this tenant profile.");
+                if (writeBlock) throw new Error(writeBlock);
                 await api(endpoint, {
                   method: "PATCH",
+                  expectedCompanyId: context.companyId,
                   body: {
                     ...Object.fromEntries(form),
                     expectedVersion: draft.version,
                   },
                 });
+                if (!context.current()) throw new ApiError("Your company or account changed before this profile change was acknowledged.", 409, "TENANT_CONTEXT_CHANGED", true);
                 setEditing(false);
                 r.reload();
               }}
@@ -555,7 +600,8 @@ export function ResidentEditor({ id, close, mode = "contact", open = true, onSav
               >
                 Discard edits
               </button>
-            </Form>
+            </Form></fieldset>
+            </>
           ) : (
             <dl className="details">
               {Object.entries(residentContactFields).map(([name, label]) => (
@@ -584,10 +630,12 @@ export function ResidentEditor({ id, close, mode = "contact", open = true, onSav
                   label="Save tenant access"
                   operation="membership.update"
                   submit={async (form) => {
+                    if (!context.current()) throw new Error("Reload the workspace before changing tenant access.");
                     await api(
                       `/api/company/members/${encodeURIComponent(id)}`,
                       {
                         method: "PATCH",
+                        expectedCompanyId: context.companyId,
                         body: {
                           role: "resident",
                           status: String(form.get("status")),
@@ -595,6 +643,7 @@ export function ResidentEditor({ id, close, mode = "contact", open = true, onSav
                         },
                       },
                     );
+                    if (!context.current()) throw new ApiError("Your company or account changed before this access change was acknowledged.", 409, "TENANT_CONTEXT_CHANGED", true);
                     setAccessEditing(false);
                     r.reload();
                   }}

@@ -1,10 +1,12 @@
 type EventRow = { name: string; outcome: string; duration: number };
 let csrf = "";
+let impersonationContext = "";
 let queue: EventRow[] = [];
 let sending = false;
 let timer: ReturnType<typeof setInterval> | undefined;
-export function setTelemetrySession(token: string) {
+export function setTelemetrySession(token: string, context = "") {
   csrf = token;
+  impersonationContext = context;
   if (!csrf) {
     queue = [];
     if (timer) clearInterval(timer);
@@ -34,7 +36,7 @@ export async function flushTelemetry() {
       credentials: "same-origin",
       cache: "no-store",
       signal: AbortSignal.timeout(3000),
-      headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf, "X-Impersonation-ID": impersonationContext },
       body: JSON.stringify({ events }),
     });
   } catch {

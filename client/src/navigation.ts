@@ -1,6 +1,8 @@
 export type Capability =
   | "notification.read"
   | "platform.manage"
+  | "platform.impersonate"
+  | "subscription.read"
   | "property.read"
   | "property.write"
   | "company.manage"
@@ -17,6 +19,14 @@ export const routes: {
   permission?: Capability;
   section: string;
 }[] = [
+  { path: "/company/imports/expenses", title: "Import paid expenses", permission: "finance.manage", section: "Company" },
+  { path: "/resident/documents", title: "My documents", permission: "resident.self", section: "Resident" },
+  { path: "/company/prospects", title: "Prospects & applications", permission: "lease.manage", section: "Company" },
+  { path: "/company/availability", title: "Availability & turnover", permission: "lease.manage", section: "Company" },
+  { path: "/company/imports/units", title: "Import units", permission: "property.write", section: "Company" },
+  { path: "/platform/plans", title: "Monthly plans", permission: "platform.manage", section: "Platform" },
+  { path: "/company/subscription", title: "Plan & billing", permission: "subscription.read", section: "Company" },
+  { path: "/platform/impersonation", title: "Impersonation", permission: "platform.impersonate", section: "Platform" },
   { path: "/company/work-orders", title: "Assigned work", permission: "maintenance.execute", section: "Company" },
   {
     path: "/platform/companies",

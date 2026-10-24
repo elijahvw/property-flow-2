@@ -1,5 +1,12 @@
 export type OperationName =
+  | "availability.update" | "unit.import.preview" | "unit.import.commit" | "unit.import.cancel"
+  | "prospect.create" | "prospect.update" | "prospect.stage" | "prospect.convert"
+  | "document.share" | "document.revoke" | "document.shared.download"
+  | "expense.import.preview" | "expense.import.commit" | "expense.import.cancel"
+  | "plan.publish" | "plan.availability" | "subscription.update" | "subscription.invoice.issue" | "subscription.invoice.void" | "subscription.payment.record" | "subscription.payment.reverse"
+  | "impersonation.start" | "impersonation.stop" | "impersonation.support.update"
   | "notification.state"
+  | "notification.preferences"
   | 'agreement.save' | 'agreement.review'
   | 'inspection.save' | 'inspection.review'
   | 'preventive.save' | 'preventive.occurrence'
@@ -10,7 +17,7 @@ export type OperationName =
   | 'user.provision' | 'account.verification'
   | 'finance.create' | 'finance.void'
   | 'unit.create' | 'unit.update' | 'lease.create' | 'lease.update'
-  | 'maintenance.work' | 'maintenance.create' | 'maintenance.status' | 'maintenance.update'
+  | 'maintenance.work' | 'maintenance.create' | 'maintenance.status' | 'maintenance.update' | 'maintenance.reply'
   | 'maintenance.cost.link' | 'maintenance.cost.unlink'
   | 'page.data.load'
   | 'auth.session.restore' | 'auth.profile.load'

@@ -1,4 +1,5 @@
 import { test, expect, Page } from "@playwright/test";
+import { tenantDirectoryFixture, tenantRentalHistoryFixture } from "./tenant-directory-fixture";
 async function fixture(page: Page, role = "owner") {
   const state = {
     writes: [] as any[],
@@ -83,7 +84,9 @@ async function fixture(page: Page, role = "owner") {
       emergencyContactPhone: null,
       managementNotes: null,
     };
+    if (p === "/api/company/resident-profiles/directory") return json(tenantDirectoryFixture([profile],req.url(),{companyId:"a"}));
     if (p === "/api/company/resident-profiles") return json([profile]);
+    if (p === "/api/company/resident-profiles/resident/rentals") return json(tenantRentalHistoryFixture(profile,[],req.url(),{companyId:"a"}));
     if (p === "/api/company/resident-profiles/resident")
       return json({
         ...profile,

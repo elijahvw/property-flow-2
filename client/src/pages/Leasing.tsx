@@ -3,6 +3,7 @@ import { useDebouncedValue } from "../useDebouncedValue";
 import { TenantForm,type TenantContact } from "../components/TenantForm";
 import { formatDate } from "../dates";
 import { leasePath, unitDirectoryPath, unitListContext } from "../lease-links";
+import { prospectContext, withProspectContext } from "../prospect-context";
 import { DateField } from "../components/DateField";
 import {
   LeaseReview,
@@ -19,6 +20,7 @@ import { EditorDialog } from "../components/EditorDialog";
 import { DraftReset } from "../components/DraftReset";
 import { PropertyNavigation } from "../components/PropertyNavigation";
 import { Form } from "../components/Form";
+import "../components/LandlordForms.css";
 type Unit = UnitExtras & {
   id: string;
   propertyId: string;
@@ -51,6 +53,14 @@ export type Lease = {
   resident: { name: string | null; email: string };
 };
 type Records<T> = { items: T[]; nextCursor: string | null };
+function mergeLeaseUnitChoices(previous: Unit[], incoming: Unit[]) {
+  const choices = new Map(previous.map(unit => [unit.id, unit]));
+  for (const unit of incoming) {
+    const existing = choices.get(unit.id);
+    if (!existing || !Number.isSafeInteger(existing.version) || unit.version >= existing.version) choices.set(unit.id, unit);
+  }
+  return [...choices.values()];
+}
 const usd = (cents: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
     cents / 100,
@@ -163,11 +173,7 @@ function UnitList({
         <p>
           Find a space, review its details and follow its lease history.
         </p>
-        {editable && (
-          <button disabled={!property.data} onClick={() => setAdding(true)}>
-            Add a unit
-          </button>
-        )}
+        {editable && <div className="actions"><button disabled={!property.data} onClick={() => setAdding(true)}>Add a unit</button><Link className="button secondary" to="/company/imports/units">Import units from CSV</Link></div>}
       </header>
       {error && <p role="alert">{error}</p>}
       {success && <p role="status" className="notice">{success}</p>}
@@ -403,7 +409,7 @@ function LeaseList() {
   const properties = useResource<{ id: string; name: string }[]>(
     "/api/company/properties",
   );
-  const r = useResource<Records<Lease> & { unit?: { id: string; label: string; propertyId: string } }>(
+  const r = useResource<Records<Lease> & { unit?: Unit }>(
     `/api/company/leases?${new URLSearchParams(Object.entries({ cursor, propertyId: contextId, unitId, status, attention, approvals, q: search }).filter(([, value]) => value))}`,
     true,
     true,
@@ -432,6 +438,7 @@ function LeaseList() {
           leaseListQ: query,
           leaseListUnit: unitId,
           ...unitListContext(params),
+          ...prospectContext(params),
           ...(approvals ? { section: "invitations" } : {}),
         }).filter(([, value]) => value),
       ),
@@ -460,7 +467,7 @@ function LeaseList() {
         </p>}
         {contextId && (
           <p>
-            <Link to="/company/leases">View all company leases</Link>
+            <Link to={withProspectContext("/company/leases", params)}>View all company leases</Link>
           </p>
         )}
         </div><div className="actions"><button onClick={() => setAdding(true)}>Record a lease</button>
@@ -536,6 +543,8 @@ function LeaseList() {
               >
                 <LeaseCreate
                   propertyId={id}
+                  active={propertyId === id}
+                  unitHint={{ id: unitId, loading: r.loading, failed: !!r.error, candidate: r.data?.unit }}
                   initialContactId={params.get("contactId") || undefined}
                   propertyName={
                     properties.data!.find((p) => p.id === id)?.name ||
@@ -545,7 +554,7 @@ function LeaseList() {
                     reload();
                     setAdding(false);
                     navigate(
-                      `/company/leases/${encodeURIComponent(row.id)}?onboarding=household`,
+                      leasePath(row.id, { onboarding: "household", ...prospectContext(params) }),
                     );
                   }}
                 />
@@ -611,6 +620,7 @@ function LeaseList() {
                 const value = e.target.value;
                 setCursor("");
                 setParams({
+                  ...prospectContext(params),
                   ...(unitId ? { unitId, ...unitListContext(params) } : {}),
                   ...(query ? { q: query } : {}),
                   ...(!pathPropertyId && contextId
@@ -687,7 +697,7 @@ function LeaseList() {
                         <td>
                           <Link
                             className="table-primary"
-                            to={`/company/properties/${encodeURIComponent(lease.propertyId)}/leases`}
+                            to={withProspectContext(`/company/properties/${encodeURIComponent(lease.propertyId)}/leases`, params)}
                           >
                             {lease.property.name}
                           </Link>
@@ -738,7 +748,7 @@ function LeaseList() {
                               <summary>More actions</summary>
                               <div className="row-more-actions">
                                 <Link
-                                  to={`/company/rent?leaseId=${encodeURIComponent(lease.id)}`}
+                                  to={withProspectContext(`/company/rent?leaseId=${encodeURIComponent(lease.id)}`, params)}
                                 >
                                   Rent ledger →
                                 </Link>
@@ -809,6 +819,7 @@ function LeaseList() {
               setRenewing(null);
               reload();
               setParams({
+                ...prospectContext(params),
                 ...(!pathPropertyId ? { propertyId: renewing.propertyId } : {}),
                 status: "draft",
               });
@@ -868,21 +879,31 @@ export function LeaseCreate({
   propertyId,
   propertyName,
   initialContactId,
+  active = true,
+  unitHint,
   saved,
 }: {
   propertyId: string;
   propertyName: string;
   initialContactId?:string;
+  active?: boolean;
+  unitHint?: { id: string; loading: boolean; failed: boolean; candidate?: Unit };
   saved: (row: { id:string }) => void;
 }) {
+  const [returnParams] = useSearchParams();
   const auth = useAuth().data,
     storageKey = `pf:lease-setup:${auth?.user.id}:${auth?.membership?.companyId}:${propertyId}`;
-  const [review, setReview] = useState<LeaseReviewData | null>(() =>
-    leasePending(storageKey),
-  );
+  const [openingReview] = useState<LeaseReviewData | null>(() => leasePending(storageKey));
+  const [review, setReview] = useState<LeaseReviewData | null>(openingReview);
+  const [openingUnitHint] = useState(unitHint?.id || "");
+  const hintScope = JSON.stringify([auth?.user.id, auth?.user.status, auth?.user.emailVerified, auth?.membership?.companyId,
+    auth?.membership?.version, auth?.permissions, auth?.impersonation?.contextId, auth?.companyFeatures]);
+  const openingHintScope = useRef(hintScope), edited = useRef(!!openingReview), hintConsumed = useRef(!!openingReview);
+  const [selectedUnit, setSelectedUnit] = useState<string | null>(() => typeof openingReview?.payload.unitId === "string" ? openingReview.payload.unitId : null);
   const [key, setKey] = useState(() => crypto.randomUUID()),
     [unitCursor, setUnitCursor] = useState("");
   const [unitOptions, setUnitOptions] = useState<Unit[]>([]);
+  const [observedHint, setObservedHint] = useState<Unit>();
   const units = useResource<Records<Unit>>(
     `/api/company/properties/${encodeURIComponent(propertyId)}/units?${new URLSearchParams(unitCursor ? { cursor: unitCursor } : {})}`,
   );
@@ -898,36 +919,71 @@ export function LeaseCreate({
   // Browsing options must never remount a pending draft or change its retry identity.
   // Keep already-seen choices so the selected unit survives an independent page load.
   useEffect(() => {
-    if (units.data)
+    if (units.data) {
+      const observed = units.data.items.find(unit => unit.id === openingUnitHint);
+      if (observed) setObservedHint(previous => !previous || observed.version >= previous.version ? observed : previous);
       setUnitOptions((previous) => {
-        const choices = new Map(previous.map((unit) => [unit.id, unit]));
-        for (const unit of units.data!.items)
-          if (unit.status === "active") choices.set(unit.id, unit);
-        return [...choices.values()];
+        return mergeLeaseUnitChoices(previous, units.data!.items.filter(unit => unit.status === "active"));
       });
-  }, [units.data]);
+    }
+  }, [units.data, openingUnitHint]);
+  const candidate = unitHint?.candidate;
+  // Include inactive page observations: a newer archived record must prevent
+  // an older in-flight active lookup from initializing this intake.
+  const newestHint = [observedHint, units.data?.items.find(unit => unit.id === openingUnitHint), candidate]
+    .filter((unit): unit is Unit => !!unit && unit.id === openingUnitHint && Number.isSafeInteger(unit.version) && unit.version >= 1)
+    .reduce<Unit | undefined>((newest, unit) => !newest || unit.version > newest.version ? unit : newest, undefined);
+  const verifiedCandidate = !unitHint?.loading && !unitHint?.failed && unitHint?.id === openingUnitHint && candidate &&
+    candidate.id === openingUnitHint && candidate.propertyId === propertyId && candidate.status === "active" &&
+    Number.isSafeInteger(candidate.version) && candidate.version >= 1 && newestHint?.status === "active" &&
+    newestHint.propertyId === propertyId && typeof newestHint.label === "string" && !!newestHint.label.trim()
+      ? newestHint : undefined;
+  useEffect(() => {
+    // A returned page or background refresh is advisory. It must never rewrite
+    // a different property, an edited intake or a retained submission journal.
+    if (hintScope !== openingHintScope.current) hintConsumed.current = true;
+    if (!active || !openingUnitHint || hintConsumed.current || edited.current || review || !verifiedCandidate || hintScope !== openingHintScope.current) return;
+    setUnitOptions(previous => mergeLeaseUnitChoices(previous, [verifiedCandidate]));
+    setSelectedUnit(verifiedCandidate.id);
+    hintConsumed.current = true;
+  }, [active, openingUnitHint, verifiedCandidate, review, hintScope]);
+  const hintUnavailable = openingUnitHint && !review && !hintConsumed.current && !unitHint?.loading && !verifiedCandidate;
+  const unitValue = selectedUnit ?? (openingUnitHint ? "" : unitOptions[0]?.id || "");
   return (
     <>
-      <EditorDialog open={addingTenant} title="Add tenant for this lease" onSaveDraft={()=>setAddingTenant(false)} onClose={()=>{setAddingTenant(false);setTenantFormRevision(v=>v+1);residents.reload();}}><TenantForm key={tenantFormRevision} saved={row=>{setNewTenant(row);setSelectedTenant(row.id);setAddingTenant(false);residents.reload();}} cancel={()=>setAddingTenant(false)}/></EditorDialog>
-      <div className="prerequisite-links">
-        <Link
-          to={`/company/properties/${encodeURIComponent(propertyId)}/residents`}
-        >
-          Manage residents
-        </Link>{" "}
-        ·{" "}
-        <Link
-          to={`/company/properties/${encodeURIComponent(propertyId)}/units`}
-        >
-          Manage units for this property
-        </Link>
-      </div>
-      <p className="help">Choose an existing tenant or add one here. Each tenant has one Auth0 account; activating portal access is optional.</p><button type="button" className="secondary" onClick={()=>setAddingTenant(true)}>Add tenant for this lease</button>
+      <EditorDialog open={addingTenant} title="Add tenant for this lease" onSaveDraft={()=>setAddingTenant(false)} onClose={()=>{setAddingTenant(false);setTenantFormRevision(v=>v+1);residents.reload();}}><TenantForm key={tenantFormRevision} saved={row=>{edited.current=true;setNewTenant(row);setSelectedTenant(row.id);setAddingTenant(false);residents.reload();}} cancel={()=>setAddingTenant(false)}/></EditorDialog>
       <ol className="lease-setup-progress" aria-label="Lease setup progress">
         <li aria-current={!review?"step":undefined}>1. Rental and terms</li>
         <li aria-current={review?"step":undefined}>2. Review and record</li>
         <li>3. Household, invitations and billing</li>
       </ol>
+      <div className="lease-setup-tools" hidden={!!review}>
+        <p className="help">Choose an existing tenant or add one here. Each tenant has one Auth0 account; activating portal access is optional.</p>
+        <div className="actions">
+          <button type="button" className="secondary" onClick={()=>{edited.current=true;setAddingTenant(true);}}>Add tenant for this lease</button>
+          <details className="lease-setup-links"><summary>Property setup options</summary><div className="actions">
+            <Link to={withProspectContext(`/company/properties/${encodeURIComponent(propertyId)}/residents`, returnParams)}>Manage residents</Link>
+            <Link to={`/company/properties/${encodeURIComponent(propertyId)}/units`}>Manage units for this property</Link>
+          </div></details>
+        </div>
+      </div>
+      {openingUnitHint && !review && !hintConsumed.current && <p role="status" className="help">
+        {hintUnavailable ? "Suggested unit is unavailable for this property. Choose an active unit."
+          : edited.current ? "Choose an active unit. Your existing edits have been kept."
+            : unitHint?.loading ? "Checking suggested unit…" : "Choose an active unit."}
+      </p>}
+      {review && (
+        <LeaseReview
+          review={review}
+          storageKey={storageKey}
+          back={() => setReview(null)}
+          saved={(row) => {
+            setReview(null);
+            saved(row);
+            setKey(crypto.randomUUID());
+          }}
+        />
+      )}
       {!residents.data ? (
         <Load
           error={residents.error}
@@ -944,28 +1000,19 @@ export function LeaseCreate({
             )
           ) : (
             <>
-              {review && (
-                <LeaseReview
-                  review={review}
-                  storageKey={storageKey}
-                  back={() => setReview(null)}
-                  saved={(row) => {
-                    setReview(null);
-                    saved(row);
-                    setKey(crypto.randomUUID());
-                  }}
-                />
-              )}
-              <div hidden={!!review}>
+              <div hidden={!!review} onChangeCapture={() => { edited.current = true; }}>
                 <Form
                   key={key}
                   operation="page.data.load"
                   secondaryActions={
-                    <DraftReset reset={() => setKey(crypto.randomUUID())} />
+                    <DraftReset reset={() => { edited.current = true; hintConsumed.current = true; setSelectedUnit(null); setKey(crypto.randomUUID()); }} />
                   }
                   reviewOnly
                   label="Review lease"
                   submit={async (form) => {
+                    edited.current = true;
+                    hintConsumed.current = true;
+                    setSelectedUnit(String(form.get("unitId") || ""));
                     setReview({
                       property: propertyName,
                       unit:
@@ -990,10 +1037,12 @@ export function LeaseCreate({
                     });
                   }}
                 >
-                  <div className="form-grid">
+                  <fieldset className="form-section"><legend>Rental and tenant</legend><div className="form-grid">
                     <label>
                       Unit for new lease
-                      <select name="unitId" required>
+                      <select name="unitId" required value={unitValue} onChange={event => { edited.current = true; setSelectedUnit(event.target.value); }}>
+                        {openingUnitHint && <option value="">Choose an active unit</option>}
+                        {selectedUnit && !unitOptions.some(unit => unit.id === selectedUnit) && openingReview && <option value={selectedUnit}>{openingReview.unit} · recorded selection</option>}
                         {unitOptions.map((u) => (
                           <option key={u.id} value={u.id}>
                             {u.label}
@@ -1012,7 +1061,7 @@ export function LeaseCreate({
                         ))}
                       </select>
                     </label>
-                  </div>
+                  </div></fieldset>
                   {initialContactId&&!choices.some(p=>p.contactId===initialContactId)&&!selectedTenantId&&<p role="alert">This tenant is not eligible for the selected property. Review their record or choose another tenant explicitly.</p>}
                   <LeaseTerms prefix="New lease" />
                   <p className="help">
@@ -1159,11 +1208,11 @@ function PaymentTerms({ prefix, value,locked=false }: { prefix: string; value?: 
           />
         </label>
       </div>
-      <p className="help">
+      <details className="payment-policy-help"><summary>How due dates and grace are applied</summary><p className="help">
         Due days 29–31 use the last day when a month is shorter. Grace is
         counted in full calendar days after the due date, in the company
         timezone.
-      </p>
+      </p></details>
       <p className="policy-example">
         Example: November rent due {formatDate(preview.toISOString())} · grace
         through {formatDate(through.toISOString())} · past grace from{" "}

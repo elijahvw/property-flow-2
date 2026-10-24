@@ -6,7 +6,7 @@ import { DraftReset } from "../components/DraftReset";
 import { PropertyNavigation } from "../components/PropertyNavigation";
 import { DateField } from "../components/DateField";
 import { useAuth } from "../context/AuthContext";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { formatDate, formatActivityDate, formatActivityTime } from "../dates";
@@ -18,6 +18,7 @@ import { PrivateDocuments } from "../components/PrivateDocuments";
 import { PreventiveSource } from "../components/PreventiveSource";
 import { MaintenanceVendor } from "../components/MaintenanceVendor";
 import { WorkOrderPanel } from "./WorkOrders";
+import "./MaintenanceConversation.css";
 type Row = {
   id: string;
   propertyId: string;
@@ -50,6 +51,15 @@ type Detail = Row & {
     changes?: Record<string, { from: string | null; to: string | null }>;
   }[];
 };
+type Directory = {
+  companyId: string;
+  items: Omit<Row, "description" | "version" | "updatedAt">[];
+  total: number;
+  statusCounts: { open: number; in_progress: number; resolved: number };
+  pageSize: number;
+  nextCursor: string | null;
+  previousCursor: string | null;
+};
 const statuses = ["open", "in_progress", "resolved"],
   categories = [
     "plumbing",
@@ -79,7 +89,7 @@ function Loading({ error, retry }: { error?: string; retry: () => void }) {
 }
 function directoryQuery(params: URLSearchParams) {
   const q = new URLSearchParams();
-  for (const key of ["propertyId", "status", "priority", "q", "nested", "workStatus", "due", "assignee"])
+  for (const key of ["propertyId", "status", "priority", "q", "nested", "workStatus", "due", "assignee", "cursor", "before"])
     if (params.get(key)) q.set(key, params.get(key)!);
   return q;
 }
@@ -213,6 +223,7 @@ export function Maintenance({ resident = false }: { resident?: boolean }) {
   );
 }
 function RequestWorkspace({ resident }: { resident: boolean }) {
+  const { data: auth, refreshUser } = useAuth();
   const [params, setParams, pathPropertyId] = usePropertySearchParams();
   const [adding, setAdding] = useState(false),
     [success, setSuccess] = useState(""),
@@ -222,8 +233,13 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
     query = params.get("q") || "",
     priority = params.get("priority") || "",
     due=params.get("due")||"",assignee=params.get("assignee")||"",
-    workStatus = params.get("workStatus") || "";
+    workStatus = params.get("workStatus") || "",
+    cursor = params.get("cursor") || "",
+    before = params.get("before") || "";
   const search = useDebouncedValue(query.trim()), assigneeSearch=useDebouncedValue(assignee.trim());
+  const settled = search === query.trim() && (resident || assigneeSearch === assignee.trim());
+  const resultSummary = useRef<HTMLParagraphElement>(null), intentionalPage = useRef<string | null>(null);
+  const [refreshingWorkspace, setRefreshingWorkspace] = useState(false);
   const [newProperty, setNewProperty] = useState("");
   const [createdId, setCreatedId] = useState("");
   const base = resident
@@ -234,16 +250,34 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
     true,
     true,
   );
-  const r = useResource<Row[]>(
-    `${base}?${new URLSearchParams(Object.entries({ status, propertyId, q: search, priority, ...(!resident ? {workStatus,due,assignee:assigneeSearch} : {}) }).filter(([, v]) => v))}`,
+  const r = useResource<Directory>(
+    `${base}/directory?${new URLSearchParams(Object.entries({ status, propertyId, q: search, priority, ...(!resident ? {workStatus,due,assignee:assigneeSearch} : {}), cursor, before }).filter(([, v]) => v))}`,
     true,
     true,
   );
+  const companyChanged = !!r.data && r.data.companyId !== auth?.membership?.companyId;
+  const directory = companyChanged ? undefined : r.data;
+  useEffect(() => {
+    if (r.error || (intentionalPage.current && intentionalPage.current !== `${cursor}:${before}`)) intentionalPage.current = null;
+    if (!directory || r.loading || intentionalPage.current !== `${cursor}:${before}`) return;
+    intentionalPage.current = null;
+    resultSummary.current?.focus({ preventScroll: true });
+    resultSummary.current?.scrollIntoView({ block: "nearest" });
+  }, [directory, r.error, r.loading, cursor, before]);
   const change = (key: string, value: string) => {
+    intentionalPage.current = null;
     const next = new URLSearchParams(params);
+    next.delete("cursor"); next.delete("before");
     if (value) next.set(key, value);
     else next.delete(key);
     setParams(next, { replace: true });
+  };
+  const changePage = (direction?: "cursor" | "before", token?: string) => {
+    const next = new URLSearchParams(params);
+    next.delete("cursor"); next.delete("before");
+    if (direction && token) next.set(direction, token);
+    intentionalPage.current = `${next.get("cursor") || ""}:${next.get("before") || ""}`;
+    setParams(next);
   };
   const creatingProperty =
     pathPropertyId || newProperty || propertyId || properties.data?.[0]?.id || "";
@@ -422,7 +456,7 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
             Open, in progress and completed work
           </span>
         </div>
-        {search !== query.trim() && <p role="status" className="help">Updating search…</p>}
+        {!settled && <p role="status" className="help">Updating search…</p>}
         <div className="directory-toolbar">
           <label className="directory-search">
             Find request
@@ -487,25 +521,31 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
         {!resident && !properties.data && (
           <Loading error={properties.error} retry={properties.reload} />
         )}
-        {r.error && r.data && <Loading error={r.error} retry={r.reload} />}
-        {!r.data ? (
+        {companyChanged ? <div role="alert" className="notice error">
+          <p>Your company workspace changed. Reload your workspace before viewing this maintenance directory.</p>
+          <button disabled={refreshingWorkspace} onClick={async () => { setRefreshingWorkspace(true); try { await refreshUser(); } finally { setRefreshingWorkspace(false); } }}>{refreshingWorkspace ? "Reloading workspace…" : "Reload workspace"}</button>
+        </div> : <>
+        {r.error && directory && <Loading error={r.error} retry={r.reload} />}
+        {r.error && (cursor || before) && <p className="actions"><button className="secondary" onClick={() => changePage()} disabled={r.loading || !settled}>Return to first page</button></p>}
+        {!directory ? (
           <Loading error={r.error} retry={r.reload} />
         ) : (
           <>
-            <p className="directory-results" role="status">
-              {r.data.length} matching requests ·{" "}
+            {r.loading && <p role="status" className="help">Refreshing maintenance…</p>}
+            <p className="directory-results" role="status" ref={resultSummary} tabIndex={-1}>
+              {directory.total} matching requests ·{" "}
               {statuses
                 .map(
                   (s) =>
-                    `${r.data!.filter((r) => r.status === s).length} ${label(s)}`,
+                    `${directory.statusCounts[s as keyof Directory["statusCounts"]]} ${label(s)}`,
                 )
-                .join(" · ")}
+                .join(" · ")} · {directory.items.length} shown on this page
             </p>
-            {!r.data.length ? (
+            {!directory.items.length ? (
               <div className="empty-state">
                 <h3>No requests match these filters.</h3>
                 <p>
-                  {status || propertyId || query || priority || due || assignee
+                  {status || propertyId || query || priority || due || assignee || workStatus
                     ? "Try a different search or filter."
                     : "Requests will appear here as maintenance is recorded."}
                 </p>
@@ -526,7 +566,7 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {r.data.map((row) => (
+                    {directory.items.map((row) => (
                       <tr key={row.id}>
                         <td>
                           <h3>
@@ -594,8 +634,15 @@ function RequestWorkspace({ resident }: { resident: boolean }) {
                 </table>
               </div>
             )}
+            <nav className="actions" aria-label="Maintenance request pages">
+              <button className="secondary" disabled={r.loading || !settled || !directory.previousCursor} onClick={() => changePage("before", directory.previousCursor!)}>Previous requests</button>
+              <span>{directory.pageSize} requests per page</span>
+              <button className="secondary" disabled={r.loading || !settled || !directory.nextCursor} onClick={() => changePage("cursor", directory.nextCursor!)}>Next requests</button>
+              {(cursor || before) && <button className="secondary" disabled={r.loading || !settled} onClick={() => changePage()}>First page</button>}
+            </nav>
           </>
         )}
+        </>}
       </section>
     </>
   );
@@ -785,7 +832,7 @@ function RequestDetail({ id, resident }: { id: string; resident: boolean }) {
               {!row.activity.length && <p>No recorded activity available.</p>}
             </section>
           </div>
-          <RequestUpdates endpoint={endpoint} resident={resident} canShare={row.residentUpdatesAvailable === true} />
+          <RequestUpdates endpoint={endpoint} resident={resident} canShare={row.residentUpdatesAvailable === true} requestStatus={row.status} />
           {!resident && <PreventiveSource requestId={id}/>}
           {!resident && <MaintenanceVendor requestId={id} changed={r.reload} />}
           {!resident && can("finance.manage") && <MaintenanceCosts requestId={id} propertyId={row.propertyId} />}
@@ -901,66 +948,70 @@ function RequestDetail({ id, resident }: { id: string; resident: boolean }) {
   );
 }
 
-function RequestUpdates({ endpoint, resident, canShare }: { endpoint: string; resident: boolean; canShare: boolean }) {
+function RequestUpdates({ endpoint, resident, canShare, requestStatus }: { endpoint: string; resident: boolean; canShare: boolean; requestStatus: string }) {
+  const { data } = useAuth();
+  const readOnly = !!data?.impersonation || data?.companyFeatures?.maintenance === "read_only" || (resident && data?.companyFeatures?.resident_portal === "read_only");
   const [cursor, setCursor] = useState(""),
     [adding, setAdding] = useState(false),
     [submissionKey, setSubmissionKey] = useState(() => crypto.randomUUID()),
     [success, setSuccess] = useState("");
   const updates = useResource<{
-    items: { id: string; content: string; visibility: string; author: string; createdAt: string }[];
+    items: { id: string; content: string; visibility: string; author: string; authorType?: "requester" | "team"; createdAt: string }[];
     nextCursor: string | null;
   }>(`${endpoint}/updates${cursor ? `?${new URLSearchParams({ cursor })}` : ""}`, true, true);
   return (
-    <section className="panel maintenance-updates" aria-label="Request updates">
+    <section className="panel maintenance-updates" aria-label={resident ? "Request conversation" : "Request updates"}>
       <div className="section-heading">
-        <h2>{resident ? "Updates from your property team" : "Progress updates"}</h2>
-        {!resident && <button onClick={() => { setSuccess(""); setAdding(true); }}>Add update</button>}
+        <h2>{resident ? "Updates and replies" : "Progress updates"}</h2>
+        <button disabled={readOnly} onClick={() => { setSuccess(""); setAdding(true); }}>{resident ? "Add reply" : "Add update"}</button>
       </div>
-      <p className="help">{resident ? "Shared updates for this request. For emergencies, contact local emergency services." : "Keep a record of visits, progress and follow-up. Internal notes stay with your management team. Updates do not send email or text messages."}</p>
+      <p className="help">{resident ? "Read updates from your property team and add details to your own request. Replies stay in this request conversation. For emergencies, contact local emergency services." : "Keep a record of visits, progress and follow-up. Requester replies appear alongside shared updates; internal notes stay with your management team. Shared updates can create an in-app notification when company notifications are enabled. No email or text message is sent."}</p>
+      {resident && requestStatus === "resolved" && <p className="notice conversation-resolved">This request is resolved. A reply adds to the conversation; it does not reopen the request or change its status. Your property team reviews further work separately.</p>}
       {success && <p role="status" className="notice">{success}</p>}
       {updates.error && updates.data && <Loading error={updates.error} retry={updates.reload} />}
       {!updates.data ? <Loading error={updates.error} retry={updates.reload} /> : <>
-        {!updates.data.items.length ? <p>{resident ? "No shared updates yet." : "No progress updates recorded yet."}</p> :
+        {!updates.data.items.length ? <p>{resident ? "No updates or replies yet." : "No progress updates recorded yet."}</p> :
           <ol className="maintenance-update-list">
-            {updates.data.items.map(update => <li key={update.id}>
+            {updates.data.items.map(update => <li key={update.id} className={(resident ? update.author === "You" : update.authorType === "requester") ? "maintenance-requester-reply" : undefined}>
               <div className="section-heading">
                 <strong>{update.author}</strong>
-                {!resident && <span className={`status-pill ${update.visibility === "internal" ? "" : "active"}`}>{update.visibility === "internal" ? "Internal note" : "Resident-visible update"}</span>}
+                {resident ? <span className="conversation-kind">{update.author === "You" ? "Your reply" : "Property team update"}</span> : <span className={`status-pill ${update.visibility === "internal" ? "" : "active"}`}>{update.visibility === "internal" ? "Internal note" : update.authorType === "requester" ? "Requester reply" : "Resident-visible update"}</span>}
               </div>
-              <span className="cell-detail">{formatActivityTime(update.createdAt)}</span>
+              <time className="cell-detail" dateTime={update.createdAt}>{formatActivityTime(update.createdAt)}</time>
               <p className="preserve-lines">{update.content}</p>
             </li>)}
           </ol>}
         <div className="actions">
-          {cursor && <button className="secondary" onClick={() => setCursor("")}>Latest updates</button>}
-          {updates.data.nextCursor && <button className="secondary" onClick={() => setCursor(updates.data!.nextCursor!)}>Older updates</button>}
+          {cursor && <button className="secondary" onClick={() => setCursor("")}>{resident ? "Latest conversation" : "Latest updates"}</button>}
+          {updates.data.nextCursor && <button className="secondary" onClick={() => setCursor(updates.data!.nextCursor!)}>{resident ? "Older conversation" : "Older updates"}</button>}
         </div>
       </>}
-      {!resident && <EditorDialog open={adding} title="Add maintenance update" onClose={() => setAdding(false)} onDiscard={() => { setAdding(false); setSubmissionKey(crypto.randomUUID()); }}>
-        <Form key={submissionKey} operation="maintenance.update" label="Record update" feedbackText="Maintenance update recorded."
+      <EditorDialog open={adding} title={resident ? "Reply to your maintenance request" : "Add maintenance update"} onClose={() => setAdding(false)} onDiscard={() => { setAdding(false); setSubmissionKey(crypto.randomUUID()); }}>
+        <Form key={submissionKey} operation={resident ? "maintenance.reply" : "maintenance.update"} label={resident ? "Post reply" : "Record update"} feedbackText={resident ? "Maintenance reply recorded." : "Maintenance update recorded."}
           secondaryActions={<DraftReset reset={() => setSubmissionKey(crypto.randomUUID())} />}
           submit={async form => {
-            await api(`${endpoint}/updates`, { method: "POST", body: { content: form.get("content"), visibility: form.get("visibility"), submissionKey } });
+            if (readOnly) throw new Error("This request conversation is read-only under your current access settings.");
+            await api(`${endpoint}/updates`, { method: "POST", body: { content: form.get("content"), ...(!resident ? { visibility: form.get("visibility") } : {}), submissionKey } });
             setAdding(false);
             setSubmissionKey(crypto.randomUUID());
-            setSuccess("Update recorded.");
+            setSuccess(resident ? "Reply recorded." : "Update recorded.");
             setCursor("");
             updates.reload();
           }}>
           <fieldset className="form-section">
-            <legend>Update and audience</legend>
-            <label>Who can see this update?
+            <legend>{resident ? "Reply to the property team" : "Update and audience"}</legend>
+            {!resident && <label>Who can see this update?
               <select name="visibility" aria-label="Update audience" defaultValue="internal">
                 <option value="internal">Management team only</option>
                 {canShare && <option value="resident">Resident requester and management team</option>}
               </select>
-            </label>
-            <p className="help">{canShare ? "Shared updates are visible only to the resident who submitted this request, while they retain property access. They do not notify the resident." : "This management-created request has no resident requester. Its updates stay internal."}</p>
-            <label>Update (required)<textarea name="content" aria-label="Update text" required maxLength={4000} rows={6} /></label>
+            </label>}
+            <p className="help">{resident ? "Your reply is visible to you and the property team while you retain request access. The property team can receive an in-app notification when company notifications are enabled. No email or text message is sent." : canShare ? "Shared updates are visible only to the resident who submitted this request, while they retain property access. They can create an in-app notification when company notifications are enabled." : "This management-created request has no resident requester. Its updates stay internal."}</p>
+            <label>{resident ? "Your reply (required)" : "Update (required)"}<textarea name="content" aria-label={resident ? "Reply text" : "Update text"} required maxLength={4000} rows={6} /></label>
           </fieldset>
-          <p className="help">Review the audience before saving. Recorded updates and their audience are retained; add a follow-up to correct an earlier update.</p>
+          <p className="help">{resident ? "Replies are retained in the conversation and do not change request status. Add a follow-up reply to correct an earlier message." : "Review the audience before saving. Recorded updates and their audience are retained; add a follow-up to correct an earlier update."}</p>
         </Form>
-      </EditorDialog>}
+      </EditorDialog>
     </section>
   );
 }

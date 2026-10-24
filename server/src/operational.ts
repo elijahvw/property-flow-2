@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { AccessError, companyScope, type Permission } from "./access.js";
+import { AccessError, companyScope, permissions, type Permission } from "./access.js";
 import { assignmentId, serializable } from "./application.js";
+import { companyFeatures, memberRouteFeatures, requireFeatures } from "./company-features.js";
 export type Tx = Prisma.TransactionClient;
 export function input(request: FastifyRequest, keys: string[]) {
   const value = request.body;
@@ -63,6 +64,21 @@ export function scoped<T>(db: PrismaClient, request: FastifyRequest, permission:
     const current = await tx.user.findUnique({ where: { id: request.principal!.id }, include: { membership: { include: { company: true } } } });
     if (!current) throw new AccessError(403, "ACCESS_DENIED", "Access is unavailable.");
     companyScope(current, permission, companyId);
+    const required = memberRouteFeatures(request.routeOptions.url ?? request.url, current.membership?.role);
+    if (required.length) {
+      request.companyFeatures = await companyFeatures(tx, companyId);
+      requireFeatures(request.companyFeatures, required, request.method);
+    }
+    if (request.impersonation) {
+      const session = await tx.session.findUnique({ where: { tokenHash: request.appSession!.tokenHash } });
+      const actor = await tx.user.findUnique({ where: { id: request.sessionActor!.id }, include: { membership: { include: { company: true } } } });
+      if (!session || !actor || !permissions(actor).includes("platform.impersonate") || current.platformRole ||
+          session.impersonatedUserId !== current.id || session.impersonationCompanyId !== companyId ||
+          session.impersonationMembershipVersion !== current.membership?.version ||
+          !session.impersonationExpiresAt || session.impersonationExpiresAt.getTime() <= Date.now() ||
+          `${encodeURIComponent(current.id)}:${session.impersonationExpiresAt.toISOString()}` !== request.impersonation.contextId)
+        throw new AccessError(403, "IMPERSONATION_UNAVAILABLE", "This impersonation expired or access changed. Return to your account to continue.");
+    }
     await tx.$queryRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
     const propertyIds = current.membership?.role === "staff" && current.membership.staffPropertyScope === "selected"
       ? (await tx.staffPropertyAccess.findMany({ where: { companyId, userId: current.id }, select: { propertyId: true } })).map(g => g.propertyId)
@@ -70,9 +86,10 @@ export function scoped<T>(db: PrismaClient, request: FastifyRequest, permission:
     return run(tx, companyId, propertyIds);
   });
 }
-export type AuditRequest = { id: string; principal?: { id: string } };
+export type AuditRequest = { id: string; principal?: { id: string }; sessionActor?: { id: string }; impersonation?: { contextId: string } };
 export function audit(tx: Tx, request: AuditRequest, companyId: string, targetId: string, action: string, detail?: Prisma.InputJsonValue) {
-  return tx.auditEvent.create({ data: { actorId: request.principal!.id, companyId, targetId, action, requestId: request.id, detail } });
+  const acting = request.impersonation ? { ...(detail && typeof detail === "object" && !Array.isArray(detail) ? detail : {}), impersonatedUserId: request.principal!.id, impersonationContext: request.impersonation.contextId } : detail;
+  return tx.auditEvent.create({ data: { actorId: request.sessionActor?.id ?? request.principal!.id, companyId, targetId, action, requestId: request.id, detail: acting } });
 }
 export function paging(query: { cursor?: string }) {
   if (Object.keys(query).some(k => k !== "cursor")) throw new AccessError(400, "INVALID_INPUT", "Unknown filter.");

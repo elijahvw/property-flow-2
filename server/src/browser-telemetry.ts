@@ -2,7 +2,13 @@ import type { FastifyInstance, preValidationHookHandler } from "fastify";
 import { recordBrowserOperation } from "./tracing.js";
 // Closed vocabulary: names are product operations, never page paths or user input.
 export const browserOperations = [
-  "notification.state", "agreement.save", "agreement.review",
+  "availability.update", "unit.import.preview", "unit.import.commit", "unit.import.cancel",
+  "prospect.create", "prospect.update", "prospect.stage", "prospect.convert",
+  "document.share", "document.revoke", "document.shared.download",
+  "expense.import.preview", "expense.import.commit", "expense.import.cancel",
+  "plan.publish", "plan.availability", "subscription.update", "subscription.invoice.issue", "subscription.invoice.void", "subscription.payment.record", "subscription.payment.reverse",
+  "impersonation.start", "impersonation.stop", "impersonation.support.update",
+  "notification.state", "notification.preferences", "agreement.save", "agreement.review",
   "inspection.save", "inspection.review",
   "document.upload", "document.scan", "document.download", "document.archive",
   "deposit.setup",
@@ -28,6 +34,7 @@ export const browserOperations = [
   "maintenance.create",
   "maintenance.status",
   "maintenance.update",
+  "maintenance.reply",
   "maintenance.cost.link",
   "maintenance.cost.unlink",
   "page.data.load",

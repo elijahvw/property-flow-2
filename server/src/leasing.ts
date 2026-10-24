@@ -132,7 +132,7 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
     if(approvals&&(attention||status))throw new AccessError(400,"INVALID_INPUT","Choose resident approvals, status or an attention view.");
     return scoped(db,request,"lease.manage",async(tx,companyId)=>{
       if(propertyId) await property(tx,companyId,propertyId);
-      const selectedUnit = unitId ? await tx.unit.findFirst({where:{id:unitId,companyId,...(propertyId?{propertyId}:{})},select:{id:true,label:true,propertyId:true}}) : null;
+      const selectedUnit = unitId ? await tx.unit.findFirst({where:{id:unitId,companyId,...(propertyId?{propertyId}:{})},select:{id:true,label:true,propertyId:true,status:true,version:true}}) : null;
       if(unitId&&!selectedUnit)throw new AccessError(404,"NOT_FOUND","Unit not found in this property.");
       if(approvals&&(await tx.companyMembership.findUniqueOrThrow({where:{userId:request.principal!.id}})).role!=="owner")throw new AccessError(403,"ACCESS_DENIED","Only owners can review all resident approval requests.");
       let dates={};
@@ -236,11 +236,11 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
       const company=await tx.company.findUniqueOrThrow({where:{id:companyId},select:{timezone:true}}),today=new Date(companyDay(company.timezone)+"T00:00:00Z");
       const [householdCount,pendingApprovals,schedule,deposit]=await Promise.all([
         tx.leaseParticipant.count({where:{companyId,leaseId,removedAt:null,startsOn:{lte:today},OR:[{endsOn:null},{endsOn:{gte:today}}]}}),
-        tx.invitation.count({where:{companyId,leaseId,approvedAt:null,acceptedAt:null,revokedAt:null,expiresAt:{gt:new Date()}}}),
-        tx.rentSchedule.findFirst({where:{companyId,leaseId,status:{in:["active","paused"]}},select:{status:true}}),
-        tx.depositAccount.findFirst({where:{companyId,leaseId},select:{id:true}})
+        request.companyFeatures?.resident_portal !== "disabled" ? tx.invitation.count({where:{companyId,leaseId,approvedAt:null,acceptedAt:null,revokedAt:null,expiresAt:{gt:new Date()}}}) : null,
+        request.companyFeatures?.finances !== "disabled" ? tx.rentSchedule.findFirst({where:{companyId,leaseId,status:{in:["active","paused"]}},select:{status:true}}) : null,
+        request.companyFeatures?.finances !== "disabled" ? tx.depositAccount.findFirst({where:{companyId,leaseId},select:{id:true}}) : null
       ]);
-      return {...current,resident:leasePerson(row),overview:{householdCount,pendingApprovals,scheduleStatus:schedule?.status??null,depositRecorded:!!deposit}};
+      return {...current,resident:leasePerson(row),overview:{householdCount,...(pendingApprovals !== null ? {pendingApprovals} : {}),...(request.companyFeatures?.finances !== "disabled" ? {scheduleStatus:schedule?.status??null,depositRecorded:!!deposit} : {financeAvailable:false})}};
     });
   });
   server.patch<{ Params: { leaseId: string } }>("/api/company/leases/:leaseId", auth, request => {

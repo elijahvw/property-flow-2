@@ -6,6 +6,7 @@ import { useResource } from '../useResource';
 import { formatActivityTime } from '../dates';
 import { Form } from './Form';
 import { EditorDialog, useEditorBusy } from './EditorDialog';
+import { LeaseDocumentSharing } from './LeaseDocumentSharing';
 type Version={id:string;number:number;filename:string;byteLength:number;scanStatus:string;createdAt:string};
 type Document={id:string;title:string;version:number;archivedAt:string|null;versions:Version[]};
 const scanLabel=(status:string)=>status==='clean'?'Cleared by scanning':status==='rejected'?'Rejected by scanning. Download blocked.':'Quarantined. Download blocked until scanning clears this version.';
@@ -18,7 +19,7 @@ export function PrivateDocuments({source,sourceId}:{source:'leases'|'maintenance
   return <section className="panel private-documents">
     <div className="section-heading"><h2>Private documents</h2><button disabled={!r.data||!!r.error} onClick={()=>begin(null)}>Upload document</button></div>
     <p><Link to="/company/documents">Open document library →</Link></p>
-    <p className="help">Management only. Uploads are quarantined until scanning clears them. Originals and earlier versions are retained. PDF, PNG, JPEG or text, up to 5 MB each.</p>
+    <p className="help">Private management originals. Uploads are quarantined until scanning clears them. Company owners may share an exact cleared lease version with approved leaseholders. PDF, PNG, JPEG or text, up to 5 MB each.</p>
     {r.data&&<p className="help">{r.data.scanningConfigured?'Scanning is configured. Each upload is scanned automatically; only cleared files can be downloaded.':'Scanning is not configured. You can retain private originals, but downloads stay blocked until an administrator enables scanning.'}</p>}
     {notice&&<p role="status">{notice}</p>}
     {r.error&&<p role="alert">{r.error} <button onClick={r.reload}>Reload documents</button></p>}
@@ -38,6 +39,7 @@ export function PrivateDocuments({source,sourceId}:{source:'leases'|'maintenance
           link.href=url;link.download=file.filename;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
         }}><span className="help">Access is checked again for each download.</span></Form>}
       </li>)}</ul></details>
+      {source==='leases'&&<LeaseDocumentSharing leaseId={sourceId} documentId={doc.id} sourceVersion={doc.version}/>}
     </li>)}</ul>}
     {r.data&&draft&&<EditorDialog open={open} title={draft.document?'Upload new document version':'Upload private document'} onClose={()=>setOpen(false)} onDiscard={()=>{setDraft(null);setOpen(false);}}><DocumentUpload key={draft.key} endpoint={endpoint} scanningConfigured={!!r.data.scanningConfigured} draft={draft} saved={message=>{setNotice(message);setDraft(null);setOpen(false);r.reload();}} discard={()=>{setDraft(null);setOpen(false);}} /></EditorDialog>}
   </section>;

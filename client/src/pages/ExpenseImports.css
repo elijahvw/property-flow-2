@@ -1,0 +1,26 @@
+.expense-import-steps { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1rem; padding: 0; margin: 1.25rem 0; list-style: none; }
+.expense-import-steps li { display: grid; gap: .35rem; padding: 1rem; border: 1px solid #dce5e0; border-radius: 10px; background: #f6f9f7; }
+.expense-import-steps span { color: #53665b; line-height: 1.45; }
+.expense-import-help summary { cursor: pointer; font-weight: 650; }
+.expense-import-help-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1.5rem; margin: 1rem 0; }
+.expense-import-help-grid h2 { font-size: 1rem; }
+.expense-import-help-grid p, .expense-import-help-grid li { line-height: 1.55; }
+.expense-import-help code, .expense-import-columns, .expense-review-facts code, .expense-import-rows code { overflow-wrap: anywhere; white-space: normal; }
+.expense-import-columns { display: block; margin: .75rem 0; }
+.expense-import-total { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem 1rem; padding: .9rem 0; margin: .65rem 0; border-bottom: 1px solid #dce5e0; }
+.expense-import-total strong { font-size: 1.35rem; }
+.expense-review-facts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; }
+.expense-review-facts dt { color: #53665b; font-size: .9rem; }
+.expense-review-facts dd { margin: .3rem 0 0; overflow-wrap: anywhere; }
+.expense-import-confirm { display: flex; flex-direction: row; align-items: flex-start; gap: .75rem; margin: .9rem 0; padding: .9rem; border: 1px solid #dce5e0; border-radius: 8px; line-height: 1.5; cursor: pointer; }
+.expense-import-confirm input[type="checkbox"] { width: 1.1rem; min-height: 1.1rem; height: 1.1rem; margin: .2rem 0 0; flex-shrink: 0; }
+.expense-import-memo { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 24rem; }
+.expense-import-rows td { vertical-align: top; }
+.expense-import-rows td:last-child { min-width: 14rem; }
+.expense-import-rows ul { margin: 0; padding-left: 1.1rem; }
+@media (max-width: 700px) {
+  .expense-import-steps, .expense-import-help-grid, .expense-review-facts { grid-template-columns: 1fr; }
+  .expense-import-steps { gap: .6rem; }
+  .expense-import-steps li { padding: .8rem; }
+  .expense-import-confirm { padding: .8rem; }
+}

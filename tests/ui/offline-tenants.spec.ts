@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { tenantDirectoryFixture, tenantRentalHistoryFixture } from "./tenant-directory-fixture";
 async function fixture(
   page: Page,
   options: { signedIn?: boolean; loseSave?: boolean } = {},
@@ -25,6 +26,7 @@ async function fixture(
     deposits: { heldCents: "0", outstandingCents: "0" },
   };
   state.workspace = workspace;
+  const profiles = () => state.contact ? [{ ...state.contact, contactId: state.contact.id, recordStatus: state.contact.status, portalState: "offline", user: null }] : [];
   await page.route("**/api/**", async (route) => {
     const req = route.request(),
       p = new URL(req.url()).pathname,
@@ -58,20 +60,9 @@ async function fixture(
             ],
             csrfToken: "fixture",
           });
-    if (p === "/api/company/resident-profiles")
-      return json(
-        state.contact
-          ? [
-              {
-                ...state.contact,
-                contactId: state.contact.id,
-                recordStatus: state.contact.status,
-                portalState: "offline",
-                user: null,
-              },
-            ]
-          : [],
-      );
+    if (p === "/api/company/resident-profiles/directory") return json(tenantDirectoryFixture(profiles(),req.url(),{companyId:"a",today:workspace.businessDate,timezone:workspace.timezone}));
+    if (p === "/api/company/resident-profiles") return json(profiles());
+    if (p === "/api/company/resident-contacts/jordan-profile/rentals") return state.contact ? json(tenantRentalHistoryFixture(state.contact,state.contact.rentals||state.workspace.leases,req.url(),{companyId:"a",today:workspace.businessDate,timezone:workspace.timezone})) : json({error:"Tenant unavailable"},404);
     if (p === "/api/invitations") return json([]);
     if (p === "/api/company/resident-contacts" && req.method() === "POST") {
       const body = req.postDataJSON();

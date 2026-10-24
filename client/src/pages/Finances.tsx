@@ -16,7 +16,9 @@ import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
 import { EditorDialog, useEditorBusy } from "../components/EditorDialog";
 import { Form } from "../components/Form";
+import "./FinancialForms.css";
 type Entry = {
+  importedExpense?: { batchId: string; sourceNamespace: string; sourceId: string; sourceRow: number } | null;
   maintenanceCosts?: { requestId: string }[];
   movementId?:string|null; movement?:{id:string;leaseId:string;reference:string;kind:string}|null;
   reference?: string;
@@ -125,7 +127,7 @@ function LedgerWorkspace() {
           ; their linked cash receipts appear here separately from income.
           Transfers are not supported.
         </p>
-        <button onClick={() => setAdding(true)}>Record a transaction</button>
+        <div className="actions"><button onClick={() => setAdding(true)}>Record a transaction</button><Link className="button secondary" to="/company/imports/expenses">Import paid expenses</Link></div>
         {entryId && <p className="notice">Showing the selected transaction. <button className="text-button" onClick={() => { const next = new URLSearchParams(params); next.delete("entryId"); setParams(next); setCursor(""); }}>Show all transactions</button></p>}
       </header>
       <EditorDialog
@@ -177,9 +179,10 @@ function LedgerWorkspace() {
             }}
           >
             <label>
-              Transaction property
+              <span className="financial-field-label">Transaction property <span className="financial-required" aria-hidden="true">required</span></span>
               <select
                 name="propertyId"
+                aria-label="Transaction property"
                 required
                 defaultValue={filters.propertyId}
               >
@@ -192,33 +195,37 @@ function LedgerWorkspace() {
                   ))}
               </select>
             </label>
-            <label>
-              Date received or paid
-              <DateField name="occurredOn" aria-label="Date received or paid" required />
-            </label>
-            <label>
-              Amount (USD)
-              <input
-                name="amount"
-                type="number"
-                min="0.01"
-                max="1000000"
-                step="0.01"
-                required
-              />
-            </label>
+            <div className="financial-form-row">
+              <label>
+                <span className="financial-field-label">Date received or paid <span className="financial-required" aria-hidden="true">required</span></span>
+                <DateField name="occurredOn" aria-label="Date received or paid" required />
+              </label>
+              <label>
+                <span className="financial-field-label">Amount (USD) <span className="financial-required" aria-hidden="true">required</span></span>
+                <input
+                  name="amount"
+                  aria-label="Amount (USD)"
+                  type="number"
+                  min="0.01"
+                  max="1000000"
+                  step="0.01"
+                  required
+                />
+              </label>
+            </div>
             <input type="hidden" name="kind" value={kind}/>
-            <label htmlFor="finance-category">Category</label>
-            <select id="finance-category" key={kind} name="category">
-              {(kind === "income"
-                ? ["other", "rent"]
-                : ["repairs", "utilities", "insurance", "property_tax", "other"]
-              ).map((c) => (
-                <option key={c} value={c}>
-                  {c === "rent" ? "Unlinked historical rent" : c.replace("_", " ")}
-                </option>
-              ))}
-            </select>
+            <label htmlFor="finance-category">Category
+              <select id="finance-category" key={kind} name="category" aria-label="Category">
+                {(kind === "income"
+                  ? ["other", "rent"]
+                  : ["repairs", "utilities", "insurance", "property_tax", "other"]
+                ).map((c) => (
+                  <option key={c} value={c}>
+                    {c === "rent" ? "Unlinked historical rent" : c.charAt(0).toUpperCase() + c.slice(1).replace(/_/g, " ")}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label>
               Memo (optional)
               <textarea name="memo" maxLength={500} />
@@ -334,6 +341,7 @@ function LedgerWorkspace() {
                       {formatDate(entry.occurredOn)} ·{" "}
                       {entry.category.replace("_", " ")}
                     </p>
+                    {entry.importedExpense && <p><Link to={`/company/imports/expenses?${new URLSearchParams({ importId: entry.importedExpense.batchId })}`}>Imported expense source</Link><br/><span className="help"><code>{entry.importedExpense.sourceNamespace}</code> · Source <code>{entry.importedExpense.sourceId}</code> · CSV line {entry.importedExpense.sourceRow}</span></p>}
                     {entry.movement && <p><Link to={propertyLink(entry.movement.kind==="deposit_refund"?"/company/deposits":"/company/rent",entry.propertyId,{leaseId:entry.movement.leaseId})}>Linked {recordReference(entry.movement.reference)} · Review refund and correction history →</Link></p>}
                     {entry.depositReceipt && (
                       <p>
@@ -441,6 +449,6 @@ function LedgerWorkspace() {
 }
 
 function CashEntryIntent({value,changed}:{value:string;changed:(value:string)=>void}) {
-  const {uncertain}=useEditorBusy();
-  return <label>What are you recording?<select disabled={uncertain} aria-label="What are you recording?" value={value} onChange={event=>changed(event.target.value)}><option value="income">Other income</option><option value="expense">Paid expense</option><option value="rent">Lease rent payment</option><option value="deposit">Security deposit receipt</option></select></label>;
+  const {busy,uncertain}=useEditorBusy();
+  return <label>What are you recording?<select disabled={busy||uncertain} aria-label="What are you recording?" value={value} onChange={event=>changed(event.target.value)}><option value="income">Other income</option><option value="expense">Paid expense</option><option value="rent">Lease rent payment</option><option value="deposit">Security deposit receipt</option></select></label>;
 }

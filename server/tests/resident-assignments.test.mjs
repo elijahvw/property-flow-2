@@ -12,6 +12,7 @@ async function fixture(t, actor = person('owner','owner')) {
     $queryRaw: async (strings,...values) => { if(strings.join('').includes('UPDATE')) locks.push(values[0]); else company=values[0]; return []; },
     user: {findUnique:async({where})=>users.get(where.id), update:async({where,data})=>Object.assign(users.get(where.id),data)},
     company: {findUnique:async({where})=>({id:where.id,status:'active'})},
+    companySubscription: {findUnique:async()=>null},
     residentContact: {
       findUnique:async({where})=>contacts.find(c=>c.companyId===where.companyId_userId.companyId&&c.userId===where.companyId_userId.userId),
       create:async({data})=>{assert.equal(company,data.companyId);const row={id:'contact-'+contacts.length,...data};contacts.push(row);return row;},
@@ -42,7 +43,8 @@ async function fixture(t, actor = person('owner','owner')) {
 }
 test('assignment permission belongs only to active company owners/managers',()=>{
  for(const role of ['owner','manager','staff','resident',null]) assert.equal(permissions(person('u',role)).includes('resident.assignment.manage'),['owner','manager'].includes(role));
- const p=person('p');p.membership=null;p.platformRole='owner'; assert.deepEqual(permissions(p),['platform.manage']);
+ const p=person('p');p.membership=null;p.platformRole='owner'; assert.deepEqual(permissions(p),['platform.manage','platform.impersonate']);
+ p.platformRole='support';assert.deepEqual(permissions(p),['platform.impersonate']);
 });
 test('property identifiers retain their existing bounded grammar',()=>{
  for(const id of ['auth0|abc','google-oauth2|123','home']) assert.equal(assignmentId(id),id);

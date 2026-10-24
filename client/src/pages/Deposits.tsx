@@ -8,6 +8,7 @@ import { LeaseReturnLink } from "../components/LeaseReturnLink";
 import { leasePath,leaseContext } from "../lease-links";
 import { usePropertySearchParams } from "../usePropertySearchParams";
 import { TenantReturnLink } from "../components/TenantReturnLink";
+import { prospectContext } from "../prospect-context";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../api";
@@ -22,6 +23,7 @@ import { RecordIdentity } from "../components/RecordIdentity";
 import { Form } from "../components/Form";
 import { dollars } from "../money";
 import { downloadReport, moneyCell } from "../report-export";
+import "./FinancialForms.css";
 type Summary = {
   receivedCents?:string;appliedCents?:string;returnedCents?:string;correctedCents?:string;
   requiredCents: string;
@@ -309,7 +311,7 @@ function DepositDirectory({ resident }: { resident: boolean }) {
                         to={propertyLink(
                           resident ? "/resident/deposits" : "/company/deposits",
                           propertyId,
-                          { leaseId: a.leaseId },
+                          { leaseId: a.leaseId, ...(!resident ? prospectContext(params) : {}) },
                         )}
                       >
                         Open deposit account
@@ -344,7 +346,7 @@ function DepositDirectory({ resident }: { resident: boolean }) {
           open
           title="Security deposit account"
           draftable={false}
-          onClose={() => setParams(propertyId ? { propertyId } : {})}
+          onClose={() => setParams({ ...(!resident ? prospectContext(params) : {}), ...(propertyId ? { propertyId } : {}) })}
         >
           {resident && <ResidentFinancialNotice />}
           <DepositPanel
@@ -358,7 +360,7 @@ function DepositDirectory({ resident }: { resident: boolean }) {
               to={propertyLink(
                 resident ? "/resident/rent" : "/company/rent",
                 propertyId,
-                { leaseId },
+                { leaseId, ...(!resident ? prospectContext(params) : {}) },
               )}
             >
               View rent ledger
@@ -715,6 +717,32 @@ function DepositEditor({
     [stale, setStale] = useState(false);
   const base = `/api/company/deposits/${encodeURIComponent(detail.lease.id)}`,
     current = detail.account;
+  const amountField = kind !== "void" && (
+    <label>
+      <span className={kind === "receipt" ? "financial-field-label" : undefined}>
+        {kind === "receipt"
+          ? "Deposit amount received (USD)"
+          : "Refundable deposit required (USD)"}
+        {kind === "receipt" && <span className="financial-required" aria-hidden="true">required</span>}
+      </span>
+      <input
+        name="amount"
+        aria-label={kind === "receipt" ? "Deposit amount received (USD)" : "Refundable deposit required (USD)"}
+        inputMode="decimal"
+        required
+        maxLength={11}
+        defaultValue={
+          kind === "terms"
+            ? (current!.requiredCents / 100).toFixed(2)
+            : kind === "receipt" &&
+                BigInt(current!.summary.outstandingCents) > 0n
+              ? (Number(current!.summary.outstandingCents) / 100).toFixed(2)
+              : ""
+        }
+        placeholder="0.00"
+      />
+    </label>
+  );
   return (
     <>
       {review && (
@@ -931,30 +959,7 @@ function DepositEditor({
               {detail.lease.property.name} · Unit {detail.lease.unit.label}
             </strong>
           </p>
-          {kind !== "void" && (
-            <label>
-              {kind === "receipt"
-                ? "Deposit amount received (USD)"
-                : "Refundable deposit required (USD)"}
-              <input
-                name="amount"
-                inputMode="decimal"
-                required
-                maxLength={11}
-                defaultValue={
-                  kind === "terms"
-                    ? (current!.requiredCents / 100).toFixed(2)
-                    : kind === "receipt" &&
-                        BigInt(current!.summary.outstandingCents) > 0n
-                      ? (
-                          Number(current!.summary.outstandingCents) / 100
-                        ).toFixed(2)
-                      : ""
-                }
-                placeholder="0.00"
-              />
-            </label>
-          )}
+          {kind !== "receipt" && amountField}
           {(kind === "setup" || kind === "terms") && (
             <>
               <label>
@@ -977,31 +982,36 @@ function DepositEditor({
           )}
           {kind === "receipt" && (
             <>
-              <label>
-                Deposit received date
-                <DateField
-                  name="occurredOn" aria-label="Deposit received date"
-                  required
-                  max={detail.businessDate}
-                  defaultValue={detail.businessDate}
-                />
-              </label>
-              <label>
-                Deposit payment method
-                <select name="method" required defaultValue="">
-                  <option value="" disabled>
-                    Choose the method received
-                  </option>
-                  <option value="bank_transfer">Bank transfer</option>
-                  <option value="cash">Cash</option>
-                  <option value="check">Check</option>
-                  <option value="other">Other</option>
-                </select>
-              </label>
-              <label>
-                Deposit payment reference (optional)
-                <input name="paymentReference" maxLength={100} />
-              </label>
+              <div className="financial-form-row">
+                {amountField}
+                <label>
+                  <span className="financial-field-label">Deposit received date <span className="financial-required" aria-hidden="true">required</span></span>
+                  <DateField
+                    name="occurredOn" aria-label="Deposit received date"
+                    required
+                    max={detail.businessDate}
+                    defaultValue={detail.businessDate}
+                  />
+                </label>
+              </div>
+              <div className="financial-form-row">
+                <label>
+                  <span className="financial-field-label">Deposit payment method <span className="financial-required" aria-hidden="true">required</span></span>
+                  <select name="method" aria-label="Deposit payment method" required defaultValue="">
+                    <option value="" disabled>
+                      Choose the method received
+                    </option>
+                    <option value="bank_transfer">Bank transfer</option>
+                    <option value="cash">Cash</option>
+                    <option value="check">Check</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+                <label>
+                  Deposit payment reference (optional)
+                  <input name="paymentReference" maxLength={100} />
+                </label>
+              </div>
               <label>
                 Internal deposit receipt note (optional)
                 <textarea name="memo" maxLength={500} />
@@ -1027,8 +1037,9 @@ function DepositEditor({
 }
 
 function DepositLeasePicker({propertyId,selected}:{propertyId:string;selected:(id:string)=>void}) {
+ const [params]=usePropertySearchParams();
  const [query,setQuery]=useState(""),[cursor,setCursor]=useState("");
  const search=useDebouncedValue(query.trim());
  const r=useResource<{items:Lease[];nextCursor:string|null}>(`/api/company/leases?${new URLSearchParams({...(propertyId?{propertyId}:{}),...(search?{q:search}:{}),...(cursor?{cursor}:{})})}`);
- return <><p>Select the exact lease term. Requirements and receipts stay with that lease.</p><label>Find lease for deposit<input type="search" value={query} maxLength={200} onChange={event=>{setQuery(event.target.value);setCursor("");}}/></label>{r.error?<Load error={r.error} retry={r.reload}/>:!r.data?<p role="status">Loading leases…</p>:!r.data.items.length?<p>No leases match. <Link to={propertyLink("/company/leases",propertyId,{new:"lease"})}>Record a lease</Link> first, then return to set up the deposit.</p>:<ul className="record-list">{r.data.items.map(lease=><li key={lease.id}><div><strong>{lease.property.name} · {lease.unit.label}</strong><p>{lease.resident?.name||lease.resident?.email} · {formatDate(lease.startsOn)} through {formatDate(lease.endsOn,"Open ended")} · {lease.status}</p></div><button className="secondary" onClick={()=>selected(lease.id)}>Choose this lease</button></li>)}</ul>}{cursor&&<button className="secondary" onClick={()=>setCursor("")}>First page of leases</button>}{r.data?.nextCursor&&<button className="secondary" onClick={()=>setCursor(r.data!.nextCursor!)}>More leases</button>}</>;
+ return <><p>Select the exact lease term. Requirements and receipts stay with that lease.</p><label>Find lease for deposit<input type="search" value={query} maxLength={200} onChange={event=>{setQuery(event.target.value);setCursor("");}}/></label>{r.error?<Load error={r.error} retry={r.reload}/>:!r.data?<p role="status">Loading leases…</p>:!r.data.items.length?<p>No leases match. <Link to={propertyLink("/company/leases",propertyId,{new:"lease",...prospectContext(params)})}>Record a lease</Link> first, then return to set up the deposit.</p>:<ul className="record-list">{r.data.items.map(lease=><li key={lease.id}><div><strong>{lease.property.name} · {lease.unit.label}</strong><p>{lease.resident?.name||lease.resident?.email} · {formatDate(lease.startsOn)} through {formatDate(lease.endsOn,"Open ended")} · {lease.status}</p></div><button className="secondary" onClick={()=>selected(lease.id)}>Choose this lease</button></li>)}</ul>}{cursor&&<button className="secondary" onClick={()=>setCursor("")}>First page of leases</button>}{r.data?.nextCursor&&<button className="secondary" onClick={()=>setCursor(r.data!.nextCursor!)}>More leases</button>}</>;
 }
