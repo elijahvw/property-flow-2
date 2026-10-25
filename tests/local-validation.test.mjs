@@ -221,4 +221,3 @@ test('direct fixture selection and docs-only plans do not remove existing final 
   assert.equal(validationPlan(['scripts/test-production-preview.mjs']).finalBrowserRequired, true);
   assert.equal(validationPlan(['scripts/browser-failure-summary.py']).operations, true);
 });
-
