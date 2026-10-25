@@ -27,23 +27,35 @@ FIELDS = (
 )
 
 
-def candidate(definition, image, endpoint):
+def candidate(definition, image, endpoint, alloy_enabled=None):
     if definition.get("family") != SERVICE:
         raise ValueError("Unexpected task family.")
     containers = definition["containerDefinitions"]
     names = [container["name"] for container in containers]
-    if names not in (["app"], ["app", "document-scanner"]):
+    if names not in (["app"], ["app", "document-scanner"], ["app", "document-scanner", "alloy"]):
         raise ValueError(
             "Apply the reviewed infrastructure before deploying the backend."
         )
     app = containers[0]
-    if len(containers) == 2:
+    if alloy_enabled is not None and ("alloy" in names) != alloy_enabled:
+        raise ValueError("Apply the reviewed Alloy infrastructure setting before deploying the backend.")
+    if len(containers) >= 2:
         scanner = containers[1]
         if not re.fullmatch(r"clamav/clamav@sha256:[a-f0-9]{64}", scanner.get("image", "")) or scanner.get("portMappings"):
             raise ValueError("The private scanner must use a pinned official image without exposed ports.")
         scanner_env = {row["name"]: row["value"] for row in scanner.get("environment", [])}
         if scanner_env.get("CLAMD_CONF_TCPAddr") != "127.0.0.1":
             raise ValueError("The scanner must listen only on task loopback.")
+    if "alloy" in names:
+        alloy = containers[2]
+        if (alloy.get("image") != "grafana/alloy:v1.21.1" or alloy.get("essential") is not False
+                or alloy.get("portMappings") or not alloy.get("healthCheck")):
+            raise ValueError("Alloy must use the reviewed image, private readiness check and nonessential lifecycle.")
+        refs = {row["name"]: row["valueFrom"] for row in alloy.get("secrets", [])}
+        if not re.fullmatch(r"arn:aws:secretsmanager:us-east-1:800754316001:secret:propertyflow-dev-grafana-otlp-[A-Za-z0-9]{6}:alloy_token::", refs.get("GRAFANA_ALLOY_TOKEN", "")):
+            raise ValueError("Alloy is missing its scoped runtime token reference.")
+        if any(row["name"] == "GRAFANA_ALLOY_TOKEN" for row in alloy.get("environment", [])):
+            raise ValueError("Alloy credentials must not be stored in the task environment definition.")
     env = {row["name"]: row["value"] for row in app.get("environment", [])}
     if any(key.startswith(("DD_", "DATADOG_")) for key in env):
         raise ValueError("Legacy monitoring configuration remains in the task.")
@@ -79,7 +91,8 @@ def deploy(ecs, sts, env=os.environ):
     ]
     task = ecs.register_task_definition(
         **candidate(
-            definition, repository + ":" + revision, env.get("GRAFANA_OTLP_ENDPOINT")
+            definition, repository + ":" + revision, env.get("GRAFANA_OTLP_ENDPOINT"),
+            env.get("GRAFANA_ALLOY_ENABLED", "false") == "true",
         )
     )["taskDefinition"]["taskDefinitionArn"]
     count = max(1, service["desiredCount"])

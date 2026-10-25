@@ -1,0 +1,57 @@
+logging {
+  level = "info"
+}
+
+remotecfg {
+  url            = ${jsonencode(fleet_url)}
+  id             = constants.hostname
+  poll_frequency = "60s"
+  attributes = {
+    "env" = ${jsonencode(environment)},
+    "app" = "propertyflow",
+  }
+  basic_auth {
+    username = ${jsonencode(fleet_id)}
+    password = sys.env("GRAFANA_ALLOY_TOKEN")
+  }
+}
+
+prometheus.remote_write "collector" {
+  endpoint {
+    url = "https://prometheus-prod-66-prod-us-east-3.grafana.net/api/prom/push"
+    basic_auth {
+      username = "3678509"
+      password = sys.env("GRAFANA_ALLOY_TOKEN")
+    }
+  }
+  external_labels = {
+    environment = ${jsonencode(environment)},
+    application = "propertyflow",
+    collector   = constants.hostname,
+  }
+}
+
+prometheus.exporter.self "collector" {}
+
+prometheus.scrape "collector" {
+  targets         = prometheus.exporter.self.collector.targets
+  forward_to      = [prometheus.remote_write.collector.receiver]
+  scrape_interval = "60s"
+  job_name        = "integrations/alloy"
+}
+
+%{ if ecs_metrics_enabled ~}
+// Experimental receiver, explicitly enabled in the deployment configuration.
+// Uses this task's metadata endpoint; no AWS read role or public listener.
+otelcol.receiver.awsecscontainermetrics "task" {
+  collection_interval = "60s"
+  output {
+    metrics = [otelcol.exporter.prometheus.task.input]
+  }
+}
+
+otelcol.exporter.prometheus "task" {
+  forward_to                       = [prometheus.remote_write.collector.receiver]
+  resource_to_telemetry_conversion = true
+}
+%{ endif ~}

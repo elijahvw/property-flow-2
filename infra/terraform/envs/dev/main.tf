@@ -55,7 +55,9 @@ resource "random_password" "runtime_database" {
 }
 
 module "ecr" {
-  source = "../../modules/ecr"
+  source                    = "../../modules/ecr"
+  alloy_enabled             = var.grafana_alloy_enabled
+  alloy_ecs_metrics_enabled = var.grafana_alloy_ecs_metrics_enabled
   vars = {
     environment              = var.environment
     aws_region               = var.aws_region

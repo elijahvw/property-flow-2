@@ -122,12 +122,12 @@ resource "aws_ecs_task_definition" "app" {
   family                   = "propertyflow-${var.vars.environment}"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "512"
-  memory                   = "4096"
+  cpu                      = tostring(local.task_cpu)
+  memory                   = tostring(local.task_memory)
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.app.arn
 
-  container_definitions = jsonencode([
+  container_definitions = jsonencode(concat([
     {
       name      = "app"
       image     = "${aws_ecr_repository.app.repository_url}:latest"
@@ -153,7 +153,7 @@ resource "aws_ecs_task_definition" "app" {
         { name = "DATABASE_URL", value = local.database_url },
         { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = var.vars.grafana_otlp_endpoint },
         { name = "APP_ENV", value = var.vars.environment },
-        { name = "APP_CPU_CORES", value = "0.5" },
+        { name = "APP_CPU_CORES", value = tostring(local.task_cpu / 1024) },
         { name = "INVITATION_EMAIL_FROM", value = local.invitation_sender },
         { name = "INVITATION_EMAIL_REGION", value = var.vars.aws_region },
         { name = "DOCUMENT_SCANNER_PORT", value = "3310" }
@@ -210,7 +210,14 @@ resource "aws_ecs_task_definition" "app" {
         }
       }
     }
-  ])
+  ], local.alloy_containers))
+
+  lifecycle {
+    precondition {
+      condition     = !var.alloy_enabled || var.vars.grafana_otlp_endpoint != ""
+      error_message = "Alloy requires the populated Grafana ingestion secret; configure the OTLP endpoint before enabling it."
+    }
+  }
 }
 
 resource "aws_ecs_service" "app" {

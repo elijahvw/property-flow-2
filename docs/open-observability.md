@@ -68,3 +68,7 @@ The user requested a Terraform-managed Grafana CloudWatch connection. Its role, 
 ## Expanded coverage review — October 17, 2026
 
 The dedicated dashboard now has 21 panels and explicit dev/service metric scopes. Full Faro browser RUM is implemented locally and its Grafana frontend app exists, but browser ingestion awaits an approved application release. This supersedes the original operation-metrics-only browser scope; replay remains off. See [monitoring coverage, actual live evidence and remaining work](monitoring-coverage.md).
+
+## Optional ECS Alloy collector — October 25 local increment
+
+An optional Fleet-managed Alloy container and existing Start/Stop integration are prepared in Terraform. Collector credentials remain runtime-only, and optional experimental ECS metadata collection supports scanner sizing. PostgreSQL credentials/query-level collection are not activated by this change. See [activation, current resource evidence, schedules and limits](alloy-collector.md).

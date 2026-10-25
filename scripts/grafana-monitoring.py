@@ -68,10 +68,24 @@ def validate_secret_arn(arn):
     return arn
 
 
+def alloy_credentials(env):
+    """Validate without decoding or printing the collector's separate token."""
+    enabled = env.get("GRAFANA_ALLOY_ENABLED", "false")
+    if enabled not in ("true", "false"):
+        raise SafeFailure("GRAFANA_ALLOY_ENABLED must be true or false.")
+    if enabled == "false":
+        return {}
+    token = env.get("GRAFANA_ALLOY_TOKEN", "")
+    if not token.startswith("glc_") or any(c.isspace() for c in token) or len(token) < 20:
+        raise SafeFailure("Set GRAFANA_ALLOY_TOKEN to a collector token with set:alloy-data-write before enabling Alloy.")
+    return {"alloy_token": token}
+
+
 def store_ingestion(env=os.environ, client=None):
     validate_endpoint(env.get("GRAFANA_OTLP_ENDPOINT"))
     headers = validate_headers(env.get("GRAFANA_OTLP_HEADERS"))
     arn = validate_secret_arn(env.get("GRAFANA_SECRET_ARN", ""))
+    collector = alloy_credentials(env)
     if client is None:
         import boto3
 
@@ -79,7 +93,7 @@ def store_ingestion(env=os.environ, client=None):
     # Put only. Never retrieve a secret; neither token nor decoded credentials are logged.
     client.put_secret_value(
         SecretId=arn,
-        SecretString=json.dumps({"headers": headers}),
+        SecretString=json.dumps({"headers": headers, **collector}),
         ClientRequestToken=str(uuid.uuid4()),
     )
     print("Stored the write-only ingestion credential for ECS injection.")
@@ -113,6 +127,7 @@ def validate_bootstrap_plan(plan):
 def bootstrap_ingestion(env=os.environ, runner=subprocess.run, client=None):
     validate_endpoint(env.get("GRAFANA_OTLP_ENDPOINT"))
     validate_headers(env.get("GRAFANA_OTLP_HEADERS"))
+    alloy_credentials(env)
     directory = ROOT / "infra/terraform/envs/dev"
 
     def terraform(*args):
@@ -523,6 +538,7 @@ def main():
     if args.action == "preflight":
         validate_endpoint(os.environ.get("GRAFANA_OTLP_ENDPOINT"))
         validate_headers(os.environ.get("GRAFANA_OTLP_HEADERS"))
+        alloy_credentials(os.environ)
         Grafana()
         print("Grafana configuration is present and structurally valid.")
     elif args.action == "store-ingestion":
