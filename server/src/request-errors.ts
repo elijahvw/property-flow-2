@@ -1,5 +1,6 @@
 import type { FastifyError, FastifyInstance, FastifyRequest } from "fastify";
 import { AccessError } from "./access.js";
+import { IdentityProviderError } from "./identity-provider.js";
 
 // Framework input failures (including JSON parsing and content type checks) are
 // client errors. Keep their HTTP status without exposing parser or driver text.
@@ -51,11 +52,19 @@ export function registerRequestErrors(
         errorType: error.name,
         status,
         requestId: request.id,
+        ...(error instanceof IdentityProviderError ? {
+          providerOperation: error.operation,
+          providerFailure: error.failure,
+          ...(error.rateSource !== undefined ? { providerRateSource: error.rateSource } : {}),
+          ...(error.upstreamStatus !== undefined ? { providerStatus: error.upstreamStatus } : {}),
+          ...(error.retryAfterSeconds !== undefined ? { retryAfterSeconds: error.retryAfterSeconds } : {}),
+        } : {}),
         ...(status >= 500 ? { stack: safeFrames } : {}),
       },
       "Request failed",
     );
     if (status >= 500) onServerError(request, safeCode, error.name);
+    if (error instanceof IdentityProviderError && status === 429 && error.retryAfterSeconds) reply.header("Retry-After", String(error.retryAfterSeconds));
     reply.status(status).send({ error: message, code: safeCode, requestId: request.id });
   });
 }

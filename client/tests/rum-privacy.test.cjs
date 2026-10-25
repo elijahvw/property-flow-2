@@ -15,6 +15,18 @@ test('RUM paths remove IDs, secrets, third-party hosts and unbounded path labels
   assert.equal(rumPath('/assets/private.js', origin), '/assets/:asset');
   assert.equal(rumPath('/x'.repeat(20), origin), '/unknown');
 });
+test('demo planning and lifecycle paths retain fixed operations while concealing generations, plans and credentials', () => {
+  assert.equal(rumPath('/api/platform/sales-demos/blueprint?planHash=private-plan', origin), '/api/platform/sales-demos/blueprint');
+  for (const action of ['plan', 'rebuild', 'resume', 'teardown', 'credentials']) {
+    const url = `${origin}/api/platform/sales-demos/private-generation/${action}?planHash=private-plan&email=private-email#private-password`;
+    const expected = `/api/platform/sales-demos/:id/${action}`;
+    assert.equal(rumPath(url, origin), expected);
+    const safe = sanitizeRumItem({ type: 'event', meta, payload: { name: 'faro.tracing.fetch', attributes: { 'http.url': url, 'http.method': 'POST', planHash: 'private-plan', credentials: 'private-password', body: '{"email":"private-email","password":"private-password"}' } } }, origin);
+    assert.equal(safe.payload.attributes['http.url'], origin + expected);
+    assert.deepEqual(Object.keys(safe.payload.attributes).sort(), ['http.method', 'http.url']);
+    assert.doesNotMatch(JSON.stringify(safe), /private-|planHash|password|email|body/);
+  }
+});
 test('Web Vitals retain measurements without DOM attribution or identity', () => {
   const safe = sanitizeRumItem({type:'measurement',meta,payload:{type:'web-vitals', values:{lcp:2400,delta:2,private:22,inp:Infinity},context:{rating:'good',element:'#private',interaction_target:'private',resource_url:'private'}}},origin);
   assert.deepEqual(safe.payload.values,{lcp:2400,delta:2});

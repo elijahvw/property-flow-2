@@ -51,6 +51,7 @@ import { input, mutation, boundedText } from "./operational.js";
 import { registerCompanyAdministration } from "./company-administration.js";
 import { registerUserAdministration } from "./user-administration.js";
 import { registerSalesDemo } from "./sales-demo.js";
+import { assertDemoIdentityAvailable } from "./demo-identity-guard.js";
 import type { IdentityProvider } from "./identity-provider.js";
 import { registerRentSchedules } from "./rent-schedules.js";
 import { registerRent } from "./rent.js";
@@ -430,6 +431,7 @@ export function registerApplication(
         status = stateValue(body.status);
       return serial(request, async (tx) => {
         await lockTarget(tx, userId);
+        await assertDemoIdentityAvailable(tx, userId);
         await activeCompany(tx, companyId);
         const target = await tx.user.findUnique({ where: { id: userId } });
         if (!target || target.status !== "active")
@@ -502,6 +504,7 @@ export function registerApplication(
         userId = opaqueUserId(request.params.userId);
       return serial(request, async (tx) => {
         await lockTarget(tx, userId);
+        if (status === "active") await assertDemoIdentityAvailable(tx, userId);
         const target = await tx.user.findUnique({ where: { id: userId } });
         if (!target) throw new AccessError(404, "NOT_FOUND", "User not found.");
         if (target.platformRole === "owner")
@@ -610,6 +613,7 @@ export function registerApplication(
             "OWNER_PROTECTED",
             "Use ownership transfer to change an owner.",
           );
+        await assertDemoIdentityAvailable(tx, userId);
         if (member.role !== role || status !== "active") await clearAssignments(tx, userId, companyId);
         await preserveResidentContactProfile(tx, companyId, userId);
         const result = await tx.companyMembership.update({
@@ -658,6 +662,7 @@ export function registerApplication(
           "INVALID_OWNER",
           "Choose an active member of this company.",
         );
+      await assertDemoIdentityAvailable(tx, userId);
       await clearAssignments(tx, userId, companyId);
       await preserveResidentContactProfile(tx, companyId, userId);
       await tx.companyMembership.update({
@@ -797,6 +802,7 @@ export function registerApplication(
         "Verify your sign-in email before accepting an invitation.",
       );
     return serial(request, async (tx) => {
+      await assertDemoIdentityAvailable(tx, user.id);
       await tx.$queryRaw`UPDATE "Invitation" SET version=version WHERE "tokenHash"=${digest(token)} RETURNING id`;
       const invitation = await tx.invitation.findUnique({
         where: { tokenHash: digest(token) },

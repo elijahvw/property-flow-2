@@ -4,6 +4,7 @@ import Fastify from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { AccessError } from '../dist/access.js';
 import { registerRequestErrors } from '../dist/request-errors.js';
+import { IdentityProviderError } from '../dist/identity-provider.js';
 
 test('malformed JSON, unsupported media and body limits return safe client errors', async t => {
   const failures = [];
@@ -58,4 +59,15 @@ test('actionable access errors survive while internal failures stay private and 
   assert.equal(internal.statusCode, 503);
   assert.doesNotMatch(internal.body, /private|credentials|parameters/);
   assert.deepEqual(failures, [{ id: internal.json().requestId, code: 'REQUEST_503', name: 'Error' }]);
+});
+
+test('provider errors expose bounded retry guidance and only fixed safe diagnostic fields',async t=>{
+ const logs=[];const app=Fastify({logger:{stream:{write:line=>logs.push(JSON.parse(line))}}});registerRequestErrors(app);
+ app.post('/api/example',()=>{throw new IdentityProviderError('update','rate_limit',429,30);});
+ app.post('/api/cooldown',()=>{throw new IdentityProviderError('lookup','rate_limit',undefined,30);});t.after(()=>app.close());
+ const result=await app.inject({method:'POST',url:'/api/example'});assert.equal(result.statusCode,429);assert.equal(result.headers['retry-after'],'30');assert.equal(result.json().code,'IDENTITY_PROVIDER_UNAVAILABLE');assert.match(result.json().error,/30 seconds.*same request/);
+ const warning=logs.find(row=>row.msg==='Request failed');assert.equal(warning.requestId,result.json().requestId);assert.equal(warning.providerOperation,'update');assert.equal(warning.providerFailure,'rate_limit');assert.equal(warning.providerStatus,429);assert.equal(warning.providerRateSource,'upstream');assert.equal(warning.retryAfterSeconds,30);
+ const cooldown=await app.inject({method:'POST',url:'/api/cooldown'});assert.equal(cooldown.statusCode,429);assert.equal(cooldown.headers['retry-after'],'30');
+ const cooldownLog=logs.find(row=>row.msg==='Request failed'&&row.requestId===cooldown.json().requestId);assert.equal(cooldownLog.providerRateSource,'cooldown');assert.ok(!Object.hasOwn(cooldownLog,'providerStatus'));
+ for(const value of [result.json(),warning])assert.ok(!Object.hasOwn(value,'providerUrl')&&!Object.hasOwn(value,'providerBody')&&!Object.hasOwn(value,'email')&&!Object.hasOwn(value,'token'));
 });
