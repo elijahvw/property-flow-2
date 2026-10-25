@@ -159,13 +159,13 @@ test("library paging and search use complete filtered metadata and exact source 
   );
   await expect(page.getByText("Page 1", { exact: true })).toBeVisible();
 });
-test("latest scan filter and source review preserve older clean versions without enabling quarantined download", async ({
+test("file status and source review preserve historical verdicts and allow unscanned downloads", async ({
   page,
 }) => {
   await fixture(page);
   await page.goto("/company/documents?scan=pending&propertyId=home");
   await expect(
-    page.getByText("Quarantined · download blocked", { exact: false }),
+    page.locator('td[data-label="File status"]').filter({hasText:"Not scanned"}),
   ).toBeVisible();
   await page
     .getByRole("link", { name: "Fictional file 00", exact: true })
@@ -180,12 +180,12 @@ test("latest scan filter and source review preserve older clean versions without
   ).toBeVisible();
   await expect(
     selected.getByRole("button", { name: "Download version 2", exact: true }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await page
     .getByRole("link", { name: "Back to document library →", exact: true })
     .click();
   await expect(
-    page.getByRole("combobox", { name: "Latest scan result", exact: true }),
+    page.getByRole("combobox", { name: "Latest file status", exact: true }),
   ).toHaveValue("pending");
   await expect(
     page.getByRole("combobox", { name: "Filter property", exact: true }),

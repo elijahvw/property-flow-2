@@ -72,3 +72,7 @@ The dedicated dashboard now has 21 panels and explicit dev/service metric scopes
 ## Optional ECS Alloy collector — October 25 local increment
 
 An optional Fleet-managed Alloy container and existing Start/Stop integration are prepared in Terraform. Collector credentials remain runtime-only, and optional experimental ECS metadata collection supports scanner sizing. PostgreSQL credentials/query-level collection are not activated by this change. See [activation, current resource evidence, schedules and limits](alloy-collector.md).
+
+## Scanner retirement follow-up
+
+The user requested removal of ClamAV. The separate [retirement change](scanner-retirement.md) reduces app-plus-Alloy capacity to 0.5 vCPU/2 GiB and removes scan operations while preserving document upload/download/share telemetry. Prior scanner sizing findings above remain historical evidence, not a requirement to retain the container.

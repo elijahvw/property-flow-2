@@ -12,7 +12,7 @@
     "service": "propertyflow-dev",
     "address": "module.ecr.aws_ecs_service.app",
     "terraform": "modules/ecr/main.tf#aws_ecs_service.app",
-    "includes": "All containers in the service task, including document-scanner and the optional Alloy collector"
+    "includes": "All containers in the service task, including the optional Alloy collector"
   },
   "retainedResourceTypes": {
     "random_password": "Keep existing credentials across power cycles.",

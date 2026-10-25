@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: Start or stop the app, scanner, enabled Alloy collector and database
+        description: Start or stop the app, enabled Alloy collector and database
         required: true
         type: choice
         default: stop
@@ -62,7 +62,7 @@ jobs:
         if: success() && inputs.action == 'stop'
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
-          Development app, document scanner, enabled Alloy collector and database are stopped. Data is retained.
+          Development app, enabled Alloy collector and database are stopped. Data is retained.
           Storage, load balancer and some networking charges continue.
           AWS automatically restarts a stopped RDS database after seven days.
           Run **Dev Start or Stop** with **start** to bring the environment back up.

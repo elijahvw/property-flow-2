@@ -2,11 +2,11 @@ import { test, expect, BrowserContext } from "@playwright/test";
 
 async function fixture(context: BrowserContext, resident = false) {
   const document = { id: "share-doc", title: "Fictional rental guide", version: 2, archivedAt: null };
-  const versions = [{ id: "share-v2", number: 2, filename: "pending.txt", scanStatus: "pending", byteLength: 17, createdAt: "2026-10-24T12:00:00Z" }, { id: "share-v1", number: 1, filename: "guide.txt", scanStatus: "clean", byteLength: 17, createdAt: "2026-10-23T12:00:00Z" }];
+  const versions = [{ id: "share-v2", number: 2, filename: "rejected.txt", scanStatus: "rejected", byteLength: 17, createdAt: "2026-10-24T12:00:00Z" }, { id: "share-v1", number: 1, filename: "guide.txt", scanStatus: "unscanned", byteLength: 17, createdAt: "2026-10-23T12:00:00Z" }];
   const recipient = { id: "share-resident", name: "Fictional resident", email: "resident@test.invalid" };
   const state = { grants: [] as any[], revokes: [] as any[], share: null as any, loseGrant: true, revoked: false, downloads: 0, receipts: [] as any[], receiptVersion: 1, receivedAt: null as string | null, loseReceipt: false, receiptFailure: "", readFailure: "", company: "a", documentsMode: "enabled", impersonating: false, additional: [] as any[] };
   const received = new Map<string, { body: unknown; receipt: { id: string; recordedAt: string } }>();
-  const originals = () => [{ id: "share-grant", title: document.title, versionNumber: 1, filename: "guide.txt", mediaType: "text/plain", byteLength: 17, expiresOn: "2099-12-31", version: state.receiptVersion, receivedAt: state.receivedAt, sharedAt: "2026-10-24T12:00:00Z", lease: { id: "share-lease", property: { name: "Fictional property" }, unit: { label: "Fictional apartment" } } }, ...state.additional];
+  const originals = () => [{ id: "share-grant", title: document.title, versionNumber: 1, filename: "guide.txt", mediaType: "text/plain", byteLength: 17, scanStatus: "unscanned", expiresOn: "2099-12-31", version: state.receiptVersion, receivedAt: state.receivedAt, sharedAt: "2026-10-24T12:00:00Z", lease: { id: "share-lease", property: { name: "Fictional property" }, unit: { label: "Fictional apartment" } } }, ...state.additional];
   await context.route("**/api/**", async route => {
     const request = route.request(), path = new URL(request.url()).pathname, method = request.method();
     const json = (value: unknown, status = 200) => route.fulfill({ json: value, status });
@@ -58,13 +58,13 @@ test("owner reviews an exact original and leaseholder; interrupted sharing retri
   const state = await fixture(context);
   await page.goto("/company/leases/share-lease?section=documents");
   await page.getByText("Leaseholder sharing & access history", { exact: true }).click();
-  await page.getByRole("button", { name: "Share a cleared version", exact: true }).click();
+  await page.getByRole("button", { name: "Share a document version", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Share a lease document", exact: true });
-  await dialog.getByRole("combobox", { name: "Cleared document version", exact: true }).selectOption("share-v1");
+  await dialog.getByRole("combobox", { name: "Document version", exact: true }).selectOption("share-v1");
   await dialog.getByRole("combobox", { name: "Approved leaseholder", exact: true }).selectOption("share-resident");
-  await expect(dialog.getByRole("option", { name: /pending.txt/ })).toHaveCount(0);
+  await expect(dialog.getByRole("option", { name: /rejected.txt/ })).toHaveCount(0);
   await dialog.getByRole("button", { name: "Review selected access", exact: true }).click();
-  await expect(dialog.getByText("Version 1 · guide.txt", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Version 1 · guide.txt · Not scanned", { exact: true })).toBeVisible();
   await dialog.getByLabel("Access through (company calendar date)", { exact: true }).fill("2099-12-31");
   await dialog.getByLabel("Sharing reason", { exact: true }).fill("Fictional leaseholder welcome guide review");
   await dialog.getByRole("button", { name: "Confirm document sharing", exact: true }).click();

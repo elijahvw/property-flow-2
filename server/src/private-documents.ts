@@ -4,7 +4,7 @@ import type { PrismaClient } from '@prisma/client';
 import { AccessError } from './access.js';
 import { assignmentId } from './application.js';
 import { audit, boundedText, conflict, input, mutation, sameSubmission, scoped, submission, version, type Tx } from './operational.js';
-import { documentScanner, type DocumentScanner } from './document-scanner.js';
+import { documentAvailable } from './document-status.js';
 import { revokeDocumentShares } from './lease-document-shares.js';
 export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
 const metadata = { id:true, number:true, filename:true, mediaType:true, byteLength:true, sha256:true, scanStatus:true, scannedAt:true, createdAt:true } as const;
@@ -21,7 +21,7 @@ export function validateDocument(filename: unknown, mediaType: unknown, base64: 
   if(!supported) throw new AccessError(400,'INVALID_FILE','Choose a PDF, PNG, JPEG or UTF-8 text file with matching content and extension.');
   return {filename:name,mediaType:mediaType as string,bytes,sha256:createHash('sha256').update(bytes).digest('hex')};
 }
-export function registerPrivateDocuments(server:FastifyInstance,db:PrismaClient,authenticate:preValidationHookHandler,origin:string,scan:DocumentScanner=documentScanner()) {
+export function registerPrivateDocuments(server:FastifyInstance,db:PrismaClient,authenticate:preValidationHookHandler,origin:string) {
   for(const source of ['leases','maintenance'] as const) {
     const permission=source==='leases'?'lease.manage':'maintenance.manage', base=`/api/company/${source}/:sourceId/documents`;
     const sourceRecord=async(tx:Tx,companyId:string,id:string)=>{
@@ -40,7 +40,7 @@ export function registerPrivateDocuments(server:FastifyInstance,db:PrismaClient,
       await sourceRecord(tx,companyId,assignmentId(request.params.sourceId));
       const items=await tx.privateDocument.findMany({where:{companyId,...sourceWhere(request.params.sourceId)},select:{id:true,title:true,version:true,archivedAt:true,createdAt:true,versions:{select:metadata,orderBy:{number:'desc'}}},orderBy:[{createdAt:'desc'},{id:'desc'}],take:201});
       if(items.length>200)throw new AccessError(409,'DOCUMENT_LIMIT','This source exceeds the document limit. Ask your administrator to review retention.');
-      return {items, scanningConfigured: scan.available ? await scan.available() : true};
+      return {items};
     }));
     server.post<{Params:Params}>(base,{preValidation:authenticate,bodyLimit:Math.ceil(MAX_DOCUMENT_BYTES/3)*4+8192},request=>{
       mutation(request,origin);
@@ -69,38 +69,17 @@ export function registerPrivateDocuments(server:FastifyInstance,db:PrismaClient,
           await tx.privateDocument.update({where:{id:doc.id},data:{version:{increment:1}}});
         }
         const nextNumber=(await tx.documentVersion.aggregate({where:{companyId,documentId:doc.id},_max:{number:true}}))._max.number||0;
-        const row=await tx.documentVersion.create({data:{companyId,documentId:doc.id,number:nextNumber+1,filename:file.filename,mediaType:file.mediaType,byteLength:file.bytes.length,sha256:file.sha256,content:file.bytes,createdById:request.principal!.id,...key},select:metadata});
-        await audit(tx,request,companyId,doc.id,'document.uploaded',{versionId:row.id,source,sourceId:id,number:row.number});
+        const row=await tx.documentVersion.create({data:{companyId,documentId:doc.id,number:nextNumber+1,filename:file.filename,mediaType:file.mediaType,byteLength:file.bytes.length,sha256:file.sha256,content:file.bytes,scanStatus:'unscanned',scannedAt:null,createdById:request.principal!.id,...key},select:metadata});
+        await audit(tx,request,companyId,doc.id,'document.uploaded',{versionId:row.id,source,sourceId:id,number:row.number,scanStatus:'unscanned'});
         return {documentId:doc.id,versionId:row.id};
-      });
-    });
-    server.post<{Params:Params}>(`${base}/:documentId/versions/:versionId/scan`,{preValidation:authenticate},async request=>{
-      mutation(request,origin);input(request,[]);
-      const stored=await scoped(db,request,permission,async(tx,companyId)=>{
-        const doc=await document(tx,companyId,request.params);
-        if(doc.archivedAt)throw new AccessError(409,'DOCUMENT_ARCHIVED','Archived documents cannot be scanned.');
-        const row=await tx.documentVersion.findFirst({where:{id:assignmentId(request.params.versionId),companyId,documentId:doc.id}});
-        if(!row)throw new AccessError(404,'NOT_FOUND','Version not found.');
-        return row;
-      });
-      if(stored.scanStatus!=='pending')return {scanStatus:stored.scanStatus};
-      // Provider work never holds an authorization/record transaction open.
-      const verdict=await scan(Buffer.from(stored.content));
-      if(verdict!=='clean'&&verdict!=='rejected')throw new AccessError(503,'SCANNER_UNAVAILABLE','The scan did not produce a valid verdict. File remains quarantined.');
-      return scoped(db,request,permission,async(tx,companyId)=>{
-        const doc=await document(tx,companyId,request.params);
-        if(doc.archivedAt)throw new AccessError(409,'DOCUMENT_ARCHIVED','Document was archived during scanning.');
-        const changed=await tx.documentVersion.updateMany({where:{id:stored.id,companyId,documentId:doc.id,scanStatus:'pending'},data:{scanStatus:verdict,scannedAt:new Date()}});
-        if(changed.count)await audit(tx,request,companyId,doc.id,'document.scanned',{versionId:stored.id,verdict});
-        return tx.documentVersion.findFirstOrThrow({where:{id:stored.id,companyId},select:{scanStatus:true}});
       });
     });
     server.get<{Params:Params}>(`${base}/:documentId/versions/:versionId/download`,{preValidation:authenticate},async(request,reply)=>{
       const result=await scoped(db,request,permission,async(tx,companyId)=>{
         const doc=await document(tx,companyId,request.params), row=await tx.documentVersion.findFirst({where:{id:assignmentId(request.params.versionId),companyId,documentId:doc.id},select:{...metadata,content:true}});
         if(!row)throw new AccessError(404,'NOT_FOUND','Version not found.');
-        if(row.scanStatus!=='clean')throw new AccessError(409,'FILE_QUARANTINED','Only files cleared by scanning can be downloaded.');
-        await audit(tx,request,companyId,doc.id,'document.downloaded',{versionId:row.id});
+        if(!documentAvailable(row.scanStatus))throw new AccessError(409,'FILE_QUARANTINED','This original has a recorded rejection or unavailable file status. Download is blocked.');
+        await audit(tx,request,companyId,doc.id,'document.downloaded',{versionId:row.id,scanStatus:row.scanStatus});
         return {filename:row.filename,contentBase64:Buffer.from(row.content).toString('base64'),mediaType:row.mediaType};
       });
       return reply.header('Cache-Control','private, no-store').header('X-Content-Type-Options','nosniff').send(result);

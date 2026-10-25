@@ -539,12 +539,6 @@ export async function notificationCases(t, admin, db, call, app) {
         ),
         submissionKey: randomUUID(),
       });
-      await ok(
-        "notice-owner",
-        "POST",
-        `${base}/documents/${document.documentId}/versions/${document.versionId}/scan`,
-        {},
-      );
       const c = await ok("notice-owner", "GET", base + "/agreements/context");
       agreement = await ok("notice-owner", "POST", base + "/agreements", {
         title: "Fictional review package",

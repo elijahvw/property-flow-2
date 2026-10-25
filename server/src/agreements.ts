@@ -1,3 +1,4 @@
+import { documentAvailable } from "./document-status.js";
 import { publishNotification, type NotificationPublisher } from "./notification-events.js";
 import { createHash } from "node:crypto";
 import type {
@@ -314,9 +315,9 @@ async function resolve(
       blockers.push("A selected original is unavailable at this lease.");
       return { id, unavailable: true };
     }
-    if (row.scanStatus !== "clean")
+    if (!documentAvailable(row.scanStatus))
       blockers.push(
-        `The selected version of “${row.document.title}” has not cleared scanning.`,
+        `The selected version of “${row.document.title}” has a recorded rejection or unavailable file status.`,
       );
     if (row.document.archivedAt)
       blockers.push(

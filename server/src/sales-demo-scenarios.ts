@@ -11,7 +11,7 @@ export const DEMO_FEATURE_COVERAGE = {
   properties: ["properties", "units", "scenarios.archivedUnitId"],
   leasing: ["leases", "scenarios.offlineLeaseId", "scenarios.invitationId", "scenarios.endedLeaseId", "scenarios.approvedApplicationId", "scenarios.rejectedApplicationId", "savedTaskId"],
   maintenance: ["requests", "vendorId", "scenarios.privateUpdateId", "scenarios.pausedPreventivePlanId"],
-  documents: ["documentId", "scenarios.receivedShareId", "scenarios.archivedDocumentId"],
+  documents: ["documentVersionId", "documentId", "scenarios.receivedShareId", "scenarios.archivedDocumentId"],
   finances: ["scenarios.endedLeaseId", "scenarios.offlineLeaseId", "scenarios.reversedCreditId", "scenarios.voidedExpenseId"],
   reports: ["scenarios.expenseImportId", "leases"],
   inspections: ["inspectionId", "scenarios.baselineInspectionId", "scenarios.moveOutInspectionId"],
@@ -74,7 +74,6 @@ export async function seedDemoScenarios(c: { call: Call; tx: Tx; companyId: stri
 
   const documentRoot = `/api/company/leases/${leases[0]}/documents`;
   const original = await call("POST", documentRoot, { title: "Bundled sample lease original · DEMO", filename: "bundled-demo.txt", mediaType: "text/plain", contentBase64: Buffer.from(DEMO_BUNDLED_TEXT).toString("base64") });
-  await call("POST", `${documentRoot}/${original.documentId}/versions/${original.versionId}/scan`, {});
   const shareRoot = `${documentRoot}/${original.documentId}/shares`, shared = await call("POST", shareRoot, { documentVersionId: original.versionId, userId: accounts.users.resident.user_id, expiresOn: offset(3), reason: "DEMO owner explicitly shares the bundled fictional original.", expectedVersion: null, expectedDocumentVersion: 1 });
   asActor(accounts.users.resident.user_id);
   await call("POST", `/api/resident/documents/${shared.share.id}/received`, { expectedVersion: shared.share.version });

@@ -45,8 +45,8 @@ variables {
 run "disabled_preserves_existing_task" {
   command = plan
   assert {
-    condition     = aws_ecs_task_definition.app.cpu == "512" && aws_ecs_task_definition.app.memory == "4096" && length(jsondecode(aws_ecs_task_definition.app.container_definitions)) == 2
-    error_message = "Disabled Alloy must preserve the existing app/scanner task size and containers."
+    condition     = aws_ecs_task_definition.app.cpu == "512" && aws_ecs_task_definition.app.memory == "1024" && length(jsondecode(aws_ecs_task_definition.app.container_definitions)) == 1
+    error_message = "Disabled Alloy must preserve the scanner-free app task size and containers."
   }
 }
 
@@ -54,7 +54,7 @@ run "collector_shares_the_power_controlled_task" {
   command = plan
   variables { alloy_enabled = true }
   assert {
-    condition     = aws_ecs_task_definition.app.cpu == "1024" && aws_ecs_task_definition.app.memory == "5120" && length(jsondecode(aws_ecs_task_definition.app.container_definitions)) == 3
+    condition     = aws_ecs_task_definition.app.cpu == "512" && aws_ecs_task_definition.app.memory == "2048" && length(jsondecode(aws_ecs_task_definition.app.container_definitions)) == 2
     error_message = "Alloy must fit inside the existing application task with valid Fargate capacity."
   }
   assert {
@@ -70,8 +70,8 @@ run "collector_shares_the_power_controlled_task" {
     error_message = "Use a runtime token reference and keep the experimental receiver opt-in."
   }
   assert {
-    condition     = one([for c in jsondecode(aws_ecs_task_definition.app.container_definitions) : c if c.name == "document-scanner"]).memory == 3072
-    error_message = "Do not reduce the scanner ceiling without per-container memory evidence."
+    condition     = !contains([for c in jsondecode(aws_ecs_task_definition.app.container_definitions) : c.name], "document-scanner")
+    error_message = "The retired scanner must never be reintroduced into the application task."
   }
 }
 

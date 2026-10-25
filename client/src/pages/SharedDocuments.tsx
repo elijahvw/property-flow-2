@@ -1,3 +1,4 @@
+import { documentStatusLabel } from "../document-status";
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api";
@@ -10,7 +11,7 @@ import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "../components/Form";
 import "../components/LeaseDocumentSharing.css";
 
-type SharedOriginal = { id: string; version: number; receivedAt: string | null; sharedAt: string; title: string; versionNumber: number; filename: string; mediaType: string; byteLength: number; expiresOn: string; lease: { id: string; property: { name: string }; unit: { label: string } } };
+type SharedOriginal = { id: string; version: number; receivedAt: string | null; sharedAt: string; title: string; versionNumber: number; filename: string; mediaType: string; byteLength: number; scanStatus: string; expiresOn: string; lease: { id: string; property: { name: string }; unit: { label: string } } };
 type ReceiptAttempt = { shareId: string; expectedVersion: number; submissionKey: string; companyId: string };
 type ReceiptResult = { id: string; version: number; receivedAt: string | null; receipt: { id: string; recordedAt: string } };
 const scope = (auth: Bootstrap | null) => JSON.stringify([auth?.user.id, auth?.user.status, auth?.user.emailVerified, auth?.membership?.companyId, auth?.membership?.version, auth?.membership?.role, auth?.membership?.status, auth?.membership?.company.status, auth?.permissions, auth?.impersonation?.contextId]);
@@ -61,7 +62,7 @@ function Documents() {
     {resource.data && !current && <p role="alert" className="notice error">Your company context changed. Reload the workspace before continuing.</p>}
     {!resource.data && !resource.error && <p role="status">Loading shared documents…</p>}
     {current && <><p role="status">{current.total} shared originals currently available{q ? " for this search" : ""}</p>
-      {current.items.length ? <div className="shared-document-grid">{current.items.map(original => <SharedDocument key={original.id} original={original} companyId={companyId!} busy={!!busy} download={() => void download(original)} downloading={busy === original.id} changed={resource.reload} notify={setNotice}/>)}</div> : <section className="panel"><h2>{q ? "No matching shared documents" : "No shared documents available"}</h2><p>{q ? "Try another document title, property or unit." : "Your owner can share a cleared original when your leaseholder account and property access are approved."}</p></section>}
+      {current.items.length ? <div className="shared-document-grid">{current.items.map(original => <SharedDocument key={original.id} original={original} companyId={companyId!} busy={!!busy} download={() => void download(original)} downloading={busy === original.id} changed={resource.reload} notify={setNotice}/>)}</div> : <section className="panel"><h2>{q ? "No matching shared documents" : "No shared documents available"}</h2><p>{q ? "Try another document title, property or unit." : "Your owner can share an available original when your leaseholder account and property access are approved."}</p></section>}
       <nav className="actions" aria-label="Shared document pages"><button className="secondary" disabled={!cursor} onClick={() => { const previous = cursors.at(-1) || ""; change(search, previous, cursors.slice(0, -1)); }}>{cursors.length ? "Previous documents" : "First documents"}</button><button className="secondary" disabled={!current.nextCursor} onClick={() => change(search, current.nextCursor!, [...cursors, cursor])}>Next documents</button></nav>
     </>}
   </>;
@@ -87,7 +88,7 @@ function SharedDocument({ original, companyId, busy, downloading, download, chan
   const begin = () => { setReview(attempt || { shareId: original.id, expectedVersion: current.version, submissionKey: crypto.randomUUID(), companyId }); setOpen(true); setChecked(null); setAcceptCurrent(false); setCheckError(""); notify(""); };
   if (denied) return <p className="notice error" role="alert">Shared-document access is unavailable. Private details are hidden; any interrupted receipt confirmation is kept.</p>;
   return <article className="shared-document-card">
-    <h2>{original.title}</h2><p>{original.lease.property.name} · {original.lease.unit.label}</p>
+    <h2>{original.title}</h2><p className="help">{documentStatusLabel(original.scanStatus)}</p><p>{original.lease.property.name} · {original.lease.unit.label}</p>
     <dl><div><dt>Original</dt><dd>Version {original.versionNumber} · {original.filename}</dd></div><div><dt>Size</dt><dd>{Math.max(1, Math.ceil(original.byteLength / 1024))} KB</dd></div><div><dt>First shared</dt><dd>{formatActivityTime(original.sharedAt)}</dd></div><div><dt>Access through</dt><dd>{formatDate(original.expiresOn)} · Company calendar</dd></div></dl>
     <div className="actions"><button disabled={busy || sending} onClick={download}>{downloading ? "Preparing download…" : `Download version ${original.versionNumber}`}</button>{(!current.receivedAt || attempt) && <button className="secondary" disabled={busy || sending || readOnly && !attempt} onClick={begin}>{attempt ? readOnly ? "Review interrupted confirmation" : "Retry original confirmation" : "Confirm received"}</button>}</div>
     {current.receivedAt && <p role="status" className="notice">Receipt confirmed {formatActivityTime(current.receivedAt)}</p>}

@@ -40,7 +40,7 @@ export function registerDocumentLibrary(
         ),
         scan = choice(
           q.scan || "all",
-          ["all", "pending", "clean", "rejected"],
+          ["all", "unscanned", "pending", "clean", "rejected"],
           "latest scan result",
         ),
         propertyId =
@@ -71,7 +71,7 @@ export function registerDocumentLibrary(
    ), filtered AS (SELECT * FROM documents WHERE true
     ${source === "all" ? Prisma.empty : Prisma.sql`AND source=${source}`}
     ${status === "all" ? Prisma.empty : status === "active" ? Prisma.sql`AND "archivedAt" IS NULL` : Prisma.sql`AND "archivedAt" IS NOT NULL`}
-    ${scan === "all" ? Prisma.empty : Prisma.sql`AND "scanStatus"=${scan}`}
+    ${scan === "all" ? Prisma.empty : scan === "unscanned" ? Prisma.sql`AND "scanStatus" IN ('unscanned','pending')` : Prisma.sql`AND "scanStatus"=${scan}`}
     ${propertyId ? Prisma.sql`AND "propertyId"=${propertyId}` : Prisma.empty}
     ${search ? Prisma.sql`AND (position(lower(${search}) in lower(title))>0 OR position(lower(${search}) in lower(filename))>0 OR position(lower(${search}) in lower("propertyName"))>0 OR position(lower(${search}) in lower(COALESCE("requestTitle",'')))>0)` : Prisma.empty}
    )`;

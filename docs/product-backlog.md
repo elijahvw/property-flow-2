@@ -189,6 +189,8 @@ Acceptance:
 
 ### PF-15 · Private documents and attachments — P1 foundation
 
+October 25 local retirement: explicit user authorization removes scanning, adds immutable unscanned uploads, preserves recorded rejection/history and updates management, leaseholder, inspection/agreement and demo flows together. Migration 056 precedes deployment; acceptance includes private upload/retry/download, exact grants, rejected-file denial and smaller task lifecycle. [Release contract](scanner-retirement.md).
+
 Current delivery: Merged/deployed: private PostgreSQL originals, immutable versions, ClamAV quarantine/scan, management library and source download. Local 046 adds explicit owner-granted access to a selected cleared lease-document version for an eligible leaseholder, with retained grant/revoke history, expiry and fresh recipient/source checks. The combined 34-check roadmap API suite and two focused sharing browser cases pass within the full 260-case browser run. Release/real-role acceptance, wider staff sharing, resident uploads, larger private object storage and retention operations remain future. [Current sharing contract and evidence](roadmap-continuation-2026-10-24.md).
 
 Audience: management and explicitly authorized tenant/staff. Dependencies: reviewed private-storage scope; PF-12 delegated authority.

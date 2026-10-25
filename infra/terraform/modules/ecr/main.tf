@@ -6,9 +6,7 @@ resource "aws_ecr_repository" "app" {
 locals {
   invitation_sender_domain = "propertyflow.saasapps.cloud"
   invitation_sender        = "invitations@${local.invitation_sender_domain}"
-  # Official stable Linux/amd64 image, inspected and pinned before rollout.
-  scanner_image        = "clamav/clamav@sha256:705e0723f02fc13bf6e5e8a8e13a8c44420acf5e7ed06dfa2197081da00c7a73"
-  runtime_database_url = format("postgresql://propertyflow_runtime:%s@%s:5432/%s", urlencode(var.vars.runtime_db_password), var.vars.db_endpoint, urlencode(var.vars.db_name))
+  runtime_database_url     = format("postgresql://propertyflow_runtime:%s@%s:5432/%s", urlencode(var.vars.runtime_db_password), var.vars.db_endpoint, urlencode(var.vars.db_name))
   database_url = format(
     "postgresql://%s:%s@%s:5432/%s?schema=public&sslmode=verify-full",
     urlencode(var.vars.db_user),
@@ -156,7 +154,6 @@ resource "aws_ecs_task_definition" "app" {
         { name = "APP_CPU_CORES", value = tostring(local.task_cpu / 1024) },
         { name = "INVITATION_EMAIL_FROM", value = local.invitation_sender },
         { name = "INVITATION_EMAIL_REGION", value = var.vars.aws_region },
-        { name = "DOCUMENT_SCANNER_PORT", value = "3310" }
       ]
       secrets = var.vars.grafana_otlp_endpoint == "" ? [] : [{
         name      = "OTEL_EXPORTER_OTLP_HEADERS"
@@ -168,45 +165,6 @@ resource "aws_ecs_task_definition" "app" {
           "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
           "awslogs-region"        = var.vars.aws_region
           "awslogs-stream-prefix" = "ecs"
-        }
-      }
-    },
-    {
-      name  = "document-scanner"
-      image = local.scanner_image
-      # Scanning failures quarantine files without stopping unrelated app work.
-      essential = false
-      cpu       = 256
-      memory    = 3072
-      # Finish the first signature update before clamd loads its database.
-      # Concurrent first startup can otherwise load old data before freshclam's
-      # notification socket exists; periodic SelfCheck cannot detect that race.
-      entryPoint = ["/bin/sh", "-c"]
-      command    = ["for attempt in 1 2 3; do freshclam --foreground --stdout && break; [ \"$attempt\" = 3 ] || sleep 5; done; exec /init"]
-      # No port mapping. ECS containers share loopback; the daemon binds only it.
-      environment = [
-        { name = "CLAMD_CONF_TCPAddr", value = "127.0.0.1" },
-        { name = "CLAMD_CONF_MaxThreads", value = "2" },
-        { name = "CLAMD_CONF_MaxQueue", value = "4" },
-        { name = "CLAMD_CONF_StreamMaxLength", value = "6M" },
-        { name = "CLAMD_CONF_MaxFileSize", value = "10M" },
-        { name = "CLAMD_CONF_MaxScanSize", value = "50M" },
-        { name = "CLAMD_CONF_AlertExceedsMax", value = "yes" },
-        { name = "CLAMD_CONF_ConcurrentDatabaseReload", value = "no" },
-        { name = "CLAMD_CONF_SelfCheck", value = "60" },
-        { name = "CLAMD_STARTUP_TIMEOUT", value = "240" },
-        { name = "FRESHCLAM_CHECKS", value = "12" }
-      ]
-      healthCheck = {
-        command  = ["CMD-SHELL", "test \"$(echo PING | nc 127.0.0.1 3310)\" = PONG"]
-        interval = 30, timeout = 5, retries = 3, startPeriod = 300
-      }
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
-          "awslogs-region"        = var.vars.aws_region
-          "awslogs-stream-prefix" = "scanner"
         }
       }
     }

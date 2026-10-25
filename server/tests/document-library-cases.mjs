@@ -1,3 +1,4 @@
+import {historicalDocument} from "./historical-document-fixture.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { chromium, expect } from "@playwright/test";
@@ -29,31 +30,10 @@ export async function documentLibraryCases(t, admin, call, app) {
     ...extra,
   });
   const docs = [];
-  for (let i = 0; i < 27; i++)
-    docs.push(
-      await ok(
-        "manager",
-        "POST",
-        source,
-        payload(
-          `Library file ${String(i).padStart(2, "0")}`,
-          i === 1
-            ? {
-                contentBase64: Buffer.from("EICAR fictional test").toString(
-                  "base64",
-                ),
-              }
-            : {},
-        ),
-      ),
-    );
-  for (const i of [0, 1, 2])
-    await ok(
-      "manager",
-      "POST",
-      `${source}/${docs[i].documentId}/versions/${docs[i].versionId}/scan`,
-      {},
-    );
+  for (let i = 0; i < 27; i++) {
+    const title = `Library file ${String(i).padStart(2, "0")}`;
+    docs.push(i < 3 ? await historicalDocument(admin, {sourceId:request.id, title, status:i===1?'rejected':'clean'}) : await ok("manager","POST",source,payload(title)));
+  }
   await ok(
     "manager",
     "POST",
@@ -101,7 +81,7 @@ export async function documentLibraryCases(t, admin, call, app) {
       assert.equal(match.total, 1);
       assert.equal(match.items[0].id, docs[0].documentId);
       assert.equal(match.items[0].latestNumber, 2);
-      assert.equal(match.items[0].scanStatus, "pending");
+      assert.equal(match.items[0].scanStatus, "unscanned");
       assert.equal(match.items[0].sourceId, request.id);
       const lease = await ok(
         "manager",
@@ -127,7 +107,7 @@ export async function documentLibraryCases(t, admin, call, app) {
       const pending = await ok(
         "manager",
         "GET",
-        base + "?q=Library&scan=pending",
+        base + "?q=Library&scan=unscanned",
       );
       assert.equal(pending.total, 26);
       assert.ok(pending.items.some((x) => x.id === docs[0].documentId));
@@ -156,7 +136,7 @@ export async function documentLibraryCases(t, admin, call, app) {
             `${source}/${docs[0].documentId}/versions/${current.versions[0].id}/download`,
           )
         ).statusCode,
-        409,
+        200,
       );
     },
   );
@@ -287,7 +267,7 @@ export async function documentLibraryCases(t, admin, call, app) {
         const origin = process.env.TEST_MAINTENANCE_BROWSER_URL;
         await page.goto(
           origin +
-            "/company/documents?q=replacement-find-me&scan=pending&propertyId=home",
+            "/company/documents?q=replacement-find-me&scan=unscanned&propertyId=home",
         );
         await expect(
           page.getByRole("status").filter({ hasText: "1 matching document" }),
@@ -304,7 +284,7 @@ export async function documentLibraryCases(t, admin, call, app) {
         ).toBeVisible();
         await expect(selected.locator("details")).toHaveAttribute("open", "");
         await expect(
-          selected.getByText("Latest version: Quarantined.", { exact: false }),
+          selected.getByText("Latest version: Not scanned", { exact: false }),
         ).toBeVisible();
         await expect(
           selected.getByRole("button", {
@@ -317,7 +297,7 @@ export async function documentLibraryCases(t, admin, call, app) {
             name: "Download version 2",
             exact: true,
           }),
-        ).toHaveCount(0);
+        ).toBeVisible();
         assert.equal(
           await page.evaluate(
             () =>
@@ -346,10 +326,10 @@ export async function documentLibraryCases(t, admin, call, app) {
         ).toHaveValue("replacement-find-me");
         await expect(
           page.getByRole("combobox", {
-            name: "Latest scan result",
+            name: "Latest file status",
             exact: true,
           }),
-        ).toHaveValue("pending");
+        ).toHaveValue("unscanned");
         await page.screenshot({ path: "/tmp/pf-library-local-mobile.png" });
         await page.setViewportSize({ width: 1440, height: 1000 });
         await page.screenshot({ path: "/tmp/pf-library-local-desktop.png" });

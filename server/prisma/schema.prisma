@@ -1458,7 +1458,7 @@ model DocumentVersion {
   createdById String
   submissionKey String
   submissionHash String
-  scanStatus String @default("pending")
+  scanStatus String @default("unscanned")
   scannedAt DateTime?
   createdAt DateTime @default(now())
   document PrivateDocument @relation(fields:[documentId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)

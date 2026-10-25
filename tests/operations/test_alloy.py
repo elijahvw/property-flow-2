@@ -64,11 +64,10 @@ class AlloyDeploymentTests(unittest.TestCase):
     def definition(self):
         return {"family": "propertyflow-dev", "containerDefinitions": [
             {"name": "app", "image": "old", "environment": [{"name": "OTEL_EXPORTER_OTLP_ENDPOINT", "value": "https://expected"}], "secrets": [{"name": "OTEL_EXPORTER_OTLP_HEADERS", "valueFrom": ARN + ":headers::"}]},
-            {"name": "document-scanner", "image": "clamav/clamav@sha256:" + "a" * 64, "environment": [{"name": "CLAMD_CONF_TCPAddr", "value": "127.0.0.1"}]},
             {"name": "alloy", "image": "grafana/alloy:v1.21.1", "essential": False, "healthCheck": {"command": ["CMD-SHELL", "readiness"]}, "secrets": [{"name": "GRAFANA_ALLOY_TOKEN", "valueFrom": ARN + ":alloy_token::"}]}
         ]}
 
-    def test_rollout_preserves_collector_and_scanner(self):
+    def test_rollout_preserves_collector(self):
         definition = self.definition()
         original = copy.deepcopy(definition["containerDefinitions"][1:])
         result = deployment.candidate(definition, "immutable", "https://expected", True)
@@ -88,7 +87,7 @@ class AlloyDeploymentTests(unittest.TestCase):
                        {"environment": [{"name": "GRAFANA_ALLOY_TOKEN", "value": "private"}]},
                        {"secrets": [{"name": "GRAFANA_ALLOY_TOKEN", "valueFrom": ARN.replace("800754316001", "000000000000") + ":alloy_token::"}]}):
             definition = self.definition()
-            definition["containerDefinitions"][2].update(change)
+            definition["containerDefinitions"][1].update(change)
             with self.subTest(fields=list(change)), self.assertRaises(ValueError):
                 deployment.candidate(definition, "new", "https://expected", True)
 
@@ -98,7 +97,7 @@ class AlloyReadinessTests(unittest.TestCase):
         calls = []
         responses = [
             {"taskDefinition": "current", "desiredCount": 1},
-            names if names is not None else ["app", "document-scanner", "alloy"],
+            names if names is not None else ["app", "alloy"],
             ["task-1"],
             {"failures": failures or [], "tasks": tasks if tasks is not None else [{"definition": "current", "status": "RUNNING", "containers": [{"name": "alloy", "status": "RUNNING", "health": "HEALTHY"}]}]}
         ]
@@ -127,9 +126,9 @@ class AlloyReadinessTests(unittest.TestCase):
 
     def test_disabled_is_explicit_but_expected_collector_cannot_be_missing(self):
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(len(self.run_check(names=["app", "document-scanner"], expected=False)), 2)
+            self.assertEqual(len(self.run_check(names=["app"], expected=False)), 2)
         with self.assertRaisesRegex(ValueError, "absent"):
-            self.run_check(names=["app", "document-scanner"], expected=True)
+            self.run_check(names=["app"], expected=True)
 
 
 if __name__ == "__main__":

@@ -6,11 +6,11 @@ import { AccessError } from "./access.js";
 import type { Tx } from "./operational.js";
 import type { IdentityProvider, ProviderUser } from "./identity-provider.js";
 import { companyDay } from "./reports.js";
-import { seedDemoScenarios, DEMO_BUNDLED_TEXT } from "./sales-demo-scenarios.js";
+import { seedDemoScenarios } from "./sales-demo-scenarios.js";
 
 // Bump whenever the fixture changes. Only constant fictional content goes here;
 // never copy customer data or call an external identity/email/payment provider.
-export const SALES_DEMO_SEED_VERSION = 3;
+export const SALES_DEMO_SEED_VERSION = 4;
 export type DemoSeedAccounts = { issuer: string; databaseConnection: string; users: Record<string, ProviderUser> };
 export async function seedSalesDemo(tx: Tx, companyId: string, accounts: DemoSeedAccounts) {
   const ownerId = accounts.users.owner.user_id;
@@ -49,17 +49,11 @@ export async function seedSalesDemo(tx: Tx, companyId: string, accounts: DemoSee
     request.appSession = { tokenHash: csrf, csrfToken: csrf, userId: actingId, createdAt: new Date(), expiresAt: new Date(Date.now()+60000), idleExpiresAt: new Date(Date.now()+60000), impersonatedUserId: null, impersonationExpiresAt: null, impersonationReason: null, impersonationCompanyId: null, impersonationMembershipVersion: null };
   }, origin, provider, {
     salesDemo: false,
-    // This unbound fixture can clear only the exact bundled, inert UTF-8 text.
-    // User uploads always use the application's real scanner; no external scan
-    // success is inferred. Other fixture originals stay quarantined.
-    documentScanner: Object.assign(async (content: Buffer) => {
-      if (content.equals(Buffer.from(DEMO_BUNDLED_TEXT))) return "clean" as const;
-      throw new AccessError(503, "SCANNER_UNAVAILABLE", "This demo original awaits the application scanner.");
-    }, { available: async () => true }),
+
   });
   app.setErrorHandler((error, request, reply) => reply.code(error instanceof AccessError ? error.statusCode : 500).send({ code: (error as AccessError).code || "DEMO_SEED_FAILED", step: request.routeOptions.url }));
   async function call(method: "GET" | "POST" | "PUT" | "PATCH", url: string, body?: Record<string, unknown>): Promise<any> {
-    const keyed = method !== "GET" && method !== "PATCH" && !url.endsWith("/scan") && !url.endsWith("/void") && (!url.endsWith("/preview") || url.startsWith("/api/company/imports/"));
+    const keyed = method !== "GET" && method !== "PATCH" && !url.endsWith("/void") && (!url.endsWith("/preview") || url.startsWith("/api/company/imports/"));
     const response = await app.inject({ method, url, headers: { origin, "x-csrf-token": csrf }, ...(body ? { payload: { ...body, ...(keyed ? { submissionKey: randomUUID() } : {}) } } : {}) });
     if (response.statusCode !== 200) {
       const failure = response.json();
@@ -125,7 +119,7 @@ export async function seedSalesDemo(tx: Tx, companyId: string, accounts: DemoSee
     actingId = ownerId;
     const file = await call("POST", `/api/company/leases/${leases[0]}/documents`, { title: "Unsigned sample agreement · DEMO", filename: "demo-agreement.txt", mediaType: "text/plain", contentBase64: Buffer.from("FICTIONAL SALES DEMO ONLY. Unsigned sample agreement. No legal effect.").toString("base64") });
     const context = await call("GET", `/api/company/leases/${leases[0]}/agreements/context`);
-    const agreement = await call("POST", `/api/company/leases/${leases[0]}/agreements`, { title: "Lease preparation · DEMO", kind: "lease", notes: "Fictional unsigned preparation. Attach the sample original after real malware scanning.", documentVersionIds: [], partyIds: context.leaseholders.map((p: { id: string }) => p.id), companySignerId: ownerId });
+    const agreement = await call("POST", `/api/company/leases/${leases[0]}/agreements`, { title: "Lease preparation · DEMO", kind: "lease", notes: "Fictional unsigned preparation. The sample original is not scanned for malware.", documentVersionIds: [], partyIds: context.leaseholders.map((p: { id: string }) => p.id), companySignerId: ownerId });
     await call("PUT", `/api/company/units/${units[2]}/availability`, { expectedVersion: null, condition: "ready", availableOn: today, reason: "DEMO owner-reviewed vacancy and readiness." });
     await call("PUT", `/api/company/units/${units[5]}/availability`, { expectedVersion: null, condition: "turnover", availableOn: offset(1), reason: "DEMO turnover in progress." });
     await call("POST", `/api/company/units/${units[2]}/rental-listing`, { forRent: true, expectedVersion: null, expectedAvailabilityVersion: 1, reason: "DEMO explicit owner listing intent." });

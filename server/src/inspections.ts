@@ -1,3 +1,4 @@
+import { availableDocumentStatuses } from "./document-status.js";
 import { publishNotification, type NotificationPublisher } from "./notification-events.js";
 import type {
   FastifyInstance,
@@ -197,13 +198,13 @@ export function registerInspections(
       where: {
         id: { in: ids },
         companyId,
-        scanStatus: "clean",
+        scanStatus: { in: availableDocumentStatuses },
         document: { companyId, leaseId },
       },
     });
     if (count !== ids.length)
       throw invalid(
-        "Evidence must be an exact cleared document version retained at this lease. Upload and scan it in Documents first.",
+        "Evidence must be an available exact document version retained at this lease. Upload it in Documents first.",
       );
   };
   const replay = async (
