@@ -1,0 +1,1125 @@
+{
+  "source_pr": 60,
+  "source_commit": "f5f1a2394e7eeae33ce063bfdadadb8171f9c35d",
+  "common_base": "75d5342732ab8fc1e67deb3de9d045855eb20dc6",
+  "destination_pr": 61,
+  "destination_url": "https://github.com/elijahvw/property-flow-2/pull/61",
+  "baseline_implementation": "b68416de649a775756ef24c19ccbcdf51d36b8e9",
+  "closure_gate": "Every useful unique item preserved remotely plus final combined checks/reviews; keep source branch/commits",
+  "rows": [
+    {
+      "source_path": "CODEX-HANDOFF.md",
+      "status": "adapted",
+      "family": "Handoff/privacy",
+      "target": "CODEX-HANDOFF.md",
+      "evidence": "Current consolidation claims adapted; six exact PR60 privacy replacement blocks applied to CODEX-HANDOFF; README had no privacy replacement block",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "README.md",
+      "status": "adapted",
+      "family": "Handoff/privacy",
+      "target": "README.md",
+      "evidence": "Current consolidation claims adapted; six exact PR60 privacy replacement blocks applied to CODEX-HANDOFF; README had no privacy replacement block",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/package.json",
+      "status": "uniqueported",
+      "family": "Dependencies/error hardening",
+      "target": "client/package.json",
+      "evidence": "Coordinated npm ci and official Prisma7.10.1 generation pass; current server/client builds and four fresh root/backend production/all audits pass with zero findings. Safe error helper3/3 and actual Vite host/console-forwarding plus tsx import/watch smoke pass. Earlier install/build checkpoints are historical in the continuation.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/App.tsx",
+      "status": "adapted",
+      "family": "Central integration",
+      "target": "client/src/App.tsx",
+      "evidence": "Root reports data-router/guards, canonical routes, scoped context/focus/nav, feature maps and fixed telemetry vocabulary wired; current builds/browser/privacy proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/activity-label.ts",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/activity-label.ts",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/ContextHelp.tsx",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/components/ContextHelp.tsx",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/DocumentSharing.css",
+      "status": "adapted",
+      "family": "Receipts/conversation UI",
+      "target": "client/src/components/LeaseDocumentSharing.css",
+      "evidence": "Canonical explicit owner/verified-leaseholder sharing retained; per-grant receipt, download history and full-result search added without broadening roles. Five acknowledgment API cases pass within roadmap39/39 and all eight document-sharing browser cases pass within affected81/81; exact retries, regrants, expiry/revocation and support/read-only boundaries covered.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/DocumentSharing.tsx",
+      "status": "adapted",
+      "family": "Receipts/conversation UI",
+      "target": "client/src/components/LeaseDocumentSharing.tsx",
+      "evidence": "Canonical explicit owner/verified-leaseholder sharing retained; per-grant receipt, download history and full-result search added without broadening roles. Five acknowledgment API cases pass within roadmap39/39 and all eight document-sharing browser cases pass within affected81/81; exact retries, regrants, expiry/revocation and support/read-only boundaries covered.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/EditorDialog.css",
+      "status": "adapted",
+      "family": "Tasks/leave guards",
+      "target": "client/src/components/EditorDialog.css",
+      "evidence": "Task/guard/forms25/25 +overlapping peer-view2/2 pass; real combined leasing66/66 includes all11taskAPI/P2; scoped completion fix2/2 +late35/35 tasks pass. Four pure task groups included safe server116pass/8DBskips; direct client navigation2groups and safeclient14files pass. Final remote/head proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/EditorDialog.tsx",
+      "status": "adapted",
+      "family": "Tasks/leave guards",
+      "target": "client/src/components/EditorDialog.tsx",
+      "evidence": "Task/guard/forms25/25 +overlapping peer-view2/2 pass; real combined leasing66/66 includes all11taskAPI/P2; scoped completion fix2/2 +late35/35 tasks pass. Four pure task groups included safe server116pass/8DBskips; direct client navigation2groups and safeclient14files pass. Final remote/head proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/Form.tsx",
+      "status": "adapted",
+      "family": "Tasks/leave guards",
+      "target": "client/src/components/Form.tsx",
+      "evidence": "Task/guard/forms25/25 +overlapping peer-view2/2 pass; real combined leasing66/66 includes all11taskAPI/P2; scoped completion fix2/2 +late35/35 tasks pass. Four pure task groups included safe server116pass/8DBskips; direct client navigation2groups and safeclient14files pass. Final remote/head proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/LeaseInspections.tsx",
+      "status": "adapted",
+      "family": "Tasks/leave guards",
+      "target": "client/src/components/LeaseInspections.tsx",
+      "evidence": "Task/guard/forms25/25 +overlapping peer-view2/2 pass; real combined leasing66/66 includes all11taskAPI/P2; scoped completion fix2/2 +late35/35 tasks pass. Four pure task groups included safe server116pass/8DBskips; direct client navigation2groups and safeclient14files pass. Final remote/head proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/LeaseInvitations.tsx",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/components/LeaseInvitations.tsx",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/LeaseLifecycle.tsx",
+      "status": "uniqueported",
+      "family": "Experience/source navigation",
+      "target": "client/src/components/LeaseLifecycle.tsx",
+      "evidence": "Independent source review: byte-identical to f5; wording/completed-before-unmount retained. Full relevant money/workflow regression pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/LeaseReview.tsx",
+      "status": "adapted",
+      "family": "Tasks/leave guards",
+      "target": "client/src/components/LeaseReview.tsx",
+      "evidence": "Task/guard/forms25/25 +overlapping peer-view2/2 pass; real combined leasing66/66 includes all11taskAPI/P2; scoped completion fix2/2 +late35/35 tasks pass. Four pure task groups included safe server116pass/8DBskips; direct client navigation2groups and safeclient14files pass. Final remote/head proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/MaintenanceConversation.css",
+      "status": "adapted",
+      "family": "Receipts/conversation UI",
+      "target": "Canonical Maintenance.tsx RequestUpdates + pages/MaintenanceConversation.css + shared EditorDialog/Form",
+      "evidence": "Canonical requester/team conversation, immutable provenance and exact actor/company/request reply journal; all nine reply and five Auth browser cases pass in affected81/81, with full maintenance148/148 passing. Fresh reads, read-only/support boundaries, authoritative denial and exact reload retries verified.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/MaintenanceConversation.tsx",
+      "status": "adapted",
+      "family": "Receipts/conversation UI",
+      "target": "Canonical Maintenance.tsx RequestUpdates + pages/MaintenanceConversation.css + shared EditorDialog/Form",
+      "evidence": "Canonical requester/team conversation, immutable provenance and exact actor/company/request reply journal; all nine reply and five Auth browser cases pass in affected81/81, with full maintenance148/148 passing. Fresh reads, read-only/support boundaries, authoritative denial and exact reload retries verified.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/MaintenanceCosts.tsx",
+      "status": "uniqueported",
+      "family": "Experience/source navigation",
+      "target": "client/src/components/MaintenanceCosts.tsx",
+      "evidence": "Independent source review: byte-identical to f5; wording/completed-before-unmount retained. Full relevant money/workflow regression pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/NavigationIcon.tsx",
+      "status": "adapted",
+      "family": "Central integration",
+      "target": "client/src/components/NavigationIcon.tsx",
+      "evidence": "Root reports data-router/guards, canonical routes, scoped context/focus/nav, feature maps and fixed telemetry vocabulary wired; current builds/browser/privacy proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/PageLeaveGuard.tsx",
+      "status": "adapted",
+      "family": "Tasks/leave guards",
+      "target": "client/src/components/PageLeaveGuard.tsx",
+      "evidence": "Task/guard/forms25/25 +overlapping peer-view2/2 pass; real combined leasing66/66 includes all11taskAPI/P2; scoped completion fix2/2 +late35/35 tasks pass. Four pure task groups included safe server116pass/8DBskips; direct client navigation2groups and safeclient14files pass. Final remote/head proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/PrivateDocuments.tsx",
+      "status": "adapted",
+      "family": "Receipts/conversation UI",
+      "target": "client/src/components/PrivateDocuments.tsx + LeaseDocumentSharing.tsx + SharedDocuments.tsx",
+      "evidence": "Canonical explicit owner/verified-leaseholder sharing retained; per-grant receipt, download history and full-result search added without broadening roles. Five acknowledgment API cases pass within roadmap39/39 and all eight document-sharing browser cases pass within affected81/81; exact retries, regrants, expiry/revocation and support/read-only boundaries covered.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/PropertyNavigation.tsx",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/components/PropertyNavigation.tsx",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/PropertySearch.css",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/components/PropertySearch.css",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/PropertySearch.tsx",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/components/PropertySearch.tsx",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/ResidentRentSummary.css",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/components/ResidentRentSummary.css",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/ResidentRentSummary.tsx",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/components/ResidentRentSummary.tsx",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/TaskDraft.tsx",
+      "status": "adapted",
+      "family": "Tasks/leave guards",
+      "target": "client/src/components/TaskDraft.tsx",
+      "evidence": "Task/guard/forms25/25 +overlapping peer-view2/2 pass; real combined leasing66/66 includes all11taskAPI/P2; scoped completion fix2/2 +late35/35 tasks pass. Four pure task groups included safe server116pass/8DBskips; direct client navigation2groups and safeclient14files pass. Final remote/head proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/TenantForm.tsx",
+      "status": "adapted",
+      "family": "Tasks / experience",
+      "target": "Canonical TaskDraft/PageLeaveGuard/EditorDialog/Form and current TenantForm/lease page",
+      "evidence": "Four forms-audit behaviors retained: page lease setup/filter Back, error focus/review, optional native validation expansion, unchanged/reverted close. Included in task/guard/forms25/25 PASS48.0s; private pin/journal/authority semantics preserved; final combined/remote pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/components/UserActivity.tsx",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/components/UserActivity.tsx",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/help-content.ts",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/help-content.ts",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/navigation.ts",
+      "status": "adapted",
+      "family": "Central integration",
+      "target": "client/src/navigation.ts",
+      "evidence": "Root reports data-router/guards, canonical routes, scoped context/focus/nav, feature maps and fixed telemetry vocabulary wired; current builds/browser/privacy proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/operation-lifecycle.ts",
+      "status": "adapted",
+      "family": "Central integration",
+      "target": "client/src/operation-lifecycle.ts",
+      "evidence": "Root reports data-router/guards, canonical routes, scoped context/focus/nav, feature maps and fixed telemetry vocabulary wired; current builds/browser/privacy proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/Applications.css",
+      "status": "adapted",
+      "family": "Acquisition/listing",
+      "target": "client/src/pages/Applications.css",
+      "evidence": "Canonical Prospect references and separate owner listing intent preserve readiness; manual applications, follow-ups and explicit account-backed draft-lease conversion retain history and exact retries. All thirteen real acquisition groups pass within leasing66/66; focused acquisition28/28 and affected canonical navigation/recovery cases pass. No email merge, portal grant or collection.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/ContactDetail.tsx",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/pages/ContactDetail.tsx",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/Deposits.tsx",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/pages/Deposits.tsx",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/Finances.tsx",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/pages/Finances.tsx",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/LeaseDetail.tsx",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/pages/LeaseDetail.tsx",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/LeaseDetailNavigation.css",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/pages/LeaseDetailNavigation.css",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/Leasing.tsx",
+      "status": "adapted",
+      "family": "Tasks/leave guards",
+      "target": "client/src/pages/Leasing.tsx",
+      "evidence": "Task/guard/forms25/25 +overlapping peer-view2/2 pass; real combined leasing66/66 includes all11taskAPI/P2; scoped completion fix2/2 +late35/35 tasks pass. Four pure task groups included safe server116pass/8DBskips; direct client navigation2groups and safeclient14files pass. Final remote/head proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/Maintenance.tsx",
+      "status": "adapted",
+      "family": "Receipts / tasks",
+      "target": "client/src/pages/Maintenance.tsx",
+      "evidence": "Canonical requester/team conversation +shared EditorDialog/Form and attempted-only actor/company/request/property/version-pinned session reload journal. Fresh authorized hydration, readonly/support/company/context private-hide. All9maintenance reply cases and5Auth cases in affected81/81 pass; maintenance148/148 passes; final remote proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/Rent.tsx",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/pages/Rent.tsx",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/RentalApplications.tsx",
+      "status": "adapted",
+      "family": "Acquisition/listing",
+      "target": "client/src/pages/RentalApplications.tsx + canonical Prospects.tsx follow-up/application panel",
+      "evidence": "Canonical Prospect references and separate owner listing intent preserve readiness; manual applications, follow-ups and explicit account-backed draft-lease conversion retain history and exact retries. All thirteen real acquisition groups pass within leasing66/66; focused acquisition28/28 and affected canonical navigation/recovery cases pass. No email merge, portal grant or collection.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/ResidentDetail.tsx",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/pages/ResidentDetail.tsx",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/ResidentDocuments.css",
+      "status": "adapted",
+      "family": "Receipts/conversation UI",
+      "target": "client/src/pages/SharedDocuments.tsx (canonical styles/search)",
+      "evidence": "Canonical explicit owner/verified-leaseholder sharing retained; per-grant receipt, download history and full-result search added without broadening roles. Five acknowledgment API cases pass within roadmap39/39 and all eight document-sharing browser cases pass within affected81/81; exact retries, regrants, expiry/revocation and support/read-only boundaries covered.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/ResidentDocuments.tsx",
+      "status": "adapted",
+      "family": "Receipts/conversation UI",
+      "target": "client/src/pages/SharedDocuments.tsx",
+      "evidence": "Canonical explicit owner/verified-leaseholder sharing retained; per-grant receipt, download history and full-result search added without broadening roles. Five acknowledgment API cases pass within roadmap39/39 and all eight document-sharing browser cases pass within affected81/81; exact retries, regrants, expiry/revocation and support/read-only boundaries covered.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/SavedDrafts.tsx",
+      "status": "adapted",
+      "family": "Tasks/leave guards",
+      "target": "client/src/pages/SavedDrafts.tsx",
+      "evidence": "Task/guard/forms25/25 +overlapping peer-view2/2 pass; real combined leasing66/66 includes all11taskAPI/P2; scoped completion fix2/2 +late35/35 tasks pass. Four pure task groups included safe server116pass/8DBskips; direct client navigation2groups and safeclient14files pass. Final remote/head proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/Statement.tsx",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/pages/Statement.tsx",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/Vacancies.css",
+      "status": "adapted",
+      "family": "Acquisition/listing",
+      "target": "client/src/pages/Availability.css (canonical board)",
+      "evidence": "Canonical Prospect references and separate owner listing intent preserve readiness; manual applications, follow-ups and explicit account-backed draft-lease conversion retain history and exact retries. All thirteen real acquisition groups pass within leasing66/66; focused acquisition28/28 and affected canonical navigation/recovery cases pass. No email merge, portal grant or collection.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/Vacancies.tsx",
+      "status": "adapted",
+      "family": "Acquisition/listing",
+      "target": "client/src/pages/Availability.tsx (listing/filter/history; readiness/seek retained)",
+      "evidence": "Canonical Prospect references and separate owner listing intent preserve readiness; manual applications, follow-ups and explicit account-backed draft-lease conversion retain history and exact retries. All thirteen real acquisition groups pass within leasing66/66; focused acquisition28/28 and affected canonical navigation/recovery cases pass. No email merge, portal grant or collection.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/Workspace.tsx",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/pages/Workspace.tsx",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/pages/WorkspaceExperience.css",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "client/src/pages/WorkspaceExperience.css",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/src/rum-privacy.ts",
+      "status": "adapted",
+      "family": "Central integration",
+      "target": "client/src/rum-privacy.ts",
+      "evidence": "Root reports data-router/guards, canonical routes, scoped context/focus/nav, feature maps and fixed telemetry vocabulary wired; current builds/browser/privacy proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "client/vite.config.ts",
+      "status": "uniqueported",
+      "family": "Dependencies/error hardening",
+      "target": "client/vite.config.ts",
+      "evidence": "Coordinated npm ci and official Prisma7.10.1 generation pass; current server/client builds and four fresh root/backend production/all audits pass with zero findings. Safe error helper3/3 and actual Vite host/console-forwarding plus tsx import/watch smoke pass. Earlier install/build checkpoints are historical in the continuation.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/acceptance-evidence/application-review-desktop-2026-10-22.png",
+      "status": "adapted",
+      "family": "Historical evidence",
+      "target": "docs/pr60-source-evidence/acceptance-evidence/application-review-desktop-2026-10-22.png",
+      "evidence": "Source 0258b99d84a6db7f557864cf90d4cf42debbf5d2; provenance/hash manifest; dated evidence only, not port validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/acceptance-evidence/availability-desktop-2026-10-22.png",
+      "status": "adapted",
+      "family": "Historical evidence",
+      "target": "docs/pr60-source-evidence/acceptance-evidence/availability-desktop-2026-10-22.png",
+      "evidence": "Source 7a6ec30b5cd114d9099ed9ab09ee7fd56ab46b4f; provenance/hash manifest; dated evidence only, not port validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/acceptance-evidence/availability-mobile-2026-10-22.png",
+      "status": "adapted",
+      "family": "Historical evidence",
+      "target": "docs/pr60-source-evidence/acceptance-evidence/availability-mobile-2026-10-22.png",
+      "evidence": "Source a20e6d52c8cd063d721d3b3b9ca795fd332357b3; provenance/hash manifest; dated evidence only, not port validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/acceptance-evidence/notifications-local-desktop-2026-10-19.png",
+      "status": "adapted",
+      "family": "Historical evidence",
+      "target": "docs/pr60-source-evidence/acceptance-evidence/notifications-local-desktop-2026-10-19.png",
+      "evidence": "Source f32100482b694fcfd81db18bb12b04b27a96ef2b; provenance/hash manifest; dated evidence only, not port validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/acceptance-evidence/notifications-local-mobile-2026-10-19.png",
+      "status": "adapted",
+      "family": "Historical evidence",
+      "target": "docs/pr60-source-evidence/acceptance-evidence/notifications-local-mobile-2026-10-19.png",
+      "evidence": "Source 0e9cc76d82061783d109d35f2b65cdcc737cfed7; provenance/hash manifest; dated evidence only, not port validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/backend-audit-2026-10-21.md",
+      "status": "adapted",
+      "family": "Historical evidence",
+      "target": "docs/pr60-source-evidence/backend-audit-2026-10-21.md",
+      "evidence": "Source 85b5317121593e72377bcdb354c2d20aa4b8f67c; provenance/hash manifest; dated evidence only, not port validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/dependency-audit-2026-10-21.md",
+      "status": "adapted",
+      "family": "Historical evidence",
+      "target": "docs/dependency-audit-2026-10-21.md + docs/pr60-source-evidence/dependency-audit-2026-10-21.md",
+      "evidence": "Historical source preserved with hashes; owner current audit doc records four fresh zero-finding scans/compatibleFastURI fix and helper3/3, combined install/build pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/feature-batch-2026-10-22.md",
+      "status": "adapted",
+      "family": "Historical evidence",
+      "target": "docs/pr60-source-evidence/feature-batch-2026-10-22.md",
+      "evidence": "Source 23af3aa08b532f87ae8d25b2fce9b6fa5ab16373; provenance/hash manifest; dated evidence only, not port validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/forms-audit-2026-10-21.md",
+      "status": "adapted",
+      "family": "Historical evidence",
+      "target": "docs/pr60-source-evidence/forms-audit-2026-10-21.md",
+      "evidence": "Source ab4f3c0c82f5ce38c445bf32ada51895c617542e; provenance/hash manifest; dated evidence only, not port validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/local-feature-release-notes.md",
+      "status": "adapted",
+      "family": "Current docs",
+      "target": "docs/local-feature-release-notes.md",
+      "evidence": "Current baseline/consolidation scope reconciled; PR60 historical contracts retained separately; final port/checklist updates pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/maintenance-conversations.md",
+      "status": "adapted",
+      "family": "Historical evidence",
+      "target": "docs/pr60-source-evidence/maintenance-conversations.md",
+      "evidence": "Source bcaa93b0d7779b417f248a3f066569854b5e4929; provenance/hash manifest; dated evidence only, not port validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/monitoring-coverage.md",
+      "status": "adapted",
+      "family": "Current docs",
+      "target": "docs/monitoring-coverage.md",
+      "evidence": "Current baseline/consolidation scope reconciled; PR60 historical contracts retained separately; final port/checklist updates pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/mvp-status.md",
+      "status": "adapted",
+      "family": "Current docs",
+      "target": "docs/mvp-status.md",
+      "evidence": "Current status reconciled separately; eight exact historical PR60 privacy replacement blocks applied without copying stale release claims or rewriting Git history; final port evidence pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/platform-audit-2026-10-21.md",
+      "status": "adapted",
+      "family": "Historical evidence",
+      "target": "docs/pr60-source-evidence/platform-audit-2026-10-21.md",
+      "evidence": "Source d5136395920b41630988fc214a05453a5d96b487; provenance/hash manifest; dated evidence only, not port validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/product-backlog.md",
+      "status": "adapted",
+      "family": "Current docs",
+      "target": "docs/product-backlog.md",
+      "evidence": "Current baseline/consolidation scope reconciled; PR60 historical contracts retained separately; final port/checklist updates pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/product-experience-audit-2026-10-21.md",
+      "status": "adapted",
+      "family": "Historical evidence",
+      "target": "docs/pr60-source-evidence/product-experience-audit-2026-10-21.md",
+      "evidence": "Source 428598302261aef738c146687ac2206aff909541; provenance/hash manifest; dated evidence only, not port validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/product-roadmap.md",
+      "status": "adapted",
+      "family": "Current docs",
+      "target": "docs/product-roadmap.md",
+      "evidence": "Current baseline/consolidation scope reconciled; PR60 historical contracts retained separately; final port/checklist updates pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/production-audit-validation-2026-10-21.md",
+      "status": "adapted",
+      "family": "Historical evidence",
+      "target": "docs/pr60-source-evidence/production-audit-validation-2026-10-21.md",
+      "evidence": "Source 05dd22ed4f82874e3c9fe70e2d2f4faf941f7f53; provenance/hash manifest; dated evidence only, not port validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/resident-document-sharing.md",
+      "status": "adapted",
+      "family": "Historical evidence",
+      "target": "docs/shared-document-receipts.md + docs/pr60-source-evidence/resident-document-sharing.md",
+      "evidence": "Canonical acknowledgment contract authored locally; historical source retained with provenance; runtime and final acceptance remain pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/task-drafts.md",
+      "status": "adapted",
+      "family": "Historical evidence",
+      "target": "docs/pr60-source-evidence/task-drafts.md",
+      "evidence": "Source 62bcbacb4c03b1cf118593ce929eba96a030ed84; provenance/hash manifest; dated evidence only, not port validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/vacancy-applications.md",
+      "status": "adapted",
+      "family": "Historical evidence",
+      "target": "docs/pr60-source-evidence/vacancy-applications.md",
+      "evidence": "Source a86e054af1da7e8bfb2aec1200bead508eeb25fa; provenance/hash manifest; dated evidence only, not port validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "docs/workflow-batch-validation-2026-10-22.md",
+      "status": "adapted",
+      "family": "Historical evidence",
+      "target": "docs/pr60-source-evidence/workflow-batch-validation-2026-10-22.md",
+      "evidence": "Source f7e54ddd24b7d33615347689a7ef1005c2c37375; provenance/hash manifest; dated evidence only, not port validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentary preservation accompanies this docs checkpoint; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "package-lock.json",
+      "status": "defectfixed",
+      "family": "Dependencies/error hardening",
+      "target": "package-lock.json",
+      "evidence": "Coordinated npm ci and official Prisma7.10.1 generation pass; current server/client builds and four fresh root/backend production/all audits pass with zero findings. Safe error helper3/3 and actual Vite host/console-forwarding plus tsx import/watch smoke pass. Earlier install/build checkpoints are historical in the continuation.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "package.json",
+      "status": "uniqueported",
+      "family": "Dependencies/error hardening",
+      "target": "package.json",
+      "evidence": "Coordinated npm ci and official Prisma7.10.1 generation pass; current server/client builds and four fresh root/backend production/all audits pass with zero findings. Safe error helper3/3 and actual Vite host/console-forwarding plus tsx import/watch smoke pass. Earlier install/build checkpoints are historical in the continuation.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "playwright.onboarding.config.ts",
+      "status": "uniqueported",
+      "family": "Dependency harness",
+      "target": "playwright.onboarding.config.ts",
+      "evidence": "FixtureVite5012 avoids API5011 self-proxy loop; source adapted, configuration/runtime proof pending combined validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "scripts/local-preview.mjs",
+      "status": "uniqueported",
+      "family": "Dependency harness",
+      "target": "scripts/local-preview.mjs + scripts/local-preview-upgrades.mjs + prepared scripts/test-preview-upgrades.mjs",
+      "evidence": "Canonical031–053 upgrade markers, foreignPR60/partial/out-of-order preflight and atomic steps; ownedPG smoke11/11 PASS /tmp/propertyflow-consolidated-preview-upgrade-smoke.log, replay/fingerprints preserved, resources cleaned; NO private-preview run or old-chain reconciliation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "scripts/test-finances.mjs",
+      "status": "uniqueported",
+      "family": "Dependency harness",
+      "target": "scripts/test-finances.mjs",
+      "evidence": "Per-run owned mkdtemp Vite config/cache with finally cleanup; syntax checks pass; runtime proof pending combined validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "scripts/test-leasing.mjs",
+      "status": "uniqueported",
+      "family": "Dependency harness",
+      "target": "scripts/test-leasing.mjs",
+      "evidence": "Per-run owned mkdtemp Vite config/cache with finally cleanup; syntax checks pass; runtime proof pending combined validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "scripts/test-maintenance.mjs",
+      "status": "uniqueported",
+      "family": "Dependency harness",
+      "target": "scripts/test-maintenance.mjs",
+      "evidence": "Per-run owned mkdtemp Vite config/cache with finally cleanup; syntax checks pass; runtime proof pending combined validation",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/package-lock.json",
+      "status": "defectfixed",
+      "family": "Dependencies/error hardening",
+      "target": "server/package-lock.json",
+      "evidence": "Coordinated npm ci and official Prisma7.10.1 generation pass; current server/client builds and four fresh root/backend production/all audits pass with zero findings. Safe error helper3/3 and actual Vite host/console-forwarding plus tsx import/watch smoke pass. Earlier install/build checkpoints are historical in the continuation.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/package.json",
+      "status": "uniqueported",
+      "family": "Dependencies/error hardening",
+      "target": "server/package.json",
+      "evidence": "Coordinated npm ci and official Prisma7.10.1 generation pass; current server/client builds and four fresh root/backend production/all audits pass with zero findings. Safe error helper3/3 and actual Vite host/console-forwarding plus tsx import/watch smoke pass. Earlier install/build checkpoints are historical in the continuation.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/prisma/migrations/202610220041_maintenance_conversations/migration.sql",
+      "status": "adapted",
+      "family": "Canonical migration adaptation",
+      "target": "Canonical202610240048_resident_maintenance_replies (no oldDDL copy)",
+      "evidence": "Current canonical031–053 chain/replay/fingerprint and foreign/partial/out-of-order fail-closed ownedPG smoke11/11 PASS; original conflictingPR60DDL not copied. Functional feature/RLS/remote combined proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/prisma/migrations/202610220042_document_sharing/migration.sql",
+      "status": "adapted",
+      "family": "Canonical migration adaptation",
+      "target": "Canonical202610240046_lease_document_sharing + 202610240053_document_acknowledgments",
+      "evidence": "Current canonical031–053 chain/replay/fingerprint and foreign/partial/out-of-order fail-closed ownedPG smoke11/11 PASS; original conflictingPR60DDL not copied. Functional feature/RLS/remote combined proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/prisma/migrations/202610220043_task_drafts/migration.sql",
+      "status": "adapted",
+      "family": "Canonical migration adaptation",
+      "target": "202610240052_task_drafts",
+      "evidence": "Current canonical031–053 chain/replay/fingerprint and foreign/partial/out-of-order fail-closed ownedPG smoke11/11 PASS; original conflictingPR60DDL not copied. Functional feature/RLS/remote combined proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/prisma/migrations/202610220044_vacancy_applications/migration.sql",
+      "status": "adapted",
+      "family": "Canonical migration adaptation",
+      "target": "Canonical202610240043/045 + 202610240051_acquisition_consolidation",
+      "evidence": "Current canonical031–053 chain/replay/fingerprint and foreign/partial/out-of-order fail-closed ownedPG smoke11/11 PASS; original conflictingPR60DDL not copied. Functional feature/RLS/remote combined proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/prisma/migrations/202610220045_rental_listing_intent/migration.sql",
+      "status": "adapted",
+      "family": "Canonical migration adaptation",
+      "target": "Canonical202610240043/045 + 202610240051_acquisition_consolidation",
+      "evidence": "Current canonical031–053 chain/replay/fingerprint and foreign/partial/out-of-order fail-closed ownedPG smoke11/11 PASS; original conflictingPR60DDL not copied. Functional feature/RLS/remote combined proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/prisma/schema.prisma",
+      "status": "adapted",
+      "family": "Central integration",
+      "target": "server/prisma/schema.prisma",
+      "evidence": "Canonical source schema frozen; official Prisma Client7.10.1 generation PASS1.44s and owned031–053 schema smoke11/11; full type/domain tests pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/src/application.ts",
+      "status": "adapted",
+      "family": "Central integration",
+      "target": "server/src/application.ts",
+      "evidence": "Fresh legacy actor/company/support fences, requiredmemberVersion and current private context implemented. Dedicatedaccess51/51, support15/15, users56/56, safe116pass/8DBskips, affected81/81 +late35/35 pass; final remote proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/src/browser-telemetry.ts",
+      "status": "adapted",
+      "family": "Central integration",
+      "target": "server/src/browser-telemetry.ts",
+      "evidence": "Root reports data-router/guards, canonical routes, scoped context/focus/nav, feature maps and fixed telemetry vocabulary wired; current builds/browser/privacy proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/src/document-sharing.ts",
+      "status": "adapted",
+      "family": "Receipts/conversation UI",
+      "target": "server/src/lease-document-shares.ts + new053_document_acknowledgments",
+      "evidence": "Canonical explicit owner/verified-leaseholder sharing retained; per-grant receipt, download history and full-result search added without broadening roles. Five acknowledgment API cases pass within roadmap39/39 and all eight document-sharing browser cases pass within affected81/81; exact retries, regrants, expiry/revocation and support/read-only boundaries covered.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/src/index.ts",
+      "status": "uniqueported",
+      "family": "Dependencies/error hardening",
+      "target": "server/src/index.ts",
+      "evidence": "Coordinated npm ci and official Prisma7.10.1 generation pass; current server/client builds and four fresh root/backend production/all audits pass with zero findings. Safe error helper3/3 and actual Vite host/console-forwarding plus tsx import/watch smoke pass. Earlier install/build checkpoints are historical in the continuation.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/src/leasing.ts",
+      "status": "adapted",
+      "family": "Central integration",
+      "target": "server/src/leasing.ts",
+      "evidence": "Root reports exact-unit GET with strict query/current property/company scope and tests ported; current functional/runtime proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/src/maintenance-conversations.ts",
+      "status": "covered",
+      "family": "Canonical maintenance",
+      "target": "Canonical server/src/maintenance.ts + 202610240048; resident-maintenance-update-cases and maintenance-update-cases",
+      "evidence": "Independent mapping covers original eight conversation groups through current requester/update/private-paging cases; canonical requester provenance/immutability stronger. Current maintenance148/148 passes and journal9/Auth5 included affected81/81; final remote proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/src/maintenance.ts",
+      "status": "covered",
+      "family": "Canonical maintenance",
+      "target": "Canonical server/src/maintenance.ts + 202610240048; resident-maintenance-update-cases and maintenance-update-cases",
+      "evidence": "Independent mapping covers original eight conversation groups through current requester/update/private-paging cases; canonical requester provenance/immutability stronger. Current maintenance148/148 passes and journal9/Auth5 included affected81/81; final remote proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/src/notification-events.ts",
+      "status": "adapted",
+      "family": "Central integration",
+      "target": "server/src/notification-events.ts",
+      "evidence": "Canonical reply kind/title and legacy resident no-source fallback with preferences/eligibility retained; notification-cases967 regression covered by current maintenance148/148 PASS; final remote proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/src/notifications.ts",
+      "status": "adapted",
+      "family": "Central integration",
+      "target": "server/src/notifications.ts",
+      "evidence": "Canonical reply kind/title and legacy resident no-source fallback with preferences/eligibility retained; notification-cases967 regression covered by current maintenance148/148 PASS; final remote proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/src/request-errors.ts",
+      "status": "uniqueported",
+      "family": "Dependencies/error hardening",
+      "target": "server/src/request-errors.ts",
+      "evidence": "Coordinated npm ci and official Prisma7.10.1 generation pass; current server/client builds and four fresh root/backend production/all audits pass with zero findings. Safe error helper3/3 and actual Vite host/console-forwarding plus tsx import/watch smoke pass. Earlier install/build checkpoints are historical in the continuation.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/src/task-drafts.ts",
+      "status": "defectfixed",
+      "family": "Tasks/leave guards",
+      "target": "server/src/task-drafts.ts",
+      "evidence": "Stale-renewal P2, unavailable-source receipt ordering, peer-current/no-silent-rebase and private-denial repairs are implemented; real combined leasing66/66 includes all11 taskAPI cases, /tmp/propertyflow-consolidated-leasing-regression-attempt2.log. Scoped taskUI25 +overlapping2 pass; final remote/head proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/src/vacancy-applications.ts",
+      "status": "adapted",
+      "family": "Acquisition/listing",
+      "target": "server/src/rental-applications.ts + existing prospects.ts / unit-availability.ts",
+      "evidence": "Canonical Prospect references and separate owner listing intent preserve readiness; manual applications, follow-ups and explicit account-backed draft-lease conversion retain history and exact retries. All thirteen real acquisition groups pass within leasing66/66; focused acquisition28/28 and affected canonical navigation/recovery cases pass. No email merge, portal grant or collection.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/tests/database-access.test.mjs",
+      "status": "adapted",
+      "family": "Central integration",
+      "target": "server/tests/database-access.test.mjs",
+      "evidence": "Fresh legacy actor/company/support fences, requiredmemberVersion and current private context implemented. Dedicatedaccess51/51, support15/15, users56/56, safe116pass/8DBskips, affected81/81 +late35/35 pass; final remote proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/tests/document-sharing-cases.mjs",
+      "status": "adapted",
+      "family": "Receipts/conversation UI",
+      "target": "server/tests/document-acknowledgment-cases.mjs + existing sharing cases",
+      "evidence": "Canonical explicit owner/verified-leaseholder sharing retained; per-grant receipt, download history and full-result search added without broadening roles. Five acknowledgment API cases pass within roadmap39/39 and all eight document-sharing browser cases pass within affected81/81; exact retries, regrants, expiry/revocation and support/read-only boundaries covered.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/tests/household-cases.mjs",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "server/tests/household-cases.mjs",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/tests/leasing.test.mjs",
+      "status": "adapted",
+      "family": "Central integration",
+      "target": "server/tests/leasing.test.mjs",
+      "evidence": "Canonical leasing66/66 PASS136.98s including task11/acquisition13 and original exact retry/source/unit/guard flows, /tmp/propertyflow-consolidated-leasing-regression-attempt2.log. Earlier60/66 retained; real selector completion fix and precise fixtures/regressions verified. Final remote proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/tests/maintenance-conversation-cases.mjs",
+      "status": "covered",
+      "family": "Canonical maintenance",
+      "target": "Canonical server/src/maintenance.ts + 202610240048; resident-maintenance-update-cases and maintenance-update-cases",
+      "evidence": "Independent mapping covers original eight conversation groups through current requester/update/private-paging cases; canonical requester provenance/immutability stronger. Current maintenance148/148 passes and journal9/Auth5 included affected81/81; final remote proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/tests/maintenance.test.mjs",
+      "status": "adapted",
+      "family": "Central integration",
+      "target": "server/tests/maintenance.test.mjs",
+      "evidence": "Canonical maintenance/notifications/agreements/reply and author/privacy regressions148/148 PASS95.76s, /tmp/propertyflow-consolidated-maintenance-regression-attempt3.log. Earlier141/148 then145/148 diagnostics retained; missing-version/stronger-private-label fixtures corrected without weakening explicit negatives. New journal9 +Auth5 also in affected81/81. Final remote proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/tests/request-errors.test.mjs",
+      "status": "uniqueported",
+      "family": "Dependencies/error hardening",
+      "target": "server/tests/request-errors.test.mjs",
+      "evidence": "Coordinated npm ci and official Prisma7.10.1 generation pass; current server/client builds and four fresh root/backend production/all audits pass with zero findings. Safe error helper3/3 and actual Vite host/console-forwarding plus tsx import/watch smoke pass. Earlier install/build checkpoints are historical in the continuation.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/tests/resident-assignments.test.mjs",
+      "status": "adapted",
+      "family": "Central integration",
+      "target": "server/tests/resident-assignments.test.mjs",
+      "evidence": "Fresh legacy actor/company/support fences, requiredmemberVersion and current private context implemented. Dedicatedaccess51/51, support15/15, users56/56, safe116pass/8DBskips, affected81/81 +late35/35 pass; final remote proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/tests/resident-portal-cases.mjs",
+      "status": "covered",
+      "family": "Central integration",
+      "target": "server/tests/resident-portal-cases.mjs",
+      "evidence": "Independent source review: original delta is exact bounded telemetry exclusion; current line56 allows only guide+exacttelemetry as non-business writes and preserves rental/business mutation denial assertions. Final maintenance/remote proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/tests/resident-workspace-cases.mjs",
+      "status": "adapted",
+      "family": "Experience/source navigation",
+      "target": "server/tests/resident-workspace-cases.mjs",
+      "evidence": "Canonical source/navigation/activity/summary/label adaptation locally implemented; Scoped experience browser17/17 PASS41.9s, /tmp/propertyflow-experience-port-20261025/playwright.log; owned Vite8.3.4/system Chromium at desktop1440x960/mobile390x844, both Property CREATE boundary cases included; six reviewed PNGs copied with hash/provenance. Final combined/current remote proof remains pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/tests/task-draft-cases.mjs",
+      "status": "adapted",
+      "family": "Tasks/leave guards",
+      "target": "server/tests/task-draft-cases.mjs",
+      "evidence": "Task/guard/forms25/25 +overlapping peer-view2/2 pass; real combined leasing66/66 includes all11taskAPI/P2; scoped completion fix2/2 +late35/35 tasks pass. Four pure task groups included safe server116pass/8DBskips; direct client navigation2groups and safeclient14files pass. Final remote/head proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/tests/task-drafts.test.mjs",
+      "status": "adapted",
+      "family": "Tasks/leave guards",
+      "target": "server/tests/task-drafts.test.mjs",
+      "evidence": "Task/guard/forms25/25 +overlapping peer-view2/2 pass; real combined leasing66/66 includes all11taskAPI/P2; scoped completion fix2/2 +late35/35 tasks pass. Four pure task groups included safe server116pass/8DBskips; direct client navigation2groups and safeclient14files pass. Final remote/head proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/tests/users.test.mjs",
+      "status": "adapted",
+      "family": "Central integration",
+      "target": "server/tests/users.test.mjs",
+      "evidence": "Fresh legacy actor/company/support fences, requiredmemberVersion and current private context implemented. Dedicatedaccess51/51, support15/15, users56/56, safe116pass/8DBskips, affected81/81 +late35/35 pass; final remote proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "server/tests/vacancy-application-cases.mjs",
+      "status": "adapted",
+      "family": "Acquisition/listing",
+      "target": "server/tests/acquisition-consolidation-cases.mjs (13 real groups)",
+      "evidence": "Canonical Prospect references and separate owner listing intent preserve readiness; manual applications, follow-ups and explicit account-backed draft-lease conversion retain history and exact retries. All thirteen real acquisition groups pass within leasing66/66; focused acquisition28/28 and affected canonical navigation/recovery cases pass. No email merge, portal grant or collection.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/connected-workspace.spec.ts",
+      "status": "adapted",
+      "family": "UI regression adaptation",
+      "target": "tests/ui/connected-workspace.spec.ts",
+      "evidence": "Original useful source/access/retry assertions preserved on canonical UI; all eight first-broad382 findings repaired and covered by affected81/81 +late35/35. New389 full head proof is remote CI; final remote verification pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/forms-audit.spec.ts",
+      "status": "adapted",
+      "family": "UI regression adaptation",
+      "target": "Canonical TaskDraft/PageLeaveGuard/EditorDialog/Form and current TenantForm/lease page",
+      "evidence": "Original useful source/access/retry assertions preserved on canonical UI; all eight first-broad382 findings repaired and covered by affected81/81 +late35/35. New389 full head proof is remote CI; final remote verification pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/help-guidance-invitations.spec.ts",
+      "status": "covered",
+      "family": "UI regression adaptation",
+      "target": "tests/ui/help-guidance-invitations.spec.ts",
+      "evidence": "Original useful source/access/retry assertions preserved on canonical UI; all eight first-broad382 findings repaired and covered by affected81/81 +late35/35. New389 full head proof is remote CI; final remote verification pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/lease-recovery.spec.ts",
+      "status": "adapted",
+      "family": "UI regression adaptation",
+      "target": "tests/ui/lease-recovery.spec.ts",
+      "evidence": "Original useful source/access/retry assertions preserved on canonical UI; all eight first-broad382 findings repaired and covered by affected81/81 +late35/35. New389 full head proof is remote CI; final remote verification pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/lease-wayfinding.spec.ts",
+      "status": "uniqueported",
+      "family": "UI regression adaptation",
+      "target": "tests/ui/lease-wayfinding.spec.ts",
+      "evidence": "Original useful source/access/retry assertions preserved on canonical UI; all eight first-broad382 findings repaired and covered by affected81/81 +late35/35. New389 full head proof is remote CI; final remote verification pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/leasing.spec.ts",
+      "status": "adapted",
+      "family": "UI regression adaptation",
+      "target": "tests/ui/leasing.spec.ts",
+      "evidence": "Original useful source/access/retry assertions preserved on canonical UI; all eight first-broad382 findings repaired and covered by affected81/81 +late35/35. New389 full head proof is remote CI; final remote verification pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/maintenance-conversations.spec.ts",
+      "status": "adapted",
+      "family": "Receipts/conversation UI",
+      "target": "Canonical Maintenance.tsx RequestUpdates + pages/MaintenanceConversation.css + shared EditorDialog/Form",
+      "evidence": "Canonical requester/team conversation, immutable provenance and exact actor/company/request reply journal; all nine reply and five Auth browser cases pass in affected81/81, with full maintenance148/148 passing. Fresh reads, read-only/support boundaries, authoritative denial and exact reload retries verified.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/maintenance-costs.spec.ts",
+      "status": "covered",
+      "family": "UI regression adaptation",
+      "target": "tests/ui/maintenance-costs.spec.ts",
+      "evidence": "Original useful source/access/retry assertions preserved on canonical UI; all eight first-broad382 findings repaired and covered by affected81/81 +late35/35. New389 full head proof is remote CI; final remote verification pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/maintenance.spec.ts",
+      "status": "covered",
+      "family": "UI regression adaptation",
+      "target": "tests/ui/maintenance.spec.ts",
+      "evidence": "Original useful source/access/retry assertions preserved on canonical UI; all eight first-broad382 findings repaired and covered by affected81/81 +late35/35. New389 full head proof is remote CI; final remote verification pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/navigation-audit.spec.ts",
+      "status": "uniqueported",
+      "family": "UI regression adaptation",
+      "target": "tests/ui/navigation-audit.spec.ts",
+      "evidence": "Original useful source/access/retry assertions preserved on canonical UI; all eight first-broad382 findings repaired and covered by affected81/81 +late35/35. New389 full head proof is remote CI; final remote verification pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/owner-onboarding.spec.ts",
+      "status": "adapted",
+      "family": "UI regression adaptation",
+      "target": "tests/ui/owner-onboarding.spec.ts",
+      "evidence": "Original useful source/access/retry assertions preserved on canonical UI; all eight first-broad382 findings repaired and covered by affected81/81 +late35/35. New389 full head proof is remote CI; final remote verification pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/page-leave-guard.spec.ts",
+      "status": "adapted",
+      "family": "Tasks/leave guards",
+      "target": "tests/ui/page-leave-guard.spec.ts",
+      "evidence": "Task/guard/forms25/25 +overlapping peer-view2/2 pass; real combined leasing66/66 includes all11taskAPI/P2; scoped completion fix2/2 +late35/35 tasks pass. Four pure task groups included safe server116pass/8DBskips; direct client navigation2groups and safeclient14files pass. Final remote/head proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/payment-policy.spec.ts",
+      "status": "adapted",
+      "family": "UI regression adaptation",
+      "target": "tests/ui/payment-policy.spec.ts",
+      "evidence": "Original useful source/access/retry assertions preserved on canonical UI; all eight first-broad382 findings repaired and covered by affected81/81 +late35/35. New389 full head proof is remote CI; final remote verification pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/prelogin-users.spec.ts",
+      "status": "covered",
+      "family": "UI regression adaptation",
+      "target": "tests/ui/prelogin-users.spec.ts",
+      "evidence": "Original useful source/access/retry assertions preserved on canonical UI; all eight first-broad382 findings repaired and covered by affected81/81 +late35/35. New389 full head proof is remote CI; final remote verification pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/rent.spec.ts",
+      "status": "adapted",
+      "family": "UI regression adaptation",
+      "target": "tests/ui/rent.spec.ts",
+      "evidence": "Original useful source/access/retry assertions preserved on canonical UI; all eight first-broad382 findings repaired and covered by affected81/81 +late35/35. New389 full head proof is remote CI; final remote verification pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/resident-documents.spec.ts",
+      "status": "adapted",
+      "family": "Receipts/conversation UI",
+      "target": "tests/ui/document-sharing.spec.ts (eight authored cases)",
+      "evidence": "Canonical explicit owner/verified-leaseholder sharing retained; per-grant receipt, download history and full-result search added without broadening roles. Five acknowledgment API cases pass within roadmap39/39 and all eight document-sharing browser cases pass within affected81/81; exact retries, regrants, expiry/revocation and support/read-only boundaries covered.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/resident-home-audit.spec.ts",
+      "status": "uniqueported",
+      "family": "UI regression adaptation",
+      "target": "tests/ui/resident-home-audit.spec.ts",
+      "evidence": "Original useful source/access/retry assertions preserved on canonical UI; all eight first-broad382 findings repaired and covered by affected81/81 +late35/35. New389 full head proof is remote CI; final remote verification pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/statements.spec.ts",
+      "status": "adapted",
+      "family": "UI regression adaptation",
+      "target": "tests/ui/statements.spec.ts",
+      "evidence": "Original useful source/access/retry assertions preserved on canonical UI; all eight first-broad382 findings repaired and covered by affected81/81 +late35/35. New389 full head proof is remote CI; final remote verification pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/task-drafts.spec.ts",
+      "status": "adapted",
+      "family": "Tasks/leave guards",
+      "target": "tests/ui/task-drafts.spec.ts",
+      "evidence": "Task/guard/forms25/25 +overlapping peer-view2/2 pass; real combined leasing66/66 includes all11taskAPI/P2; scoped completion fix2/2 +late35/35 tasks pass. Four pure task groups included safe server116pass/8DBskips; direct client navigation2groups and safeclient14files pass. Final remote/head proof pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/tenant-workspace.spec.ts",
+      "status": "adapted",
+      "family": "UI regression adaptation",
+      "target": "tests/ui/tenant-workspace.spec.ts",
+      "evidence": "Original useful source/access/retry assertions preserved on canonical UI; all eight first-broad382 findings repaired and covered by affected81/81 +late35/35. New389 full head proof is remote CI; final remote verification pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/vacancy-applications.spec.ts",
+      "status": "adapted",
+      "family": "Acquisition/listing",
+      "target": "tests/ui/acquisition-consolidation.spec.ts (13 cases covering both canonical flows)",
+      "evidence": "Canonical Prospect references and separate owner listing intent preserve readiness; manual applications, follow-ups and explicit account-backed draft-lease conversion retain history and exact retries. All thirteen real acquisition groups pass within leasing66/66; focused acquisition28/28 and affected canonical navigation/recovery cases pass. No email merge, portal grant or collection.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/vacancy-directory.spec.ts",
+      "status": "adapted",
+      "family": "Acquisition/listing",
+      "target": "tests/ui/acquisition-consolidation.spec.ts (13 cases covering both canonical flows)",
+      "evidence": "Canonical Prospect references and separate owner listing intent preserve readiness; manual applications, follow-ups and explicit account-backed draft-lease conversion retain history and exact retries. All thirteen real acquisition groups pass within leasing66/66; focused acquisition28/28 and affected canonical navigation/recovery cases pass. No email merge, portal grant or collection.",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    },
+    {
+      "source_path": "tests/ui/workspace-usability.spec.ts",
+      "status": "covered",
+      "family": "UI regression adaptation",
+      "target": "tests/ui/workspace-usability.spec.ts",
+      "evidence": "Original useful source/access/retry assertions preserved on canonical UI; all eight first-broad382 findings repaired and covered by affected81/81 +late35/35. New389 full head proof is remote CI; final remote verification pending",
+      "remote_preservation": "Implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; final-head CI/review required before closure"
+    }
+  ],
+  "local_accounting_note": "All 139 paths locally classified: 9 covered, 17 uniqueported, 110 adapted, 3 defectfixed, zero pending. Consolidated implementation remote verified at 33f2df6264ec8163e26f716e813b15fa0eae6cf1; documentation/evidence is preserved in its companion docs checkpoint. Final-head CI/reviews and conditional PR #60 closure remain.",
+  "verified_implementation": "33f2df6264ec8163e26f716e813b15fa0eae6cf1"
+}

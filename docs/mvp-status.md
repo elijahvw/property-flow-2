@@ -1,6 +1,6 @@
 # Property Flow platform status
 
-Consolidation authorization, October 24, 23:16 UTC: the user requested that all useful unique PR #60 work be incorporated into the current draft candidate. **Consolidation is in progress**, including collision-safe migrations, the saved-renewal P2 fix, ports, tests and documentation. The `b68416d` 320/320 browser and 56/56 privacy results validate the pre-consolidation baseline, not the combined result. Keep PR #60 open until every unique item is preserved on the verified remote destination and combined checks/reviews are complete; only then close it with a preservation link, retaining its branch/commits. Unrelated feature development remains paused; no merge, deployment or live migration is authorized. [Consolidation inventory and prior comparison](PR60-integration-review-2026-10-24.md).
+Consolidation authorization, October 24, 23:16 UTC: the user requested that all useful unique PR #60 work be incorporated into [draft PR #61](https://github.com/elijahvw/property-flow-2/pull/61). **Consolidation is in progress**, including collision-safe migrations, the saved-renewal P2 fix, ports, tests and documentation. The `b68416d` 320/320 browser and 56/56 privacy results validate the pre-consolidation baseline, not the combined result. Keep PR #60 open until every unique item is preserved on the verified remote destination and combined checks/reviews are complete; only then close it with a preservation link, retaining its branch/commits. Unrelated feature development remains paused; no merge, deployment or live migration is authorized. [Consolidation inventory and prior comparison](PR60-integration-review-2026-10-24.md).
 
 The completed tenant directory/history snapshot is locally validated: refined server build/safe 109+eight expected skips/SQL 7/finance 192 and unchanged client build/client 13/full browser 320 pass. Final repeated matrix passes 511/511 reads/24 scenarios, including 2,001 people, with exact privacy/count/source/fingerprint/cleanup invariants. At 2k, refined default is 262.10 ms median/43,003 bytes and former 224.49 ms, improving the first paged run; the old eager all-record API remains faster (144.03 ms) and larger (1,535,493 bytes), with different populations. Repeated graphs, portal-pending loops and growing metadata remain costs; timed history grain<=3 is distinct from the functional 1,001-lease API proof. No universal speed/constant-work/deployed SLO or live acceptance is claimed.
 
@@ -84,7 +84,7 @@ Units/leases PR #17 CI initially exposed a stale-edit fixture race; its reload a
 
 ## Units and lease records checkpoint — 2026-10-14
 
-Worktree `/Users/elijahward/Documents/ChatGPT/Property Flow/units-leases`, branch `codex/units-leases-mvp`, based on deployed main `143432db915e4aff9d999260e24febdfbfa45897`. Existing maintenance/source worktrees were preserved. User authorized continued feature work while offline; merge and further deployment still require approval.
+Worktree `<project>/units-leases`, branch `codex/units-leases-mvp`, based on deployed main `143432db915e4aff9d999260e24febdfbfa45897`. Existing maintenance/source worktrees were preserved. User authorized continued feature work while offline; merge and further deployment still require approval.
 
 Owners/managers can create, rename, archive and restore property units; staff retain read-only unit access. Owners/managers can create and edit draft/active/ended lease records for currently active accepted residents assigned to that property, with start/end dates and exact integer-cent monthly rent in USD. End dates are inclusive record dates; open-ended records are allowed except for ended status. Unit/resident identity is immutable on an existing lease. Status is manually maintained, not inferred occupancy, signed-contract validity or payment status. There is one manually active lease per unit, enforced by a PostgreSQL partial unique index; drafts/ended history remain available. Leases do not grant resident access or automatically restore assignments. Manager history survives resident revocation/transfer; ended records remain editable afterward.
 
@@ -96,7 +96,7 @@ Limits: USD-only internal records, one primary resident per record, manually mai
 
 ## Approved development release and manual acceptance setup
 
-PR16 merged at `143432d`. Deploy Dev run **38510462932** completed successfully from that exact main revision, with frontend/backend rebuild and `run_terraform=never`: https://github.com/elijahvw/property-flow-2/actions/runs/38510462932. AWS account 800754316001, us-east-1, one running stable ECS task; running app image digest matches the SHA-tagged release, ALB target healthy. Public homepage, DB readiness, unauthenticated bootstrap 401, API 404 and frontend deep-link smoke checks pass. App: https://drfbeumseaytt.cloudfront.net. This verifies rollout/public smoke only, not real owner/manager/resident acceptance. User has no test accounts yet and will perform a manual pass before providing emails for automation.
+PR16 merged at `143432d`. Deploy Dev run **38510462932** completed successfully from that exact main revision, with frontend/backend rebuild and `run_terraform=never`: https://github.com/elijahvw/property-flow-2/actions/runs/38510462932. Development AWS account in us-east-1, one running stable ECS task; running app image digest matches the SHA-tagged release, ALB target healthy. Public homepage, DB readiness, unauthenticated bootstrap 401, API 404 and frontend deep-link smoke checks pass. App: https://drfbeumseaytt.cloudfront.net. This verifies rollout/public smoke only, not real owner/manager/resident acceptance. User has no test accounts yet and will perform a manual pass before providing emails for automation.
 
 Create seven distinct verified login identities in two test companies, using the existing platform administrator to create companies and assign initial owners:
 - Company A: owner, manager, staff, resident A1, resident A2.
@@ -155,7 +155,7 @@ Maintenance commit `c7aef20` retains validated harness `1cf022e` (source `496a66
 
 ## Bounded maintenance requests — 2026-10-14
 
-Implemented on `maintenance-requests-mvp` in `/Users/elijahward/Documents/Codex/2026-10-13/task-7/maintenance-requests`, starting from committed assignment head `940c905`. The source's dirty harness was left untouched; final harness commit `496a663caf65706a54460022fb0021afdc0466d0` was safely cherry-picked as `1cf022e`. The assignment author is separately correcting opaque Auth0 subject validation; that upcoming dependency must be integrated before publication. Maintenance never validates authenticated subject IDs with the property/request ID whitelist.
+Implemented on `maintenance-requests-mvp` in the isolated maintenance checkout, starting from committed assignment head `940c905`. The source's dirty harness was left untouched; final harness commit `496a663caf65706a54460022fb0021afdc0466d0` was safely cherry-picked as `1cf022e`. The assignment author is separately correcting opaque Auth0 subject validation; that upcoming dependency must be integrated before publication. Maintenance never validates authenticated subject IDs with the property/request ID whitelist.
 
 Resident creation accepts only propertyId, title (1–160 characters), description (1–4000), and priority low/normal/high. Company and requester come from the session. Resident list returns only their own requests for currently assigned properties; owner/manager list returns company history, with status/property filters. Staff and platform-only users have no maintenance access. Statuses open/in_progress/resolved permit any transition, including reopening; repeated same-status updates do not create audit changes. Creation and actual status changes are audited without copying request descriptions into audit detail. Minimal responses contain request fields and property name, without requester email/identity or company identifiers. All mutations require same Origin and session CSRF token, independently of the shared session middleware.
 
@@ -228,7 +228,7 @@ The strengthened PostgreSQL cases are **authored and syntax-checked, not execute
 
 ## Resident property assignment slice — 2026-10-14
 
-Implemented on `resident-property-assignments` from clean owner-onboarding `cb80edeb93eeec2275671eb0f2c21b0b9df2f26e`, in an isolated local clone at `/Users/elijahward/Documents/Codex/2026-10-13/task-5/resident-assignments`. The reviewed source checkout and its Git metadata were not modified. No ancestor/repository AGENTS.md was found. No push, merge, deployment, infrastructure provision, package installation, migration application, or existing database operation occurred. Stop here for independent review before publication.
+Implemented on `resident-property-assignments` from clean owner-onboarding `cb80edeb93eeec2275671eb0f2c21b0b9df2f26e`, in an isolated local clone. The reviewed source checkout and its Git metadata were not modified. No ancestor/repository AGENTS.md was found. No push, merge, deployment, infrastructure provision, package installation, migration application, or existing database operation occurred. Stop here for independent review before publication.
 
 ### Completed behavior
 
@@ -308,15 +308,16 @@ CI now installs Chromium (with Linux dependencies) and runs `npx playwright test
 The original implementation temporarily used this exact root dependency symlink in the task worktree:
 
 ```sh
-ln -s /Users/elijahward/Documents/Codex/2026-10-12/existing-saas-foundations-project-best-use/work/auth-overhaul/node_modules node_modules
+# Replace /path/to/dependency-checkout with an existing local checkout.
+ln -s /path/to/dependency-checkout/node_modules node_modules
 ```
 
-That symlink supplied React, TypeScript, Vite, Playwright and the previously generated Prisma client. Chromium was already installed under `/Users/elijahward/Library/Caches/ms-playwright/chromium-1208` (headless shell also cached). No package installation or browser download was performed. The symlink was removed before the original clean handoff, explaining why a reviewer without dependencies could not rerun Node/Playwright tests.
+That symlink supplied React, TypeScript, Vite, Playwright and the previously generated Prisma client. Chromium was already installed in the local Playwright browser cache (headless shell also cached). No package installation or browser download was performed. The symlink was removed before the original clean handoff, explaining why a reviewer without dependencies could not rerun Node/Playwright tests.
 
 For this follow-up, dependencies were copied into an ordinary ignored worktree directory using macOS APFS cloning, preserving the source dependency tree:
 
 ```sh
-cp -cR /Users/elijahward/Documents/Codex/2026-10-12/existing-saas-foundations-project-best-use/work/auth-overhaul/node_modules node_modules
+cp -cR /path/to/dependency-checkout/node_modules node_modules
 ```
 
 This ignored directory is retained for local review. For a fresh checkout without that cache, use Node 22, install from the root lockfile, generate Prisma client using only a dummy build URL, and install Chromium. These preparation commands do not run migrations or require a live database:
@@ -347,4 +348,4 @@ Follow-up results: 21 Node tests, 12 browser fixture tests, both TypeScript chec
 
 ## Historical release evidence
 
-The earlier audit record is `/Users/elijahward/Documents/Codex/2026-10-13/task/PROPERTYFLOW-MVP-STATUS.md`. Its parent-supplied evidence confirms successful development deployment of PR12 merge `d4760b32718da5b9e8b5a6a8e6bc51dbcc15979f`: [Deploy Dev run 38497232143](https://github.com/elijahvw/property-flow-2/actions/runs/38497232143), and [PR CI run 38495106759](https://github.com/elijahvw/property-flow-2/actions/runs/38495106759). Those are historical results, not a fresh verification or a deployment of this slice. Authenticated acceptance remains outstanding; production deployment is not claimed.
+The earlier audit record is kept outside the repository. Its parent-supplied evidence confirms successful development deployment of PR12 merge `d4760b32718da5b9e8b5a6a8e6bc51dbcc15979f`: [Deploy Dev run 38497232143](https://github.com/elijahvw/property-flow-2/actions/runs/38497232143), and [PR CI run 38495106759](https://github.com/elijahvw/property-flow-2/actions/runs/38495106759). Those are historical results, not a fresh verification or a deployment of this slice. Authenticated acceptance remains outstanding; production deployment is not claimed.

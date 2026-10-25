@@ -1,0 +1,56 @@
+{
+  "scope": "Scoped task/acquisition fixture screenshots only; not final combined or real-account acceptance",
+  "raw_copy_no_image_edits": true,
+  "runs": [
+    {
+      "scope": "Two existing task peer-current review cases; overlapping the25-case task/guard/forms run, not additional unique cases",
+      "result": "2/2 pass6.7s after displayed-date correction",
+      "log": "/tmp/propertyflow-task-consolidation-ui-viewport-final.log",
+      "records": [
+        {
+          "source": "/tmp/propertyflow-task-current-record-desktop-viewport.png",
+          "repository_copy": "docs/acceptance-evidence/2026-10-25-consolidated-task-current-record-desktop.png",
+          "sha256": "cf2ff89e2d69dbc4684231e0c5b7547eae7cfb4c8f4eee85306f01fc2080d4e9",
+          "source_file_mtime_utc": "2026-10-25T00:07:08.376000+00:00"
+        },
+        {
+          "source": "/tmp/propertyflow-task-current-record-mobile-viewport.png",
+          "repository_copy": "docs/acceptance-evidence/2026-10-25-consolidated-task-current-record-mobile.png",
+          "sha256": "40b05a242eab9876994e0623671e77a41fd44ab267880d7056c40a5483ad9ec7",
+          "source_file_mtime_utc": "2026-10-25T00:07:10.791963+00:00"
+        }
+      ]
+    },
+    {
+      "scope": "Acquisition new13 plus availability3/prospect-return8/prospects4",
+      "result": "28/28 pass44.4s; realAPI13/final combined remain separate",
+      "log": "/tmp/propertyflow-acquisition-consolidation-browser-final.log",
+      "records": [
+        {
+          "source": "/tmp/propertyflow-consolidated-listing-1440.png",
+          "repository_copy": "docs/acceptance-evidence/2026-10-25-consolidated-listing-desktop.png",
+          "sha256": "a73b8958217fa9cd1d7becde9837229d8142ca634e180450413a6c4e25816507",
+          "source_file_mtime_utc": "2026-10-25T00:12:24.975428+00:00"
+        },
+        {
+          "source": "/tmp/propertyflow-consolidated-listing-390.png",
+          "repository_copy": "docs/acceptance-evidence/2026-10-25-consolidated-listing-mobile.png",
+          "sha256": "b2fb9acdd4c5199acb95b5932113e1713781bf7f9e9df6979c5c67da2a5f44e7",
+          "source_file_mtime_utc": "2026-10-25T00:12:26.363408+00:00"
+        },
+        {
+          "source": "/tmp/propertyflow-consolidated-application-review-1440.png",
+          "repository_copy": "docs/acceptance-evidence/2026-10-25-consolidated-application-review-desktop.png",
+          "sha256": "ba3376a805601ee1d6c883fbf8d35e5fc729340592061cae6357412d8ae72af0",
+          "source_file_mtime_utc": "2026-10-25T00:12:41.143196+00:00"
+        },
+        {
+          "source": "/tmp/propertyflow-consolidated-application-review-390.png",
+          "repository_copy": "docs/acceptance-evidence/2026-10-25-consolidated-application-review-mobile.png",
+          "sha256": "8716570d4a11b35c531fb3ab31ad5ff8ff9c5a7040e7a287d0087001903bfb4d",
+          "source_file_mtime_utc": "2026-10-25T00:12:43.231166+00:00"
+        }
+      ]
+    }
+  ]
+}

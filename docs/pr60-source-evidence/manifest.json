@@ -1,0 +1,142 @@
+{
+  "source_commit": "f5f1a2394e7eeae33ce063bfdadadb8171f9c35d",
+  "purpose": "Historical evidence only; not proof of current consolidated behavior",
+  "records": [
+    {
+      "source": "docs/acceptance-evidence/application-review-desktop-2026-10-22.png",
+      "archive": "docs/pr60-source-evidence/acceptance-evidence/application-review-desktop-2026-10-22.png",
+      "source_blob": "0258b99d84a6db7f557864cf90d4cf42debbf5d2",
+      "source_sha256": "33dc0e6a9919b5355c1de7fb43aa4bdea9dbf0c0ad7dddaa9022fafdf5a2e3c8",
+      "archive_sha256": "33dc0e6a9919b5355c1de7fb43aa4bdea9dbf0c0ad7dddaa9022fafdf5a2e3c8",
+      "kind": "byte-identical dated image"
+    },
+    {
+      "source": "docs/acceptance-evidence/availability-desktop-2026-10-22.png",
+      "archive": "docs/pr60-source-evidence/acceptance-evidence/availability-desktop-2026-10-22.png",
+      "source_blob": "7a6ec30b5cd114d9099ed9ab09ee7fd56ab46b4f",
+      "source_sha256": "1b5c7b6d1ae7f7d3e4d0cd78a637c14921301234d5b915d0abfec18b1b36ffbf",
+      "archive_sha256": "1b5c7b6d1ae7f7d3e4d0cd78a637c14921301234d5b915d0abfec18b1b36ffbf",
+      "kind": "byte-identical dated image"
+    },
+    {
+      "source": "docs/acceptance-evidence/availability-mobile-2026-10-22.png",
+      "archive": "docs/pr60-source-evidence/acceptance-evidence/availability-mobile-2026-10-22.png",
+      "source_blob": "a20e6d52c8cd063d721d3b3b9ca795fd332357b3",
+      "source_sha256": "c75ae5934a5215b91d4dd9d3a0a4c140d4ae0c3de9f9a6a7697445de0a39fec7",
+      "archive_sha256": "c75ae5934a5215b91d4dd9d3a0a4c140d4ae0c3de9f9a6a7697445de0a39fec7",
+      "kind": "byte-identical dated image"
+    },
+    {
+      "source": "docs/acceptance-evidence/notifications-local-desktop-2026-10-19.png",
+      "archive": "docs/pr60-source-evidence/acceptance-evidence/notifications-local-desktop-2026-10-19.png",
+      "source_blob": "f32100482b694fcfd81db18bb12b04b27a96ef2b",
+      "source_sha256": "53334c375f49c31232a5bc853ff1e13c94946ab21430655c5d02164efd378438",
+      "archive_sha256": "53334c375f49c31232a5bc853ff1e13c94946ab21430655c5d02164efd378438",
+      "kind": "byte-identical dated image"
+    },
+    {
+      "source": "docs/acceptance-evidence/notifications-local-mobile-2026-10-19.png",
+      "archive": "docs/pr60-source-evidence/acceptance-evidence/notifications-local-mobile-2026-10-19.png",
+      "source_blob": "0e9cc76d82061783d109d35f2b65cdcc737cfed7",
+      "source_sha256": "33211443f9f876f41037c903c644c32cdfe31e03307a09a91f870f86fed30a75",
+      "archive_sha256": "33211443f9f876f41037c903c644c32cdfe31e03307a09a91f870f86fed30a75",
+      "kind": "byte-identical dated image"
+    },
+    {
+      "source": "docs/backend-audit-2026-10-21.md",
+      "archive": "docs/pr60-source-evidence/backend-audit-2026-10-21.md",
+      "source_blob": "85b5317121593e72377bcdb354c2d20aa4b8f67c",
+      "source_sha256": "3349b287fc22a9d1fa216e8759a5d75209bd1e62b5b5ccb630b4ef83ed7a6ec8",
+      "archive_sha256": "72aab04971abe6be6e8cdad9286c91fdf0aaa862e132b3936273a9d45a482879",
+      "kind": "adapted dated document"
+    },
+    {
+      "source": "docs/dependency-audit-2026-10-21.md",
+      "archive": "docs/pr60-source-evidence/dependency-audit-2026-10-21.md",
+      "source_blob": "88a1d7fe7a3499bf95a54899a3d508956790f7a9",
+      "source_sha256": "14cf61992a9f39f9797e89f052301261886a8dd91c0b99e256d81063ae80b9bb",
+      "archive_sha256": "2bd4e2c964e3e4a8879776c0ea5fceeef9670a2a27ab7da075a8068a11d476bc",
+      "kind": "adapted dated document"
+    },
+    {
+      "source": "docs/feature-batch-2026-10-22.md",
+      "archive": "docs/pr60-source-evidence/feature-batch-2026-10-22.md",
+      "source_blob": "23af3aa08b532f87ae8d25b2fce9b6fa5ab16373",
+      "source_sha256": "4edd26b87904d0fa3b35863cd5c19f316dd9dad6a62ab3e491c4f284c61cea31",
+      "archive_sha256": "81d53b0bd63064d7ab5c20b99f4b1f41ec23aed296f52dd233690eb4f62834b0",
+      "kind": "adapted dated document"
+    },
+    {
+      "source": "docs/forms-audit-2026-10-21.md",
+      "archive": "docs/pr60-source-evidence/forms-audit-2026-10-21.md",
+      "source_blob": "ab4f3c0c82f5ce38c445bf32ada51895c617542e",
+      "source_sha256": "8705d1ad760c94116330031544e59a01235797c54c1474dd80ded63d08ed470c",
+      "archive_sha256": "068e6632bd6d707423eca004f7568553826d16d152b6600b9b0c422d7a5dd572",
+      "kind": "adapted dated document"
+    },
+    {
+      "source": "docs/maintenance-conversations.md",
+      "archive": "docs/pr60-source-evidence/maintenance-conversations.md",
+      "source_blob": "bcaa93b0d7779b417f248a3f066569854b5e4929",
+      "source_sha256": "8816de964a004b215335b8d3f234f06aef9bd44d1bc44eaf0fdaca7159bb70ac",
+      "archive_sha256": "51b70f5de41bdb5d348b96f3ac7e289bfc26afe07dc3b522cfc099f89cb1e6a1",
+      "kind": "adapted dated document"
+    },
+    {
+      "source": "docs/platform-audit-2026-10-21.md",
+      "archive": "docs/pr60-source-evidence/platform-audit-2026-10-21.md",
+      "source_blob": "d5136395920b41630988fc214a05453a5d96b487",
+      "source_sha256": "80c7ef8e56c49c24102bafc2b2cdf8db3030bf7b41a055073cb882cb4d639b06",
+      "archive_sha256": "b90b612903d1019f0694f744f1a077fb0bcdec4beaff4a8b941aa0d1ed480177",
+      "kind": "adapted dated document"
+    },
+    {
+      "source": "docs/product-experience-audit-2026-10-21.md",
+      "archive": "docs/pr60-source-evidence/product-experience-audit-2026-10-21.md",
+      "source_blob": "428598302261aef738c146687ac2206aff909541",
+      "source_sha256": "41179045f3ef1ddceaf48a5f9300ff4dce3a7e5d2401bd52f8cff5577761da03",
+      "archive_sha256": "56b23ae3e1f0f940ceddd8710e0e8c42e5ebe8387d446541edcb623c323fe167",
+      "kind": "adapted dated document"
+    },
+    {
+      "source": "docs/production-audit-validation-2026-10-21.md",
+      "archive": "docs/pr60-source-evidence/production-audit-validation-2026-10-21.md",
+      "source_blob": "05dd22ed4f82874e3c9fe70e2d2f4faf941f7f53",
+      "source_sha256": "d1df18d3535c347d310b7348005f03d8778d0fd98a8e34c8f6c50ad8315b46fe",
+      "archive_sha256": "fe31871d5b4d4f36300644cabf49c2cc3471ab835525e68eee9d93c31cf2b6ce",
+      "kind": "adapted dated document"
+    },
+    {
+      "source": "docs/resident-document-sharing.md",
+      "archive": "docs/pr60-source-evidence/resident-document-sharing.md",
+      "source_blob": "a47b254b54d1daf76dbe1bdc4967ea5359768ad4",
+      "source_sha256": "c409015519cf9b1ce8f44f4f607bc9ef0ce2196e53a2de835f2e5fdb38b300b1",
+      "archive_sha256": "7d7d2414c166c460a8f0d84342e73b08470a22c15268e4bae38c834554a6d476",
+      "kind": "adapted dated document"
+    },
+    {
+      "source": "docs/task-drafts.md",
+      "archive": "docs/pr60-source-evidence/task-drafts.md",
+      "source_blob": "62bcbacb4c03b1cf118593ce929eba96a030ed84",
+      "source_sha256": "50cd30253b40080e4acdebaa713812287bcac9f709a040165b6dc75776ad9e29",
+      "archive_sha256": "bbe74b5b55687761223e83ef2a4981a7992188c4bbe8fc6448cf123bc133c0f1",
+      "kind": "adapted dated document"
+    },
+    {
+      "source": "docs/vacancy-applications.md",
+      "archive": "docs/pr60-source-evidence/vacancy-applications.md",
+      "source_blob": "a86e054af1da7e8bfb2aec1200bead508eeb25fa",
+      "source_sha256": "2428497a29b19ef74f4743367cd4e270111c89fd5d948ce27d7b0ccf69ff86cb",
+      "archive_sha256": "450a48d42f67f1c618c91d263eebcff40cce984e087c8309c4b97621f1e03344",
+      "kind": "adapted dated document"
+    },
+    {
+      "source": "docs/workflow-batch-validation-2026-10-22.md",
+      "archive": "docs/pr60-source-evidence/workflow-batch-validation-2026-10-22.md",
+      "source_blob": "f7e54ddd24b7d33615347689a7ef1005c2c37375",
+      "source_sha256": "e6b76d8fed751e918f8f21db9f10b1ff09534b461c3e854ad465b618e6879bfe",
+      "archive_sha256": "ec0879f526442235cf66e7c4214ad71066c43d7f3a53ccf09450a5544f8aeecd",
+      "kind": "adapted dated document"
+    }
+  ]
+}
