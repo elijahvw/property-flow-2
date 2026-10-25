@@ -259,8 +259,15 @@
         ]
       },
       {
-        "head": "codex/aws-dev-protection-2026-10-25",
+        "head": "codex/demo-rate-limit-recovery",
         "base": "codex/demo-overhaul-2026-10-25",
+        "groups": [
+          "future move-out handoff and combined fixture5"
+        ]
+      },
+      {
+        "head": "codex/aws-dev-protection-2026-10-25",
+        "base": "codex/demo-rate-limit-recovery",
         "groups": [
           "AWS source protection"
         ]
@@ -269,7 +276,7 @@
     "state": "Authorized publication; exact remote commits/PR status are recorded in GitHub metadata and delivery handoff.",
     "sourceChangesAfterValidation": true,
     "statusDocumentationChangedAfterValidation": true,
-    "existingPr63": "b9c24032280f5ad538460da65f5711b6f4380953 remains separate and untouched; reconcile overlap before merging.",
+    "existingPr63": "At initial publication b9c2403 was separate. Subsequent authorized repairs preserve it as an ancestor; current results and four-PR ordering are in reconciliationEvidence.",
     "productionSourceChangesAfterValidation": false,
     "browserFixtureChangesAfterValidation": false,
     "formatOnlyChangesAfterValidation": [
@@ -277,5 +284,6 @@
     ],
     "manifestSha256": "c35212cd2178e8c64e87879e6d3f016e1fdab65c9768a42fd8f99a9d1fe481e0",
     "manifestFiles": 550
-  }
+  },
+  "reconciliationEvidence": "pr63-reconciliation-2026-10-25.json"
 }
