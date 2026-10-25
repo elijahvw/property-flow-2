@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-25",
+  "readOnly": true,
+  "requestId": "req-acb",
+  "source": "AWS CloudWatch Logs",
+  "group": "/ecs/propertyflow-dev",
+  "region": "us-east-1",
+  "startMs": 1792960980000,
+  "endMs": 1792961160000,
+  "events": [
+    {
+      "time": 1792961059302,
+      "level": 30,
+      "reqId": "req-acb",
+      "msg": "incoming request",
+      "method": "POST",
+      "routeFamily": "/api/platform/sales-demos/:id/teardown"
+    },
+    {
+      "time": 1792961060409,
+      "level": 40,
+      "reqId": "req-acb",
+      "requestId": "req-acb",
+      "code": "IDENTITY_PROVIDER_UNAVAILABLE",
+      "status": 429,
+      "errorType": "Error",
+      "msg": "Request failed"
+    },
+    {
+      "time": 1792961060409,
+      "level": 30,
+      "reqId": "req-acb",
+      "msg": "request completed",
+      "responseTime": 1107.0910549983382,
+      "responseStatus": 429
+    }
+  ],
+  "privacy": "No headers, body, raw error message, token, secret or provider account data returned.",
+  "apiCalls": [
+    {
+      "service": "logs",
+      "operation": "DescribeLogGroups",
+      "status": "success",
+      "n_items": {
+        "logGroups": 1
+      }
+    },
+    {
+      "service": "logs",
+      "operation": "FilterLogEvents",
+      "status": "success",
+      "n_items": {
+        "events": 3,
+        "searchedLogStreams": 0
+      }
+    }
+  ],
+  "interpretation": {
+    "confirmed": "POST demo teardown returned IDENTITY_PROVIDER_UNAVAILABLE/HTTP429 in about1107ms; source maps this to an upstream Auth0 HTTP429.",
+    "notEstablished": [
+      "Which provider operation (token, identity lookup or account blocking) was throttled.",
+      "Provider Retry-After/reset window and bucket/tenant quota.",
+      "Actual partial-setup or separate Ready-demo database state; no live database/provider read or mutation was performed."
+    ]
+  },
+  "screenshot": {
+    "inspection": "Parent inspected pixels; root executor lacks a supported Library prepare_materialize tool.",
+    "reportedContext": "Unfinished setup, nine prepared accounts, teardown retry; separate Ready fixture3 generation."
+  },
+  "noLiveProvisioningOrCleanup": true
+}

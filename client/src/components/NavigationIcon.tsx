@@ -24,6 +24,8 @@ export function NavigationIcon({ path }: { path: string }) {
       <circle cx="12" cy="12" r="3" />
       <path d="M6 12h.01M18 12h.01" />
     </>
+  ) : path.includes("work-calendar") ? (
+    <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18M7 14h2m3 0h2m3 0h1M7 18h2m3 0h2"/></>
   ) : path.includes("settings") ? (
     <>
       <path d="M4 7h16M4 17h16" />
@@ -35,7 +37,7 @@ export function NavigationIcon({ path }: { path: string }) {
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7v5l3 2" />
     </>
-  ) : /maintenance|work-orders/.test(path) ? (
+  ) : /maintenance|work-orders|preventive|vendors/.test(path) ? (
     <>
       <path d="m14 5 5 5M3 21l9-9m-2-7 3-3 8 8-3 3-4-1-3-3z" />
     </>

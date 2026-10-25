@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useDebouncedValue } from "../useDebouncedValue";
@@ -8,7 +8,8 @@ import { Form } from "./Form";
 import { VendorContact, VendorHistory, type Vendor } from "./VendorContact";
 
 type Linked = { id: string; version: number; vendor: Vendor | null };
-function VendorPicker({ initial }: { initial: Vendor | null }) {
+type ChoiceAvailability = { loading: boolean; error?: string };
+function VendorPicker({ initial, availabilityChanged, retry }: { initial: Vendor | null; availabilityChanged: (state: ChoiceAvailability) => void; retry: MutableRefObject<() => void> }) {
   const [query, setQuery] = useState(""),
     [page, setPage] = useState(1),
     [selected, setSelected] = useState(initial),
@@ -18,6 +19,8 @@ function VendorPicker({ initial }: { initial: Vendor | null }) {
     true,
     true,
   );
+  retry.current = r.reload;
+  useEffect(() => availabilityChanged({ loading: r.loading, error: r.error }), [r.loading, r.error, availabilityChanged]);
   return (
     <>
       <input type="hidden" name="vendorId" value={selected?.id || ""} />
@@ -58,14 +61,6 @@ function VendorPicker({ initial }: { initial: Vendor | null }) {
           }}
         />
       </label>
-      {r.error && (
-        <p role="alert">
-          {r.error}{" "}
-          <button type="button" className="secondary" onClick={r.reload}>
-            Try again
-          </button>
-        </p>
-      )}
       {!r.data ? (
         !r.error && <p>Loading vendors…</p>
       ) : (
@@ -81,6 +76,7 @@ function VendorPicker({ initial }: { initial: Vendor | null }) {
                   type="button"
                   className="secondary"
                   aria-pressed={selected?.id === vendor.id}
+                  disabled={r.loading || !!r.error}
                   onClick={() => setSelected(vendor)}
                 >
                   Use {vendor.name}
@@ -105,7 +101,7 @@ function VendorPicker({ initial }: { initial: Vendor | null }) {
             <button
               type="button"
               className="secondary"
-              disabled={page === 1}
+              disabled={r.loading || !!r.error || page === 1}
               onClick={() => setPage((value) => value - 1)}
             >
               Previous vendor choices
@@ -113,7 +109,7 @@ function VendorPicker({ initial }: { initial: Vendor | null }) {
             <button
               type="button"
               className="secondary"
-              disabled={page * r.data.pageSize >= r.data.total}
+              disabled={r.loading || !!r.error || page * r.data.pageSize >= r.data.total}
               onClick={() => setPage((value) => value + 1)}
             >
               Next vendor choices
@@ -134,7 +130,9 @@ export function MaintenanceVendor({
   const endpoint = `/api/company/maintenance/${encodeURIComponent(requestId)}/vendor`,
     r = useResource<Linked>(endpoint, true, true);
   const [open, setOpen] = useState(false),
-    [draft, setDraft] = useState<{ source: Linked; key: string } | null>(null);
+    [draft, setDraft] = useState<{ source: Linked; key: string } | null>(null),
+    [choices, setChoices] = useState<ChoiceAvailability>({ loading: true });
+  const retryChoices = useRef<() => void>(() => {});
   const directory = `/company/vendors?requestId=${encodeURIComponent(requestId)}`;
   return (
     <section className="panel">
@@ -179,6 +177,7 @@ export function MaintenanceVendor({
           )}
           <button
             className="secondary"
+            disabled={r.loading || !!r.error}
             onClick={() => {
               setDraft(
                 (previous) =>
@@ -195,9 +194,9 @@ export function MaintenanceVendor({
           />
         </>
       )}
-      {r.data && draft && (
+      {draft && (
         <EditorDialog
-          open={open}
+          open={open && !!r.data}
           title="Choose vendor contact"
           onClose={() => setOpen(false)}
           onDiscard={() => {
@@ -205,12 +204,16 @@ export function MaintenanceVendor({
             setDraft(null);
           }}
         >
+          {r.error && <div className="notice error" role="alert"><p>The current vendor link could not be refreshed. Your selection is kept; refresh before saving.</p><button type="button" className="secondary" onClick={r.reload}>Refresh current vendor link</button></div>}
+          {choices.error && <div className="notice error" role="alert"><p>{choices.error} Your selected vendor is kept; refresh the directory before saving.</p><button type="button" className="secondary" onClick={() => retryChoices.current()}>Refresh vendor choices</button></div>}
           <Form
             key={draft.key}
             label="Save vendor link"
             operation="maintenance.vendor"
             feedbackText="Vendor contact saved."
+            locked={r.loading || !!r.error || choices.loading || !!choices.error}
             submit={async (data) => {
+              if (r.loading || r.error || choices.loading || choices.error) throw new Error("Refresh the current vendor link and choices before saving. Your selection is kept.");
               await api(endpoint, {
                 method: "POST",
                 body: {
@@ -228,7 +231,7 @@ export function MaintenanceVendor({
               changed();
             }}
           >
-            <VendorPicker initial={draft.source.vendor} />
+            <VendorPicker initial={draft.source.vendor} availabilityChanged={setChoices} retry={retryChoices} />
           </Form>
         </EditorDialog>
       )}

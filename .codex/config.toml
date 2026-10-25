@@ -1,0 +1,17 @@
+# Repository defaults for Codex. A trusted project may load this file; managed
+# environments and organization policies can enforce stricter runtime settings.
+# Workflow, product, authorization and documentation contracts live in AGENTS.md.
+
+# Routine repository edits and checks run inside the workspace sandbox. Request
+# extra permission only when a necessary command exceeds that sandbox.
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+# Keep external access explicit. Commands that need package downloads or local
+# browser/database sockets may request narrowly scoped execution permission.
+[sandbox_workspace_write]
+network_access = false
+writable_roots = ["/tmp"]
+
+# Avoid brittle model/provider/version overrides. Preserve the developer's
+# configured identity, model and reasoning settings.

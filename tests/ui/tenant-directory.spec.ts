@@ -70,6 +70,25 @@ async function fixture(page: Page, options: { role?: string; leasing?: string; p
   });
   return state;
 }
+
+test("nonempty tenant views expose removable filters and reset without losing the prospect return", async ({ page }) => {
+  const state = await fixture(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/company/residents?${new URLSearchParams({ ...origin, q: "Fictional Tenant", propertyId: "home", rental: "former", access: "active", cursor: token(50) })}`);
+  await expect(summary(page)).toHaveText(/122 tenants/);
+  const active = page.getByLabel("Active filters", { exact: true });
+  await expect(active.getByRole("button")).toHaveCount(4);
+  await active.getByRole("button", { name: "Remove Portal: Active", exact: true }).click();
+  await expect(page).toHaveURL(url => !url.searchParams.has("access") && !url.searchParams.has("cursor") && url.searchParams.get("propertyId") === "home" && url.searchParams.get("prospectId") === origin.prospectId);
+  await expect(page.locator(".directory-view-summary")).toBeFocused();
+  await page.getByRole("button", { name: "Clear filters", exact: true }).click();
+  await expect(summary(page)).toHaveText("123 tenants · 50 shown on this page");
+  const search = new URL(page.url()).searchParams;
+  for (const key of ["q", "propertyId", "rental", "access", "cursor", "before"]) expect(search.has(key)).toBe(false);
+  for (const [key, value] of Object.entries(origin)) expect(search.get(key)).toBe(value);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(state.writes).toHaveLength(0);
+});
 const directory = (page: Page) => page.getByRole("region", { name: "Tenant directory", exact: true });
 const summary = (page: Page) => directory(page).locator(".directory-count");
 const history = (page: Page) => page.getByRole("region", { name: "Rental history", exact: true });
@@ -102,7 +121,7 @@ test("all filter edits clear both tenant cursors while debounced search preserve
   await page.clock.pauseAt(new Date("2026-10-24T12:00:01Z"));
   await page.goto(`/company/residents?${new URLSearchParams({ ...origin, cursor: token(50) })}`);
   await expect(summary(page)).toHaveText(/123 tenants/);
-  const input = page.getByRole("searchbox", { name: "Find resident", exact: true });
+  const input = page.getByRole("searchbox", { name: "Find tenant", exact: true });
   await input.fill("Fictional Tenant 0");
   await expect(page).toHaveURL(url => url.searchParams.get("q") === "Fictional Tenant 0" && !url.searchParams.has("cursor") && !url.searchParams.has("before") && url.searchParams.get("prospectCursor") === origin.prospectCursor);
   await expect(page.getByText("Updating search…", { exact: true })).toBeVisible();
@@ -141,7 +160,7 @@ test("same-page refresh keeps typing focus, hides failed counts and recovers wit
   await page.clock.install();
   await page.goto(`/company/residents?cursor=${token(50)}`);
   await expect(summary(page)).toHaveText(/123 tenants/);
-  const input = page.getByRole("searchbox", { name: "Find resident", exact: true });
+  const input = page.getByRole("searchbox", { name: "Find tenant", exact: true });
   await input.focus(); state.hold = true; state.fail = true;
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(page.getByText("Refreshing tenants…", { exact: true })).toBeVisible();

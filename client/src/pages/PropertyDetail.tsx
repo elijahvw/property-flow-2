@@ -15,6 +15,9 @@ import {
 import { EditorDialog } from "../components/EditorDialog";
 import { ManageResidents } from "./Workspace";
 import { monitorOperation } from "../operations";
+import { availableFeatureRoute } from "../company-features";
+import { tenantEditorScope } from "../tenant-write-access";
+import "./PropertyDetail.css";
 
 type Property = PropertyExtras & {
   version: number;
@@ -29,7 +32,7 @@ export default function PropertyDetail() {
   const { propertyId = "" } = useParams();
   const { data, can } = useAuth();
   // Remount on identity, company or access changes so stale details/drafts disappear.
-  const scope = `${data?.user.id}:${data?.user.status}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}`;
+  const scope = tenantEditorScope(data);
   return (
     <Detail
       key={`${scope}:${propertyId}`}
@@ -44,7 +47,10 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
   const [revision, setRevision] = useState(0);
   const [editing, setEditing] = useState(false);
   const [managing, setManaging] = useState(false);
-  const { can } = useAuth();
+  const { can, data: auth } = useAuth();
+  const propertyReadOnly = auth?.companyFeatures?.properties === "read_only";
+  const tenantAccessReadOnly = propertyReadOnly || auth?.companyFeatures?.leasing === "read_only";
+  const allowed = (permission: Parameters<typeof can>[0], path: string) => can(permission) && availableFeatureRoute(path, auth?.companyFeatures, auth?.membership?.role);
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState<Error>();
   const [saved, setSaved] = useState(false);
@@ -68,7 +74,7 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
   const deniedSave =
     saveError instanceof ApiError && [403, 404].includes(saveError.status);
   return (
-    <>
+    <div className="property-detail-workspace">
       <PropertyNavigation id={id} name={property?.name} external />
       <nav className="sr-only" aria-label="Breadcrumb">
         <Link to="/company/properties">Properties</Link> / Property details
@@ -116,12 +122,12 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
               >
                 {editable ? "Manage units" : "View units"}
               </Link>
-              {can("resident.assignment.manage") && (
+              {allowed("resident.assignment.manage", `/company/properties/${encodeURIComponent(id)}/residents`) && (tenantAccessReadOnly ? <Link className="button secondary" to={`/company/properties/${encodeURIComponent(id)}/residents`}>View tenant access</Link> :
                 <button className="secondary" onClick={() => setManaging(true)}>
                   Manage residents
                 </button>
               )}
-              {can("lease.manage") && (
+              {allowed("lease.manage", propertyLink("/company/leases", id)) && auth?.companyFeatures?.leasing !== "read_only" && (
                 <Link
                   className="button secondary"
                   to={`/company/properties/${encodeURIComponent(id)}/leases?new=lease`}
@@ -131,11 +137,12 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
               )}
             </div>
           </header>
-          <section className="panel">
+          <section className="panel property-record-panel">
             <div className="section-heading">
               <h2>Property details</h2>
               {editable && !editing && (
                 <button
+                  disabled={propertyReadOnly}
                   onClick={() => {
                     setEditing(true);
                     setSaved(false);
@@ -163,7 +170,7 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
                   key={property.version}
                   onSubmit={async (event) => {
                     event.preventDefault();
-                    if (busy || deniedSave) return;
+                    if (busy || deniedSave || propertyReadOnly) return;
                     const body = {
                       ...Object.fromEntries(new FormData(event.currentTarget)),
                       expectedVersion: property.version,
@@ -191,7 +198,7 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
                     }
                   }}
                 >
-                  <fieldset disabled={busy || deniedSave}>
+                  <fieldset disabled={busy || deniedSave || propertyReadOnly}>
                     <PropertyAddressFields value={property} />
                     <PropertyFields value={property} />
                     <div className="actions">
@@ -257,38 +264,20 @@ function Detail({ id, editable }: { id: string; editable: boolean }) {
               close={() => setManaging(false)}
             />
           )}
-          <section className="panel">
-            <h2>Keep this property moving</h2>
-            <div className="quick-links">
-              <Link to={`/company/properties/${encodeURIComponent(id)}/units`}>
-                <strong>Units</strong>
-                <span>Set up the spaces you rent.</span>
-              </Link>
-              {can("resident.assignment.manage") && (
-                <Link
-                  to={`/company/properties/${encodeURIComponent(id)}/residents`}
-                >
-                  <strong>Residents</strong>
-                  <span>Contact details and property access.</span>
-                </Link>
-              )}
-              {can("maintenance.manage") && (
-                <Link to={propertyLink("/company/maintenance", id)}>
-                  <strong>Maintenance</strong>
-                  <span>Review requests and update progress.</span>
-                </Link>
-              )}
-              {can("finance.manage") && (
-                <Link to={propertyLink("/company/finances", id)}>
-                  <strong>Finances</strong>
-                  <span>Record income and expenses.</span>
-                </Link>
-              )}
+          <section className="property-workflow-section" aria-label="Property workflows">
+            <div className="section-heading"><div><p className="record-kicker">Work in this property</p><h2>Choose your next task</h2></div><p className="help">Every workspace below stays scoped to {property.name}.</p></div>
+            <div className="property-workflow-grid">
+              {[
+                { title: "Spaces & records", description: "Keep each rentable space and its source history together.", links: [["Units", `/company/properties/${encodeURIComponent(id)}/units`, "property.read", "Review spaces, details and lease history"]] },
+                { title: "People & leasing", description: "Follow account access, households and each lease term.", links: [["Tenant access", `/company/properties/${encodeURIComponent(id)}/residents`, "resident.assignment.manage", "Review property access and tenant contacts"], ["Leases", propertyLink("/company/leases", id), "lease.manage", "Open terms, households and renewal workspaces"]] },
+                { title: "Finance", description: "Follow source balances and record money only after it moves.", links: [["Rent & payments", propertyLink("/company/rent", id), "finance.manage", "Review charges, receipts and outstanding balances"], ["Deposits", propertyLink("/company/deposits", id), "finance.manage", "Review requirements, held funds and corrections"], ["Cash activity", propertyLink("/company/finances", id), "finance.manage", "Record paid expenses and received income"], ["Reports", propertyLink("/company/reports", id), "finance.manage", "Follow the records behind totals and exports"]] },
+                { title: "Maintenance", description: "Keep requests, assigned work and their source records connected.", links: [["Maintenance requests", propertyLink("/company/maintenance", id), "maintenance.manage", "Review requests, work progress and supporting history"]] },
+              ].map(area => ({ ...area, links: area.links.filter(([, path, permission]) => allowed(permission as Parameters<typeof can>[0], path)) })).filter(area => area.links.length).map(area => <section className="property-workflow-card" key={area.title}><h3>{area.title}</h3><p>{area.description}</p><ul>{area.links.map(([label, path, , help]) => <li key={path}><Link to={path}><strong>{label}</strong><span>{help}</span><span aria-hidden="true">→</span></Link></li>)}</ul></section>)}
             </div>
           </section>
         </>
       )}
       <Link to="/company/properties">← Back to properties</Link>
-    </>
+    </div>
   );
 }

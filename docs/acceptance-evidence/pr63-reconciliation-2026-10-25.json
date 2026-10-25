@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-25",
+  "scope": "PR63 repairs, reconciliation with65/66 and preserved AWS67;64/68 reviewed separately, not integrated.",
+  "originalPr63": "b9c24032280f5ad538460da65f5711b6f4380953",
+  "implementationCommit": "e1ab2c35deab36088e1fa61fe713d2ed392b4353",
+  "source": {
+    "files": 551,
+    "manifestSha256": "81450ba119297a9b5c94dfe8168941cff381e2cd0f0724aa87e8b0beb77b9b1d",
+    "definition": "SHA-256 of sorted compact JSON mapping the recorded source/test/script/config paths to file SHA-256; documentation and generated artifacts excluded.",
+    "verifiedUnchangedAfterAggregate": true
+  },
+  "clientBuild": {
+    "command": "node scripts/local-validation.mjs build client",
+    "exitCode": 0,
+    "files": 90,
+    "manifestSha256": "b5b4e9bdfdcce6d7ed740f8f3e1c6b7208e9f0a2b04cdf3bbdf0019bf54fe768",
+    "freshOnlyReceipt": true
+  },
+  "serverCompile": {
+    "command": "node node_modules/typescript/bin/tsc -p server/tsconfig.json",
+    "exitCode": 0,
+    "schema": "Canonical056 unchanged by these repairs; matching generated client from prior verified official WASM generation. Normal CLI download remains blocked locally; normal release CI remains a gate."
+  },
+  "checks": {
+    "providerFocused": {
+      "passed": 25,
+      "failed": 0,
+      "reportedSeconds": 17.277
+    },
+    "safeServer": {
+      "passed": 130,
+      "skipped": 9,
+      "failed": 0,
+      "reportedSeconds": 20.737
+    },
+    "clientUnits": {
+      "passed": 69,
+      "failed": 0,
+      "reportedSeconds": 8.192
+    },
+    "handoffFocused": {
+      "passed": 5,
+      "failed": 0,
+      "reportedSeconds": 9.9,
+      "command": "PF_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium node node_modules/@playwright/test/cli.js test -c playwright.production.config.ts tests/ui/move-out-handoff.spec.ts"
+    },
+    "controlledTelemetry": {
+      "passed": 3,
+      "failed": 0,
+      "reportedSeconds": 9.4,
+      "proof": "Actual15s telemetry flush with controlled browser clock; explicit ancillary handler, CSRF check and zero domain writes."
+    },
+    "freshDemo": {
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0,
+      "reportedSeconds": 84.475,
+      "command": "PLAYWRIGHT_BROWSERS_PATH=/tmp/propertyflow-browser-cache node scripts/test-sales-demo.mjs"
+    },
+    "freshLeasing": {
+      "passed": 66,
+      "failed": 0,
+      "skipped": 0,
+      "reportedSeconds": 62.737,
+      "command": "PLAYWRIGHT_BROWSERS_PATH=/tmp/propertyflow-browser-cache node scripts/test-leasing.mjs"
+    },
+    "freshUsers": {
+      "passed": 56,
+      "failed": 0,
+      "skipped": 0,
+      "reportedSeconds": 65.23,
+      "command": "PLAYWRIGHT_BROWSERS_PATH=/tmp/propertyflow-browser-cache node scripts/test-users.mjs"
+    },
+    "operations": {
+      "passed": 94,
+      "failed": 0,
+      "reportedSeconds": 18.961
+    },
+    "validationTooling": {
+      "passed": 15,
+      "failed": 0
+    },
+    "powerGuard": {
+      "exitCode": 0
+    },
+    "browserFull": {
+      "status": "passed",
+      "discovered": 459,
+      "workers": 2,
+      "retries": 0,
+      "command": "PF_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium node node_modules/@playwright/test/cli.js test -c playwright.production.config.ts --reporter=line --output=/tmp/pf-pr63-final-aggregate-results",
+      "passed": 459,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "reportedMinutes": 8.4,
+      "retainedFailureTraces": 0,
+      "sourceAndBuildHeldFixed": true
+    }
+  },
+  "priorFailures": [
+    {
+      "stage": "Published65 CI40238889039",
+      "result": "449/450 UI; no-write fixture counted an extra request. Its broad handler treated telemetry as a fabricated domain create. Original run did not capture the offending path; controlled actual telemetry regression now validates classification without weakening domain assertions."
+    },
+    {
+      "stage": "Published66/67 CI40238890165/40238924038",
+      "result": "454/454 UI passed, then real leasing failed a stale exact Prospects & applications heading. Canonical Prospects selector corrected; new fresh leasing66/66 passes, including source/privacy/no-effect assertions."
+    },
+    {
+      "stage": "First focused repaired handoff run",
+      "result": "27/30; three restored-textarea exact-label selectors failed despite correct visible retained values. Accessible textbox roles preserve exact-value assertions; five cases pass after correction."
+    }
+  ],
+  "reviewOrder": [
+    65,
+    66,
+    63,
+    67
+  ],
+  "publication": {
+    "authorized": true,
+    "status": "Authorized final-head update; branches/review order retained. Exact remote commit/CI status is recorded in GitHub metadata and delivery handoff."
+  },
+  "separateInfraReview": {
+    "pr64": {
+      "commit": "ad79f9a5697ea61043da1a32164e22202a3b9591",
+      "ci": "40238570211 success",
+      "sourceFindings": "No material defect identified in bounded read-only review. Merging enables scheduled3amEasternStop by default unless DEV_AUTO_STOP=false; Alloy stays disabled until configured."
+    },
+    "pr68": {
+      "commit": "66310be9968beefc82ccbb2d89b3b2dfbd2eea9a",
+      "ci": "40240818287 failure:392/393 UI; post-save unload warning remained active. Later integrations skipped.",
+      "holds": [
+        "Canonical056 migration numbering/schema reconciliation with66. Distinct directory names are not themselves a proven SQL failure.",
+        "Fixture graph/version reconciliation with current5.",
+        "Current inspection/agreement/document contracts contradict deliberate unscanned availability policy.",
+        "Reduced ECS capacity and live document/provider acceptance remain unverified."
+      ],
+      "dependsOn": 64,
+      "integrated": false
+    }
+  },
+  "limits": [
+    "TAP/Playwright reported timings exclude parent-runner setup/cleanup and are not matching-workload speed comparisons.",
+    "Provider tests use fake fetch or simulated identities; local API/RLS fixtures do not prove live Auth0 acceptance.",
+    "Earlier CLS24/24 and finance192 remain dated prior evidence; this repair changes no existing four-route geometry or financial server business logic.",
+    "Published-head CI/comments/review and hosted/schema/provider acceptance remain gates."
+  ],
+  "liveEffects": {
+    "mainMerge": false,
+    "deployment": false,
+    "awsApply": false,
+    "realProviderCalls": false,
+    "customerDataChanges": false,
+    "sharedDemoExecution": false,
+    "ec2Migration": false
+  }
+}

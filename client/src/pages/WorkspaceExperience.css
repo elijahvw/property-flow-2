@@ -9,7 +9,85 @@
 .resident-service-grid > div { background: #fff; border: 1px solid #d8e3df; border-radius: 12px; padding: 1.25rem; }
 .resident-service-grid a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 650; font-size: 1.05rem; }
 .resident-service-grid p { margin: .4rem 0 0; max-width: 52ch; }
+.admin-directory-heading > div { max-width: 68ch; }
+.admin-directory-intro { display:flex; align-items:flex-start; justify-content:space-between; gap:1.5rem; margin-bottom:1.25rem; }
+.admin-directory-intro h2 { margin-bottom:.35rem; }
+.admin-directory-intro p { max-width:68ch; margin:0; }
+.admin-directory .admin-directory-toolbar { display:grid; grid-template-columns:minmax(17rem,1.15fr) minmax(21rem,1fr); gap:1rem; align-items:start; margin-bottom:.65rem; }
+.admin-directory-search { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.65rem; align-items:end; }
+.admin-directory-search > label,.admin-directory-filters > label { margin:0; min-width:0; }
+.admin-directory-search > button { white-space:nowrap; }
+.admin-directory-filters { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+.admin-directory-summary { display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.85rem 0; border-top:1px solid var(--pf-border,#d8e3df); margin-top:1rem; }
+.admin-directory-summary p { margin:0; font-weight:600; font-size:.86rem; color:var(--pf-muted,#536b61); }
+.admin-directory-results { margin-top:0; }
+.admin-record-table { width:100%; min-width:0; table-layout:auto; }
+.admin-record-table th { background:var(--pf-surface-subtle,#f7faf8); font-size:.76rem; color:var(--pf-muted,#536b61); text-transform:none; letter-spacing:0; }
+.admin-record-table td { vertical-align:top; padding:1rem .8rem; font-size:.87rem; overflow-wrap:anywhere; }
+.admin-record-table .cell-detail { line-height:1.55; font-size:.8rem; }
+.admin-record-identity { min-width:12rem; }
+.admin-record-identity > strong { display:block; font-size:.95rem; color:var(--pf-text,#172b36); }
+.admin-record-actions { width:1%; white-space:nowrap; }
+.admin-record-actions button,.admin-record-actions a { min-height:44px; }
+.admin-status { display:inline-flex; align-items:center; max-width:100%; padding:.22rem .5rem; border-radius:var(--pf-radius-control,6px); background:var(--pf-surface-subtle,#f4f7f5); border:1px solid var(--pf-border,#d8e3df); color:var(--pf-muted,#536b61); font-size:.76rem; font-weight:600; line-height:1.5; }
+.admin-status.is-active { color:#245b45; background:#edf6f0; border-color:#cce0d2; }
+.admin-status.is-blocked { color:#864339; background:#fff4f1; border-color:#edcec6; }
+.admin-status.is-pending { color:#75542e; background:#fff9eb; border-color:#e9dcbb; }
+.admin-directory-pagination { display:flex; align-items:center; justify-content:space-between; gap:1rem; border-top:1px solid var(--pf-border,#d8e3df); margin-top:1rem; padding-top:1rem; }
+.admin-directory-pagination p { margin:0; font-size:.82rem; }
+.admin-directory-pagination .actions { margin:0; flex-wrap:nowrap; }
+.admin-directory-pagination .actions > span { font-size:.82rem; white-space:nowrap; }
+.admin-related-links { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem 1.25rem; margin:-.4rem 0 1.5rem; }
+.admin-related-links .text-button { margin-left:auto; font-size:.85rem; }
+.team-directory .filters { display:grid; grid-template-columns:minmax(13rem,1.5fr) repeat(2,minmax(10rem,1fr)); gap:1rem; margin-bottom:0; }
+.team-directory .filters label { margin-bottom:0; min-width:0; }
+.company-directory-toolbar { display:grid; grid-template-columns:minmax(13rem,2fr) minmax(11rem,1fr); gap:1rem; }
+.company-directory-toolbar label { margin-bottom:0; min-width:0; }
+.team-directory .team-record-list { margin:0; }
+.team-directory .team-record-list > li { display:grid; grid-template-columns:minmax(13rem,1fr) minmax(11rem,.7fr) auto; align-items:center; gap:1rem; padding:1.15rem 0; }
+.team-record-identity { display:flex; gap:.8rem; align-items:center; min-width:0; }
+.team-record-identity > div { min-width:0; }
+.team-record-identity p { margin:.2rem 0 0; font-size:.83rem; overflow-wrap:anywhere; }
+.admin-avatar { display:grid; place-items:center; flex:0 0 2.6rem; width:2.6rem; height:2.6rem; border-radius:var(--pf-radius-control,8px); background:var(--pf-surface-subtle,#edf4f0); color:var(--pf-accent,#126b5c); font-weight:700; }
+.team-record-status,.team-record-actions { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+.team-record-status .badge { text-transform:capitalize; }
+.team-record-actions { justify-content:flex-end; }
+.account-section-nav { display:flex; gap:.5rem; flex-wrap:wrap; padding:.75rem; margin:1rem 0 1.5rem; border:1px solid var(--pf-border,#d8e3df); border-radius:var(--pf-radius-control,8px); background:var(--pf-surface-subtle,#f7faf8); }
+.account-section-nav button { flex:1 1 auto; font-size:.8rem; padding:.45rem .65rem; }
+.account-workspace-section { scroll-margin-top:1rem; }
+.account-workspace-section:focus-visible { outline:3px solid var(--pf-accent,#126b5c); outline-offset:4px; }
+@media (max-width:1100px) {
+  .admin-directory .admin-directory-toolbar { grid-template-columns:1fr; }
+  .team-directory .team-record-list > li { grid-template-columns:minmax(13rem,1fr) auto; }
+  .team-record-actions { grid-column:1/-1; justify-content:flex-start; padding-left:3.4rem; }
+}
+@media (max-width:760px) {
+  .admin-directory-intro { flex-wrap:wrap; gap:.65rem; }
+  .admin-record-table,.admin-record-table tbody { display:block; min-width:0; width:100%; }
+  .admin-record-table thead { position:absolute; width:1px; height:1px; clip:rect(0,0,0,0); overflow:hidden; }
+  .admin-record-table tbody { display:grid; gap:.8rem; }
+  .admin-record-table tr { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; border:1px solid var(--pf-border,#d8e3df); border-radius:var(--pf-radius-surface,10px); padding:1rem; }
+  .admin-record-table td { display:block; border:0; padding:0; width:auto; min-width:0; }
+  .admin-record-table td[data-label]::before { content:attr(data-label); display:block; font-size:.72rem; color:var(--pf-muted,#536b61); margin-bottom:.3rem; }
+  .admin-record-table .admin-record-identity,.admin-record-table .admin-record-actions { grid-column:1/-1; }
+  .admin-record-table .admin-record-actions { padding-top:.6rem; border-top:1px solid var(--pf-border,#d8e3df); }
+  .admin-record-table .admin-record-actions button,.admin-record-table .admin-record-actions a { width:100%; }
+  .admin-directory-results { overflow:visible; }
+  .admin-directory-pagination { flex-direction:column; align-items:stretch; }
+  .admin-directory-pagination .actions { flex-wrap:wrap; }
+  .team-directory .filters { grid-template-columns:1fr 1fr; }
+  .team-directory .filters > label:first-child { grid-column:1/-1; }
+  .team-directory .team-record-list { display:grid; gap:.8rem; }
+  .team-directory .team-record-list > li { padding:1rem; border:1px solid var(--pf-border,#d8e3df); border-radius:var(--pf-radius-surface,10px); gap:.85rem; grid-template-columns:1fr; }
+  .team-record-actions { padding-left:0; grid-column:auto; }
+  .team-record-actions > button { flex:1 1 auto; }
+}
 @media (max-width: 640px) {
   .property-filter-panel .directory-toolbar, .resident-service-grid { grid-template-columns: 1fr; }
   .property-filter-panel .section-heading { align-items: flex-start; }
+  .admin-directory-search,.admin-directory-filters { grid-template-columns:1fr; }
+  .team-directory .filters,.company-directory-toolbar { grid-template-columns:1fr; }
+  .admin-directory-search button { justify-self:stretch; }
+  .admin-related-links .text-button { margin-left:0; }
 }
+@media (max-width:360px) { .admin-record-table tr { grid-template-columns:1fr; } }

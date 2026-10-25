@@ -1330,6 +1330,9 @@ test(
           await page.goto(
             process.env.TEST_USERS_BROWSER_URL + "/platform/users",
           );
+          // The directory presents bounded pages. Filter the synced account;
+          // this does not invoke a provider lookup, import or target sign-in.
+          await page.getByRole("searchbox", { name: "Search users", exact: true }).fill(candidate.email);
           await expect(
             page.getByRole("row").filter({ hasText: candidate.email }),
           ).toContainText("Awaiting first sign-in");

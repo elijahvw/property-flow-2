@@ -55,19 +55,36 @@ export async function api<T>(
       },
       body: requestBody,
     });
-    const data = await response.json();
-    if (data?.code === "IMPERSONATION_CONTEXT_CHANGED" ||
-      (path !== "/api/bootstrap" && context !== impersonationContext)) {
+    // Authentication may fail at the proxy before the API can return JSON.
+    // Always invalidate the session, even for an empty or HTML response.
+    if (response.status === 401)
+      window.dispatchEvent(new Event("session-expired"));
+    let data: any;
+    try {
+      data = await response.json();
+    } catch {
+      if (response.ok)
+        throw new Error("The server returned an unreadable response. Reload to check the latest state.");
+      data = null;
+    }
+    // Session expiry clears the support context synchronously in AuthProvider.
+    // A definitive 401 must retain its sign-in recovery rather than becoming a
+    // context-change/uncertain-submission error because of that cleanup.
+    if (response.status !== 401 && (data?.code === "IMPERSONATION_CONTEXT_CHANGED" ||
+      (path !== "/api/bootstrap" && context !== impersonationContext))) {
       window.dispatchEvent(new Event("impersonation-context-changed"));
       throw new ApiError("Your support session changed. Reloading your workspace…", 409, "IMPERSONATION_CONTEXT_CHANGED", !!options.method && options.method !== "GET");
     }
     if (!response.ok) {
-      if (response.status === 401)
-        window.dispatchEvent(new Event("session-expired"));
       throw new ApiError(
-        typeof data.error === "string" ? data.error : "Request failed.",
+        typeof data?.error === "string" ? data.error :
+          response.status === 401 ? "Your session expired. Sign in again to continue." :
+          response.status === 403 ? "You no longer have access to this action. Reload your workspace." :
+          response.status === 429 ? "Too many requests. Wait a moment and try again." :
+          response.status >= 500 ? "The service is temporarily unavailable. Try again shortly." :
+          "Request failed. Reload and try again.",
         response.status,
-        data.code || "REQUEST_FAILED",
+        typeof data?.code === "string" ? data.code : "REQUEST_FAILED",
         !!options.method && options.method !== "GET" && response.status >= 500,
       );
     }

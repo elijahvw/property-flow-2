@@ -23,7 +23,7 @@ export const routes: {
   { path: "/company/drafts", title: "Saved drafts", permission: "lease.manage", section: "Company" },
   { path: "/company/imports/expenses", title: "Import paid expenses", permission: "finance.manage", section: "Company" },
   { path: "/resident/documents", title: "My documents", permission: "resident.self", section: "Resident" },
-  { path: "/company/prospects", title: "Prospects & applications", permission: "lease.manage", section: "Company" },
+  { path: "/company/prospects", title: "Prospects", permission: "lease.manage", section: "Company" },
   { path: "/company/availability", title: "Availability & turnover", permission: "lease.manage", section: "Company" },
   { path: "/company/imports/units", title: "Import units", permission: "property.write", section: "Company" },
   { path: "/platform/plans", title: "Monthly plans", permission: "platform.manage", section: "Platform" },
@@ -139,6 +139,93 @@ export function visibleRoutes(permissions: readonly string[]) {
   );
 }
 
+// Keep workflow placement and order explicit. Route registration order and words
+// in a URL must never decide where a task appears in the menu.
+export const navigationSections = [
+  { title: "Workspace", paths: ["/company/overview", "/company/properties", "/company/residents", "/resident"] },
+  { title: "Operations", paths: ["/company/availability", "/company/prospects", "/company/applications", "/company/leases", "/company/maintenance", "/company/work-orders", "/company/documents", "/company/drafts", "/resident/maintenance", "/resident/documents"] },
+  { title: "Finance", paths: ["/company/rent", "/company/deposits", "/company/finances", "/company/reports", "/company/imports/expenses", "/resident/rent", "/resident/deposits"] },
+  { title: "Administration", paths: ["/platform/companies", "/platform/users", "/platform/plans", "/platform/audit", "/platform/impersonation", "/company/members", "/company/settings", "/company/subscription", "/company/imports/units"] },
+  { title: "Account", paths: ["/account/notifications", "/account", "/help"] },
+] as const;
+
+export function groupedNavigation(permissions: readonly string[]) {
+  const visible = new Map(visibleRoutes(permissions).map(route => [route.path, route]));
+  return navigationSections.map(section => ({
+    title: section.title,
+    routes: section.paths.flatMap(path => {
+      const route = visible.get(path);
+      return route ? [route] : [];
+    }),
+  }));
+}
+
+export type WorkspaceDestination = { path: string; title: string; group: string; keywords: string };
+
+const taskKeywords: Record<string, string> = {
+  "/company/overview": "dashboard today priorities portfolio",
+  "/company/properties": "property portfolio buildings homes units addresses",
+  "/company/residents": "tenants residents people contacts household access",
+  "/company/leases": "tenancy rental agreements renewals household",
+  "/company/availability": "vacant vacancy turnover readiness listings",
+  "/company/prospects": "inquiries leads tours follow ups",
+  "/company/applications": "applicants application review screening draft lease",
+  "/company/maintenance": "repairs requests work management queue",
+  "/company/work-orders": "assigned repairs staff jobs maintenance",
+  "/company/rent": "balances receipts payment collection arrears late billing money",
+  "/company/deposits": "security deposit held funds refund money",
+  "/company/finances": "transactions income expense ledger cash money",
+  "/company/reports": "reporting cash statements exports money",
+  "/company/drafts": "unfinished saved tasks continue resume",
+  "/company/members": "team staff people permissions roles invitations access",
+  "/company/settings": "company business address preferences roles",
+  "/company/subscription": "subscription invoices usage company billing",
+  "/platform/users": "people accounts identity access permissions",
+  "/platform/companies": "companies customer organizations demo",
+  "/platform/audit": "history events activity",
+  "/platform/impersonation": "support read only testing view user",
+  "/account/notifications": "inbox alerts updates notices",
+  "/account": "personal profile contact preferences password account",
+  "/resident": "home household lease terms rental",
+  "/resident/maintenance": "repairs maintenance requests help",
+  "/resident/rent": "balance statement rent receipts payments money",
+  "/resident/deposits": "security deposit held refund money",
+  "/resident/documents": "files lease documents originals",
+  "/help": "guidance how to help instructions",
+};
+
+// Search also exposes existing secondary workspaces without adding competing
+// primary navigation items or granting authority through a search result.
+export function workspaceDestinations(permissions: readonly string[]): WorkspaceDestination[] {
+  const primary = groupedNavigation(permissions).flatMap(section => section.routes.map(route => ({
+    path: route.path, title: route.title, group: section.title, keywords: taskKeywords[route.path] || "",
+  })));
+  const secondary = permissions.includes("maintenance.manage") ? [
+    { path: "/company/vendors", title: "Vendors", group: "Maintenance", keywords: "contractors service contacts repair suppliers" },
+    { path: "/company/preventive", title: "Preventive maintenance", group: "Maintenance", keywords: "scheduled recurring plans service tasks" },
+    { path: "/company/work-calendar", title: "Work calendar", group: "Maintenance", keywords: "schedule calendar due dates work plans" },
+  ] : [];
+  return [...primary, ...secondary];
+}
+
+export function matchingWorkspaceDestinations(destinations: readonly WorkspaceDestination[], query: string) {
+  const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  const matches = destinations.filter(destination => terms.every(term =>
+    `${destination.title} ${destination.group} ${destination.keywords}`.toLocaleLowerCase().includes(term),
+  ));
+  if (terms.length) {
+    const phrase = query.trim().toLocaleLowerCase();
+    const rank = (destination: WorkspaceDestination) => {
+      const title = destination.title.toLocaleLowerCase();
+      return title === phrase ? 0 : title.startsWith(phrase) ? 1 : title.includes(phrase) ? 2 : 3;
+    };
+    return matches.sort((a, b) => rank(a) - rank(b));
+  }
+  const common = ["/company/overview", "/company/properties", "/company/residents", "/company/leases", "/company/maintenance", "/company/rent", "/company/work-orders", "/resident", "/resident/maintenance", "/resident/rent", "/platform/companies", "/platform/users", "/account/notifications", "/company/drafts", "/account", "/help"];
+  const rank = (path: string) => common.indexOf(path) < 0 ? common.length : common.indexOf(path);
+  return matches.sort((a, b) => rank(a.path) - rank(b.path));
+}
+
 // A page's location is separate from its portfolio navigation item. For
 // example, a property's rent screen stays inside Properties while naming the
 // actual task in the breadcrumb and browser title.
@@ -150,7 +237,7 @@ export function pageContext(pathname: string, search = "") {
   }
   if (pathname === "/company/prospects" && new URLSearchParams(search).get("prospectId")) {
     const directory = new URLSearchParams(search); directory.delete("prospectId");
-    return { title: "Prospect details", parent: { path: pathname + (directory.size ? `?${directory}` : ""), title: "Prospects & applications" } };
+    return { title: "Prospect details", parent: { path: pathname + (directory.size ? `?${directory}` : ""), title: "Prospects" } };
   }
   const propertyPage = pathname.match(/^\/company\/properties\/[^/]+(?:\/([^/]+))?$/);
   if (propertyPage) {

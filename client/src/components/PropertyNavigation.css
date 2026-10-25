@@ -1,0 +1,12 @@
+.property-context-title { flex-wrap:wrap; row-gap:.3rem; }
+.property-context-title > strong { min-width:0; overflow-wrap:anywhere; }
+.property-context .grouped-property-tabs { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:.55rem 1.3rem; overflow:visible; padding:.4rem 0 1rem; }
+.property-nav-group { min-width:0; }
+.property-nav-group-title { display:block; margin-bottom:.25rem; color:var(--pf-muted,#607568); font-size:.66rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+.property-nav-group > div { display:flex; flex-wrap:wrap; align-items:flex-start; gap:.15rem .8rem; }
+.property-context .property-nav-group a { white-space:normal; padding:.35rem .05rem; font-size:.8rem; min-height:36px; }
+.property-context .property-nav-group a[aria-current=page] { color:var(--pf-accent,#126b5c); }
+@media(max-width:700px) {
+  .property-context .grouped-property-tabs { display:none; }
+  .property-context .context-select { margin:.85rem 0; }
+}

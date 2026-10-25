@@ -101,3 +101,36 @@ test('building details are editable, and stale edits have an explicit reload pat
  state.property={...state.property,name:'Latest house',version:2};state.saveStatus=200;await page.getByRole('button',{name:'Discard edits and reload latest property'}).click();await expect(page.getByRole('heading',{name:'Latest house',exact:true})).toBeVisible();await page.getByRole('button',{name:'Edit property'}).click();await expect(page.getByLabel('Year built',{exact:true})).toHaveValue('');
  await page.getByLabel('Year built',{exact:true}).fill('1985');await page.getByRole('button',{name:'Save changes',exact:true}).click();await expect(page.getByRole('status')).toHaveText('Property saved.');await expect(page.locator('dd').filter({hasText:'1985'})).toBeVisible();
 });
+
+test('property workspaces group real jobs and hide disabled feature destinations on desktop and mobile',async({page})=>{
+ const state=await fixture(page,'owner');
+ const features={properties:'enabled',leasing:'enabled',finances:'enabled',reports:'disabled',maintenance:'enabled',documents:'enabled',resident_portal:'enabled',inspections:'enabled',agreements:'enabled',notifications:'enabled'};
+ await page.route('**/api/bootstrap',route=>route.fulfill({json:{user:{id:'fixture-user',status:'active',name:'Tester',email:'test@example.test'},membership:{companyId:'company-a',version:1,role:'owner',status:'active',company:{id:'company-a',name:'Test company',status:'active'}},permissions:['property.read','property.write','resident.assignment.manage','lease.manage','finance.manage','maintenance.manage'],companyFeatures:features,csrfToken:'fixture-csrf'}}));
+ await page.goto('/company/properties/property-a');
+ const workflows=page.getByRole('region',{name:'Property workflows',exact:true});
+ await expect(workflows.getByRole('heading',{name:'People & leasing',exact:true})).toBeVisible();
+ await expect(workflows.getByRole('link',{name:/^Leases/})).toHaveAttribute('href','/company/properties/property-a/leases');
+ await expect(workflows.getByRole('link',{name:/^Rent & payments/})).toHaveAttribute('href','/company/properties/property-a/rent');
+ const navigation=page.getByRole('navigation',{name:'Property navigation',exact:true});
+ await expect(navigation.getByRole('link',{name:'Reports',exact:true})).toHaveCount(0);
+ features.finances='disabled';await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await expect(navigation.getByRole('link',{name:'Rent & payments',exact:true})).toHaveCount(0);
+ await expect(workflows.getByRole('heading',{name:'Finance',exact:true})).toHaveCount(0);
+ await page.setViewportSize({width:390,height:844});
+ const choices=page.getByRole('combobox',{name:'Property section',exact:true});
+ await expect(choices).toBeVisible();await expect(choices.getByRole('option',{name:'Rent & payments',exact:true})).toHaveCount(0);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(state.writes).toBe(0);
+});
+
+test('a property policy refresh locks the current edit without discarding its entered values',async({page})=>{
+ const state=await fixture(page,'owner');
+ let mode='enabled';
+ await page.route('**/api/bootstrap',route=>route.fulfill({json:{user:{id:'fixture-user',status:'active',name:'Tester',email:'test@example.test'},membership:{companyId:'company-a',version:1,role:'owner',status:'active',company:{id:'company-a',name:'Test company',status:'active'}},permissions:['property.read','property.write'],companyFeatures:{properties:mode,leasing:'enabled',finances:'enabled',reports:'enabled',maintenance:'enabled',documents:'enabled',resident_portal:'enabled',inspections:'enabled',agreements:'enabled',notifications:'enabled'},csrfToken:'fixture-csrf'}}));
+ await page.goto('/company/properties/property-a');await page.getByRole('button',{name:'Edit property',exact:true}).click();
+ const dialog=page.getByRole('dialog',{name:'Edit property',exact:true});await dialog.getByLabel('Property name',{exact:true}).fill('Retained property draft');
+ mode='read_only';await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await expect(dialog.getByRole('button',{name:'Save changes',exact:true})).toBeDisabled();await expect(dialog.getByLabel('Property name',{exact:true})).toHaveValue('Retained property draft');expect(state.writes).toBe(0);
+ mode='enabled';await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await expect(dialog.getByRole('button',{name:'Save changes',exact:true})).toBeEnabled();await dialog.getByRole('button',{name:'Save changes',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Retained property draft',exact:true})).toBeVisible();expect(state.writes).toBe(1);
+});

@@ -21,3 +21,34 @@ test('directory paging and opening or closing a retained intake leave its source
   assert.equal(editorNavigationChangesSource(location('/company/leases?propertyId=home'), location('/company/leases?propertyId=other')), true);
   assert.equal(editorNavigationChangesSource(location('/company/leases'), location('/help')), true);
 });
+
+
+test('an already open lease intake keeps its pinned source when only its URL unit suggestion changes', () => {
+  assert.equal(editorNavigationChangesSource(location('/company/leases?new=lease&propertyId=home&unitId=unit-51'), location('/company/leases?new=lease&propertyId=home&unitId=unit-3')), false);
+  assert.equal(editorNavigationChangesSource(location('/company/properties/home/leases?new=lease&unitId=unit-51'), location('/company/properties/home/leases?new=lease&unitId=unit-3')), false);
+  assert.equal(editorNavigationChangesSource(location('/company/leases?new=lease&unitId=unit-51'), location('/company/leases?new=lease&unitId=unit-3')), false);
+});
+
+test('unit identity stays protected outside the same open lease intake', () => {
+  const pairs = [
+    ['/company/leases?unitId=unit-51', '/company/leases?unitId=unit-3'],
+    ['/company/leases?unitId=unit-51', '/company/leases?new=lease&unitId=unit-3'],
+    ['/company/leases?new=lease&unitId=unit-51', '/company/leases?unitId=unit-3'],
+    ['/company/leases/lease-a?new=lease&unitId=unit-51', '/company/leases/lease-a?new=lease&unitId=unit-3'],
+    ['/company/properties/home/units?new=lease&unitId=unit-51', '/company/properties/home/units?new=lease&unitId=unit-3'],
+    ['/company/rent?new=lease&unitId=unit-51', '/company/rent?new=lease&unitId=unit-3'],
+  ];
+  for (const [from, to] of pairs) assert.equal(editorNavigationChangesSource(location(from), location(to)), true, `${from} → ${to}`);
+});
+
+test('a changed property, person or reviewed source still protects an open lease intake', () => {
+  const pairs = [
+    ['/company/leases?new=lease&propertyId=home&unitId=unit-51', '/company/leases?new=lease&propertyId=other&unitId=unit-3'],
+    ['/company/properties/home/leases?new=lease&unitId=unit-51', '/company/properties/other/leases?new=lease&unitId=unit-3'],
+    ['/company/leases?new=lease&contactId=tenant-a&unitId=unit-51', '/company/leases?new=lease&contactId=tenant-b&unitId=unit-3'],
+    ['/company/leases?new=lease&prospectId=inquiry-a&unitId=unit-51', '/company/leases?new=lease&prospectId=inquiry-b&unitId=unit-3'],
+    ['/company/leases?new=lease&taskVersion=1&unitId=unit-51', '/company/leases?new=lease&taskVersion=2&unitId=unit-3'],
+    ['/company/leases?new=lease&section=details&unitId=unit-51', '/company/leases?new=lease&section=household&unitId=unit-3'],
+  ];
+  for (const [from, to] of pairs) assert.equal(editorNavigationChangesSource(location(from), location(to)), true, `${from} → ${to}`);
+});

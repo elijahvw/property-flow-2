@@ -52,7 +52,7 @@ async function fixture(page: Page, role = 'manager') {
 test('paid expense review retains an interrupted link and opens its exact financial source', async ({ page }) => {
   const state = await fixture(page); state.loseLink = true; await page.goto('/company/maintenance/request');
   await page.getByRole('button', { name: 'Link existing expense', exact: true }).click(); await page.getByLabel('Find paid expense').fill('sink'); await page.getByRole('radio', { name: /TX-102/ }).check();
-  await page.getByRole('button', { name: 'Link expense', exact: true }).click(); await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible(); await page.getByRole('button', { name: 'Close', exact: true }).click();await page.getByRole('button',{name:/^(Save draft & close|Close & keep recovery)$/,exact:true}).click();
+  await page.getByRole('button', { name: 'Link expense', exact: true }).click(); await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible(); await expect(page.getByLabel('Find paid expense')).toBeDisabled(); await expect(page.getByRole('radio', { name: /TX-102/ })).toBeDisabled(); await page.getByRole('button', { name: 'Close', exact: true }).click();await page.getByRole('button',{name:/^(Save draft & close|Close & keep recovery)$/,exact:true}).click();
   await page.getByRole('button', { name: 'Link existing expense', exact: true }).click(); await expect(page.getByRole('group', { name: 'Review selected expense' })).toContainText('$45.05'); await page.getByRole('button', { name: 'Link expense', exact: true }).click();
   await expect(page.locator('.cost-total')).toContainText('$45.05'); expect(state.links.length).toBe(1); expect(state.posts[0]).toEqual(state.posts[1]);
   await page.getByRole('link', { name: 'TX-102 · View transaction →', exact: true }).click(); await expect(page).toHaveURL(/entryId=e2/); await expect(page.getByRole('heading', { name: 'Maple House · expense · $45.05', exact: true })).toBeVisible(); await expect(page.getByText('Boiler repair', { exact: true })).toHaveCount(0);
@@ -80,4 +80,89 @@ test('empty phone cost view leads to a property-scoped paid expense form and bac
 test('resident and staff flows never request or render maintenance finance data', async ({ page }) => {
   const resident = await fixture(page, 'resident'); await page.goto('/resident/maintenance/request'); await expect(page.getByRole('heading', { name: 'Kitchen tap leak', exact: true })).toBeVisible(); await expect(page.getByRole('region', { name: 'Maintenance costs', exact: true })).toHaveCount(0); expect(resident.costReads).toBe(0);
   await page.unroute('**/api/**'); const staff = await fixture(page, 'staff'); await page.goto('/company/maintenance/request'); await expect(page.getByRole('heading', { name: 'Access unavailable', exact: true })).toBeVisible(); expect(staff.costReads).toBe(0);
+});
+
+
+test('stale maintenance cost reads suspend mutations and recover without losing expense review', async ({ page }) => {
+  const state = await fixture(page);
+  await page.goto('/company/maintenance/request');
+  await page.getByRole('button', { name: 'Link existing expense', exact: true }).click();
+  await page.getByRole('radio', { name: /TX-101/ }).check();
+  let failCandidates = true;
+  await page.route('**/api/company/maintenance/request/costs/candidates*', route => failCandidates ? route.fulfill({ status: 503, json: { error: 'Expense choices are temporarily unavailable.' } }) : route.fallback());
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('alert')).toContainText('temporarily unavailable');
+  await expect(dialog.getByRole('button', { name: 'Link expense', exact: true })).toBeDisabled();
+  await expect(dialog.getByRole('radio', { name: /TX-101/ })).toBeDisabled();
+  await expect(dialog.getByRole('group', { name: 'Review selected expense' })).toContainText('TX-101');
+  expect(state.posts).toHaveLength(0);
+  failCandidates = false;
+  await dialog.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Link expense', exact: true })).toBeEnabled();
+  let failSource = true;
+  await page.route('**/api/company/maintenance/request/costs', route => failSource ? route.fulfill({ status: 503, json: { error: 'Maintenance cost history could not be refreshed.' } }) : route.fallback());
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(dialog.getByRole('alert')).toContainText('could not be refreshed');
+  await expect(dialog.getByRole('button', { name: 'Link expense', exact: true })).toBeDisabled();
+  failSource = false;
+  await dialog.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Link expense', exact: true })).toBeEnabled();
+  await expect(dialog.getByRole('group', { name: 'Review selected expense' })).toContainText('TX-101');
+  await dialog.getByRole('button', { name: 'Link expense', exact: true }).click();
+  await expect(page.locator('.cost-total')).toContainText('$250.00');
+  expect(state.posts).toHaveLength(1);
+});
+
+
+test('expense selection stays fixed while a link response is pending', async ({ page }) => {
+  const state = await fixture(page);
+  let release = () => {};
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/company/maintenance/request/costs', async route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    await pending;
+    return route.fallback();
+  });
+  await page.goto('/company/maintenance/request');
+  await page.getByRole('button', { name: 'Link existing expense', exact: true }).click();
+  await page.getByRole('radio', { name: /TX-101/ }).check();
+  await page.getByRole('button', { name: 'Link expense', exact: true }).click();
+  await expect(page.getByLabel('Find paid expense')).toBeDisabled();
+  await expect(page.getByRole('radio', { name: /TX-102/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Close', exact: true })).toBeDisabled();
+  release();
+  await expect(page.locator('.cost-total')).toContainText('$250.00');
+  expect(state.posts).toHaveLength(1);
+  expect(state.posts[0].entryId).toBe('e1');
+});
+
+
+test('temporarily denied cost access conceals an uncertain editor and restores its exact retry', async ({ page }) => {
+  const state = await fixture(page); state.loseLink = true;
+  let denied = false;
+  await page.route('**/api/company/maintenance/request/costs', route => route.request().method() === 'GET' && denied ? route.fulfill({ status: 403, json: { error: 'Maintenance costs are unavailable.' } }) : route.fallback());
+  await page.goto('/company/maintenance/request');
+  await page.getByRole('button', { name: 'Link existing expense', exact: true }).click();
+  await page.getByRole('radio', { name: /TX-101/ }).check();
+  await page.getByRole('button', { name: 'Link expense', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Link a paid maintenance expense', exact: true });
+  await expect(dialog.getByRole('alert')).toBeVisible();
+  denied = true;
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(dialog).not.toBeVisible();
+  const costs = page.getByRole('region', { name: 'Maintenance costs', exact: true });
+  await expect(costs.getByRole('alert')).toContainText('unavailable');
+  await expect(costs.getByRole('button', { name: 'Link existing expense', exact: true })).toBeDisabled();
+  denied = false;
+  await costs.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('group', { name: 'Review selected expense' })).toContainText('TX-101');
+  await expect(dialog.getByLabel('Find paid expense')).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Link expense', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  expect(state.links).toHaveLength(1);
+  expect(state.posts).toHaveLength(2);
+  expect(state.posts[0]).toEqual(state.posts[1]);
 });
