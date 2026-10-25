@@ -128,3 +128,11 @@ References: [Fleet registration](https://grafana.com/docs/grafana-cloud/send-dat
 [ECS telemetry](https://grafana.com/docs/alloy/latest/collect/ecs-opentelemetry-data/),
 [ClamAV memory guidance](https://docs.clamav.net/manual/Installing/Docker.html#memory-ram-requirements),
 [GitHub schedules](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
+
+## Main integration — October25, 2026
+
+This branch now includes merged main `44747bd` (PR65/66/63/67). The roadmap conflict preserves the platform/demo recovery work and the RDS/ECR protections. Application source and schema are unchanged from that main; its459-case browser evidence remains valid for those unchanged paths.
+
+The combined infrastructure source passes103 operations checks, the development power inventory, recursive Terraform formatting, backend-free root validation, four mocked ECR/Alloy Terraform tests, and rendered stable/experimental Alloy configuration validation using v1.21.1. Workflow/validation-recipe source is unchanged from the prior green CI/actionlint checkpoint. No account-backed plan, Terraform apply, credential read, collector activation, Start/Stop or schedule activation occurred here. Final published-head CI/review remain required.
+
+PR68 remains a separate dependent change. Its scanner retirement uses057 after the immutable056 demo migration and combines document examples with fixture6. Merge64 into main first, then update68's target to main and recheck before merging. Merging64 activates the documented3a.m.Eastern shutdown; Alloy remains disabled until separately configured.
