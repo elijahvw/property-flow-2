@@ -674,7 +674,7 @@ function RequestDetail({ id, resident }: { id: string; resident: boolean }) {
     row = r.data;
   // Freeze the opening record: a background refresh must not authorize a stale draft.
   const [draft, setDraft] = useState<Row | null>(null);
-  if (conversationDenied) return <><Link to={directoryPath(params, resident)}>← Back to maintenance</Link><section className="notice error" role="alert"><h1>Maintenance request access unavailable</h1><p>Private request details and the reply review are hidden. Any original interrupted reply is kept for authorized recovery.</p><button type="button" onClick={() => window.location.reload()}>Reload workspace</button></section></>;
+  if (conversationDenied || resident && [401, 403, 404].includes(r.errorStatus || 0)) return <><Link to={directoryPath(params, resident)}>← Back to maintenance</Link><section className="notice error" role="alert"><h1>Maintenance request access unavailable</h1><p>Private request details and the reply review are hidden. Any original interrupted reply is kept for authorized recovery.</p><button type="button" onClick={() => window.location.reload()}>Reload workspace</button></section></>;
   return (
     <>
       <nav className="record-breadcrumb">

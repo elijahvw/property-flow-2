@@ -16,7 +16,9 @@ Counts at this checkpoint: covered 9, uniqueported 17, adapted 110, defectfixed 
 - Search/navigation/rent summaries/activity/optional forms plus successful-save, leave/history and unsent-text guards.
 - Actor/company authority fences and mandatory membership versions; legacy resident-notice fallback; safe API errors; closed telemetry paths.
 - Toolchain/locks, per-run browser caches, fixture proxy-port fix and safe local-preview migration markers.
-- Local install/builds, domain regressions, focused browser/mobile/retry/revocation checks and four dependency audits pass. The first broad browser run was 374/382; all findings are covered by 81/81 affected and 35/35 late passes. Final full 389-test remote CI and review findings must be checked on the published head.
+- Local install/builds, domain regressions, focused browser/mobile/retry/revocation checks and four dependency audits pass. The first broad browser run was 374/382; all findings are covered by 81/81 affected and 35/35 late passes. Final full 391-test remote CI and review findings must be checked on the published head.
+
+The first published docs-head CI (`4d532a4`) passed 388/389 browser cases; its sole failure exposed competing maintenance detail/conversation denial notices. Both reads now use the canonical private-denial screen. Forced detail-first/updates-first cases and adjacent flows pass 34/34 locally; the current full suite contains 391 tests. Final-head CI remains required.
 
 ## All source paths
 

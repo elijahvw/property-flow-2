@@ -121,7 +121,7 @@ test("phone conversation shows own replies, retains failed input and clears inac
   await page.screenshot({ path: "/tmp/propertyflow-maintenance-replies-mobile-viewport.png", fullPage: false });
   state.denied = true;
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(page.getByText("Request access is no longer available.", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Maintenance request access unavailable", exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Reply text" })).toHaveCount(0);
   await expect(page.getByText("Fictional requester update: the tap still drips overnight.")).toHaveCount(0);
 });
@@ -163,6 +163,42 @@ test('an unsent requester reply protects browser navigation without posting its 
 
 const replyJournal = (page: Page) => page.evaluate(() => sessionStorage.getItem('pf-maintenance-reply:fictional-requester:fictional-company:/api/resident/maintenance/fictional-request'));
 const acceptReload = async (page: Page) => { page.once('dialog', confirmation => confirmation.accept()); await page.reload(); };
+
+for (const first of ['detail', 'updates'] as const) test(`the first ${first} denial hides the entire private request while the other read is held`, async ({ page }) => {
+  const state = await fixture(page); await page.goto('/resident/maintenance/fictional-request');
+  await page.getByRole('button', { name: 'Add reply', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Reply to your maintenance request', exact: true });
+  const privateText = 'Original private reply retained across either denied-read order';
+  await dialog.getByRole('textbox', { name: 'Reply text', exact: true }).fill(privateText);
+  state.abortReplyBeforeSave = true; await dialog.getByRole('button', { name: 'Post reply', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toBeVisible(); const originalJournal = await replyJournal(page); expect(originalJournal).not.toBeNull();
+  const detailPath = '/api/resident/maintenance/fictional-request', firstPath = first === 'detail' ? detailPath : `${detailPath}/updates`;
+  let release!: () => void, started!: () => void, held = false, released = false;
+  const heldResponse = new Promise<void>(resolve => { release = () => { released = true; resolve(); }; });
+  const heldStarted = new Promise<void>(resolve => { started = resolve; });
+  await page.route('**/api/resident/maintenance/fictional-request**', async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() === 'GET' && state.denied && [detailPath, `${detailPath}/updates`].includes(path)) {
+      if (path === firstPath) await heldStarted;
+      else { held = true; started(); await heldResponse; }
+    }
+    return route.fallback();
+  });
+  state.denied = true;
+  try {
+    const firstDenied = page.waitForResponse(response => new URL(response.url()).pathname === firstPath && response.status() === 404);
+    await page.evaluate(() => window.dispatchEvent(new Event('focus'))); await firstDenied;
+    await expect(page.getByRole('heading', { name: 'Maintenance request access unavailable', exact: true })).toBeVisible();
+    await expect(page.getByText('Private request details and the reply review are hidden. Any original interrupted reply is kept for authorized recovery.', { exact: true })).toBeVisible();
+    expect(held).toBe(true); expect(released).toBe(false);
+    await expect(page.getByRole('textbox', { name: 'Reply text', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Request conversation' })).toHaveCount(0);
+    await expect(page.getByText('The fictional kitchen tap has been repaired; use this isolated request to verify the conversation.', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('The fictional tap repair is complete. Please let us know if there is still a leak.', { exact: true })).toHaveCount(0);
+    await expect(page.getByText(privateText, { exact: true })).toHaveCount(0);
+    expect(await replyJournal(page)).toBe(originalJournal); expect(state.replyPosts).toHaveLength(1);
+  } finally { release(); await page.unrouteAll({ behavior: 'wait' }); }
+});
 
 for (const width of [1440, 390]) test(`attempted requester reply reloads with its original text, company and key at ${width}px`, async ({ page }) => {
   const state = await fixture(page); await page.setViewportSize({ width, height: 900 }); await page.goto('/resident/maintenance/fictional-request');
