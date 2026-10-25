@@ -10,6 +10,8 @@ The app and ClamAV scanner run in the same ECS task, so both stop and start toge
 
 Routine shutdown is a pause, not `terraform destroy`. It retains the database, original documents, credentials, images and public domain configuration. Do not use destruction to save development compute charges.
 
+The October25 [AWS audit](aws-audit-2026-10-25.md) found live automated backup retention at zero and deletion protection disabled. Reviewed local Terraform now proposes seven-day retention and deletion protection; it has not been applied. Enabling backups from zero needs a maintenance rollout and verified restore. Backups and retained database storage can continue to cost money while stopped. Deletion protection does not interfere with Start/Stop; deliberate decommissioning still needs an explicit backup/final-snapshot procedure, and the existing `skip_final_snapshot` teardown behavior remains a separately tracked gap.
+
 The deployment role additionally needs `rds:StartDBInstance` and `rds:StopDBInstance` on `arn:aws:rds:us-east-1:800754316001:db:propertyflow-dev-db`. Its existing policy supplies discovery and ECS update permissions.
 
 Stopping retains database data and avoids backend/container and database compute charges while stopped. Storage, the load balancer, its public addresses, and other retained resources still incur charges. This is a cost reduction, not a billing cap. Grafana Cloud is configured on its Free plan; review actual monitoring usage and retained AWS resources.
