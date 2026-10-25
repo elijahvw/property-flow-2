@@ -76,15 +76,27 @@ test('property tabs carry context through lease history, residents, finances, an
  await page.getByRole('navigation',{name:'Property navigation'}).getByRole('link',{name:'Cash activity',exact:true}).click();await expect(page.getByLabel('Filter property')).toHaveValue('home');await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await expect(page.getByLabel('Transaction property')).toHaveValue('home');await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('navigation',{name:'Property navigation'}).getByRole('link',{name:'Reports',exact:true}).click();await expect(page.getByLabel('Report property')).toHaveValue('home');
 });
 test('mobile property sections retain the selected property across operating workflows',async({page})=>{
- const state=await fixture(page);await page.setViewportSize({width:390,height:844});await page.goto('/company/properties/home/units');
- for(const module of ['leases','maintenance','rent','deposits','finances','reports']){
-  const target='/company/properties/home/'+module;
-  await page.getByRole('combobox',{name:'Property section',exact:true}).selectOption(target);
-  await expect(page).toHaveURL(new RegExp(target+'$'));
-  await expect(page.getByRole('combobox',{name:'Property section',exact:true})).toHaveValue(target);
-  await expect(page.getByRole('region',{name:'Property workspace'})).toContainText('Maple House');
+ const runtimeErrors:string[]=[];
+ const recordError=(kind:string,message:string)=>{if(runtimeErrors.length<12)runtimeErrors.push(`${kind} at ${page.url()}: ${message.slice(0,2400)}`);};
+ page.on('pageerror',error=>recordError('pageerror',error.stack||error.message));
+ page.on('console',message=>{if(message.type()==='error')recordError('console.error',message.text());});
+ try{
+  const state=await fixture(page);await page.setViewportSize({width:390,height:844});await page.goto('/company/properties/home/units');
+  await expect(page.getByRole('combobox',{name:'Property section',exact:true})).toBeVisible();
+  for(const module of ['leases','maintenance','rent','deposits','finances','reports']){
+   await test.step(`Open the property's ${module} section`,async()=>{
+    const target='/company/properties/home/'+module;
+    await page.getByRole('combobox',{name:'Property section',exact:true}).selectOption(target);
+    await expect(page).toHaveURL(new RegExp(target+'$'));
+    await expect(page.getByRole('combobox',{name:'Property section',exact:true})).toHaveValue(target);
+    await expect(page.getByRole('region',{name:'Property workspace'})).toContainText('Maple House');
+    await expect(page.getByRole('heading',{name:'Something went wrong',exact:true})).toHaveCount(0);
+   });
+  }
+  expect(state.requests.some(url=>url.startsWith('/api/company/leases?')&&url.includes('propertyId=home'))).toBe(true);
+ }finally{
+  if(runtimeErrors.length)await test.info().attach('property-sections-runtime-errors',{body:runtimeErrors.join('\n\n'),contentType:'text/plain'});
  }
- expect(state.requests.some(url=>url.startsWith('/api/company/leases?')&&url.includes('propertyId=home'))).toBe(true);
 });
 test('saving is primary; draft discard is quiet and confirmed, and property switching retains ambiguous saves',async({page})=>{
  const state=await fixture(page);state.lose=true;
@@ -139,13 +151,13 @@ test('saving is primary; draft discard is quiet and confirmed, and property swit
  await page.screenshot({path:'/tmp/pf-connected-lease-mobile.png',fullPage:true});
 });
 test('attention links select matching views; staff never gets management data, and property search works by keyboard',async({page})=>{
- await fixture(page);await page.goto('/company/overview');await page.getByRole('link',{name:/Finish draft leases/}).click();await expect(page.getByLabel('Lease view')).toHaveValue('draft');await page.keyboard.press('Control+k');await expect(page.getByRole('dialog',{name:'Find a property'})).toBeVisible();await page.getByLabel('Search properties').fill('Garden');await page.getByRole('link',{name:/Garden Apartments/}).click();await expect(page).toHaveURL(/\/company\/properties\/second$/);
+ await fixture(page);await page.goto('/company/overview');await page.getByRole('link',{name:/Finish draft leases/}).click();await expect(page.getByRole('combobox',{name:'Lease view',exact:true})).toHaveValue('draft');await page.keyboard.press('Control+k');await expect(page.getByRole('dialog',{name:'Search workspace'})).toBeVisible();await page.getByRole('searchbox',{name:'Search workspace',exact:true}).fill('Garden');await page.getByRole('link',{name:/Garden Apartments/}).click();await expect(page).toHaveURL(/\/company\/properties\/second$/);
  await page.unroute('**/api/**');const state=await fixture(page,'staff');await page.goto('/dashboard');await expect(page.getByRole('region',{name:'Portfolio snapshot'})).toBeVisible();await expect(page.getByRole('heading',{name:'Month to date'})).toHaveCount(0);await expect(page.getByRole('heading',{name:'Needs attention'})).toHaveCount(0);expect(state.requests.some(x=>/finances|reports|maintenance|leases/.test(x))).toBe(false);
 });
 
 test('company leases identify properties with the same unit label and property drilldowns stay scoped',async({page})=>{
  const state=await fixture(page);state.leases=state.properties.map((property,i)=>({id:'lease-'+i,propertyId:property.id,unit:{label:'101'},property:{name:property.name},resident:{name:'Resident '+i,email:'r'+i+'@test.invalid'},startsOn:'2026-01-01',endsOn:'2026-12-31',status:'active',rentCents:120000,version:1,renewals:[]}));
- await page.goto('/company/leases');await expect(page.getByRole('row').filter({hasText:'Maple House'}).filter({hasText:'101'})).toBeVisible();await expect(page.getByRole('row').filter({hasText:'Garden Apartments'}).filter({hasText:'101'})).toBeVisible();await page.getByRole('row').filter({hasText:'Maple House'}).filter({hasText:'101'}).getByRole('link',{name:'Maple House',exact:true}).click();await expect(page).toHaveURL(/\/company\/properties\/home\/leases$/);await expect(page.getByRole('row').filter({hasText:'Garden Apartments'}).filter({hasText:'101'})).toHaveCount(0);await page.getByLabel('Lease view').selectOption('active');await expect(page).toHaveURL(/\/company\/properties\/home\/leases\?status=active$/);await page.reload();await expect(page.getByRole('heading',{name:'Maple House · Leases',exact:true})).toBeVisible();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await expect(page.getByLabel('Property for new lease').locator('option')).toHaveText(['Choose a property','Maple House']);
+ await page.goto('/company/leases');await expect(page.getByRole('row').filter({hasText:'Maple House'}).filter({hasText:'101'})).toBeVisible();await expect(page.getByRole('row').filter({hasText:'Garden Apartments'}).filter({hasText:'101'})).toBeVisible();await page.getByRole('row').filter({hasText:'Maple House'}).filter({hasText:'101'}).getByRole('link',{name:'Maple House',exact:true}).click();await expect(page).toHaveURL(/\/company\/properties\/home\/leases$/);await expect(page.getByRole('row').filter({hasText:'Garden Apartments'}).filter({hasText:'101'})).toHaveCount(0);await page.getByRole('combobox',{name:'Lease view',exact:true}).selectOption('active');await expect(page).toHaveURL(/\/company\/properties\/home\/leases\?status=active$/);await page.reload();await expect(page.getByRole('heading',{name:'Maple House · Leases',exact:true})).toBeVisible();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await expect(page.getByLabel('Property for new lease').locator('option')).toHaveText(['Choose a property','Maple House']);
 });
 
 for (const [module, title, endpoint] of [

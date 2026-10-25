@@ -41,7 +41,8 @@ export function EditorDialog({
   children,
   busy = false,
   presentation = "dialog",
-  backLabel = "Back to leases",
+  backLabel = "Back",
+  eyebrow,
 }: {
   open: boolean;
   title: string;
@@ -56,6 +57,7 @@ export function EditorDialog({
   busy?: boolean;
   presentation?: "dialog" | "page";
   backLabel?:string;
+  eyebrow?: string;
 }) {
   const dialog = useRef<HTMLElement | null>(null),
     pageConfirmation = useRef<HTMLDialogElement>(null),
@@ -145,7 +147,29 @@ export function EditorDialog({
       retained.current = false;
     }
   }, []);
-  const draftSaved=useCallback((element?:HTMLElement)=>{const current=fields(),adapters=[...durableAdapters.current.values()];for(const field of current)if(!element||element.contains(field)||!adapters.some(adapter=>adapter.element.current?.contains(field)))baseline.current.set(field,fieldValue(field));const remaining=current.some(field=>baseline.current.has(field)&&baseline.current.get(field)!==fieldValue(field));reviewed.current=false;structuralDirty.current=false;setDirty(remaining);retained.current=true;persisted.current=true;setSavedDraft(true);if(!remaining)releaseNavigation.current();},[]);
+  const draftSaved = useCallback((element?: HTMLElement) => {
+    const current = fields(), adapters = [...durableAdapters.current.values()];
+    for (const field of current)
+      if (!element || element.contains(field) || !adapters.some(adapter => adapter.element.current?.contains(field)))
+        baseline.current.set(field, fieldValue(field));
+    const remaining = current.some(field => baseline.current.has(field) && baseline.current.get(field) !== fieldValue(field));
+    // The durable save has been acknowledged. Clear only its busy registration
+    // now, before closing; the task hook's effect cleanup may run a render later.
+    const completedIds = [...durableAdapters.current].filter(([, adapter]) => adapter.element.current === element).map(([id]) => id);
+    setBusyForms(previous => {
+      if (!completedIds.some(id => previous.has(id))) return previous;
+      const next = new Set(previous);
+      for (const id of completedIds) next.delete(id);
+      return next;
+    });
+    reviewed.current = false;
+    structuralDirty.current = false;
+    setDirty(remaining);
+    retained.current = true;
+    persisted.current = true;
+    setSavedDraft(true);
+    if (!remaining) releaseNavigation.current();
+  }, []);
   const discard = () => {
     if (uncertain) return;
     completed();
@@ -198,6 +222,13 @@ export function EditorDialog({
   });
   useEffect(() => {
     if (open) setVisited(true);
+    // Access refresh can conceal an open editor while a request is in flight
+    // or its outcome is unknown. Close the dialog, but retain the mounted form
+    // and its original retry payload/key until authorization is restored.
+    else if (presentation === "dialog" && visited && (blocked || uncertain)) {
+      retained.current = true;
+      setConfirming(false);
+    }
     // Browser Back can return a page editor to its directory without using its
     // close control. Keep that in-memory form available on the same page.
     else if (presentation === "page" && visited && (dirty || uncertain || retained.current)) {
@@ -220,7 +251,15 @@ export function EditorDialog({
     };
   }, [confirming, open, presentation]);
   useLayoutEffect(() => { if (confirming) keepEditing.current?.focus(); }, [confirming]);
-  useEffect(() => { if (!uncertain && !(dirty || (open && hasChanges&&!retained.current) || (savedDraft&&!persisted.current) || blocked)) return; const warn = (event:BeforeUnloadEvent) => { event.preventDefault(); }; window.addEventListener('beforeunload',warn); return () => window.removeEventListener('beforeunload',warn); }, [open,dirty,hasChanges,uncertain,savedDraft,blocked]);
+  const protectBeforeUnload = useRef(false);
+  protectBeforeUnload.current = uncertain || dirty || (open && hasChanges && !retained.current) || (savedDraft && !persisted.current) || blocked;
+  useEffect(() => {
+    // Read current protection at event time: a settled save must not leave a
+    // stale listener warning during the interval before passive cleanup runs.
+    const warn = (event: BeforeUnloadEvent) => { if (protectBeforeUnload.current) event.preventDefault(); };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
   useEffect(() => {
     const node = dialog.current;
     if (!node || !visited) return;
@@ -273,7 +312,7 @@ export function EditorDialog({
   const contents = <>
       <div className="editor-heading">
         <div>
-          <p className="eyebrow">{presentation === "page" ? "Lease setup" : "Property Flow"}</p>
+          <p className="eyebrow">{eyebrow || (presentation === "page" ? "Task details" : "Property Flow")}</p>
           {presentation === "page" ? <h1 id={titleId} tabIndex={-1}>{title}</h1> : <h2 id={titleId} tabIndex={-1}>{title}</h2>}
         </div>
         {!confirming && <button

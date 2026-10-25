@@ -1,4 +1,14 @@
-# Current work — October 20, 2026
+# Current work — October 25, 2026
+
+The complete local integration is on `codex/aws-dev-protection-2026-10-25`, based on merged `47badac` (PR59/61/62). The user authorized the platform/AWS audit and overhaul, publication, and repairs/reconciliation of PR63. Current implementation and acceptance are in [the PR63 reconciliation](pr63-reconciliation-2026-10-25.md), with the [original gap matrix](platform-overhaul-2026-10-25.md), [first-pass audit](platform-audit-2026-10-25.md) and [read-only AWS audit](aws-audit-2026-10-25.md) retaining earlier evidence. Live RDS backup/deletion protection remain disabled in the recorded observation; prepared source has not been applied.
+
+Repaired source passes provider 25, safe server 130+nine expected DB skips, client 69, fresh demo 22, leasing 66 and users 56. Five handoff fixtures pass, including phone-sized interrupted return; the final 459/459 integrated browser suite passes in 8.4m, with zero retries and no source/build drift. The [staged fast/full commands](agent-validation.md) and [EC2 CLI handoff](codex-ec2-handoff-2026-10-25.md) retain measured timings and release limits.
+
+The user authorized publication with “Push.” The repaired review stack is `codex/platform-overhaul-2026-10-25` → `codex/demo-overhaul-2026-10-25` → `codex/demo-rate-limit-recovery` → `codex/aws-dev-protection-2026-10-25`. The final AWS branch contains the complete validated stack. Merge, deployment, Terraform apply, real-provider provisioning and shared/live demo-data execution remain separately restricted. Existing preview data is preserved. Jira remains disabled. The October 20 publication permission below applied to that earlier release; the new Push instruction is the current publication authorization.
+
+## Historical October 20 handoff
+
+The following is the original dated handoff. Its branch, open-PR, stopped-environment and test statements are historical; [current platform status](mvp-status.md) supersedes them.
 
 ## Authorized delivery
 User requested pushing a PR for all new local features and updating docs/platform status; user will approve, merge and deploy. No merge, Start, deploy, live migration/provider/account/email/support action is authorized here. Jira disabled; Stripe last. Preserve active prelogin-users WIP, previews/sample data and older checkouts.

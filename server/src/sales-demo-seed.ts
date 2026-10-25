@@ -10,8 +10,8 @@ import { seedDemoScenarios } from "./sales-demo-scenarios.js";
 
 // Bump whenever the fixture changes. Only constant fictional content goes here;
 // never copy customer data or call an external identity/email/payment provider.
-export const SALES_DEMO_SEED_VERSION = 4;
-export type DemoSeedAccounts = { issuer: string; databaseConnection: string; users: Record<string, ProviderUser> };
+export const SALES_DEMO_SEED_VERSION = 6;
+export type DemoSeedAccounts = { issuer: string; databaseConnection: string; users: Record<string, ProviderUser>; anchorOn?: string };
 export async function seedSalesDemo(tx: Tx, companyId: string, accounts: DemoSeedAccounts) {
   const ownerId = accounts.users.owner.user_id;
   // Existing business handlers run inside the single outer transaction. This
@@ -62,7 +62,7 @@ export async function seedSalesDemo(tx: Tx, companyId: string, accounts: DemoSee
     }
     return response.json();
   }
-  const today = companyDay("America/New_York"), month = today.slice(0,7)+"-01";
+  const today = accounts.anchorOn || companyDay("America/New_York"), month = today.slice(0,7)+"-01";
   const offset = (months: number, day = 1) => { const d = new Date(today); return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth()+months, day)).toISOString().slice(0,10); };
   try {
     await tx.$queryRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
@@ -142,6 +142,6 @@ export async function seedSalesDemo(tx: Tx, companyId: string, accounts: DemoSee
     actingId = ownerId;
     requests.push(residentRequest.id);
     const scenarios = await seedDemoScenarios({ call, tx, companyId, accounts, today, offset, properties, units, leases, requests, asActor: id => { actingId = id; } });
-    return { today, properties, units, leases, residents, occupantId: occupant.user_id, managerId, staffId, requests, vendorId: vendor.vendorId, preventivePlanId: plan.planId, inspectionId, agreementId: agreement.agreementId, documentId: file.documentId, documentVersionId: file.versionId, prospectId: prospect.id, followUpId: followUp.id, applicationId: application.id, savedTaskId: savedTask.id, scheduleId: schedule.id, renewalId: renewal.id, scenarios };
+    return { today, fixtureVersion: SALES_DEMO_SEED_VERSION, presentation: { anchorOn: today, fictional: true, retainedHistory: true }, properties, units, leases, residents, occupantId: occupant.user_id, managerId, staffId, requests, vendorId: vendor.vendorId, preventivePlanId: plan.planId, inspectionId, agreementId: agreement.agreementId, documentId: file.documentId, documentVersionId: file.versionId, prospectId: prospect.id, followUpId: followUp.id, applicationId: application.id, savedTaskId: savedTask.id, scheduleId: schedule.id, renewalId: renewal.id, scenarios };
   } finally { await app.close(); }
 }

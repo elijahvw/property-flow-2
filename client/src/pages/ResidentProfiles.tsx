@@ -14,6 +14,7 @@ import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
 import { Invitations } from "./Workspace";
 import { Form } from "../components/Form";
+import { DirectoryView, type DirectoryFilter } from "../components/DirectoryView";
 import { hasTenantSaveRecovery, tenantEditorScope, tenantLeasingWriteBlock, useTenantAttemptContext, useTenantEditorRecord } from "../tenant-write-access";
 
 export type Profile = {
@@ -129,6 +130,14 @@ function Directory() {
     intentionalPage.current = `${next.get("cursor") || ""}:${next.get("before") || ""}`; setParams(next);
   };
   const historyParams = new URLSearchParams(tenantDirectorySearch(params)); historyParams.set("section", "rentals");
+  const clearFilters = () => { intentionalPage.current = null; setParams(prospectContext(params), { replace: true }); };
+  const activeFilters: DirectoryFilter[] = [
+    ...(query.trim() ? [{ key: "q", label: "Search", value: query.trim(), remove: () => filter("q", "") }] : []),
+    ...(property ? [{ key: "property", label: "Property", value: propertyChoices.find(item => item.id === property)?.name || "Selected property", remove: () => filter("propertyId", "") }] : []),
+    ...(rental !== "all" ? [{ key: "rental", label: "Rental", value: ({ current: "Current lease", upcoming: "Upcoming lease", draft: "Draft lease", former: "Former tenant", unassigned: "No lease recorded" } as Record<string, string>)[rental] || "Selected relationship", remove: () => filter("rental", "all") }] : []),
+    ...(access !== "all" ? [{ key: "access", label: "Portal", value: ({ active: "Active", verification: "Verification needed", disabled: "Disabled", offline: "Not invited", pending: "Invitation pending" } as Record<string, string>)[access], remove: () => filter("access", "all") }] : []),
+    ...(records ? [{ key: "records", label: "Records", value: "Archived", remove: () => filter("records", "all") }] : []),
+  ];
   return (
     <div className="tenant-directory-page">
       <header className="page-heading page-heading-row">
@@ -190,13 +199,13 @@ function Directory() {
         />
       </EditorDialog>}
       <section
-        className="panel tenant-directory-panel"
+        className="panel tenant-directory-panel directory-workbench"
         aria-label="Tenant directory"
       >
         {!settled && <p className="tenant-directory-feedback help" role="status">Updating search…</p>}
         <div className="tenant-directory-toolbar">
           <label className="tenant-search">
-            Find resident
+            Find tenant
             <input
               type="search"
               placeholder="Name, email, property or unit"
@@ -267,13 +276,13 @@ function Directory() {
               <option value="archived">Archived records</option>
             </select>
           </label>
-          <span className="directory-count" role="status" ref={summary} tabIndex={-1}>
+        </div>
+        <DirectoryView filters={activeFilters} clear={clearFilters} scope={records ? "Archived tenant records · history is retained" : "Tenant records · portal access is managed separately"} summary={<span className="directory-count" role="status" ref={summary} tabIndex={-1}>
             {directory
               ? `${directory.total} ${directory.total === 1 ? "tenant" : "tenants"} · ${directory.items.length} shown on this page`
               : r.loading && !companyChanged ? "Loading tenants…" : "Tenant count unavailable"}
-          </span>
-        </div>
-        <p className="tenant-directory-feedback help">Property and rental relationship filters use the same recorded lease relationship. Previews show up to three rentals; open Rental history for the complete list.</p>
+          </span>} />
+        <details className="tenant-directory-feedback directory-guidance"><summary>About rental history and portal access</summary><p className="help">Property and rental relationship filters use the same recorded lease relationship. Previews show up to three rentals; open Rental history for the complete list. Preparing an account or recording a lease does not grant portal access.</p></details>
         {companyChanged ? <div className="notice error" role="alert"><p>Your company workspace changed. Reload before viewing this tenant directory.</p><button disabled={refreshingWorkspace} onClick={async () => { setRefreshingWorkspace(true); try { await refreshUser(); setMetadataMismatch(false); r.reload(); } finally { setRefreshingWorkspace(false); } }}>{refreshingWorkspace ? "Reloading workspace…" : "Reload workspace"}</button></div> : <>
         {directory && r.loading && <p className="tenant-directory-feedback help" role="status">Refreshing tenants…</p>}
         {r.error && (
@@ -289,7 +298,7 @@ function Directory() {
         {!directory ? (
           !r.error && <p role="status">Loading residents…</p>
         ) : !rows?.length ? (
-          <div className="empty-state">
+          <div className="empty-state directory-empty">
             <h2>
               {query || property || rental !== "all" || access !== "all"
                 ? "No matching tenants"
@@ -302,12 +311,10 @@ function Directory() {
                 ? "Try a different name, property, unit or access filter."
                 : params.get("records") === "archived"
                   ? "Former tenants appear here after you archive their records. Their history stays available."
-                  : "Add a tenant without a login, then record their lease. Portal access can be arranged separately."}
+                  : "Prepare the tenant’s account and profile, then record their lease. First sign-in and portal access can be arranged separately."}
             </p>
             {(query || property || rental !== "all" || access !== "all") && (
-              <button className="secondary" onClick={() => setParams(prospectContext(params))}>
-                Clear filters
-              </button>
+              <p className="help">Use Clear filters above to return to the tenant directory.</p>
             )}
           </div>
         ) : (

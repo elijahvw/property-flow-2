@@ -3,7 +3,7 @@ import { EditorNavigationProvider } from "./components/PageLeaveGuard";
 import { ContextHelp } from "./components/ContextHelp";
 import { WorkspaceGuide } from "./components/WorkspaceGuide";
 import { recordBrowserEvent } from "./browser-telemetry";
-import React, { Component, lazy, Suspense, useEffect, useRef, useState } from "react";
+import React, { Component, lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   createBrowserRouter,
   RouterProvider,
@@ -16,7 +16,7 @@ import {
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
-import { routes, visibleRoutes, pageContext, navigationActive } from "./navigation";
+import { routes, groupedNavigation, pageContext, navigationActive } from "./navigation";
 import { PropertySearch } from "./components/PropertySearch";
 import { FeedbackProvider } from "./components/Feedback";
 import { NavigationIcon } from "./components/NavigationIcon";
@@ -25,6 +25,7 @@ import { ImpersonationBanner } from "./components/ImpersonationBanner";
 import { ProspectReturnLink } from "./components/ProspectReturnLink";
 import { availableFeatureRoute, CompanyFeatureBoundary } from "./company-features";
 import "./App.css";
+import "./components/WorkspaceShell.css";
 
 const Notifications = lazy(() => import("./pages/Notifications").then(module=>({default:module.Notifications})));
 const SavedDrafts = lazy(() => import("./pages/SavedDrafts").then(module=>({default:module.SavedDrafts})));
@@ -101,14 +102,82 @@ class ErrorBoundary extends Component<
   }
 }
 function Shell({ children }: { children: React.ReactNode }) {
-  const { data, user, signIn, signOut, error } = useAuth();
+  const { data, user, signIn, signOut, actionError } = useAuth();
   const location = useLocation();
   const companyRoleLabel=({owner:"Company owner",manager:"Manager",staff:"Staff",resident:"Resident"} as Record<string,string>)[data?.membership?.role||""];
   const platformWorkspace=location.pathname.startsWith("/platform")||!data?.membership;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileHeaderHeight, setMobileHeaderHeight] = useState(0);
+  const [mobile, setMobile] = useState(() => window.matchMedia("(max-width: 700px)").matches);
+  const [moreNavigation, setMoreNavigation] = useState(false);
   const main = useRef<HTMLElement>(null);
+  const sidebar = useRef<HTMLElement>(null);
+  const navigation = useRef<HTMLElement>(null);
+  const workspaceContent = useRef<HTMLDivElement>(null);
+  const menuToggle = useRef<HTMLButtonElement>(null);
   const route = pageContext(location.pathname, location.search);
   const navigationType = useNavigationType();
+  const navigationPolicy = JSON.stringify(data?.companyFeatures || null);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 700px)");
+    const update = () => {
+      setMobile(media.matches);
+      if (!media.matches) setMenuOpen(false);
+    };
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  useLayoutEffect(() => {
+    if (!mobile || !menuOpen) return;
+    const content = workspaceContent.current, menu = sidebar.current;
+    if (!content || !menu) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    content.inert = true;
+    const frame = requestAnimationFrame(() => {
+      (menu.querySelector<HTMLElement>('nav [aria-current="page"]') || menu.querySelector<HTMLElement>("nav a") || menuToggle.current)?.focus();
+    });
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault(); event.stopPropagation();
+        setMenuOpen(false);
+        requestAnimationFrame(() => window.dispatchEvent(new Event("workspace-search-open")));
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault(); event.stopPropagation(); setMenuOpen(false); return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = Array.from(menu.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), select:not([disabled]), [tabindex="0"]')).filter(node => node.getClientRects().length > 0);
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", onKey, true);
+      content.inert = false;
+      document.body.style.overflow = previousOverflow;
+      menuToggle.current?.focus();
+    };
+  }, [mobile, menuOpen]);
+  useLayoutEffect(() => {
+    const node = navigation.current;
+    if (!node) return;
+    const update = () => setMoreNavigation(node.scrollHeight - node.scrollTop - node.clientHeight > 12);
+    const active = node.querySelector<HTMLElement>('[aria-current="page"]');
+    if (active && node.clientHeight) {
+      const row = active.getBoundingClientRect(), bounds = node.getBoundingClientRect();
+      if (row.top < bounds.top) node.scrollTop -= bounds.top - row.top + 8;
+      else if (row.bottom > bounds.bottom) node.scrollTop += row.bottom - bounds.bottom + 8;
+    }
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    node.addEventListener("scroll", update, { passive: true });
+    update();
+    return () => { observer.disconnect(); node.removeEventListener("scroll", update); };
+  }, [location.pathname, data?.permissions.join(","), navigationPolicy, mobile, menuOpen]);
   useEffect(() => {
     document.title = `${route.title} · Property Flow`;
   }, [route.title]);
@@ -167,7 +236,12 @@ function Shell({ children }: { children: React.ReactNode }) {
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <aside className="sidebar">
+      {mobile && menuOpen && <button className="navigation-backdrop" aria-label="Close navigation menu" tabIndex={-1} onClick={() => setMenuOpen(false)} />}
+      <div className="workspace-sidebar-slot" style={mobile && menuOpen ? { height: mobileHeaderHeight } : undefined}>
+      <aside ref={sidebar} className={`sidebar ${mobile && menuOpen ? "mobile-open" : ""}`}
+        role={mobile && menuOpen ? "dialog" : undefined}
+        aria-modal={mobile && menuOpen ? true : undefined}
+        aria-label={mobile && menuOpen ? "Workspace menu" : undefined}>
         <Link className="brand" to={user ? "/dashboard" : "/"}>
           <span className="brand-mark">P</span>Property Flow
         </Link>
@@ -177,39 +251,29 @@ function Shell({ children }: { children: React.ReactNode }) {
             : data?.membership?.company.name || "Your workspace"}
         </p>
         <button
+          ref={menuToggle}
           className="mobile-menu-toggle secondary"
           aria-expanded={menuOpen}
           aria-controls="workspace-navigation"
-          onClick={() => setMenuOpen((v) => !v)}
+          onClick={() => {
+            if (!menuOpen) setMobileHeaderHeight(sidebar.current?.getBoundingClientRect().height || 0);
+            setMenuOpen((v) => !v);
+          }}
         >
           {menuOpen ? "Close menu" : "Menu"}
         </button>
+        {mobile && menuOpen && <button className="drawer-search" onClick={() => {
+          setMenuOpen(false);
+          requestAnimationFrame(() => window.dispatchEvent(new Event("workspace-search-open")));
+        }}><span aria-hidden="true">⌕</span> Search workspace</button>}
         <nav
+          ref={navigation}
           id="workspace-navigation"
           className={`nav-sections ${menuOpen ? "expanded" : ""}`}
           aria-label="Main navigation"
         >
-          {[
-            "Workspace",
-            "Operations",
-            "Finance",
-            "Administration",
-            "Account",
-          ].map((group) => {
-            const links = visibleRoutes(data?.permissions || []).filter(r => availableFeatureRoute(r.path, data?.companyFeatures, data?.membership?.role)).filter((r) => {
-              const section =
-                r.path.startsWith("/platform/") ||
-                /members|settings/.test(r.path)
-                  ? "Administration"
-                  : r.section === "Account"
-                    ? "Account"
-                    : /finances|reports|rent|deposits|imports\/expenses/.test(r.path)
-                      ? "Finance"
-                      : /leases|maintenance|work-orders|documents|availability|prospects|applications|drafts/.test(r.path)
-                        ? "Operations"
-                        : "Workspace";
-              return section === group;
-            });
+          {groupedNavigation(data?.permissions || []).map(({ title: group, routes: sectionRoutes }) => {
+            const links = sectionRoutes.filter(r => availableFeatureRoute(r.path, data?.companyFeatures, data?.membership?.role));
             return links.length ? (
               <div className="nav-group" key={group}>
                 <p>{group}</p>
@@ -229,6 +293,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             ) : null;
           })}
         </nav>
+        <div className="nav-scroll-hint" aria-hidden="true" hidden={!moreNavigation}>More pages below <span>↓</span></div>
         <div className={`sidebar-footer ${menuOpen ? "expanded" : ""}`}>
           {user ? (
             <>
@@ -238,16 +303,17 @@ function Shell({ children }: { children: React.ReactNode }) {
                   ? user.platformRole === "support" ? "Platform support" : "Platform owner"
                   : companyRoleLabel || "Access pending"}
               </span>
-              <button className="secondary" onClick={signOut}>
+              <button className="secondary" onClick={() => { setMenuOpen(false); signOut(); }}>
                 Sign out
               </button>
             </>
           ) : (
-            <button onClick={signIn}>Sign in</button>
+            <button onClick={() => { setMenuOpen(false); signIn(); }}>Sign in</button>
           )}
         </div>
       </aside>
-      <div className="workspace-main">
+      </div>
+      <div ref={workspaceContent} className="workspace-main" aria-hidden={mobile && menuOpen ? true : undefined}>
         <header className="topbar">
           <nav className="topbar-location" aria-label="Breadcrumb">
             {data?.permissions.includes("property.read") ? (
@@ -259,17 +325,16 @@ function Shell({ children }: { children: React.ReactNode }) {
             {route.parent && <><Link to={route.parent.path}>{route.parent.title}</Link><span aria-hidden="true">/</span></>}
             <span aria-current="page">{route.title}</span>
           </nav>
-          {data?.permissions.includes("property.read") && availableFeatureRoute("/company/properties", data.companyFeatures) && <PropertySearch />}
+          {user && <PropertySearch />}
           {data?.permissions.includes("notification.read") && availableFeatureRoute("/account/notifications", data.companyFeatures, data.membership?.role) && <NotificationBell/>}
           <ContextHelp/>
           <span className="badge">Development</span>
         </header>
         <main ref={main} id="main" tabIndex={-1}>
-          {error && user && (
-            <p role="alert" className="notice error">
-              {error}
-            </p>
-          )}
+          {actionError && user && <div role="alert" className="notice error">
+            <p>{actionError.message}</p>
+            {actionError.action === "sign_out" && <button type="button" className="secondary" onClick={signOut}>Try signing out again</button>}
+          </div>}
           <NotificationReturnLink/>
           <ProspectReturnLink/>
           <EmailVerification />

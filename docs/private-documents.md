@@ -1,6 +1,6 @@
 # Private documents — PF-15
 
-October 25, 2026 local scanner-retirement follow-up: automatic scanning is removed at the user’s request. New originals are explicitly Not scanned; authorized use/download does not require a scan. Historical results stay intact, and rejected originals remain blocked. Migration 056, smaller ECS task sizes and updated demo/workflow acceptance are documented in [scanner retirement](scanner-retirement.md). The earlier deployed scanner evidence below remains historical.
+October 25, 2026 local scanner-retirement follow-up: automatic scanning is removed at the user’s request. New originals are explicitly Not scanned; authorized use/download does not require a scan. Historical results stay intact, and rejected originals remain blocked. Migration 057, smaller ECS task sizes and updated demo/workflow acceptance are documented in [scanner retirement](scanner-retirement.md). The earlier deployed scanner evidence below remains historical.
 
 Foundation, scanner refinements and private library are merged/deployed (#46/#48/#49/#57), most recently in `1945049`. Live sample clean/rejected uploads passed; final downloaded-file receipt and full role acceptance remain unverified. This PR connects exact retained originals to inspections and unsigned agreement preparation; it grants no new sharing rights. [Current release evidence](mvp-status.md).
 

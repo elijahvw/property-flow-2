@@ -19,6 +19,7 @@ import { DraftReset } from "../components/DraftReset";
 import { PropertyFields } from "../components/PropertyFields";
 import { EditorDialog } from "../components/EditorDialog";
 import "./WorkspaceExperience.css";
+import { DirectoryPagination, useDirectoryPage } from "../components/DirectoryPagination";
 import { UserActivity, ActivityLog } from "../components/UserActivity";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useUserDirectory } from "../useUserDirectory";
@@ -33,6 +34,7 @@ import { api, ApiError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { availableFeatureRoute } from "../company-features";
 import { monitorOperation } from "../operations";
+import { LoadingState } from "../components/LoadingState";
 import { useResource } from "../useResource";
 import { formatActivityTime } from "../dates";
 import OwnerOnboarding from "../components/OwnerOnboarding";
@@ -241,6 +243,8 @@ function PeopleWorkspace() {
   const [params,setParams] = useSearchParams();
   const [selected, setSelected, selectedOpen, saveSelectedDraft] = useEditorSelection(params.get("userId") || "");
   const [query, setQuery] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
+  const [accountFilter, setAccountFilter] = useState("");
   const [creating, setCreating] = useState(false);
   const directory = useUserDirectory(r.reload);
   const [draft, setDraft] = useState<Person | null>(null);
@@ -256,17 +260,30 @@ function PeopleWorkspace() {
   useEffect(() => {
     if (currentPerson && draft?.id !== selected) setDraft(currentPerson);
   }, [selected, currentPerson, draft?.id]);
+  const rows = r.data?.filter((p) =>
+    `${p.name || ""} ${p.email}`.toLowerCase().includes(query.trim().toLowerCase()) &&
+    (!accountFilter || p.status === accountFilter) &&
+    (!companyFilter || (companyFilter === "unassigned" ? !p.membership : p.membership?.companyId === companyFilter)),
+  );
+  const userPage = useDirectoryPage(rows, JSON.stringify([query, companyFilter, accountFilter]));
+  const companyAccess = (p: Person) => {
+    if (!p.membership) return "No company access";
+    if (p.status !== "active") return "Account disabled";
+    if (p.emailVerified === false) return "Verification required";
+    if (p.membership.status !== "active") return "Membership disabled";
+    const company = companies.data?.find(c => c.id === p.membership!.companyId) || p.membership.company;
+    return company.status === "suspended" ? "Company suspended" : "Active company access";
+  };
   return (
     <>
-      <header className="page-heading">
-        <p className="eyebrow">Platform</p>
-        <h1>Users</h1>
-        <p>
-          All sign-in accounts appear here automatically, including people who
-          have not signed in. Assign company access when you are ready.
-        </p>
+      <header className="page-heading page-heading-row admin-directory-heading">
+        <div>
+          <p className="eyebrow">Platform / Accounts &amp; access</p>
+          <h1>Users</h1>
+          <p>Find a sign-in account, check its access, and open the right next action.</p>
+        </div>
+        <button onClick={() => setCreating(true)}>Add user</button>
       </header>
-      <button onClick={() => setCreating(true)}>Add user</button>
       <EditorDialog
         open={creating}
         title="Add user"
@@ -281,10 +298,7 @@ function PeopleWorkspace() {
           }}
         />
       </EditorDialog>
-      <p className="help">
-        New accounts start without a company role. Existing roles and disabled
-        access are preserved.
-      </p>
+
       {params.get("companyId") && (
         <section className="panel">
           <h2>Invite by email</h2>
@@ -298,9 +312,13 @@ function PeopleWorkspace() {
           <InvitationForm companyId={params.get("companyId")!} owner />
         </section>
       )}
-      <section className="panel">
-        <h2>All users</h2>
-        <form
+      <section className="panel admin-directory directory-workbench" aria-label="User directory">
+        <div className="admin-directory-intro">
+          <div><h2>All users</h2><p>Account creation, email verification and company access are separate. New accounts start without a company role.</p></div>
+          {r.data && <span className="directory-count">{r.data.length} synced {r.data.length === 1 ? "account" : "accounts"}</span>}
+        </div>
+        <div className="admin-directory-toolbar directory-toolbar">
+        <form className="admin-directory-search"
           onSubmit={(event) => {
             event.preventDefault();
             if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(query.trim()))
@@ -313,13 +331,34 @@ function PeopleWorkspace() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Name or email"
+              type="search"
+              maxLength={254}
+              aria-describedby="user-search-help"
             />
           </label>
-          <button type="submit" disabled={directory.syncing}>
-            Search
+          <button type="submit" className="secondary" disabled={directory.syncing || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(query.trim())}>
+            Check exact email
           </button>
         </form>
-        {directory.syncing && <p role="status">Checking for new accounts…</p>}
+        <div className="admin-directory-filters">
+          <label>Filter by company<select value={companyFilter} onChange={event => setCompanyFilter(event.target.value)}>
+            <option value="">All companies</option>
+            <option value="unassigned">No company assigned</option>
+            {companies.data?.map(company => <option key={company.id} value={company.id}>{company.name}{company.status !== "active" ? " (suspended)" : ""}</option>)}
+          </select></label>
+          <label>Filter account status<select value={accountFilter} onChange={event => setAccountFilter(event.target.value)}>
+            <option value="">All account statuses</option>
+            <option value="active">Active account</option>
+            <option value="disabled">Disabled account</option>
+          </select></label>
+        </div>
+        </div>
+        <p className="help" id="user-search-help">Filter synced accounts as you type. Enter a complete email and choose Check exact email to look for an account beyond the provider's directory limit.</p>
+        <div className="admin-directory-summary directory-result-summary">
+          <div><p aria-live="polite">{rows ? `${rows.length} matching ${rows.length === 1 ? "account" : "accounts"}` : "Loading accounts…"}{r.error && rows ? " · last loaded records" : ""}</p>
+          <span className="directory-sync-status" role="status">{directory.syncing ? "Checking for new accounts…" : ""}</span></div>
+          {(query || companyFilter || accountFilter) && <button className="text-button" type="button" onClick={() => { setQuery(""); setCompanyFilter(""); setAccountFilter(""); }}>Clear user filters</button>}
+        </div>
         {directory.error && (
           <div role="alert">
             <p>
@@ -353,59 +392,52 @@ function PeopleWorkspace() {
             </ul>
           </details>
         )}
+        <div className="user-directory-results-region">
         {!r.data ? (
-          <LoadState error={r.error} retry={r.reload} />
+          r.error ? <LoadState error={r.error} retry={r.reload} /> : <LoadingState label="Loading accounts…" />
         ) : (
-          <div className="table-wrap">
-            <table>
+          <div className="table-wrap admin-directory-results">
+            <table className="admin-record-table">
+              <caption className="sr-only">Synced sign-in accounts and their current company access</caption>
               <thead>
                 <tr>
                   <th>Person</th>
-                  <th>Email verification</th>
-                  <th>Company</th>
-                  <th>Role</th>
-                  <th>Access</th>
+                  <th>Sign-in account</th>
+                  <th>Company &amp; role</th>
+                  <th>Company access</th>
                   <th>
                     <span className="sr-only">Actions</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {r.data
-                  .filter((p) =>
-                    `${p.name || ""} ${p.email}`
-                      .toLowerCase()
-                      .includes(query.trim().toLowerCase()),
-                  )
-                  .map((p) => (
+                {userPage.items?.map((p) => (
                     <tr key={p.id}>
-                      <td>
+                      <td className="admin-record-identity">
                         <strong>{p.name || p.email}</strong>
                         <span className="cell-detail">{p.email}</span>
                       </td>
-                      <td>
-                        {p.emailVerified ? "Verified" : "Not verified"}
+                      <td data-label="Sign-in account">
+                        <span className={`admin-status ${p.status === "active" ? "is-active" : "is-blocked"}`}>{p.status === "active" ? "Active account" : "Account disabled"}</span>
+                        <span className="cell-detail">{p.emailVerified ? "Verified" : "Not verified"}</span>
                         <span className="cell-detail">
                           {p.firstSignedInAt
                             ? "Has signed in"
                             : "Awaiting first sign-in"}
                         </span>
                       </td>
-                      <td>
-                        {p.membership?.company.name || "Unassigned"}
+                      <td data-label="Company & role">
+                        <strong>{p.membership?.company.name || "Unassigned"}</strong>
                         {!p.membership && p.companyId && (
                           <span className="cell-detail">
                             Previous assignment needs review
                           </span>
                         )}
+                        <span className="cell-detail admin-role">{p.platformRole === "owner" ? "Platform owner" : p.membership?.role || "No role assigned"}</span>
+                        {p.platformRole === "owner" && p.membership && <span className="cell-detail">Company role: {p.membership.role}</span>}
                       </td>
-                      <td>
-                        {p.platformRole === "owner"
-                          ? "Platform owner"
-                          : p.membership?.role || "No role assigned"}
-                      </td>
-                      <td>{p.status}</td>
-                      <td>
+                      <td data-label="Company access"><span className={`admin-status ${companyAccess(p) === "Active company access" ? "is-active" : "is-pending"}`}>{companyAccess(p)}</span></td>
+                      <td className="admin-record-actions">
                         <button
                           className="secondary"
                           onClick={() => {
@@ -420,19 +452,17 @@ function PeopleWorkspace() {
                   ))}
               </tbody>
             </table>
-            {!r.data.some((p) =>
-              `${p.name || ""} ${p.email}`
-                .toLowerCase()
-                .includes(query.trim().toLowerCase()),
-            ) && (
+            <DirectoryPagination name="Users" {...userPage} total={rows?.length || 0} />
+            {!rows?.length && (
               <p>
-                {query
-                  ? "No users match this search. Search a complete email to check for a newly created account."
+                {query || companyFilter || accountFilter
+                  ? "No users match these filters. Clear the filters or search a complete email to check for a newly created account."
                   : "No users yet."}
               </p>
             )}
           </div>
         )}
+        </div>
       </section>
       {person && (
         <EditorDialog
@@ -456,7 +486,16 @@ function PeopleWorkspace() {
             </div>
             <Badge>{person.status}</Badge>
           </div>
-          <details open className="editor-section">
+          <nav className="account-section-nav" aria-label="Account management sections">
+            {[["profile", "Profile"], ["access", "Company access"], ["signin", "Sign-in & status"], ["activity", "Activity"]].map(([section, label]) => <button key={section} type="button" className="secondary" onClick={() => {
+              const target = document.getElementById(`manage-user-${section}`);
+              const disclosure = target instanceof HTMLDetailsElement ? target : target?.querySelector("details");
+              if (disclosure instanceof HTMLDetailsElement) disclosure.open = true;
+              target?.focus();
+              target?.scrollIntoView({ block: "start" });
+            }}>{label}</button>)}
+          </nav>
+          <details id="manage-user-profile" tabIndex={-1} open className="editor-section account-workspace-section">
             <summary>Application profile</summary>
             <Form
               label="Save display name"
@@ -480,7 +519,7 @@ function PeopleWorkspace() {
               </p>
             </Form>
           </details>
-          <details open className="editor-section">
+          <details id="manage-user-access" tabIndex={-1} open className="editor-section account-workspace-section">
             <summary>Company access</summary>
             {!companies.data ? (
               <LoadState error={companies.error} retry={companies.reload} />
@@ -537,6 +576,7 @@ function PeopleWorkspace() {
               </Form>
             )}
           </details>
+          <section id="manage-user-signin" tabIndex={-1} className="account-workspace-section" aria-label="Sign-in assistance and account status">
           <UserVerificationControls
             key={person.id}
             id={person.id}
@@ -561,10 +601,10 @@ function PeopleWorkspace() {
               </Form>
             </div>
           )}
-          <UserActivity
-            id={person.id}
-            revision={`${person.name}:${person.membership?.version}:${person.status}:${person.emailVerified}`}
-          />
+          </section>
+          <section id="manage-user-activity" tabIndex={-1} className="account-workspace-section" aria-label="Account activity">
+            <UserActivity id={person.id} revision={`${person.name}:${person.membership?.version}:${person.status}:${person.emailVerified}`} />
+          </section>
         </EditorDialog>
       )}
       <Invitations platform />
@@ -600,6 +640,8 @@ function PropertyDirectory() {
   const [propertyKey, setPropertyKey] = useState(() => crypto.randomUUID());
   const [propertySuccess, setPropertySuccess] = useState("");
   const { can, data: auth } = useAuth();
+  const propertyReadOnly = auth?.companyFeatures?.properties === "read_only";
+  const tenantAccessReadOnly = propertyReadOnly || auth?.companyFeatures?.leasing === "read_only";
   const authority = JSON.stringify([auth?.user.id, auth?.user.email, auth?.user.status, auth?.user.emailVerified,
     auth?.membership?.companyId, auth?.membership?.version, auth?.membership?.role, auth?.membership?.status,
     auth?.membership?.company.status, auth?.permissions, auth?.impersonation?.contextId]);
@@ -648,6 +690,7 @@ function PropertyDirectory() {
         (view === "maintenance" && !!count?.openMaintenance))
     );
   });
+  const propertyPage = useDirectoryPage(rows, JSON.stringify([query, view]));
   const total = (key: keyof Omit<PropertyActivity, "id">) => {
     const items=hasCounts?activity.data?.items:undefined;
     return items && items.every(p=>p[key]!==undefined) ? items.reduce((sum,p)=>sum+p[key]!,0) : undefined;
@@ -661,10 +704,10 @@ function PropertyDirectory() {
           <p>Your properties, units and day-to-day work in one place.</p>
         </div>
         {can("property.write") && (
-          <button onClick={() => setAdding(true)}>Add property</button>
+          <button disabled={propertyReadOnly} onClick={() => setAdding(true)}>Add property</button>
         )}
       </header>
-      <OwnerOnboarding properties={r} onAddProperty={() => setAdding(true)} />
+      {!propertyReadOnly && <OwnerOnboarding properties={r} onAddProperty={() => setAdding(true)} />}
       {!!r.data?.length && (
         <div className="portfolio-summary" aria-label="Portfolio summary">
           <div>
@@ -697,14 +740,17 @@ function PropertyDirectory() {
           onClose={() => setAdding(false)} onDiscard={() => { setAdding(false); setPropertyKey(crypto.randomUUID()); }}
           description="Start with the address. Add units and residents from the property workspace after saving."
         >
+          {propertyReadOnly && <p className="notice">Property creation is read-only under the current company settings. Your unfinished details are kept.</p>}
           <Form
             key={propertyKey}
+            locked={propertyReadOnly}
             operation="property.create"
             secondaryActions={
               <DraftReset reset={() => setPropertyKey(crypto.randomUUID())} />
             }
             label="Create property"
             submit={async (data) => {
+              if (propertyReadOnly) throw new Error("Property creation is read-only under the current company settings.");
               if (!currentAttempt()) throw new ApiError("Your company or account changed. Reopen the property workspace before continuing.", 409, "PROPERTY_CONTEXT_CHANGED");
               await api("/api/company/properties", {
                 method: "POST",
@@ -734,7 +780,7 @@ function PropertyDirectory() {
           {propertySuccess}
         </p>
       )}
-      <section className="panel property-filter-panel" aria-labelledby="property-filter-heading">
+      <section className="panel property-filter-panel directory-workbench" aria-labelledby="property-filter-heading">
         <div className="section-heading"><div><h2 id="property-filter-heading">Find a property</h2><p className="help">Search your portfolio or choose the work you need to review.</p></div>
           {(query || view !== "all") && <button className="text-button" onClick={() => { const next = new URLSearchParams(params); next.delete("q"); next.delete("view"); setParams(next, {replace:true}); }}>Clear filters</button>}
         </div>
@@ -814,7 +860,7 @@ function PropertyDirectory() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((p) => {
+                {propertyPage.items?.map((p) => {
                   const count = counts.get(p.id),
                     root = `/company/properties/${encodeURIComponent(p.id)}`;
                   return (
@@ -878,13 +924,8 @@ function PropertyDirectory() {
                           <Link className="tenant-row-action" to={root}>
                             View property →
                           </Link>
-                          {can("resident.assignment.manage") && (
-                            <button
-                              className="text-button"
-                              onClick={() => setManaging(p)}
-                            >
-                              Manage residents
-                            </button>
+                          {can("resident.assignment.manage") && availableFeatureRoute(`${root}/residents`, auth?.companyFeatures, auth?.membership?.role) && (
+                            tenantAccessReadOnly ? <Link className="text-button" to={`${root}/residents`}>View tenant access</Link> : <button className="text-button" onClick={() => setManaging(p)}>Manage residents</button>
                           )}
                         </div>
                       </td>
@@ -895,6 +936,7 @@ function PropertyDirectory() {
             </table>
           </div>
         )}
+        {rows && <DirectoryPagination name="Properties" {...propertyPage} total={rows.length} />}
       </section>
       {managing && can("resident.assignment.manage") && (
         <ManageResidents
@@ -968,46 +1010,51 @@ function TeamDirectory() {
   const [inviting, setInviting] = useState(params.has("invite")),
     [transferring, setTransferring] = useState(false);
   const [selected, setSelected, selectedOpen, saveSelectedDraft] = useEditorSelection("");
+  const scope = JSON.stringify([data?.user.id, data?.user.status, data?.user.emailVerified, data?.membership?.companyId, data?.membership?.version, data?.permissions, data?.impersonation?.contextId, data?.companyFeatures]);
+  const [memberDraft, setMemberDraft] = useState<{ member: Member; scope: string } | null>(null);
   const [propertyMember, setPropertyMember, propertyMemberOpen, savePropertyDraft] = useEditorSelection("");
   const [teamQuery, setTeamQuery] = useState(""), [teamStatus, setTeamStatus] = useState(""), [teamRole, setTeamRole] = useState(""), [teamPage, setTeamPage] = useState(0);
   const [invitationRevision, setInvitationRevision] = useState(0);
   const team = r.data?.filter((m) => m.role !== "resident");
-  const member = team?.find((m) => m.userId === selected);
+  const denied = r.errorStatus !== undefined && [401, 403, 404].includes(r.errorStatus);
+  const currentMember = team?.find(m => m.userId === selected);
+  const member = !denied && (!memberDraft || memberDraft.scope === scope) && (r.loading || !!r.error || !!currentMember)
+    ? memberDraft?.member.userId === selected ? memberDraft.member : currentMember
+    : undefined;
+  useEffect(() => {
+    if (denied || memberDraft && memberDraft.scope !== scope || selected && !r.loading && !r.error && r.data && !team?.some(m => m.userId === selected)) {
+      setMemberDraft(null);
+      setSelected("");
+    } else if (selected && member && memberDraft?.member.userId !== selected) {
+      setMemberDraft({ member, scope });
+    }
+  }, [denied, scope, selected, member, memberDraft, r.loading, r.error, r.data, setSelected]);
   const filteredTeam = team?.filter(m => (!teamStatus || (m.status === "active" && m.user.status === "active" ? "active" : "disabled") === teamStatus) && (!teamRole || m.role === teamRole) && `${m.user.name || ""} ${m.user.email}`.toLowerCase().includes(teamQuery.trim().toLowerCase()));
   useEffect(()=>{const last=Math.max(0,Math.ceil((filteredTeam?.length||0)/25)-1);if(r.data&&teamPage>last)setTeamPage(last);},[filteredTeam?.length,teamPage,r.data]);
   const teamRows = filteredTeam?.slice(teamPage * 25, (teamPage + 1) * 25);
   return (
     <>
-      <header className="page-heading">
-        <p className="eyebrow">Company</p>
-        <h1>Team</h1>
-        <p>
-          Manage owners, managers and staff, including staff property access.
-          Tenant profiles live in Tenants.
-        </p>
-        <div className="actions">
-          <button onClick={() => setInviting(true)}>Invite team member</button>
-          <button className="secondary" onClick={() => setTransferring(true)}>
-            Transfer ownership
-          </button>
-          <Link to="/company/residents">Manage tenants</Link>
-          <Link to="/company/settings?section=roles">Roles & permissions →</Link>
-        </div>
+      <header className="page-heading page-heading-row admin-directory-heading">
+        <div><p className="eyebrow">Company / People &amp; access</p><h1>Team</h1><p>Manage owners, managers and staff. Keep property scope separate from company roles.</p></div>
+        <button onClick={() => setInviting(true)}>Invite team member</button>
       </header>
-      <section className="panel">
-        <div className="filters"><label>Find team member<input type="search" maxLength={200} value={teamQuery} onChange={e=>{setTeamQuery(e.target.value);setTeamPage(0);}}/></label><label>Team role<select value={teamRole} onChange={e=>{setTeamRole(e.target.value);setTeamPage(0);}}><option value="">All roles</option><option value="owner">Company owner</option><option value="manager">Manager</option><option value="staff">Staff</option></select></label><label>Team status<select value={teamStatus} onChange={e=>{setTeamStatus(e.target.value);setTeamPage(0);}}><option value="">All statuses</option><option value="active">Active</option><option value="disabled">Disabled</option></select></label></div>
+      <nav className="admin-related-links" aria-label="People workspaces"><Link to="/company/residents">Manage tenants</Link><Link to="/company/settings?section=roles">Roles &amp; permissions →</Link><button className="text-button" onClick={() => setTransferring(true)}>Transfer ownership</button></nav>
+      <section className="panel admin-directory directory-workbench team-directory" aria-label="Team directory">
+        <div className="admin-directory-intro"><div><h2>Company team</h2><p>Tenant contact records and portal access are managed in Tenants.</p></div>{team && <span className="directory-count">{team.length} team {team.length === 1 ? "member" : "members"}</span>}</div>
+        <div className="filters directory-toolbar"><label>Find team member<input type="search" maxLength={200} value={teamQuery} onChange={e=>{setTeamQuery(e.target.value);setTeamPage(0);}}/></label><label>Team role<select value={teamRole} onChange={e=>{setTeamRole(e.target.value);setTeamPage(0);}}><option value="">All roles</option><option value="owner">Company owner</option><option value="manager">Manager</option><option value="staff">Staff</option></select></label><label>Team status<select value={teamStatus} onChange={e=>{setTeamStatus(e.target.value);setTeamPage(0);}}><option value="">All statuses</option><option value="active">Active</option><option value="disabled">Disabled</option></select></label></div>
+        <div className="admin-directory-summary directory-result-summary"><p aria-live="polite">{filteredTeam ? `${filteredTeam.length} matching ${filteredTeam.length === 1 ? "member" : "members"}` : "Loading team…"}</p>{(teamQuery || teamStatus || teamRole) && <button className="text-button" type="button" onClick={() => { setTeamQuery(""); setTeamStatus(""); setTeamRole(""); setTeamPage(0); }}>Clear team filters</button>}</div>
         {!r.data ? (
           <LoadState error={r.error} retry={r.reload} />
         ) : (
-          <ul className="record-list">
+          <ul className="record-list team-record-list">
             {teamRows?.map((m) => (
               <li key={m.userId}>
-                <div>
-                  <strong>{m.user.name || m.user.email}</strong>
-                  <p>{m.user.email}</p>
+                <div className="team-record-identity">
+                  <span className="admin-avatar" aria-hidden="true">{(m.user.name || m.user.email).slice(0, 1).toUpperCase()}</span>
+                  <div><strong>{m.user.name || m.user.email}</strong><p>{m.user.email}</p></div>
                 </div>
-                <Badge>{m.role}</Badge>
-                <Badge>{m.user.status !== "active" ? "Account disabled" : m.status}</Badge>
+                <div className="team-record-status"><Badge>{m.role}</Badge><span className={`admin-status ${m.user.status === "active" && m.status === "active" ? "is-active" : "is-blocked"}`}>{m.user.status !== "active" ? "Account disabled" : m.status === "active" ? "Active access" : "Membership disabled"}</span></div>
+                <div className="team-record-actions">
                 {m.role === "staff" && <button className="secondary" onClick={() => setPropertyMember(m.userId)}>Staff access</button>}
                 {m.role !== "owner" && (
                   <button
@@ -1017,12 +1064,13 @@ function TeamDirectory() {
                     Edit access
                   </button>
                 )}
+                </div>
               </li>
             ))}
           </ul>
         )}
         {r.data && !filteredTeam?.length && <p>No team members match these filters.</p>}
-        {!!filteredTeam?.length && <nav className="actions" aria-label="Team pages"><button className="secondary" disabled={!teamPage} onClick={()=>setTeamPage(p=>p-1)}>Previous team members</button><span>{filteredTeam.length} matching members · Page {teamPage+1}</span><button className="secondary" disabled={(teamPage+1)*25>=filteredTeam.length} onClick={()=>setTeamPage(p=>p+1)}>Next team members</button></nav>}
+        {(filteredTeam?.length || 0) > 25 && <nav className="admin-directory-pagination directory-pagination" aria-label="Team pages"><p>Showing {teamPage * 25 + 1}–{Math.min((teamPage + 1) * 25, filteredTeam!.length)} of {filteredTeam!.length} matching members</p><div className="actions"><button className="secondary" disabled={!teamPage} onClick={()=>setTeamPage(p=>p-1)}>Previous team members</button><span>Page {teamPage+1}</span><button className="secondary" disabled={(teamPage+1)*25>=filteredTeam!.length} onClick={()=>setTeamPage(p=>p+1)}>Next team members</button></div></nav>}
       </section>
       {team?.find(m => m.userId === propertyMember) && <EditorDialog key={propertyMember} open={propertyMemberOpen} onSaveDraft={savePropertyDraft} title={`Staff access for ${team.find(m => m.userId === propertyMember)!.user.name || team.find(m => m.userId === propertyMember)!.user.email}`} onClose={() => setPropertyMember("")}>
         <StaffPropertyEditor key={propertyMember} member={team.find(m => m.userId === propertyMember)!} saved={() => { setPropertyMember(""); r.reload(); }} />
@@ -1033,12 +1081,16 @@ function TeamDirectory() {
           open={selectedOpen}
           onSaveDraft={saveSelectedDraft}
           title={`Access for ${member.user.name || member.user.email}`}
-          onClose={() => setSelected("")}
+          onClose={() => { setSelected(""); setMemberDraft(null); }}
         >
+          {r.loading && <p role="status">Checking current team access…</p>}
+          {r.error && <LoadState error={r.error} retry={r.reload} />}
           <Form
             operation="membership.update"
+            locked={r.loading || !!r.error}
             submit={async (data) => {
-              await api(
+              if (r.loading || r.error) throw new Error("Reload current team access before saving.");
+              try { await api(
                 `/api/company/members/${encodeURIComponent(member.userId)}`,
                 {
                   method: "PATCH",
@@ -1048,8 +1100,12 @@ function TeamDirectory() {
                     expectedVersion: member.version,
                   },
                 },
-              );
+              ); } catch (error) {
+                if (error instanceof ApiError && error.code === "STALE_MEMBERSHIP") r.reload();
+                throw error;
+              }
               setSelected("");
+              setMemberDraft(null);
               r.reload();
             }}
           >
@@ -1146,6 +1202,9 @@ export function ManageResidents({
   property: { id: string; name: string };
   close: () => void;
 }) {
+  const { can, data: auth } = useAuth();
+  const accessReadOnly = (["properties", "leasing"] as const).some(key => auth?.companyFeatures?.[key] !== undefined && auth.companyFeatures[key] !== "enabled");
+  const canChangeAccess = can("resident.assignment.manage") && !accessReadOnly;
   const base = `/api/company/properties/${encodeURIComponent(property.id)}/residents`;
   const eligible = useResource<
     { userId: string; user: { name: string | null; email: string } }[]
@@ -1157,15 +1216,18 @@ export function ManageResidents({
     }[]
   >(base);
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [residentChoice, setResidentChoice] = useState("");
   const choices = eligible.data?.filter(
     (person) => !assigned.data?.some((row) => row.userId === person.userId),
   );
   const change = async (userId: string, method: "PUT" | "DELETE") => {
+    if (!canChangeAccess || busy || assigned.loading || eligible.loading || assigned.error || eligible.error) return;
     setBusy(true);
     setError("");
     try {
       await api(`${base}/${encodeURIComponent(userId)}`, { method });
+      if (method === "PUT") setResidentChoice("");
       assigned.reload();
       eligible.reload();
     } catch (e) {
@@ -1187,6 +1249,7 @@ export function ManageResidents({
         occupancy. Pending invitations are not eligible; residents must accept
         first.
       </p>
+      {accessReadOnly && <p className="notice" role="status">Tenant property access is read-only under the current company settings. New assignments and removals are unavailable.</p>}
       {error && (
         <p className="notice error" role="alert">
           {error}
@@ -1211,7 +1274,7 @@ export function ManageResidents({
                   </strong>
                   <Badge>Assigned</Badge>
                   <button
-                    disabled={busy}
+                    disabled={busy || !canChangeAccess || assigned.loading || eligible.loading || !!assigned.error || !!eligible.error}
                     className="secondary"
                     onClick={() => change(row.userId, "DELETE")}
                   >
@@ -1227,17 +1290,17 @@ export function ManageResidents({
             <form
               onSubmit={(event) => {
                 event.preventDefault();
-                if (!busy)
+                if (!busy && canChangeAccess)
                   void change(
                     String(new FormData(event.currentTarget).get("resident")),
                     "PUT",
                   );
               }}
             >
-              <fieldset disabled={busy}>
+              <fieldset disabled={busy || !canChangeAccess || assigned.loading || eligible.loading || !!assigned.error || !!eligible.error}>
                 <label>
                   Accepted resident
-                  <select name="resident" required defaultValue="">
+                  <select name="resident" required value={residentChoice} onChange={event => setResidentChoice(event.target.value)}>
                     <option value="" disabled>
                       Choose a resident
                     </option>

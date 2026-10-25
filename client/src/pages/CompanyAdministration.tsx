@@ -1,6 +1,8 @@
 import { Address } from "../components/Address";
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { DirectoryPagination, useDirectoryPage } from "../components/DirectoryPagination";
+import "./WorkspaceExperience.css";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api";
 import { useResource } from "../useResource";
@@ -183,22 +185,31 @@ function CompanyDirectory() {
     ),
     navigate = useNavigate();
   const [adding, setAdding] = useState(false),
-    [key, setKey] = useState(() => crypto.randomUUID()),
-    [search, setSearch] = useState(""),
-    [status, setStatus] = useState("all");
+    [key, setKey] = useState(() => crypto.randomUUID());
+  const [params, setParams] = useSearchParams();
+  const search = params.get("q")?.slice(0, 200) || "";
+  const status = ["active", "suspended"].includes(params.get("status") || "") ? params.get("status")! : "all";
+  const updateFilter = (key: string, value: string) => {
+    const next = new URLSearchParams(params);
+    if (value && value !== "all") next.set(key, value); else next.delete(key);
+    setParams(next, { replace: true });
+  };
   const rows = r.data?.filter(
     (c) =>
       (status === "all" || c.status === status) &&
       `${c.name} ${c.legalName || ""} ${c.contactEmail || ""}`
         .toLowerCase()
-        .includes(search.toLowerCase()),
+        .includes(search.trim().toLowerCase()),
   );
+  const companyPage = useDirectoryPage(rows, JSON.stringify([search, status]));
+  const directoryQuery = new URLSearchParams({ ...(search ? { q: search } : {}), ...(status !== "all" ? { status } : {}) }).toString();
+  const recordPath = (id: string) => `/platform/companies/${encodeURIComponent(id)}${directoryQuery ? `?${directoryQuery}` : ""}`;
   return (
     <>
-      <header className="page-heading">
-        <p className="eyebrow">Platform administration</p>
+      <header className="page-heading page-heading-row admin-directory-heading">
+        <div><p className="eyebrow">Platform / Companies</p>
         <h1>Companies</h1>
-        <p>Manage business profiles, owner setup and company access.</p>
+        <p>Manage business profiles, owner setup and company access.</p></div>
         {!adding && (
           <button
             onClick={() => {
@@ -240,27 +251,29 @@ function CompanyDirectory() {
           </p>
         </Form>
       </EditorDialog>
-      <SalesDemo onChange={r.reload} />
-      <section className="panel">
-        <h2>Company directory</h2>
-        <div className="form-grid">
+      <section className="panel admin-directory directory-workbench" aria-label="Company directory">
+        <div className="admin-directory-intro"><div><h2>Company directory</h2><p>Open the business record to review ownership, subscription and access.</p></div>{r.data && <span className="directory-count">{r.data.length} {r.data.length === 1 ? "company" : "companies"}</span>}</div>
+        <div className="directory-toolbar company-directory-toolbar">
           <label>
             Find company
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => updateFilter("q", e.target.value)}
+              type="search"
+              maxLength={200}
               placeholder="Name or contact email"
             />
           </label>
           <label>
             Filter company status
-            <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <select value={status} onChange={(e) => updateFilter("status", e.target.value)}>
               <option value="all">All statuses</option>
               <option value="active">Active</option>
               <option value="suspended">Suspended</option>
             </select>
           </label>
         </div>
+        <div className="admin-directory-summary directory-result-summary"><p aria-live="polite">{rows ? `${rows.length} matching ${rows.length === 1 ? "company" : "companies"}` : "Loading companies…"}{r.error && rows ? " · last loaded records" : ""}</p>{(search || status !== "all") && <button className="text-button" onClick={() => { const next = new URLSearchParams(params); next.delete("q"); next.delete("status"); setParams(next, { replace: true }); }}>Clear company filters</button>}</div>
         {r.data && r.error && <Load error={r.error} retry={r.reload} />}
         {!r.data ? (
           <Load error={r.error} retry={r.reload} />
@@ -272,9 +285,9 @@ function CompanyDirectory() {
           </p>
         ) : (
           <>
-            <p>{rows.length} matching companies</p>
-            <div className="table-wrap">
-              <table>
+            <div className="table-wrap admin-directory-results">
+              <table className="admin-record-table">
+                <caption className="sr-only">Company profiles, assigned people and access status</caption>
                 <thead>
                   <tr>
                     <th>Company</th>
@@ -285,19 +298,19 @@ function CompanyDirectory() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((c) => (
+                  {companyPage.items?.map((c) => (
                     <tr key={c.id}>
-                      <td>
-                        <Link to={`/platform/companies/${c.id}`}>{c.name}</Link>
+                      <td className="admin-record-identity">
+                        <Link to={recordPath(c.id)}>{c.name}</Link>
                         {c.legalName && (
                           <span className="cell-detail">{c.legalName}</span>
                         )}
                       </td>
-                      <td>{c.contactEmail || "Not supplied"}</td>
-                      <td>{c._count?.memberships || 0}</td>
-                      <td>{c.status}</td>
-                      <td>
-                        <Link to={`/platform/companies/${c.id}`}>
+                      <td data-label="Contact">{c.contactEmail || "Not supplied"}</td>
+                      <td data-label="Assigned people">{c._count?.memberships ?? c.memberships?.length ?? "Not available"}</td>
+                      <td data-label="Company access"><span className={`admin-status ${c.status === "active" ? "is-active" : "is-blocked"}`}>{c.status === "active" ? "Active" : "Suspended"}</span></td>
+                      <td className="admin-record-actions">
+                        <Link to={recordPath(c.id)}>
                           Manage {c.name}
                         </Link>
                       </td>
@@ -306,9 +319,11 @@ function CompanyDirectory() {
                 </tbody>
               </table>
             </div>
+            <DirectoryPagination name="Companies" {...companyPage} total={rows.length} />
           </>
         )}
       </section>
+      <SalesDemo onChange={r.reload} />
     </>
   );
 }
@@ -329,6 +344,8 @@ function CompanyRecord() {
     [editing, setEditing] = useState(false),
     [draft, setDraft] = useState<CompanyProfile | null>(null),
     [error, setError] = useState("");
+  const [params] = useSearchParams();
+  const directoryQuery = new URLSearchParams({ ...(params.get("q") ? { q: params.get("q")!.slice(0, 200) } : {}), ...(["active", "suspended"].includes(params.get("status") || "") ? { status: params.get("status")! } : {}) }).toString();
   if (!r.data) return <Load error={r.error} retry={r.reload} />;
   const c = r.data,
     owner = c.memberships?.some(
@@ -339,7 +356,7 @@ function CompanyRecord() {
     );
   return (
     <>
-      <Link to="/platform/companies">← Companies</Link>
+      <Link to={`/platform/companies${directoryQuery ? `?${directoryQuery}` : ""}`}>← Companies</Link>
       <header className="page-heading">
         <p className="eyebrow">Company administration</p>
         <h1>{c.name}</h1>

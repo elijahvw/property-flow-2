@@ -1,3 +1,6 @@
+@import "./design-tokens.css";
+@import "./workspace-patterns.css";
+
 :root {
   font-family:
     Inter,
@@ -5,8 +8,8 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  color: #172b36;
-  background: #f5f7f8;
+  color: var(--pf-text);
+  background: var(--pf-bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   font-size: 16px;
@@ -26,7 +29,7 @@ textarea {
   font: inherit;
 }
 a {
-  color: #116759;
+  color: var(--pf-accent);
   text-underline-offset: 3px;
 }
 button,
@@ -35,10 +38,10 @@ button,
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  background: #126b5c;
+  background: var(--pf-accent);
   color: #fff;
-  border: 1px solid #126b5c;
-  border-radius: 8px;
+  border: 1px solid var(--pf-accent);
+  border-radius: var(--pf-radius-control);
   padding: 0.65rem 1rem;
   font-weight: 600;
   cursor: pointer;
@@ -47,27 +50,28 @@ button,
 }
 button:hover,
 .button:hover {
-  background: #0a5145;
+  background: var(--pf-accent-strong);
 }
 button.secondary,
 .button.secondary {
-  background: #fff;
-  border-color: #bac7cb;
-  color: #233b46;
+  background: var(--pf-surface);
+  border-color: var(--pf-border-strong);
+  color: var(--pf-text);
 }
 button.secondary:hover,
 .button.secondary:hover {
-  background: #edf3f3;
+  background: var(--pf-surface-subtle);
 }
 button:disabled {
   opacity: 0.6;
-  cursor: wait;
+  cursor: not-allowed;
 }
+button[aria-busy="true"], [aria-busy="true"] button:disabled { cursor: wait; }
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 3px solid #327ea7;
+  outline: 3px solid var(--pf-focus);
   outline-offset: 3px;
 }
 input,
@@ -75,14 +79,14 @@ select,
 textarea {
   width: 100%;
   min-height: 44px;
-  background: #fff;
-  color: #172b36;
-  border: 1px solid #aabac1;
-  border-radius: 7px;
+  background: var(--pf-surface);
+  color: var(--pf-text);
+  border: 1px solid var(--pf-border-strong);
+  border-radius: var(--pf-radius-control);
   padding: 0.65rem 0.8rem;
 }
 textarea { resize: vertical; min-height: 110px; line-height: 1.5; }
-textarea:focus-visible { outline: 3px solid #327ea7; outline-offset: 3px; }
+textarea:focus-visible { outline: 3px solid var(--pf-focus); outline-offset: 3px; }
 legend { font-weight: 700; margin: 1rem 0; color: #193f36; }
 label {
   display: flex;
@@ -118,7 +122,7 @@ h3 {
   font-size: 1rem;
 }
 p {
-  color: #50636d;
+  color: var(--pf-muted);
 }
 ul {
   padding: 0;

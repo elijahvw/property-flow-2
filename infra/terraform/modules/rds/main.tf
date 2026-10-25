@@ -24,12 +24,13 @@ resource "aws_security_group" "rds" {
 }
 
 resource "aws_db_instance" "postgresql" {
-  tags                   = { Application = "propertyflow", Environment = var.environment }
-  identifier             = "propertyflow-${var.environment}-db"
-  engine                 = "postgres"
-  engine_version         = "16.3"
-  instance_class         = "db.t3.micro" # Free Tier eligible
-  allocated_storage      = 20            # Minimum required for Standard RDS
+  tags           = { Application = "propertyflow", Environment = var.environment }
+  identifier     = "propertyflow-${var.environment}-db"
+  engine         = "postgres"
+  engine_version = "16.3"
+  # Credits/Free Tier eligibility depend on the account; this is not a cost cap.
+  instance_class         = "db.t3.micro"
+  allocated_storage      = 20
   storage_type           = "gp2"
   db_name                = var.db_name
   username               = var.db_user
@@ -40,6 +41,10 @@ resource "aws_db_instance" "postgresql" {
   publicly_accessible    = false
   multi_az               = false
   storage_encrypted      = true
+  # Preserve a rolling recovery window and reject accidental deletion. Enabling
+  # backups from zero requires a reviewed maintenance rollout and restore test.
+  backup_retention_period = 7
+  deletion_protection     = true
 }
 
 output "db_endpoint" {

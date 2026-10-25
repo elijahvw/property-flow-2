@@ -1,0 +1,63 @@
+{
+  "date": "2026-10-25",
+  "base_main": "44747bd142abfc9e059e36db28ab0f2c0f6ce080",
+  "alloy_head": "aaebc1521b2e7ec6a3240c15172fefd9f184e7e1",
+  "original_scanner_head": "66310be9968beefc82ccbb2d89b3b2dfbd2eea9a",
+  "state": "local integrated checks passed; published-head CI/review remain required",
+  "migration": {
+    "existing_files_verified_unchanged": 59,
+    "retained": "202610250056_demo_rebuild_plans",
+    "added": "202610250057_retire_document_scanning"
+  },
+  "fixture_version": 6,
+  "checks": {
+    "server_generation_compile": "passed with bundled Prisma WASM; normal engine CDN path remains unavailable; not a normal-build receipt",
+    "client_build": "passed through normal build wrapper; fresh-only receipt",
+    "safe_server": {
+      "passed": 128,
+      "expected_database_suite_skips": 9
+    },
+    "client_units": {
+      "passed": 70
+    },
+    "operations": {
+      "passed": 100
+    },
+    "sales_demo_disposable": {
+      "passed": 22
+    },
+    "maintenance_disposable": {
+      "passed": 148
+    },
+    "roadmap_disposable": {
+      "passed": 39
+    },
+    "terraform": {
+      "mocked_runs_passed": 4,
+      "root_validation": "passed",
+      "recursive_format": "passed",
+      "alloy_stable_and_experimental": "passed",
+      "workflow_lint": "passed",
+      "power_inventory": "passed"
+    },
+    "production_browser": {
+      "status": "passed",
+      "expected_tests": 459,
+      "workers": 2,
+      "retries": 0,
+      "artifact_directory": "/tmp/propertyflow-production-tests-B32OrV",
+      "passed": 459,
+      "source_build_drift": false,
+      "duration": "6.2m"
+    }
+  },
+  "limits": [
+    "No live database/schema or provider configuration verified.",
+    "No Terraform apply, deployment, merge, secret change or cloud start/stop.",
+    "Database tests use fresh tmpfs PostgreSQL17 with actual SQL migrations and simulated Auth0.",
+    "Disposable browser tests use installed Chromium154; production suite uses PF_CHROMIUM_EXECUTABLE_PATH.",
+    "Initial Alloy validation invocation lacked terraform in PATH; corrected invocation passed without source changes.",
+    "Published-head CI/review remain required."
+  ],
+  "review": "Independent read-only source/deployment-checklist review found no actionable integration defects."
+}
