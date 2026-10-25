@@ -24,7 +24,7 @@ node node_modules/@playwright/test/cli.js test -c playwright.production.config.t
 
 Use the installed CLI directly to keep the build and validation environment consistent. The committed production config serves the fixed build on loopback port5019 with an explicitly empty preview proxy, so an unhandled fixture request cannot reach a real local API. It runs every `tests/ui` spec with two workers and zero retries, and retains traces on failure. It refuses a stale/missing build receipt or a source/artifact/build-environment change during the run. Keep application source, fixture/preview source and `client/dist` fixed until it finishes. Existing required CI/release coverage remains unchanged.
 
-The output prints a unique `/tmp/propertyflow-production-tests-*` artifact directory. Retain the original failure and trace. `browser-failures.json` summarizes at most20 retained traces with ten console/page errors of600 characters each; it excludes network bodies, headers and snapshots and omits sensitive-looking messages. This diagnostic summary does not replace the trace or prove whether a failure is environmental. In this overhaul a retained trace exposed a real double-navigation blocker defect; transport failures and product failures require different corrections.
+The output prints a unique `/tmp/propertyflow-production-tests-*` artifact directory. Retain the original failure and trace. `browser-failures.json` summarizes at most20 retained traces with ten console/page errors of 600 characters each; it excludes network bodies, headers and snapshots and omits sensitive-looking messages. This diagnostic summary does not replace the trace or prove whether a failure is environmental. In this overhaul a retained trace exposed a real double-navigation blocker defect; transport failures and product failures require different corrections.
 
 ## Build receipts and freshness
 
@@ -73,7 +73,7 @@ These are reported durations at local checkpoints, not a controlled speed compar
 
 | Workload | Reported duration | Scope and limitation |
 | --- | --- | --- |
-| Final fixed production UI suite | 7.8m | 454/454 passed; final integrated fixture gate, without retries |
+| Pre-reconciliation fixed production UI suite | 7.8m | 454/454 passed; final integrated fixture gate, without retries |
 | Earlier complete UI stages | 12.0m / 8.5m / 7.6m | Different 452–453-case snapshots retained failures for correction; not passing final gates or matching speed comparisons |
 | Guard-focused UI | 1.2m | Latest 41 passed; different coverage from the earlier 33-case31.4s checkpoint |
 | Client units | 3.188s | Latest 69 passed; excludes production build |
@@ -83,7 +83,9 @@ These are reported durations at local checkpoints, not a controlled speed compar
 | Finance disposable workflow | 441.9s | 192 passed with other work competing; not an isolated benchmark |
 | Normal client build wrapper | 22.630s / 23.358s | Two normal builds in the managed fresh-only environment; neither was a cache hit |
 
-The main saving is focused feedback before one final frozen aggregate. Vite-only bundle output of0.5–0.9s excludes TypeScript and must not be presented as a complete build measurement. Measure a normal build and a verified reuse separately only in an eligible environment; preserve unsupported inputs and report fresh-only behavior honestly.
+The PR63 repair checkpoint adds new reported durations: five handoff fixtures9.9s, focused provider 25 in 17.3s (including the retained demo pacing), safe server 130+nine skips20.7s, client 69 in 8.2s, fresh demo 22 in 84.5s, leasing 66 in 62.7s and users 56 in 65.2s. The final 459/459 gate passes in 8.4m with zero retries and no source/build drift. These remain separate workloads, excluding parent runner setup/cleanup; they do not prove an apples-to-apples speedup. Initial27/30 focused UI results exposed three prefilled-textarea selector failures; accessible textbox roles retained the exact-value assertions. The controlled15-second telemetry flush passes3/3 without weakening no-domain-write assertions.
+
+The main saving is focused feedback before one final frozen aggregate. Vite-only bundle output of 0.5–0.9s excludes TypeScript and must not be presented as a complete build measurement. Measure a normal build and a verified reuse separately only in an eligible environment; preserve unsupported inputs and report fresh-only behavior honestly.
 
 ## Running Codex CLI on an EC2 checkout
 
