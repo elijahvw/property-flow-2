@@ -143,7 +143,7 @@ export async function prospectSourceReturnCases(t, admin, call, db, app, provide
     await page.getByRole('dialog').getByRole('link', { name: 'Tenants', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Tenants', exact: true })).toBeVisible();
     assertMarker(page); assert.equal(writes.length, 0); assert.deepEqual(await domainSnapshot(), initial);
-    await page.getByRole('searchbox', { name: 'Find resident', exact: true }).fill('Independent tenant filter');
+    await page.getByRole('searchbox', { name: 'Find tenant', exact: true }).fill('Independent tenant filter');
     await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('Independent tenant filter');
     assertMarker(page);
     await page.getByRole('button', { name: 'Add tenant', exact: true }).click();

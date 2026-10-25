@@ -4,6 +4,15 @@
 
 # Connected lease, household and invitation workflow
 
+## October 25 directory and property navigation refinement (local)
+
+Lease/unit directories now expose the current result page and removable active filters with one context-preserving reset. **Clear filters** removes directory choices while retaining the originating property/unit/prospect return context. Unit and lease APIs still expose page counts and a next cursor, not an invented full matching total; page controls explain when later records are available and have named navigation landmarks. Lease rows show status-based setup/history/next-term guidance and retain exact detail/source URLs. Financial links require the existing finance role and feature access.
+
+New unit creation/editing, property editing and lease-entry actions respect current company read-only settings. Same-authority policy refresh keeps an existing unsent unit form, selected edit and interrupted unit submission mounted; controls lock until writing is available again, and retry preserves the original key. Existing lease task/review recovery continues through its existing durable mechanism. These UI gates do not replace fresh server authorization, and changes of actual user/company/authority continue to clear private drafts.
+
+Property navigation groups **Property**, **People & leasing**, **Finance** and **Maintenance**. The mobile **Property section** selector contains the same permitted feature-aware destinations. Property details groups the same scoped source workspaces into practical next tasks rather than introducing a competing directory. No provider, schema, source relationship, new financial operation or portal grant is added. Validation for this local continuation belongs in [current platform status](mvp-status.md).
+
+
 October 24 PF-21/PF-23 source-return continuation is locally complete: exact prospect/pipeline context survives tenant/account/lease setup, saved sources, tabs/history and reauthentication, with a fixed-path Back to prospect. Full 290/290 browser, real 35/35 and builds/units/focused checks pass; original identity/access/review/version/retry rules remain unchanged. Dated fixture/import diagnoses are retained. The preferred-unit advisory fix is a separate locally complete slice: both builds/units pass and reviewed recovery/display fixes preserve the retained review/payload/key after units archive and reject older option metadata. Focused browser 17/17 plus existing 25/25 and real leasing/API 40/40 pass; its complete browser run passes 307/307 (6.1m, exit 0), with no new migration. Release/real-role acceptance remains pending and tours remain unselected. [Completed source-return contract](roadmap-continuation-2026-10-24.md#checkpoint-8--pf-21pf-23-prospect-source-return-loop-locally-validated).
 
 Development increment, 2026-10-15, branch `codex/lease-households` based on the tested tenant/forms PR #33 (`7207bb9`). This implements PF-02 and the initial shared-household portion of PF-11 following the user's explicit request to bring household support and a coherent onboarding/renewal flow forward. Merge and dev deployment remain manual and user-approved.

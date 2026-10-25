@@ -1,0 +1,21 @@
+.property-detail-workspace { min-width:0; }
+.property-workflow-section { margin:1.8rem 0; }
+.property-workflow-section > .section-heading { align-items:flex-end; gap:1rem; }
+.property-workflow-section > .section-heading h2 { margin-bottom:0; font-size:1.3rem; }
+.property-workflow-section > .section-heading .help { max-width:38ch; margin:0; font-size:.8rem; }
+.property-workflow-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+.property-workflow-card { background:var(--pf-surface,#fff); border:1px solid var(--pf-border,#dce5e0); border-radius:var(--pf-radius-surface,12px); padding:1.25rem; min-width:0; }
+.property-workflow-card h3 { color:var(--pf-text,#183c2e); margin:0 0 .4rem; font-size:1rem; }
+.property-workflow-card > p { font-size:.8rem; max-width:48ch; margin-bottom:.9rem; }
+.property-workflow-card ul { margin:0; }
+.property-workflow-card li + li { border-top:1px solid var(--pf-border,#e2e9e4); }
+.property-workflow-card li a { position:relative; display:grid; padding:.8rem 1.2rem .8rem 0; gap:.2rem; text-decoration:none; min-height:52px; }
+.property-workflow-card li a strong { color:var(--pf-accent,#126b5c); font-size:.87rem; }
+.property-workflow-card li a > span:first-of-type { color:var(--pf-muted,#607568); font-size:.76rem; }
+.property-workflow-card li a > span:last-of-type { position:absolute; right:0; top:.8rem; }
+.property-workflow-card li a:hover strong { text-decoration:underline; }
+.property-record-panel .property-building-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1.2rem; }
+.property-record-panel .property-building-facts > div { min-width:0; }
+.property-record-panel .property-building-facts dd { overflow-wrap:anywhere; }
+@media(max-width:900px) { .property-record-panel .property-building-facts { grid-template-columns:1fr; gap:.8rem; } }
+@media(max-width:640px) { .property-workflow-grid { grid-template-columns:1fr; }.property-workflow-card { padding:1.05rem; }.property-workflow-section > .section-heading { align-items:flex-start; }.property-workflow-section > .section-heading .help { max-width:none; } }

@@ -40,11 +40,13 @@ export type Bootstrap = {
     unavailable?: boolean;
   };
 };
+type AuthActionError = { action: "sign_out" | "sign_in" | "switch_account"; message: string };
 type Auth = {
   user: Bootstrap["user"] | undefined;
   data: Bootstrap | null;
   loading: boolean;
   error: string | null;
+  actionError: AuthActionError | null;
   refreshUser: () => Promise<void>;
   signIn: () => void;
   switchAccount: () => void;
@@ -55,8 +57,9 @@ const AuthContext = createContext<Auth | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<Bootstrap | null>(null),
     [loading, setLoading] = useState(true),
-    [error, setError] = useState<string | null>(null);
-  const version = useRef(0);
+    [error, setError] = useState<string | null>(null),
+    [actionError, setActionError] = useState<AuthActionError | null>(null);
+  const version = useRef(0), signingOut = useRef(false);
   const restoredIdentity = useRef<string | null>(null);
   const contextInvalidated = useRef(false);
   const invalidatePrivateContext = useCallback(() => {
@@ -68,6 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // workspace first, including its private editors; recovery journals stay.
     flushSync(() => {
       setData(null);
+      setActionError(null);
       setLoading(false);
       setError("Your account or support session changed. Reload the workspace to continue.");
     });
@@ -94,6 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       if (current !== version.current) return;
       setData(null);
+      setActionError(null);
       setCsrfToken("");
       setImpersonationContext("");
       setError(
@@ -108,7 +113,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void refreshUser();
     const expired = () => {
+      // A definitive 401 outranks every restore started before it. Otherwise
+      // an older successful bootstrap could repopulate a revoked workspace.
+      ++version.current;
+      setLoading(false);
+      setError(null);
       setData(null);
+      setActionError(null);
       setCsrfToken("");
       setImpersonationContext("");
     };
@@ -139,33 +150,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshUser, invalidatePrivateContext]);
   const signIn = () => {
     if (data?.impersonation) {
-      setError("End impersonation before starting another sign-in.");
+      setActionError({ action: "sign_in", message: "End impersonation before starting another sign-in." });
       return;
     }
+    setActionError(null);
     window.location.assign(
       `/api/auth/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`,
     );
   };
   const switchAccount = () => {
     if (data?.impersonation) {
-      setError("End impersonation before switching accounts.");
+      setActionError({ action: "switch_account", message: "End impersonation before switching accounts." });
       return;
     }
+    setActionError(null);
     window.location.assign(`/api/auth/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}&switchAccount=1`);
   };
   const signOut = () => {
+    if (signingOut.current || contextInvalidated.current) return;
+    const identity = restoredIdentity.current;
+    signingOut.current = true;
+    setActionError(null);
     void api<{ logoutUrl: string }>("/api/auth/logout", {
       method: "POST",
       body: {},
     })
       .then((result) => {
+        if (contextInvalidated.current || restoredIdentity.current !== identity) return;
         ++version.current;
         setData(null);
+        setActionError(null);
         setCsrfToken("");
         setImpersonationContext("");
         window.location.assign(result.logoutUrl);
       })
-      .catch(() => setError("Unable to sign out. Please try again."));
+      .catch(() => {
+        // A failed account action does not invalidate a restored session. A
+        // denied bootstrap/session event still removes the private workspace.
+        if (!contextInvalidated.current && restoredIdentity.current === identity)
+          setActionError({ action: "sign_out", message: "Unable to sign out. Please try again." });
+      })
+      .finally(() => { signingOut.current = false; });
   };
   return (
     <AuthContext.Provider
@@ -174,6 +199,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user: data?.user,
         loading,
         error,
+        actionError,
         refreshUser,
         signIn,
         switchAccount,

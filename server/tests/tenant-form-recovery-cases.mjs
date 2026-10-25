@@ -67,8 +67,32 @@ export async function tenantFormRecoveryCases(t, { admin, db, call, app, provide
   };
   const browser = await chromium.launch({ headless: true }); t.after(() => browser.close());
   const mutations = [], reads = [];
+  const pageDiagnostics = new WeakMap();
+  const bounded = (items, value) => { items.push(value); if (items.length > 10) items.shift(); };
+  const captureFailure = async (page, label) => {
+    // Only this isolated fictional test owns these pages. Exclude headers,
+    // tokens, request payloads and provider credentials from diagnostics.
+    const body = await page.locator('body').innerText().catch(() => 'Page body unavailable');
+    console.error('Tenant access fixture diagnostic', JSON.stringify({ label, url: page.url(), ...pageDiagnostics.get(page), body: body.slice(0, 8000) }));
+    const safeLabel = label.replace(/[^a-z0-9-]/gi, '-').slice(0, 70);
+    await page.screenshot({ path: `/tmp/propertyflow-${safeLabel}-failure.png`, fullPage: true }).catch(() => {});
+  };
   const fixturePage = async ({ user = actor, lose, loseBefore, maskContext = false } = {}) => {
     const page = await newFixturePage(browser); let lost = false, lostBefore = false, masked = false;
+    const diagnostic = { pageErrors: [], consoleErrors: [], failedRequests: [], hmr: [], bootstrap: [] };
+    pageDiagnostics.set(page, diagnostic);
+    page.on('pageerror', error => bounded(diagnostic.pageErrors, String(error.message).slice(0, 500)));
+    page.on('console', message => { if (message.type() === 'error') bounded(diagnostic.consoleErrors, message.text().slice(0, 500)); });
+    page.on('requestfailed', request => bounded(diagnostic.failedRequests, { method: request.method(), path: new URL(request.url()).pathname, error: request.failure()?.errorText }));
+    page.on('websocket', socket => {
+      socket.on('framereceived', frame => {
+        try {
+          const message = JSON.parse(String(frame.payload));
+          if (['connected', 'update', 'full-reload', 'error'].includes(message.type))
+            bounded(diagnostic.hmr, { type: message.type, paths: message.updates?.slice(0, 10).map(update => update.path), at: Date.now() });
+        } catch { /* Non-JSON frames are not relevant to Vite HMR evidence. */ }
+      });
+    });
     await page.addInitScript(() => window.addEventListener('impersonation-context-changed', () => sessionStorage.setItem('tf-context-change-observed', 'true')));
     await page.context().route('**/api/**', async route => {
       const request = route.request(), url = new URL(request.url()), path = url.pathname;
@@ -83,6 +107,10 @@ export async function tenantFormRecoveryCases(t, { admin, db, call, app, provide
       }
       const response = await app.inject({ method: request.method(), url: path + url.search,
         headers: { ...request.headers(), origin: 'https://app.test', cookie: '__Host-pf-session=token-' + user }, ...(body ? { payload: body } : {}) });
+      if (path === '/api/bootstrap') {
+        const bootstrap = response.json();
+        bounded(diagnostic.bootstrap, { status: response.statusCode, code: bootstrap.code, userId: bootstrap.user?.id, role: bootstrap.membership?.role, companyId: bootstrap.membership?.companyId, permissions: bootstrap.permissions, impersonating: !!bootstrap.impersonation, at: Date.now() });
+      }
       if (request.method() === 'GET') reads.push({ path, status: response.statusCode, code: response.json().code, company: request.headers()['x-company-id'] });
       if (request.method() !== 'GET' && path !== '/api/account/guide') mutations.push({ method: request.method(), path, body, status: response.statusCode, code: response.json().code, reply: response.json(), company: request.headers()['x-company-id'] });
       const matches = lose && request.method() === lose.method && path === lose.path && (!lose.email || body?.email === lose.email);
@@ -130,23 +158,27 @@ export async function tenantFormRecoveryCases(t, { admin, db, call, app, provide
     await policy({ leasing: 'read_only' });
     try {
       for (const user of [actor, 'tf-manager']) {
-        const page = await fixturePage({ user }); await page.goto(origin + '/company/residents');
+        const page = await fixturePage({ user });
+        try { await page.goto(origin + '/company/residents');
         await expect(page.getByRole('button', { name: 'Add tenant', exact: true })).toBeDisabled();
         if (user === actor) await expect(page.getByRole('button', { name: 'Invite tenant', exact: true })).toBeDisabled();
         else await expect(page.getByRole('button', { name: 'Invite tenant', exact: true })).toHaveCount(0);
         await page.goto(origin + '/company/tenants/' + person.id);
         await expect(page.getByRole('button', { name: 'Edit tenant details', exact: true })).toBeDisabled();
         await page.getByText('More tenant actions', { exact: true }).click(); await expect(page.getByRole('button', { name: 'Archive tenant', exact: true })).toBeDisabled();
-        await page.close();
+        } catch (error) { await captureFailure(page, `readonly-${user}`); throw error; }
+        finally { await page.close(); }
       }
       for (const targetUser of [actor, 'tf-manager']) {
         const session = await db.session.findUniqueOrThrow({ where: { tokenHash: digest('token-tf-support') } });
         ok(await call('tf-support', 'POST', '/api/impersonation', { userId: targetUser, reason: 'Fictional tenant role projection review' }, { 'x-csrf-token': session.csrfToken }));
         try {
-          const page = await fixturePage({ user: 'tf-support' }); await page.goto(origin + '/company/residents');
+          const page = await fixturePage({ user: 'tf-support' });
+          try { await page.goto(origin + '/company/residents');
           await expect(page.getByRole('button', { name: 'Add tenant', exact: true })).toBeDisabled();
           await expect(page.getByRole('button', { name: 'Invite tenant', exact: true })).toHaveCount(targetUser === actor ? 1 : 0);
-          await page.close();
+          } catch (error) { await captureFailure(page, `readonly-support-${targetUser}`); throw error; }
+          finally { await page.close(); }
         } finally { const fresh = await db.session.findUniqueOrThrow({ where: { tokenHash: digest('token-tf-support') } }); ok(await call('tf-support', 'DELETE', '/api/impersonation', undefined, { 'x-csrf-token': fresh.csrfToken })); }
       }
       assert.equal(mutations.length, before); assert.deepEqual(counts(), countsBefore); assert.equal(invitationDeliveries.length, deliveryBefore);
@@ -162,8 +194,24 @@ export async function tenantFormRecoveryCases(t, { admin, db, call, app, provide
       await focus(page); await expect(page.getByRole('button', { name: 'Save tenant', exact: true })).toBeDisabled(); await reviewVisible(page);
       await expect(page.getByRole('dialog', { name: 'Add tenant', exact: true })).toContainText('PRIVATE TF DRAFT ' + email); assert.equal(mutations.length, before);
     } finally { await clearPolicy(); }
-    await focus(page); await page.getByRole('button', { name: 'Save tenant', exact: true }).click();
-    await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+    let completion = null;
+    try {
+      await focus(page);
+      const responsePromise = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === base && response.request().postDataJSON()?.email === email, { timeout: 5000 });
+      const [response] = await Promise.all([responsePromise, page.getByRole('button', { name: 'Save tenant', exact: true }).click()]);
+      const reply = await response.json();
+      completion = { status: response.status(), code: reply?.code };
+      assert.equal(response.status(), 200, JSON.stringify(completion));
+      await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+    } catch (error) {
+      // These are owned fictional fixtures only. Keep evidence bounded and
+      // retain actual request outcomes without printing mutation payloads.
+      const recent = mutations.filter(item => item.path === base).slice(-2).map(({ method, path, status, code }) => ({ method, path, status, code }));
+      const body = await page.locator('body').innerText().catch(() => 'Page body unavailable');
+      console.error('Ordinary tenant save diagnostic', JSON.stringify({ url: page.url(), completion, recent, body: body.slice(0, 8000) }));
+      await page.screenshot({ path: '/tmp/propertyflow-ordinary-tenant-save-failure.png', fullPage: true }).catch(() => {});
+      throw error;
+    }
     const saved = await assertPerson(email, { name });
     await page.getByRole('button', { name: 'Edit tenant details', exact: true }).click();
     await page.getByLabel('Full name *', { exact: true }).fill('Uncommitted private edit'); await page.getByRole('button', { name: 'Review tenant', exact: true }).click();

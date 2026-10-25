@@ -1,0 +1,34 @@
+/* Canonical Property Flow visual values. Components use semantic tokens so
+   future workflows extend one interface rather than layering another theme. */
+:root {
+  --pf-bg: #f4f7f5;
+  --pf-surface: #ffffff;
+  --pf-surface-subtle: #f7faf8;
+  --pf-surface-selected: #edf5ef;
+  --pf-text: #19342c;
+  --pf-muted: #586d63;
+  --pf-border: #d9e4dd;
+  --pf-border-strong: #b4c6ba;
+  --pf-accent: #176b55;
+  --pf-accent-strong: #0c513e;
+  --pf-accent-soft: #e7f2eb;
+  --pf-focus: #2879a3;
+  --pf-critical: #9d3731;
+  --pf-critical-soft: #fff3f0;
+  --pf-warning: #89591b;
+  --pf-warning-soft: #fff8e8;
+  --pf-nav-bg: #123c34;
+  --pf-nav-text: #dce9e1;
+  --pf-radius-control: 8px;
+  --pf-radius-surface: 12px;
+  --pf-radius-feature: 16px;
+  --pf-shadow-subtle: 0 2px 8px #163e2906;
+  --pf-space-1: .25rem;
+  --pf-space-2: .5rem;
+  --pf-space-3: .75rem;
+  --pf-space-4: 1rem;
+  --pf-space-5: 1.25rem;
+  --pf-space-6: 1.5rem;
+  --pf-space-8: 2rem;
+  --pf-content-width: 1440px;
+}

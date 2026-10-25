@@ -310,9 +310,10 @@ test("automatic sync follows all pages and discovers accounts on tab return with
     })),
   );
   await page.goto("/platform/users");
+  await expect(page.getByText("52 synced accounts", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Manage", exact: true }),
-  ).toHaveCount(52);
+  ).toHaveCount(25);
   expect(state.syncs).toContain(1);
   expect(state.people).toHaveLength(52);
   await page
@@ -338,9 +339,9 @@ test("automatic sync follows all pages and discovers accounts on tab return with
     name: "Created in another tab",
   });
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(
-    page.getByRole("row").filter({ hasText: "new-tab@test.invalid" }),
-  ).toBeVisible();
+  await expect(page.locator('[aria-label="User directory"] .directory-count')).toHaveText("53 synced accounts");
+  expect(state.people).toHaveLength(53);
+  expect(state.people).toContainEqual(expect.objectContaining({ id: "auth0|new-tab", email: "new-tab@test.invalid" }));
   await expect(
     page.getByRole("combobox", { name: "Company", exact: true }),
   ).toHaveValue("a");
@@ -354,6 +355,11 @@ test("automatic sync follows all pages and discovers accounts on tab return with
   expect(state.people[0].membership.role).toBe("staff");
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", {name:"Close without saving",exact:true}).click();
+  // Provider synchronization discovers the account automatically; the visible
+  // directory is paged, so find the new account without invoking email lookup.
+  await page.getByRole("searchbox", { name: "Search users", exact: true }).fill("new-tab@test.invalid");
+  await expect(page.getByRole("row").filter({ hasText: "new-tab@test.invalid" })).toBeVisible();
+  await page.getByRole("searchbox", { name: "Search users", exact: true }).fill("before@test.invalid");
   await page
     .getByRole("row")
     .filter({ hasText: "before@test.invalid" })
@@ -394,7 +400,7 @@ test("background company suspension preserves the selected company until an expl
   state.companies[0].status = "suspended";
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(
-    page.getByRole("option", { name: "Company A (suspended)", exact: true }),
+    page.getByRole("combobox", { name: "Company", exact: true }).getByRole("option", { name: "Company A (suspended)", exact: true }),
   ).toHaveCount(1);
   await expect(
     page.getByRole("combobox", { name: "Company", exact: true }),
@@ -462,4 +468,46 @@ test('saving one user-management form preserves close protection for another unf
  await expect(page.getByRole('heading',{name:'Manage Updated Person',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Close',exact:true}).click();await expect(page.getByRole('alertdialog',{name:'Close without saving changes?'})).toBeVisible();
  await page.getByRole('button',{name:'Keep editing',exact:true}).click();await expect(page.getByLabel('Company role',{exact:true})).toHaveValue('manager');
+});
+
+test("user directory distinguishes account and company access and supports company/status filters", async ({ page }) => {
+  const state = await fixture(page);
+  state.remote = [];
+  state.companies[1].status = "suspended";
+  const person = (id: string, membership: any, extra = {}) => ({
+    id, name: id, email: `${id}@test.invalid`, emailVerified: true,
+    status: "active", platformRole: null, membership, ...extra,
+  });
+  const membership = (companyId: string, status = "active") => ({
+    companyId, role: "staff", status, version: 1,
+    company: state.companies.find(company => company.id === companyId),
+  });
+  state.people.push(
+    person("membership-disabled", membership("a", "disabled")),
+    person("company-suspended", membership("b")),
+    person("unverified", membership("a"), { emailVerified: false }),
+    person("account-disabled", membership("a"), { status: "disabled" }),
+    person("unassigned", null),
+    person("dual-owner", membership("a"), { platformRole: "owner" }),
+  );
+  await page.goto("/platform/users");
+  const row = (email: string) => page.getByRole("row").filter({ hasText: `${email}@test.invalid` });
+  await expect(row("membership-disabled")).toContainText("Membership disabled");
+  await expect(row("company-suspended")).toContainText("Company suspended");
+  await expect(row("unverified")).toContainText("Verification required");
+  await expect(row("account-disabled")).toContainText("Account disabled");
+  await expect(row("unassigned")).toContainText("No company access");
+  await expect(row("dual-owner")).toContainText("Platform owner");
+  await expect(row("dual-owner")).toContainText("Company role: staff");
+  await page.getByLabel("Filter by company").selectOption("a");
+  await page.getByLabel("Filter account status").selectOption("disabled");
+  await expect(page.getByRole("button", { name: "Manage", exact: true })).toHaveCount(1);
+  await expect(row("account-disabled")).toBeVisible();
+  await page.getByLabel("Filter by company").selectOption("unassigned");
+  await expect(page.getByText(/No users match these filters/)).toBeVisible();
+  await page.getByLabel("Filter account status").selectOption("");
+  await expect(row("unassigned")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Manage", exact: true })).toHaveCount(1);
+  await page.getByRole("button", { name: "Clear user filters", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Manage", exact: true })).toHaveCount(6);
 });
