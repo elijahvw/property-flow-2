@@ -1,4 +1,14 @@
-# Current work — October 20, 2026
+# Current work — October 25, 2026
+
+The active branch is `work`, based on merged `47badac` (PR59/61/62). The user authorized a full platform/AWS audit, substantive usability/workflow refinement, current documentation/agent guidance and a demo overhaul. Implementation and integrated validation are tracked in [the current gap/acceptance matrix](platform-overhaul-2026-10-25.md). The [first-pass audit](platform-audit-2026-10-25.md) and [read-only AWS audit](aws-audit-2026-10-25.md) retain their original evidence. Source infrastructure protection is prepared; live RDS backup retention/deletion protection remain disabled in the recorded observation.
+
+Final local browser validation passes 454/454 in 7.8m on unchanged source/build with zero retries. Demo19/19 covers the reported partially prepared teardown 429; users 56/56 and the documented unit/operations checks pass. The [staged fast/full validation commands](agent-validation.md) and [future EC2 CLI handoff](codex-ec2-handoff-2026-10-25.md) are ready for review.
+
+The user authorized publication with “Push.” The review stack is `codex/platform-overhaul-2026-10-25` → `codex/demo-overhaul-2026-10-25` → `codex/aws-dev-protection-2026-10-25`. The final AWS branch contains the complete validated stack. Merge, deployment, Terraform apply, real-provider provisioning and shared/live demo-data execution remain separately restricted. Existing preview data is preserved. Jira remains disabled. The October 20 publication permission below applied to that earlier release; the new Push instruction is the current publication authorization.
+
+## Historical October 20 handoff
+
+The following is the original dated handoff. Its branch, open-PR, stopped-environment and test statements are historical; [current platform status](mvp-status.md) supersedes them.
 
 ## Authorized delivery
 User requested pushing a PR for all new local features and updating docs/platform status; user will approve, merge and deploy. No merge, Start, deploy, live migration/provider/account/email/support action is authorized here. Jira disabled; Stripe last. Preserve active prelogin-users WIP, previews/sample data and older checkouts.

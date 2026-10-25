@@ -1,6 +1,8 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
+import { availableFeatureRoute } from "../company-features";
+import "./PropertyNavigation.css";
 export function propertyLink(
   path: string,
   id?: string,
@@ -55,7 +57,7 @@ function PropertyName({ id }: { id: string }) {
   );
 }
 function PropertyTabs({ id, name }: { id: string; name?: string }) {
-  const { can } = useAuth(),
+  const { can, data: auth } = useAuth(),
     location = useLocation(), navigate=useNavigate();
   const root = `/company/properties/${encodeURIComponent(id)}`;
   const tabs = [
@@ -73,6 +75,13 @@ function PropertyTabs({ id, name }: { id: string; name?: string }) {
     ["Cash activity", propertyLink("/company/finances", id), "finance.manage"],
     ["Reports", propertyLink("/company/reports", id), "finance.manage"],
   ];
+  const groups = [
+    { title: "Property", paths: [root, root + "/units"] },
+    { title: "People & leasing", paths: [root + "/residents", propertyLink("/company/leases", id)] },
+    { title: "Finance", paths: [propertyLink("/company/rent", id), propertyLink("/company/deposits", id), propertyLink("/company/finances", id), propertyLink("/company/reports", id)] },
+    { title: "Maintenance", paths: [propertyLink("/company/maintenance", id)] },
+  ].map(group => ({ ...group, items: tabs.filter(([, path, permission]) => group.paths.includes(path) && can(permission as Parameters<typeof can>[0]) && availableFeatureRoute(path, auth?.companyFeatures, auth?.membership?.role)) })).filter(group => group.items.length);
+  const visibleTabs = groups.flatMap(group => group.items);
   return (
     <section className="property-context" aria-label="Property workspace">
       <div className="property-context-title">
@@ -100,11 +109,11 @@ function PropertyTabs({ id, name }: { id: string; name?: string }) {
           ) : null;
         })()}
       </div>
-      <label className="context-select">Property section<select aria-label="Property section" value={tabs.find(([,path])=>path.split("?")[0]===location.pathname)?.[1] || root} onChange={event=>navigate(event.target.value)}>{tabs.filter(([, ,p])=>can(p as Parameters<typeof can>[0])).map(([title,path])=><option key={path} value={path}>{title}</option>)}</select></label>
-      <nav className="context-tabs" aria-label="Property navigation">
-        {tabs
-          .filter(([, , p]) => can(p as Parameters<typeof can>[0]))
-          .map(([title, to]) => (
+      <label className="context-select">Property section<select aria-label="Property section" value={visibleTabs.find(([,path])=>path.split("?")[0]===location.pathname)?.[1] || root} onChange={event=>navigate(event.target.value)}>{groups.map(group => <optgroup key={group.title} label={group.title}>{group.items.map(([title,path])=><option key={path} value={path}>{title}</option>)}</optgroup>)}</select></label>
+      <nav className="context-tabs grouped-property-tabs" aria-label="Property navigation">
+        {groups.map(group => <div className="property-nav-group" key={group.title}>
+          <span className="property-nav-group-title">{group.title}</span>
+          <div>{group.items.map(([title, to]) => (
             <Link
               key={to}
               to={to}
@@ -114,7 +123,8 @@ function PropertyTabs({ id, name }: { id: string; name?: string }) {
             >
               {title}
             </Link>
-          ))}
+          ))}</div>
+        </div>)}
       </nav>
     </section>
   );

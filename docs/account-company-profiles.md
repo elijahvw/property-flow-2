@@ -2,7 +2,7 @@
 
 # Personal profiles, company details and role clarity
 
-Implemented in the local PF-07 review batch on October 16, 2026. The user confirmed on October 16, 2026 that Staff keeps read-only property access; no broader operational permissions are authorized.
+The PF-07 profile baseline was implemented on October 16, 2026. Staff retains read-only property access by default; subsequent [delegated maintenance](delegated-maintenance.md) supports only an explicit owner grant within current property scope and work assignment. The current role boundaries appear below.
 
 ## Personal profile
 
@@ -26,13 +26,17 @@ Company version checks cover both owner and platform edits. Durable retries retu
 
 ## Roles and permissions
 
+Platform Users distinguishes account status from company access: no company assigned, verification required, disabled account/membership, suspended company or active company access. Company and account-status filters combine with name/email search; Clear user filters resets all three. A platform owner with company membership shows both roles. These summaries explain existing authority and do not grant access.
+
+Company Team edits retain the opening membership/version and entered role/status after a conflict. A conflict refreshes the directory; close and reopen to review the latest assignment before saving again. While current access is loading or unavailable, the editor locks saving and offers retry. An authorization denial, changed actor/company/support/feature context, or removal from the fresh team discards the private editor. Saving one user-management form must preserve another unfinished form's close protection.
+
 The Roles screen is generated from the server grants used by permission checks. The company owner can also reach it from Team and their personal access section. Company and platform ownership are distinct.
 
 - **Platform owner:** company/user administration. Platform authority alone grants no customer operating-data access.
 - **Company owner:** company settings, team/company access, resident approvals and operating records in their company.
 - **Manager:** properties/units, tenant contact profiles and property assignments, leases/renewals, maintenance, rent/deposits/reports/settlements. Company settings, team role/membership changes and resident approval/invitation management remain owner-only.
-- **Staff:** read-only property access, explicitly confirmed by the user. No property editing, maintenance operations, financial records, lease management or company/access administration.
-- **Resident:** personal self-service and authorized rental information. Approved leaseholders can see shared lease finances and request resident invitations for owner approval. Occupants receive no financial authority. All additions/removals/approvals stay under management controls.
+- **Staff:** read-only property access by default. An explicit owner grant may enable maintenance execution only for currently assigned work in the current property scope. It does not grant property editing, finance, lease, team or document authority. See [delegated maintenance](delegated-maintenance.md).
+- **Resident:** personal self-service and authorized rental information. Approved leaseholders can see shared lease finances; household/access and invitation history is read-only in resident views. Occupants receive no financial authority. All additions/removals/invitations/approvals remain under the authorized management controls.
 
 Protected company operations require current active/verified account and active company membership/company status. Resident financial views additionally require current property assignment and the effective approved leaseholder relationship. Every role can maintain its own safe personal details; no role is granted a new unit-assignment control through the profile endpoint.
 

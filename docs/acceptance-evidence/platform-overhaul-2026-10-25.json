@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-25",
+  "localOnly": true,
+  "git": {
+    "branch": "work",
+    "baseCommit": "47badacbd4c36c047f885ff109cbde6e223ea384",
+    "committed": false,
+    "published": false,
+    "pullRequest": null,
+    "ciForLocalSource": null,
+    "workingDiff": {
+      "modifiedTrackedFiles": 82,
+      "newFiles": 54,
+      "totalFiles": 136
+    },
+    "stateRecordedAt": "Pre-publication final validation; preserves the original uncommitted snapshot."
+  },
+  "source": {
+    "manifestSha256": "4d6e0020534fb74a9f99f274d75081bb36f1c2d92c512c0e9e7138b3371991ce",
+    "files": 550,
+    "manifestDefinition": "SHA-256 of sorted compact JSON mapping source/test/script SQL/Prisma/TS/TSX/CSS/JS/Python paths plus four package manifests/lock to file SHA-256; docs and generated artifacts excluded.",
+    "verifiedUnchangedAfterFinalAggregate": true,
+    "clientBuild": {
+      "files": 90,
+      "manifestSha256": "b266483aad9e20457a2fea7161bbd42e8037140d39bbc0190766ddae1db8a0a2",
+      "definition": "SHA-256 of sorted compact JSON mapping client/dist relative paths to file SHA-256. Production config checks known input/artifact/environment fingerprints before and after the suite."
+    }
+  },
+  "checks": {
+    "clientBuild": {
+      "command": "node scripts/local-validation.mjs build client (normal npm workspace build; fresh-only receipt)",
+      "exitCode": 0
+    },
+    "serverCompile": {
+      "command": "node node_modules/typescript/bin/tsc -p server/tsconfig.json",
+      "exitCode": 0,
+      "prismaGeneration": "Matching official Prisma7.10.1 WASM/in-process generator; schema-engine download blocked403."
+    },
+    "clientUnits": {
+      "command": "node --test client/tests/*.test.cjs",
+      "passed": 69,
+      "files": 17,
+      "failed": 0,
+      "exitCode": 0
+    },
+    "safeServerUnits": {
+      "command": "node --test server/tests/*.test.mjs (all integration/runtime DB variables unset)",
+      "passed": 127,
+      "skipped": 9,
+      "failed": 0,
+      "exitCode": 0
+    },
+    "browserFull": {
+      "command": "PF_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium node node_modules/@playwright/test/cli.js test -c playwright.production.config.ts --reporter=line --output=/tmp/pf-final-verified-aggregate-results",
+      "discovered": 454,
+      "passed": 454,
+      "failed": 0,
+      "skipped": 0,
+      "retries": 0,
+      "workers": 2,
+      "reportedDurationMinutes": 7.8,
+      "exitCode": 0,
+      "sourceAndBuildHeldFixed": true,
+      "noContainerLifecycleDuringRun": true,
+      "retainedFailureTraces": 0
+    },
+    "browserAffectedRerun": {
+      "command": "node node_modules/@playwright/test/cli.js test --config=/tmp/pf-overhaul-ui.config.mjs tests/ui/leasing.spec.ts --workers=1",
+      "passed": 16,
+      "failed": 0,
+      "exitCode": 0
+    },
+    "debounceRepetitions": {
+      "command": "node node_modules/@playwright/test/cli.js test --config=/tmp/pf-overhaul-ui.config.mjs tests/ui/leasing.spec.ts -g 'unit search keeps typing' --repeat-each=5 --workers=1",
+      "passed": 5,
+      "failed": 0,
+      "exitCode": 0
+    },
+    "freshFinance": {
+      "command": "PLAYWRIGHT_BROWSERS_PATH=/tmp/propertyflow-browser-cache node scripts/test-finances.mjs",
+      "passed": 192,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0
+    },
+    "freshUsers": {
+      "command": "PLAYWRIGHT_BROWSERS_PATH=/tmp/propertyflow-browser-cache node scripts/test-users.mjs",
+      "passed": 56,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0
+    },
+    "freshDemo": {
+      "command": "PLAYWRIGHT_BROWSERS_PATH=/tmp/propertyflow-browser-cache node scripts/test-sales-demo.mjs",
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "includes": "Explicit hashless compatibility, persisted blueprint, paused-provider ownership reservations, foreign/missing privacy, non-demo/legacy isolation, rebuild recovery, browser lifecycle, and actual identity-provider code with fake fetch: nine prepared accounts, fourth block429, confirmed-cleanup acknowledgments, cooldown/no-new-request and exact resume while separate Ready/customer data remain untouched."
+    },
+    "layoutFinal": {
+      "visits": 24,
+      "runsPerRouteViewport": 3,
+      "budget": 0.1,
+      "allWithinBudget": true,
+      "pageErrors": 0,
+      "failedVisits": 0,
+      "horizontalOverflowVisits": 0,
+      "evidence": "layout-stability-2026-10-25.json",
+      "conditions": "Same fixed fixture/browser config as recorded baseline; final guard-build recheck after454-case suite with no other browser suite or Docker lifecycle in flight.",
+      "stage": "overhaul-final-guard"
+    },
+    "runtimeDependencyAudit": {
+      "command": "npm audit --omit=dev --json",
+      "knownVulnerabilities": 0,
+      "exitCode": 0
+    },
+    "allDependencyAudit": {
+      "command": "npm audit --json",
+      "knownVulnerabilities": 0,
+      "exitCode": 0
+    },
+    "operations": {
+      "command": "python3 -m unittest discover -s tests/operations -p 'test_*.py'",
+      "passed": 94,
+      "failed": 0,
+      "exitCode": 0
+    },
+    "powerInventory": {
+      "command": "python3 scripts/validate-dev-power.py",
+      "exitCode": 0
+    },
+    "terraform": {
+      "stage": "First-pass unchanged infrastructure source",
+      "result": "Official checksum-verified Terraform1.12.1 recursive format/backend-free init/provider validate passed; no account plan/apply."
+    },
+    "validationTooling": {
+      "command": "node --test tests/local-validation.test.mjs",
+      "passed": 15,
+      "failed": 0,
+      "exitCode": 0
+    },
+    "providerFocused": {
+      "passed": 22,
+      "failed": 0,
+      "exitCode": 0,
+      "scope": "Provider transport/status/privacy/cooldown and request errors, demo credential/plan checks."
+    },
+    "guardAffected": {
+      "passed": 41,
+      "failed": 0,
+      "exitCode": 0,
+      "scope": "Leasing, page leave guard, preventive and prospect return before the narrow advisory-hint correction; final aggregate covers final source."
+    }
+  },
+  "renderedPreview": {
+    "visits": 36,
+    "viewports": [
+      1440,
+      390
+    ],
+    "roles": [
+      "owner",
+      "manager",
+      "staff",
+      "resident"
+    ],
+    "pageErrors": 0,
+    "horizontalOverflow": 0,
+    "provider": "Simulated accounts in fictional isolated local API/cookie/CSRF/RLS preview; no external Auth0/email."
+  },
+  "demoCompatibility": {
+    "hashRequiredForRebuild": true,
+    "hashOptionalForLegacyCreateTeardown": true,
+    "criticalFencesVerified": true,
+    "limit": "Hashless teardown cannot establish prior review of the latest company/member snapshot. Fresh auth/CSRF/demo version/ownership/customer isolation and durable cleanup still apply."
+  },
+  "remainingGates": [
+    "Published-head CI/comments/review, including reconciliation with existing PR63; merge/deployment separately authorized.",
+    "Normal Prisma CLI/release matrix and hosted schema/frontend/API/actual-role/provider acceptance.",
+    "Reviewed AWS plan/lifecycle preview, backup rollout/restore and runtime-secret/origin/monitoring follow-ups.",
+    "Field layout/latency/device/role measurement; local CLS is not a hosted SLO."
+  ],
+  "liveEffects": {
+    "merge": false,
+    "deployment": false,
+    "terraformApply": false,
+    "realProviderProvisioning": false,
+    "sharedDemoBuildResetRetirement": false,
+    "customerDataChanged": false
+  },
+  "priorBrowserRuns": [
+    {
+      "command": "node node_modules/@playwright/test/cli.js test --config=/tmp/pf-overhaul-ui.config.mjs --workers=4 --output=/tmp/pf-overhaul-final-results",
+      "discovered": 453,
+      "passed": 452,
+      "failed": 1,
+      "exitCode": 1,
+      "failure": "A wall-clock typing/debounce assertion observed G then Garden under concurrent load. No application code changed for resolution.",
+      "resolution": "Use a controlled browser clock, retain value/focus/reload checks, assert zero queries at249ms and one at250ms. See affected reruns; this is not a453/453 single full-suite pass."
+    },
+    {
+      "discovered": 453,
+      "passed": 451,
+      "failed": 2,
+      "diagnosis": "Navigation handoff state and an unavailable-tenant readiness fixture; retained exact denial/no-write assertions."
+    },
+    {
+      "discovered": 453,
+      "passed": 452,
+      "failed": 1,
+      "diagnosis": "Preventive navigation error; five retained traces reproduced Invalid blocker state transition: unblocked -> proceeding. Fixed once-per-exact-blocker settlement and added three-cycle regression."
+    },
+    {
+      "discovered": 454,
+      "passed": 453,
+      "failed": 1,
+      "diagnosis": "Existing preferred-unit advisory hint contract blocked by broad lease leave guard. Narrowed same-property open-intake hint handling; original browser assertions unchanged and positive/negative units added."
+    }
+  ],
+  "developmentWorkflow": {
+    "planner": "node scripts/local-validation.mjs plan --base=HEAD",
+    "focused": "node scripts/local-validation.mjs build client --reuse && node node_modules/@playwright/test/cli.js test -c playwright.production.config.ts tests/ui/leasing.spec.ts",
+    "full": "node scripts/local-validation.mjs build client --reuse && node node_modules/@playwright/test/cli.js test -c playwright.production.config.ts",
+    "noTestResultCache": true,
+    "normalClientBuildSeconds": [
+      22.63,
+      23.358
+    ],
+    "cacheHitMeasured": false,
+    "freshOnlyReason": "Inherited managed environment overrides; trust settings preserved. One-use receipt required before each separate browser run.",
+    "timingLimits": "Different source, coverage and concurrent load at prior checkpoints; TAP/Playwright timings exclude parent runner build/database setup and cleanup."
+  },
+  "demoReportedFailure": {
+    "requestId": "req-acb",
+    "observed": "Read-only CloudWatch confirms HTTP429 during teardown; old logs do not identify token/lookup/block operation or quota bucket.",
+    "evidence": "demo-teardown-req-acb-2026-10-25.json",
+    "localFix": "Sanitized provider operation/status/rate-source diagnostics and Retry-After; per-process pacing/cooldown; durable exact-subject cleanup acknowledgments after fresh ownership checks. No automatic creation retry.",
+    "limits": "Per-process coordination only; cumulative queue delay can exceed two seconds. No live recovery/provisioning executed."
+  },
+  "publication": {
+    "authorized": true,
+    "instruction": "Push",
+    "branches": [
+      {
+        "head": "codex/platform-overhaul-2026-10-25",
+        "base": "main",
+        "groups": [
+          "platform",
+          "validation tooling"
+        ]
+      },
+      {
+        "head": "codex/demo-overhaul-2026-10-25",
+        "base": "codex/platform-overhaul-2026-10-25",
+        "groups": [
+          "demo lifecycle and provider recovery"
+        ]
+      },
+      {
+        "head": "codex/aws-dev-protection-2026-10-25",
+        "base": "codex/demo-overhaul-2026-10-25",
+        "groups": [
+          "AWS source protection"
+        ]
+      }
+    ],
+    "state": "Authorized publication; exact remote commits/PR status are recorded in GitHub metadata and delivery handoff.",
+    "sourceChangesAfterValidation": true,
+    "statusDocumentationChangedAfterValidation": true,
+    "existingPr63": "b9c24032280f5ad538460da65f5711b6f4380953 remains separate and untouched; reconcile overlap before merging.",
+    "productionSourceChangesAfterValidation": false,
+    "browserFixtureChangesAfterValidation": false,
+    "formatOnlyChangesAfterValidation": [
+      "Removed one extra trailing blank line from tests/local-validation.test.mjs; its15 checks rerun."
+    ],
+    "manifestSha256": "c35212cd2178e8c64e87879e6d3f016e1fdab65c9768a42fd8f99a9d1fe481e0",
+    "manifestFiles": 550
+  }
+}

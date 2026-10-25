@@ -1,0 +1,30 @@
+.directory-view { margin:0; background:var(--pf-surface-subtle,#f7faf8); }
+.directory-view-summary { align-items:center; }
+.directory-view-summary:focus-visible { outline:2px solid var(--pf-focus,#327ea7); outline-offset:-2px; }
+.directory-view-summary > div { min-width:0; flex:1; }
+.directory-view-summary .directory-count { display:block; margin:0; white-space:normal; }
+.directory-view-summary [role=status] { margin:0; font-size:.88rem; color:var(--pf-text,#2a493c); font-weight:600; }
+.directory-view-scope { margin:.2rem 0 0; font-size:.78rem; color:var(--pf-muted,#5c7165); overflow-wrap:anywhere; }
+.directory-view-summary > button { flex-shrink:0; min-height:40px; }
+.directory-view-filters { margin:0; padding:0 var(--pf-space-5,1.25rem) var(--pf-space-4,1rem); }
+.directory-view-filter-label { font-size:.73rem; font-weight:650; color:var(--pf-muted,#62766a); margin-right:.15rem; }
+button.directory-filter-chip { max-width:100%; font-weight:550; overflow-wrap:anywhere; }
+.directory-filter-chip > span:first-child { min-width:0; }
+.directory-filter-chip > span:last-child { font-size:1.05rem; line-height:1; }
+.leasing-directory-panel { padding:0; overflow:hidden; }
+.leasing-directory-panel > h2,.leasing-directory-panel > .section-heading { margin:0; padding:1.1rem var(--pf-space-5,1.25rem); }
+.leasing-directory-panel > .section-heading h2 { margin:0; }
+.leasing-directory-panel > [role=alert],.leasing-directory-panel > [role=status] { margin:1rem var(--pf-space-5,1.25rem); }
+.directory-workbench .directory-guidance > summary { cursor:pointer; font-size:.78rem; color:var(--pf-muted,#587161); }
+.directory-workbench .directory-guidance p { margin:.65rem 0 0; max-width:78ch; }
+.lease-workflow-hint { margin:.6rem 0 0; font-size:.76rem; color:var(--pf-muted,#587161); max-width:28ch; }
+.lease-directory td[data-label="Primary tenant"] > a { font-weight:600; color:var(--pf-accent-strong,#255741); }
+.lease-context-action { display:inline-flex; align-items:center; min-height:36px; font-size:.76rem; font-weight:600; text-decoration:none; }
+.lease-context-action:hover { text-decoration:underline; }
+@media(max-width:700px) {
+ .directory-view-summary { align-items:flex-start; }
+ .directory-view-summary > button { padding:.35rem 0; font-size:.78rem; }
+ .directory-view-filters { padding:0 var(--pf-space-4,1rem) var(--pf-space-4,1rem); align-items:flex-start; }
+ .directory-view-filter-label { flex-basis:100%; }
+ button.directory-filter-chip { min-height:44px; }
+}

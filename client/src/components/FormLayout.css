@@ -1,9 +1,9 @@
 .workflow-fields > fieldset:has(> legend) {
   margin: 1.25rem 0;
   padding: 1rem 1.1rem .35rem;
-  border: 1px solid #dce5e0;
-  border-radius: 10px;
-  background: #fff;
+  border: 1px solid var(--pf-border, #dce5e0);
+  border-radius: var(--pf-radius-surface, 12px);
+  background: var(--pf-surface, #fff);
 }
 .workflow-fields > fieldset:has(> legend) > legend {
   margin: 0;
@@ -19,15 +19,47 @@
 .workflow-error-summary { margin: 0 0 1.25rem; scroll-margin-top: 8rem; scroll-margin-bottom: 1rem; }
 .workflow-error-summary strong { display: block; margin-bottom: .35rem; }
 .workflow-error-summary p { margin: .35rem 0 0; line-height: 1.5; }
-.workflow-error-summary:focus { outline: 3px solid #a24435; outline-offset: 3px; }
+.workflow-error-summary:focus { outline: 3px solid var(--pf-critical, #a24435); outline-offset: 3px; }
 .editor-body .workflow-fields > .help { max-width: 68ch; line-height: 1.55; }
 .plan-feature-choices { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .75rem; margin: 1rem 0; }
-.plan-feature-option { display: flex; flex-direction: row; align-items: flex-start; gap: .75rem; padding: .9rem; margin: 0; border: 1px solid #dce5e0; border-radius: 8px; line-height: 1.4; cursor: pointer; }
-.plan-feature-option:has(input:checked) { border-color: #4b8068; background: #f0f7f2; }
+.plan-feature-option { display: flex; flex-direction: row; align-items: flex-start; gap: .75rem; padding: .9rem; margin: 0; border: 1px solid var(--pf-border, #dce5e0); border-radius: var(--pf-radius-control, 8px); line-height: 1.4; cursor: pointer; }
+.plan-feature-option:has(input:checked) { border-color: var(--pf-accent, #4b8068); background: var(--pf-accent-soft, #f0f7f2); }
 .plan-feature-option input[type="checkbox"] { flex-shrink: 0; width: 1.1rem; min-height: 1.1rem; height: 1.1rem; margin: .15rem 0 0; }
 .plan-feature-option > span { display: grid; gap: .35rem; }
 .plan-feature-option .help { margin: 0; font-weight: 400; line-height: 1.45; }
 @media (max-width: 700px) {
   .workflow-fields > fieldset:has(> legend) { padding: .85rem .85rem .15rem; }
   .plan-feature-choices { grid-template-columns: 1fr; }
+}
+
+/* One field structure keeps labels, native constraints and supporting text together. */
+.form-field { display: flex; flex-direction: column; gap: .45rem; min-width: 0; margin-bottom: 1.1rem; }
+.form-field-heading { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; }
+.form-field-heading > label { display: block; margin: 0; color: var(--pf-text, #172b36); font-size: .9rem; }
+.form-field-requirement { flex: 0 0 auto; color: var(--pf-muted, #61716f); font-size: .72rem; font-weight: 500; }
+.form-field-requirement.is-required { color: var(--pf-accent, #126b5c); font-weight: 700; }
+.form-field-hint, .form-field-error { margin: 0; font-size: .82rem; line-height: 1.5; }
+.form-field-hint { color: var(--pf-muted, #61716f); }
+.form-field-error { color: var(--pf-critical, #a24435); font-weight: 600; }
+.form-field.has-error input, .form-field.has-error select, .form-field.has-error textarea { border-color: var(--pf-critical, #a24435); }
+.form-section-block { min-width: 0; }
+.form-section-description { margin-bottom: 1.15rem; max-width: 68ch; }
+.form-section-navigation { margin: 0 0 1.5rem; padding: 1rem; border: 1px solid var(--pf-border, #dce5e0); border-radius: var(--pf-radius-surface, 12px); background: var(--pf-surface-subtle, #f5f8f7); }
+.form-section-navigation > p { margin: 0 0 .6rem; color: var(--pf-muted, #61716f); font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.form-section-navigation ol { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0; padding: 0; list-style: none; }
+.form-section-navigation li { min-width: 0; max-width: 100%; }
+.form-section-navigation button { display: flex; gap: .5rem; min-height: 44px; padding: .5rem .75rem; border-color: transparent; background: transparent; color: var(--pf-text, #172b36); font-size: .83rem; font-weight: 600; line-height: 1.4; text-align: left; white-space: normal; }
+.form-section-navigation button > span { display: inline-flex; flex: 0 0 auto; justify-content: center; align-items: center; width: 1.45rem; height: 1.45rem; border-radius: 50%; background: var(--pf-surface, #fff); border: 1px solid var(--pf-border, #dce5e0); font-size: .7rem; color: var(--pf-accent, #126b5c); }
+.form-section-navigation button:hover { background: var(--pf-surface, #fff); border-color: var(--pf-border, #dce5e0); color: var(--pf-accent, #126b5c); }
+.workflow-fields legend[id] { scroll-margin-top: 6.5rem; }
+.workflow-fields legend[id]:focus { outline: 2px solid var(--pf-accent, #126b5c); outline-offset: .3rem; border-radius: 3px; }
+.form-requirements { margin: 0 0 1rem; color: var(--pf-muted, #61716f); font-size: .8rem; line-height: 1.5; }
+.form-secondary-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.form-action-status { color: var(--pf-accent, #126b5c); font-size: .85rem; }
+.workflow-form-query > fieldset > .form-actions { border-top: 0; box-shadow: none; }
+@media (max-width: 500px) {
+  .form-section-navigation { padding: .75rem; }
+  .form-section-navigation ol { display: grid; grid-template-columns: 1fr; }
+  .form-section-navigation button { width: 100%; }
+  .form-field-heading { gap: .5rem; }
 }

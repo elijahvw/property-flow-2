@@ -288,3 +288,34 @@ test("staff cannot open management schedules or detail", async ({ page }) => {
     s.reads.filter((x) => x.startsWith("/api/company/preventive")),
   ).toHaveLength(0);
 });
+
+
+test("repeated schedule saves settle editor cleanup and navigation once per attempt", async ({ page }) => {
+  const state = await fixture(page), transitionErrors: string[] = [];
+  page.on("console", message => {
+    if (message.type() === "error" && message.text().includes("Invalid blocker state transition")) transitionErrors.push(message.text());
+  });
+  page.on("pageerror", error => {
+    if (error.message.includes("Invalid blocker state transition")) transitionErrors.push(error.message);
+  });
+  await page.goto("/company/preventive");
+  for (let index = 0; index < 3; index++) {
+    const title = `Fictional schedule transition ${index + 1}`;
+    await page.getByRole("button", { name: "Add schedule", exact: true }).click();
+    const editor = page.getByRole("dialog");
+    await editor.getByLabel("Property", { exact: true }).selectOption("home");
+    await editor.getByLabel("Title", { exact: true }).fill(title);
+    await editor.getByLabel("Instructions", { exact: true }).fill("Review fictional equipment.");
+    await editor.getByLabel("First due date", { exact: true }).fill("2026-01-31");
+    await editor.getByRole("button", { name: "Create schedule", exact: true }).click();
+    await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Something went wrong", exact: true })).toHaveCount(0);
+    await expect(page).toHaveURL(/\/company\/preventive\/plan-1/);
+    expect(state.writes).toHaveLength(index + 1);
+    await page.getByRole("link", { name: "← Back to schedules", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Add schedule", exact: true })).toBeVisible();
+  }
+  expect(transitionErrors).toEqual([]);
+  expect(new Set(state.writes.map(write => write.body.submissionKey)).size).toBe(3);
+  expect(state.writes.every(write => write.path === "/api/company/preventive")).toBe(true);
+});

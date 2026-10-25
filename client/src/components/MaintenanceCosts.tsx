@@ -29,7 +29,7 @@ export function MaintenanceCosts({ requestId, propertyId }: { requestId: string;
   const financePath = `/company/properties/${encodeURIComponent(propertyId)}/finances`;
   const refresh = (message: string) => { setCursor(""); r.reload(); setSuccess(message); };
   return <section className="panel maintenance-costs" aria-label="Maintenance costs">
-    <div className="section-heading"><h2>Paid maintenance costs</h2><button onClick={() => { setAdding(true); setSuccess(""); }}>Link existing expense</button></div>
+    <div className="section-heading"><h2>Paid maintenance costs</h2><button disabled={r.loading || !!r.error || !r.data} onClick={() => { setAdding(true); setSuccess(""); }}>Link existing expense</button></div>
     <p className="help">Link expenses already paid and recorded in Cash activity. Resolving a request does not record a payment. Voided expenses and unlinked records stay in history and are excluded from the total.</p>
     {success && <p className="notice" role="status">{success}</p>}
     {r.error && r.data && <Failure error={r.error} retry={r.reload} />}
@@ -43,20 +43,22 @@ export function MaintenanceCosts({ requestId, propertyId }: { requestId: string;
           {cost.entry.memo && <p className="preserve-lines">{cost.entry.memo}</p>}
           {cost.unlinkedAt ? <p>Unlinked {formatActivityTime(cost.unlinkedAt)} · {cost.unlinkReason}</p> : <>
             {cost.entry.voidedAt && <p>Expense correction: {cost.entry.voidReason}</p>}
-            <button className="text-button" onClick={() => setUnlinking(cost)} aria-label={`Unlink expense ${cost.entry.reference}`}>Unlink expense</button>
+            <button className="text-button" disabled={r.loading || !!r.error} onClick={() => setUnlinking(cost)} aria-label={`Unlink expense ${cost.entry.reference}`}>Unlink expense</button>
           </>}
         </li>)}
       </ul>}
       <div className="actions">{cursor && <button className="secondary" onClick={() => setCursor("")}>Latest cost links</button>}{r.data.nextCursor && <button className="secondary" onClick={() => setCursor(r.data!.nextCursor!)}>Older cost links</button>}</div>
     </>}
     <p><Link to={`${financePath}?${new URLSearchParams({ new: "expense", maintenanceReturn: requestId })}`}>Record a paid expense in Cash activity →</Link></p>
-    <EditorDialog open={adding} title="Link a paid maintenance expense" onClose={() => setAdding(false)}>
-      <ExpensePicker endpoint={endpoint} saved={() => { setAdding(false); refresh("Expense linked. Financial records are unchanged."); }} />
+    <EditorDialog open={adding && !!r.data} title="Link a paid maintenance expense" onClose={() => setAdding(false)}>
+      {r.error && <Failure error={r.error} retry={r.reload} />}
+      <ExpensePicker endpoint={endpoint} locked={r.loading || !!r.error || !r.data} saved={() => { setAdding(false); refresh("Expense linked. Financial records are unchanged."); }} />
     </EditorDialog>
-    {unlinking && <EditorDialog key={unlinking.id} open={unlinkOpen} onSaveDraft={saveUnlinkDraft} title="Unlink maintenance expense" onClose={() => setUnlinking(null)}>
+    {unlinking && <EditorDialog key={unlinking.id} open={unlinkOpen && !!r.data} onSaveDraft={saveUnlinkDraft} title="Unlink maintenance expense" onClose={() => setUnlinking(null)}>
+      {r.error && <Failure error={r.error} retry={r.reload} />}
       <p>{unlinking.entry.reference} · {dollars(unlinking.entry.amountCents)} · {formatDate(unlinking.entry.occurredOn)}</p>
       <p>This removes the expense from this request's cost total. The paid transaction stays in Cash activity; unlinking does not refund or void it.</p>
-      <Form key={`${unlinking.id}:${unlinking.version}`} operation="maintenance.cost.unlink" label="Unlink expense" feedbackText="Maintenance expense unlinked."
+      <Form locked={r.loading || !!r.error} key={`${unlinking.id}:${unlinking.version}`} operation="maintenance.cost.unlink" label="Unlink expense" feedbackText="Maintenance expense unlinked."
         submit={async form => { await api(`${endpoint}/${encodeURIComponent(unlinking.id)}/unlink`, { method: "POST", body: { expectedVersion: unlinking.version, reason: form.get("reason") } }); setUnlinking(null); refresh("Expense unlinked; its transaction and link history are retained."); }}>
         <label>Reason (required)<textarea name="reason" aria-label="Unlink reason" required maxLength={300} rows={3} /></label>
       </Form>
@@ -64,25 +66,27 @@ export function MaintenanceCosts({ requestId, propertyId }: { requestId: string;
   </section>;
 }
 
-function ExpensePicker({ endpoint, saved }: { endpoint: string; saved: () => void }) {
+function ExpensePicker({ endpoint, locked, saved }: { endpoint: string; locked: boolean; saved: () => void }) {
   const editor = useEditorBusy();
   const [query, setQuery] = useState(""), [cursor, setCursor] = useState(""),
     [selected, setSelected] = useState<Expense | null>(null), [key, setKey] = useState(() => crypto.randomUUID());
   const r = useResource<{ items: Expense[]; nextCursor: string | null }>(`${endpoint}/candidates?${new URLSearchParams(Object.entries({ q: query, cursor }).filter(([, value]) => value))}`, true, true);
   return <>
     <p>Choose an unvoided expense from this property. An expense can be actively linked to one maintenance request at a time.</p>
+    <fieldset className="workflow-fields" disabled={locked || editor.busy || editor.uncertain}>
     <label>Find paid expense<input type="search" value={query} maxLength={200} placeholder="Transaction reference or memo" onChange={e => { setQuery(e.target.value); setCursor(""); }} /></label>
-    {r.error && r.data && <Failure error={r.error} retry={r.reload} />}
-    {!r.data ? <Failure error={r.error} retry={r.reload} /> : <>
+    </fieldset>
+    {r.error && <Failure error={r.error} retry={r.reload} />}
+    {!r.data ? !r.error && <Failure retry={r.reload} /> : <fieldset className="workflow-fields" disabled={locked || r.loading || !!r.error || editor.busy || editor.uncertain}>
       {!r.data.items.length ? <p>No eligible expenses match. Record the paid expense in Cash activity first, or adjust your search.</p> : <fieldset className="form-section"><legend>Available paid expenses</legend>
         {r.data.items.map(entry => <label className="expense-choice" key={entry.id}>
-          <input type="radio" name="expense-choice" value={entry.id} checked={selected?.id === entry.id} onChange={() => setSelected(entry)} />
+          <input type="radio" name="expense-choice" value={entry.id} checked={selected?.id === entry.id} onChange={() => { setSelected(entry); setKey(crypto.randomUUID()); }} />
           <span><strong>{entry.reference} · {dollars(entry.amountCents)}</strong><span className="cell-detail">{formatDate(entry.occurredOn)} · {entry.category.replace(/_/g, " ")}</span>{entry.memo && <span className="cell-detail">{entry.memo}</span>}</span>
         </label>)}
       </fieldset>}
       <div className="actions">{cursor && <button type="button" className="secondary" onClick={() => setCursor("")}>Latest expenses</button>}{r.data.nextCursor && <button type="button" className="secondary" onClick={() => setCursor(r.data!.nextCursor!)}>Older expenses</button>}</div>
-    </>}
-    {selected && <Form key={key} operation="maintenance.cost.link" label="Link expense" feedbackText="Maintenance expense linked."
+    </fieldset>}
+    {selected && <Form locked={(locked || r.loading || !!r.error) && !editor.uncertain} key={key} operation="maintenance.cost.link" label="Link expense" feedbackText="Maintenance expense linked."
       secondaryActions={<DraftReset reset={() => { setSelected(null); setKey(crypto.randomUUID()); r.reload(); }} />}
       submit={async () => { await api(endpoint, { method: "POST", body: { entryId: selected.id, expectedEntryVersion: selected.version, submissionKey: key } }); editor.completed(); setSelected(null); setKey(crypto.randomUUID()); r.reload(); saved(); }}>
       <fieldset className="form-section"><legend>Review selected expense</legend><p>{selected.reference} · {dollars(selected.amountCents)} · {formatDate(selected.occurredOn)}</p>{selected.memo && <p className="preserve-lines">{selected.memo}</p>}<p className="help">This links the existing payment; it creates no new transaction or resident charge. If the expense has changed, clear this draft and choose its latest record.</p></fieldset>

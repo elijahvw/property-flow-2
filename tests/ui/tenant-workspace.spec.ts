@@ -49,7 +49,7 @@ test('tenant deep links, source ledgers and directory filters survive refresh an
   await page.getByRole('link',{name:'Back to tenant'}).click();
   await page.reload();
   await page.getByRole('link',{name:'All tenants',exact:true}).click();
-  await expect(page.getByLabel('Find resident')).toHaveValue('Jordan');
+  await expect(page.getByLabel('Find tenant')).toHaveValue('Jordan');
   await expect(page.getByLabel('Portal access', {exact:true})).toHaveValue('active');
 });
 

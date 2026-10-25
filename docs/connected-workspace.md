@@ -2,6 +2,16 @@
 
 # Connected workspace — development UX overhaul
 
+## Current Overview workspace — October 25, 2026 local overhaul
+
+The [current platform overhaul](platform-overhaul-2026-10-25.md) extends the original dashboard into a daily work workspace. The current property scope is explicit and can be cleared without losing other URL context. Overdue rent, billing issues, overdue maintenance and past-end leases appear under **Follow up now**; actual pending owner/management decisions appear under **Review & approve**. Current maintenance and **Plan ahead** separate active work from draft leases and upcoming renewals/move-outs. Each row keeps its actual source count and matching company/property filter. Counts can overlap and are never added into a misleading unique-task total.
+
+Upcoming lease previews retain the exact source and ending-soon/property return context. The cash summary remains received/paid cash with source transaction links, not an amount owed. Portfolio facts and property records remain available below the work queue. Staff receive a useful property browsing workspace without lease, maintenance-management or financial projections. Creation shortcuts require both the existing role and enabled write access for the relevant feature; support sessions keep source views without creation shortcuts.
+
+Explicit refresh and same-scope background refresh retain the last snapshot while loading. A temporary failure labels that snapshot as stale and offers retry; an authoritative access/missing-record denial removes it. Changing scope or authority cannot reuse the prior scope's snapshot. Initial failures remain unknown rather than zero. Desktop, narrow-screen, keyboard, read-only/support and interrupted refresh acceptance are covered by the current increment's fixture cases; the final validation record belongs to the current overhaul report. No schema, provider, financial-source or demo-fixture data change is introduced by this presentation/workflow refinement.
+
+## Historical October 15 implementation and evidence
+
 The user confirmed PR22/dev main9922af3 works but described the app as disconnected and clunky. Their concrete example was a prominent “Start a new lease” reset action above the save button. They requested modern workflows, easier navigation and a real dashboard. The implementation stays in dev; user approval is required before merge, and the user runs deployments.
 
 ## Research and decisions

@@ -1,3 +1,5 @@
+import { FormField, FormSection } from "./FormFields";
+
 type AddressValue = {
   street?: string | null;
   line2?: string | null;
@@ -38,60 +40,13 @@ export function PropertyAddressFields({
     zip?: string;
   };
 }) {
-  return (
-    <fieldset className="form-section property-address-fields">
-      <legend>Property & location</legend>
-      <label>
-        Property name
-        <input
-          name="name"
-          required
-          maxLength={200}
-          defaultValue={value.name || ""}
-        />
-      </label>
-      <div className="address-fields">
-        <label className="address-street">
-          Street address
-          <input
-            name="address"
-            required
-            maxLength={200}
-            autoComplete="street-address"
-            defaultValue={value.address || ""}
-          />
-        </label>
-        <label className="address-city">
-          City
-          <input
-            name="city"
-            required
-            maxLength={200}
-            autoComplete="address-level2"
-            defaultValue={value.city || ""}
-          />
-        </label>
-        <label className="address-region">
-          State / region
-          <input
-            name="state"
-            required
-            maxLength={100}
-            autoComplete="address-level1"
-            defaultValue={value.state || ""}
-          />
-        </label>
-        <label className="address-postal">
-          Postal code
-          <input
-            name="zip"
-            required
-            maxLength={30}
-            autoComplete="postal-code"
-            defaultValue={value.zip || ""}
-          />
-        </label>
-      </div>
-    </fieldset>
-  );
+  return <FormSection title="Property & location" className="property-address-fields" description="Record the property name and postal address so your team can identify this location.">
+    <FormField label="Property name"><input name="name" required maxLength={200} defaultValue={value.name || ""}/></FormField>
+    <div className="address-fields">
+      <FormField label="Street address" className="address-street"><input name="address" required maxLength={200} autoComplete="street-address" defaultValue={value.address || ""}/></FormField>
+      <FormField label="City" className="address-city"><input name="city" required maxLength={200} autoComplete="address-level2" defaultValue={value.city || ""}/></FormField>
+      <FormField label="State / region" className="address-region"><input name="state" required maxLength={100} autoComplete="address-level1" defaultValue={value.state || ""}/></FormField>
+      <FormField label="Postal code" className="address-postal"><input name="zip" required maxLength={30} autoComplete="postal-code" defaultValue={value.zip || ""}/></FormField>
+    </div>
+  </FormSection>;
 }

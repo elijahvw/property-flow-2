@@ -72,7 +72,7 @@ test("current and historical sources retain the original pipeline and offer one 
 test("tenant filters, legacy redirects and tenant-to-lease sources preserve separate prospect filters", async ({ page }) => {
   const state = await fixture(page, { availableContact: true });
   await page.goto(`/company/residents?${markerQuery()}`);
-  await page.getByRole("searchbox", { name: "Find resident", exact: true }).fill("No matching tenant");
+  await page.getByRole("searchbox", { name: "Find tenant", exact: true }).fill("No matching tenant");
   await expect(page).toHaveURL(url => url.searchParams.get("q") === "No matching tenant" && url.searchParams.get("prospectQ") === marker.prospectQ);
   await page.getByRole("button", { name: "Clear filters", exact: true }).click();
   await expect(page).toHaveURL(url => !url.searchParams.has("q") && url.searchParams.get("prospectQ") === marker.prospectQ);
@@ -106,8 +106,31 @@ for (const options of [
   { label: "missing lease permission", allowed: false, leasing: "enabled", support: false, visible: false },
   { label: "disabled leasing", allowed: true, leasing: "disabled", support: false, visible: false },
 ]) test(`prospect return visibility follows current ${options.label}`, async ({ page }) => {
-  await fixture(page, options);
-  await page.goto(`/company/tenants/missing-contact?${markerQuery()}`);
-  await expect(page.getByRole("heading", { name: options.leasing === "disabled" ? "Feature unavailable" : "Tenant unavailable", exact: true })).toBeVisible();
-  await expect(back(page)).toHaveCount(options.visible ? 1 : 0);
+  const sourcePath = "/api/company/resident-contacts/missing-contact";
+  const network: { event: string; path: string; elapsedMs: number; status?: number; error?: string }[] = [];
+  const started = Date.now();
+  let sourceStatus: number | undefined, complete = false;
+  const record = (event: string, url: string, detail: { status?: number; error?: string } = {}) => {
+    const path = new URL(url).pathname;
+    if (network.length < 24 && (path === "/api/bootstrap" || path.startsWith(sourcePath))) network.push({ event, path, elapsedMs: Date.now() - started, ...detail });
+  };
+  page.on("request", request => record("request", request.url()));
+  page.on("response", response => {
+    record("response", response.url(), { status: response.status() });
+    if (new URL(response.url()).pathname === sourcePath && response.request().method() === "GET") sourceStatus = response.status();
+  });
+  page.on("requestfailed", request => record("requestfailed", request.url(), { error: request.failure()?.errorText.slice(0, 300) }));
+  const state = await fixture(page, options);
+  try {
+    await page.goto(`/company/tenants/missing-contact?${markerQuery()}`);
+    // Confirm the scoped source response before checking its rendered state.
+    // Disabled leasing has no permitted source read and renders its boundary.
+    if (options.leasing !== "disabled") await expect.poll(() => sourceStatus, { timeout: 5000, message: "The current tenant source returns its unavailable response" }).toBe(404);
+    await expect(page.getByRole("heading", { name: options.leasing === "disabled" ? "Feature unavailable" : "Tenant unavailable", exact: true })).toBeVisible();
+    await expect(back(page)).toHaveCount(options.visible ? 1 : 0);
+    expect(state.writes).toHaveLength(0);
+    complete = true;
+  } finally {
+    if (!complete) await test.info().attach("prospect-return-source-readiness", { body: JSON.stringify({ case: options.label, sourceStatus: sourceStatus ?? "not received", network, fixtureReads: state.reads.slice(-24).map(url => url.pathname) }, null, 2), contentType: "application/json" });
+  }
 });
