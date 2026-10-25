@@ -49,6 +49,13 @@ jobs:
           terraform -chdir=infra/terraform/modules/s3_frontend test -no-color
           terraform -chdir=infra/terraform/envs/dev init -backend=false -input=false
           terraform -chdir=infra/terraform/envs/dev validate -no-color
+      - name: Validate Alloy task capacity and lifecycle with mocked AWS
+        run: |
+          terraform fmt -check infra/terraform/envs/dev/alloy.tf infra/terraform/modules/ecr/alloy.tf infra/terraform/modules/ecr/main.tf infra/terraform/modules/ecr/tests/alloy.tftest.hcl
+          terraform -chdir=infra/terraform/modules/ecr init -backend=false -input=false
+          terraform -chdir=infra/terraform/modules/ecr test -no-color
+          docker pull --quiet grafana/alloy:v1.21.1
+          python3 scripts/test-alloy-config.py
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund

@@ -340,6 +340,8 @@ Acceptance:
 
 ### PF-27 · Monitoring, recovery and release operations — P1, partial
 
+October 25 local increment: Alloy shares the existing power-controlled ECS task; guarded runtime credentials, collector readiness and a daily 3 a.m. Eastern GitHub stop schedule with manual starts is prepared. Acceptance requires an approved rollout, actual Fleet/series verification, Start/Stop proof and measured per-container scanner pressure before any memory reduction. PostgreSQL login/secret provisioning and query-level collection remain separate. [Runbook and evidence](alloy-collector.md).
+
 Audience: platform operator and product team. Dependencies: the app's real workflows and separately reviewed infrastructure/provider activation.
 
 Current evidence and remaining work: [monitoring coverage register](monitoring-coverage.md). Backend metrics/logs/traces, the 21-panel dashboard, enabled rules and tested email routing exist. RUM source is locally verified; real deployed sessions, AWS scrape jobs and full recovery acceptance remain open.

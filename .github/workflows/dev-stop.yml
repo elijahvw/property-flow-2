@@ -2,11 +2,15 @@ name: Stop development
 run-name: Stop development
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'
+      timezone: America/New_York
 permissions:
   contents: read
   id-token: write
 jobs:
   stop:
+    if: github.event_name != 'schedule' || vars.DEV_AUTO_STOP != 'false'
     uses: ./.github/workflows/dev-power.yml
     with:
       action: stop

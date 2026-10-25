@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-25",
+  "pr": 64,
+  "originalHead": "ad79f9a5697ea61043da1a32164e22202a3b9591",
+  "integratedMain": "44747bd142abfc9e059e36db28ab0f2c0f6ce080",
+  "applicationAndSchemaUnchangedFromMain": true,
+  "checks": {
+    "operations": {
+      "passed": 103,
+      "failed": 0
+    },
+    "terraformMocked": {
+      "passed": 4,
+      "failed": 0
+    },
+    "terraformRootValidate": {
+      "exitCode": 0,
+      "backend": false
+    },
+    "terraformFormat": {
+      "exitCode": 0
+    },
+    "powerInventory": {
+      "exitCode": 0
+    },
+    "alloyRenderedModes": {
+      "version": "1.21.1",
+      "modes": [
+        "generally-available",
+        "experimental"
+      ],
+      "passed": 2,
+      "network": "none"
+    },
+    "actionlint": {
+      "stage": "Workflow source unchanged from prior greenCI40238570211; prioractionlint1.7.12 evidence reused."
+    }
+  },
+  "publication": "Authorized branch update; published-head CI/review remain required.",
+  "liveEffects": {
+    "mainMerge": false,
+    "deployment": false,
+    "terraformApply": false,
+    "startStop": false,
+    "scheduleActivation": false,
+    "collectorActivation": false,
+    "credentialRead": false
+  }
+}

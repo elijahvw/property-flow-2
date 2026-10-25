@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: Start or stop the app, document scanner and database
+        description: Start or stop the app, scanner, enabled Alloy collector and database
         required: true
         type: choice
         default: stop
@@ -50,12 +50,19 @@ jobs:
         run: |
           public_url=$(python3 -c 'import json; print(json.load(open("config/dev-power.json"))["publicUrl"])')
           bash scripts/verify-dev-public.sh "$public_url"
-          echo "Application, scanner task and database are running; public readiness checks passed." >> "$GITHUB_STEP_SUMMARY"
+          echo "Application and database public readiness checks passed." >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify configured collector after startup
+        if: inputs.action == 'start'
+        env:
+          GRAFANA_ALLOY_ENABLED: ${{ vars.GRAFANA_ALLOY_ENABLED == 'true' }}
+        run: |
+          python3 scripts/verify-dev-collectors.py
+          echo "Configured collector readiness checks passed; hosted ingestion is verified separately." >> "$GITHUB_STEP_SUMMARY"
       - name: Explain stopped-state costs
         if: success() && inputs.action == 'stop'
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
-          Development app, document scanner and database are stopped. Data is retained.
+          Development app, document scanner, enabled Alloy collector and database are stopped. Data is retained.
           Storage, load balancer and some networking charges continue.
           AWS automatically restarts a stopped RDS database after seven days.
           Run **Dev Start or Stop** with **start** to bring the environment back up.
