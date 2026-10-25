@@ -16,7 +16,7 @@ const retired = () => new AccessError(409, "DEMO_RETIRED", "This demo was torn d
 const leaseUntil = () => new Date(Date.now() + 5 * 60000);
 const secretFailure = () => new AccessError(503, "DEMO_PROVIDER_RETRY", "Demo identity setup was interrupted. Retry this setup to continue safely.");
 type LifecycleReview = { intent: "retire" | "rebuild"; planHash: string; replacementSetupId?: string };
-type OwnedDemoAccount = ProviderUser & { cleanupConfirmedSubject?: string };
+type OwnedDemoAccount = ProviderUser & { issuer?: string; connection?: string; cleanupConfirmedSubject?: string };
 
 export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, authenticate: preValidationHookHandler, origin: string, provider?: IdentityProvider, credentialSecret = process.env.AUTH0_WEB_CLIENT_SECRET ?? "") {
   const auth = { preValidation: authenticate };
@@ -36,15 +36,24 @@ export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, aut
   }
   const blueprint = (): DemoBlueprint => ({ format: 1, seedVersion: SALES_DEMO_SEED_VERSION, anchorOn: companyDay("America/New_York"), environment: demoEnvironment(origin, provider?.issuer, !!provider?.salesDemo) });
   function cleanupContext(setup: SalesDemoSetup) {
+    if (Object.values(ownedAccounts(setup)).some(account => account.issuer !== undefined && account.issuer !== provider?.issuer || account.connection !== undefined && account.connection !== provider?.databaseConnection))
+      throw new AccessError(409, "DEMO_PROVIDER_CHANGED", "The demo identity connection changed. Restore its original Auth0 issuer and database connection before resuming or cleaning up; no account was changed.");
     const saved = readDemoBlueprint(setup.blueprint), current = blueprint();
     if (saved && (saved.environment.name !== current.environment.name || saved.environment.origin !== current.environment.origin || saved.environment.identityIssuer !== current.environment.identityIssuer))
       throw new AccessError(409, "DEMO_ENVIRONMENT_CHANGED", "This setup belongs to another application or identity environment. Restore its original configuration before cleanup; no account was disabled.");
   }
   function ownedAccounts(setup: SalesDemoSetup) {
     const accounts = setup.accounts as Record<string, OwnedDemoAccount>;
-    if (!accounts || Array.isArray(accounts) || Object.entries(accounts).some(([key, account]) => !DEMO_PEOPLE.some(([known]) => known === key) || !account || typeof account.user_id !== "string" || account.email !== `${key}.${setup.id}@sales-demo.invalid` || account.cleanupConfirmedSubject !== undefined && account.cleanupConfirmedSubject !== account.user_id) || new Set(Object.values(accounts).map(a => a.user_id)).size !== Object.keys(accounts).length)
+    if (!accounts || Array.isArray(accounts) || Object.entries(accounts).some(([key, account]) => !DEMO_PEOPLE.some(([known]) => known === key) || !account || typeof account.user_id !== "string" || account.email !== `${key}.${setup.id}@sales-demo.invalid` || account.issuer !== undefined && (typeof account.issuer !== "string" || !account.issuer) || account.connection !== undefined && (typeof account.connection !== "string" || !account.connection) || account.cleanupConfirmedSubject !== undefined && account.cleanupConfirmedSubject !== account.user_id) || new Set(Object.values(accounts).map(a => a.user_id)).size !== Object.keys(accounts).length)
       throw new AccessError(409, "DEMO_OWNERSHIP_CHANGED", "This demo's generated account ownership changed. No existing account or company was modified.");
     return accounts;
+  }
+  async function knownIdentityContext(tx: Tx, setup: SalesDemoSetup) {
+    cleanupContext(setup);
+    const subjects = Object.values(ownedAccounts(setup)).map(account => account.user_id);
+    const identities = await tx.identity.findMany({ where: { userId: { in: subjects }, subject: { in: subjects } }, select: { userId: true, subject: true, issuer: true } });
+    if (identities.some(identity => identity.userId === identity.subject && identity.issuer !== provider?.issuer))
+      throw new AccessError(409, "DEMO_PROVIDER_CHANGED", "A generated account belongs to another Auth0 issuer. Restore its original identity connection before resuming or cleaning up; no account was changed.");
   }
   const manifestValue = (manifest: unknown, path: string): unknown => path.split(".").reduce<unknown>((value, key) => value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined, manifest);
   async function lifecyclePlan(tx: Tx, id: string, intent: string, excludeReplacementId?: string) {
@@ -100,6 +109,7 @@ export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, aut
     const setup = await checked(request, async tx => {
       const row = await tx.salesDemoSetup.findUnique({ where: { id } });
       if (!row) throw new AccessError(404, "NOT_FOUND", "Demo setup not found.");
+      await knownIdentityContext(tx, row);
       if (row.status === "ready") return row;
       if (row.status !== "pending") throw retired();
       assertDemoBuildPlan(readDemoBlueprint(row.blueprint), blueprint());
@@ -108,10 +118,11 @@ export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, aut
     });
     if (setup.status === "ready") return reveal(request, id);
     try {
+      const deadline = Date.now() + 110000;
       if (setup.sourceDemoId) {
         const review = readDemoBlueprint(setup.blueprint)?.sourceReview;
         if (!review || review.replacementSetupId !== setup.id) throw new AccessError(409, "DEMO_PLAN_INVALID", "This rebuild's saved review is unavailable. No existing generation was changed.");
-        try { await retireDemo(request, setup.sourceDemoId, setup.sourceVersion!, { intent: "rebuild", ...review }); }
+        try { await retireDemo(request, setup.sourceDemoId, setup.sourceVersion!, { intent: "rebuild", ...review }, deadline); }
         catch (error) {
           if (error instanceof AccessError && error.code === "DEMO_PLAN_CHANGED") throw new AccessError(409, "DEMO_REBUILD_REVIEW_CHANGED", "The original demo changed after this replacement was reserved. Retire the unfinished replacement, then review a fresh rebuild. The original generation was not changed by this attempt.");
           throw error;
@@ -119,16 +130,20 @@ export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, aut
       }
       const credentials = openDemoCredentials(id, setup.credentialsCipher, credentialSecret);
       for (const account of credentials) {
-        await checked(request, async tx => { await currentRun(tx, id, token, "pending"); await tx.salesDemoSetup.update({ where: { id }, data: { leaseUntil: leaseUntil() } }); });
+        const prepared = await checked(request, async tx => { const current = await currentRun(tx, id, token, "pending"); await knownIdentityContext(tx, current); await tx.salesDemoSetup.update({ where: { id }, data: { leaseUntil: leaseUntil() } }); return ownedAccounts(current)[account.accountKey]; });
+        if (prepared?.issuer === provider!.issuer && prepared.connection === provider!.databaseConnection) {
+          if (!prepared.user_id.startsWith("auth0|") || prepared.email !== account.email || !prepared.email_verified || prepared.blocked || prepared.cleanupConfirmedSubject) throw secretFailure();
+          continue;
+        }
         // Provider calls stay outside DB locks. Exact generation metadata recovers
         // ambiguous creates without adopting unrelated accounts by email.
-        const remote = await identities.ensure(account);
+        const remote = await identities.ensure(account, { deadline });
         if (remote.email !== account.email || !remote.email_verified || remote.blocked) throw secretFailure();
         await checked(request, async tx => {
           const current = await currentRun(tx, id, token, "pending");
           const accounts = current.accounts as Record<string, ProviderUser>;
           if (accounts[account.accountKey] && accounts[account.accountKey].user_id !== remote.user_id) throw new AccessError(409, "DEMO_IDENTITY_CONFLICT", "The generated demo identity changed. Tear down this setup before creating another.");
-          await tx.salesDemoSetup.update({ where: { id }, data: { accounts: { ...accounts, [account.accountKey]: { user_id: remote.user_id, email: remote.email, name: account.name, email_verified: true } } } });
+          await tx.salesDemoSetup.update({ where: { id }, data: { accounts: { ...accounts, [account.accountKey]: { user_id: remote.user_id, email: remote.email, name: account.name, email_verified: true, issuer: provider!.issuer, connection: provider!.databaseConnection } } } });
         });
       }
       await checked(request, async tx => {
@@ -154,12 +169,12 @@ export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, aut
     } catch (error) { if (error instanceof AccessError || (error as { code?: string }).code?.startsWith("P")) throw error; throw secretFailure(); }
     finally { await release(request, id, token); }
   }
-  async function teardownSetup(request: FastifyRequest, setup: SalesDemoSetup, expectedVersion: number, review?: LifecycleReview) {
+  async function teardownSetup(request: FastifyRequest, setup: SalesDemoSetup, expectedVersion: number, review?: LifecycleReview, deadline = Date.now() + 110000) {
     const identities = configured(), token = randomUUID(), id = setup.id;
     const claimed = await checked(request, async tx => {
       const row = await tx.salesDemoSetup.findUniqueOrThrow({ where: { id } });
+      await knownIdentityContext(tx, row);
       if (row.status === "retired") return row;
-      cleanupContext(row);
       if (review && row.status !== "retiring") {
         const plan = await lifecyclePlan(tx, id, review.intent, review.replacementSetupId);
         if (plan.planHash !== review.planHash) throw new AccessError(409, "DEMO_PLAN_CHANGED", "This demo changed after review. Refresh its action plan before continuing; no account was disabled.");
@@ -202,9 +217,10 @@ export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, aut
             if (user && (user.platformRole || user.companyId || user.membership && user.membership.companyId !== demo?.companyId)) throw new AccessError(409, "DEMO_ACCOUNT_ASSIGNED", "A generated account was assigned elsewhere. Review that assignment before finishing teardown; its Auth0 login was not disabled.");
             if (user) await tx.user.update({ where: { id: user.id }, data: { status: "disabled" } });
             await tx.session.deleteMany({ where: { OR: [{ userId: remote.user_id }, { impersonatedUserId: remote.user_id }] } });
-            await tx.salesDemoSetup.update({ where: { id }, data: { accounts: { ...(current.accounts as Record<string, ProviderUser>), [accountKey]: { user_id: remote.user_id, email: remote.email, email_verified: remote.email_verified } } } });
+            const accounts = ownedAccounts(current);
+            await tx.salesDemoSetup.update({ where: { id }, data: { accounts: { ...accounts, [accountKey]: { ...accounts[accountKey], user_id: remote.user_id, email: remote.email, email_verified: remote.email_verified, issuer: provider!.issuer, connection: provider!.databaseConnection } } } });
           });
-        });
+        }, { deadline });
         // Store only confirmed progress, bound to the exact recorded subject.
         // Lost PATCH/receipt responses remain unacknowledged and are safely
         // rechecked. Missing, unrecorded slots still require exact lookup.
@@ -285,9 +301,9 @@ export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, aut
     });
     return build(request, setup.id);
   });
-  async function retireDemo(request: FastifyRequest, id: string, expectedVersion: number, review?: LifecycleReview) {
+  async function retireDemo(request: FastifyRequest, id: string, expectedVersion: number, review?: LifecycleReview, deadline?: number) {
     const setup = await checked(request, tx => tx.salesDemoSetup.findUnique({ where: { id } }));
-    if (setup) return teardownSetup(request, setup, expectedVersion, review);
+    if (setup) return teardownSetup(request, setup, expectedVersion, review, deadline);
     // Version-one presenters are pre-existing accounts, never block them.
     return checked(request, async tx => {
       const demo = await tx.salesDemo.findUnique({ where: { id } });

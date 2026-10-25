@@ -4,17 +4,18 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import pg from 'pg';
 import Fastify from 'fastify';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { registerApplication } from '../dist/application.js';
 import { registerSessions, digest } from '../dist/sessions.js';
 import { registerRequestErrors } from '../dist/request-errors.js';
 import { AccessError } from '../dist/access.js';
-import { identityProvider } from '../dist/identity-provider.js';
+import { identityProvider, IdentityProviderError } from '../dist/identity-provider.js';
 import { chromium, expect } from '@playwright/test';
 import { newFixturePage } from './browser-fixture.mjs';
 import { DEMO_BUNDLED_TEXT, DEMO_FEATURE_COVERAGE } from '../dist/sales-demo-scenarios.js';
 import { FEATURE_CATALOG } from '../dist/company-features.js';
+import { SALES_DEMO_SEED_VERSION } from '../dist/sales-demo-seed.js';
 
 const url = process.env.TEST_SALES_DEMO_DATABASE_URL;
 test('automatic sales demo identities, role access, recovery and teardown', { skip: !url }, async t => {
@@ -30,16 +31,18 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
   t.after(async()=>{await db.$disconnect();await pool.end();});
   for(const id of ['platform','customer']) await admin.query(`INSERT INTO "User"(id,email,name,"emailVerified","platformRole","updatedAt") VALUES($1,$2,$1,true,$3,NOW())`,[id,`${id}@test.invalid`,id==='platform'?'owner':null]);
   await admin.query(`INSERT INTO "Company"(id,name,"updatedAt") VALUES('customer-company','Customer sentinel',NOW()); INSERT INTO "CompanyMembership"("userId","companyId",role,"updatedAt") VALUES('customer','customer-company','owner',NOW())`);
-  const remote=new Map(),passwords=new Map();let normalCalls=0,created=0,ensureCalls=0,blockCalls=0,loseIdentity=false,failBlock=false,pauseEnsure=null,pauseBlock=null;
+  const remote=new Map(),passwords=new Map(),providerBudgets=[];let normalCalls=0,created=0,ensureCalls=0,blockCalls=0,loseIdentity=false,failBlock=false,pauseEnsure=null,pauseBlock=null,limitedAccount=null;
   const unavailable=async()=>{normalCalls++;throw Error('Unexpected ordinary identity operation');};
   const provider={issuer:'https://unused.auth0.com/',databaseConnection:'test',get:unavailable,create:unavailable,rename:unavailable,verify:unavailable,setup:unavailable,list:unavailable,salesDemo:{
-    async ensure(account){
+    async ensure(account,options){
+      providerBudgets.push({action:'ensure',generation:account.demoId,deadline:options?.deadline});
       ensureCalls++;if(pauseEnsure)await pauseEnsure;
+      if(account.accountKey===limitedAccount)throw new IdentityProviderError('lookup','rate_limit',429,30);
       if(!remote.has(account.email)){remote.set(account.email,{user_id:'auth0|demo-'+randomUUID(),email:account.email,name:account.name,email_verified:true,blocked:false});passwords.set(account.email,account.password);created++;}
       if(loseIdentity){loseIdentity=false;throw new AccessError(503,'DEMO_IDENTITY_RETRY','Retry setup');}
       return {...remote.get(account.email)};
     },
-    async block(account,subject,beforeBlock){blockCalls++;if(failBlock){failBlock=false;throw Error('Provider temporarily unavailable');}const found=remote.get(account.email);if(found){if(subject)assert.equal(found.user_id,subject);await beforeBlock?.(found);if(pauseBlock)await pauseBlock(found);found.blocked=true;}}
+    async block(account,subject,beforeBlock,options){providerBudgets.push({action:'block',generation:account.demoId,deadline:options?.deadline});blockCalls++;if(failBlock){failBlock=false;throw Error('Provider temporarily unavailable');}const found=remote.get(account.email);if(found){if(subject)assert.equal(found.user_id,subject);await beforeBlock?.(found);if(pauseBlock)await pauseBlock(found);found.blocked=true;}}
   }};
   const app=Fastify();t.after(()=>app.close());registerRequestErrors(app);
   const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});
@@ -53,7 +56,7 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
   await t.test('read-only blueprint is complete and has no provider, setup, company or audit effects',async()=>{
     const before={companies:await db.company.count(),users:await db.user.count(),setups:await db.salesDemoSetup.count(),audits:await db.auditEvent.count(),created,ensureCalls,blockCalls};
     const r=await call('platform','GET',base+'/blueprint');assert.equal(r.statusCode,200,r.body);assert.equal(r.headers['cache-control'],'no-store');const plan=r.json();
-    assert.equal(plan.seedVersion,4);assert.match(plan.planHash,/^[a-f0-9]{64}$/);assert.equal(plan.effects.preparedAccounts,11);assert.equal(plan.effects.issuedLogins,8);assert.equal(plan.roles.filter(r=>!r.login).length,3);
+    assert.equal(plan.seedVersion,SALES_DEMO_SEED_VERSION);assert.match(plan.planHash,/^[a-f0-9]{64}$/);assert.equal(plan.effects.preparedAccounts,11);assert.equal(plan.effects.issuedLogins,8);assert.equal(plan.roles.filter(r=>!r.login).length,3);
     assert.deepEqual(plan.coverage.map(c=>c.key).sort(),FEATURE_CATALOG.map(c=>c.key).sort());assert.ok(!plan.roles.some(r=>r.password||r.email));
     assert.deepEqual({companies:await db.company.count(),users:await db.user.count(),setups:await db.salesDemoSetup.count(),audits:await db.auditEvent.count(),created,ensureCalls,blockCalls},before);
     assert.equal((await call('customer','GET',base+'/blueprint')).statusCode,403);
@@ -107,6 +110,26 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
     await db.companyMembership.update({where:{userId:users.manager.user_id},data:{companyId:demo.companyId}});
     const audits=await db.auditEvent.findMany();for(const c of sheet.credentials)assert.ok(!JSON.stringify(audits).includes(c.password));
   });
+  await t.test('prepared issuer and connection receipts resume only missing accounts and verify legacy snapshots once',async()=>{
+    const payload={submissionKey:randomUUID()},beforeCreated=created;limitedAccount='former';
+    try{
+      const stopped=await call('platform','POST',base,payload);assert.equal(stopped.statusCode,429,stopped.body);
+      const saved=await db.salesDemoSetup.findUniqueOrThrow({where:{createdById_submissionKey:{createdById:'platform',submissionKey:payload.submissionKey}}});assert.equal(Object.keys(saved.accounts).length,10);assert.equal(created-beforeCreated,10);
+      assert.ok(Object.values(saved.accounts).every(account=>account.issuer===provider.issuer&&account.connection===provider.databaseConnection));
+      let before=ensureCalls;assert.equal((await call('platform','POST',`${base}/${saved.id}/resume`,{})).statusCode,429);assert.equal(ensureCalls-before,1,'prepared receipts must not consume quota again');
+      for(const remove of [['connection'],['issuer','connection']]){
+        const legacy=Object.fromEntries(Object.entries(saved.accounts).map(([key,account])=>[key,Object.fromEntries(Object.entries(account).filter(([field])=>!remove.includes(field)))]));
+        await db.salesDemoSetup.update({where:{id:saved.id},data:{accounts:legacy}});before=ensureCalls;
+        assert.equal((await call('platform','POST',`${base}/${saved.id}/resume`,{})).statusCode,429);assert.equal(ensureCalls-before,11,'legacy receipts must be verified before cache reuse');
+        const upgraded=await db.salesDemoSetup.findUniqueOrThrow({where:{id:saved.id}});assert.ok(Object.values(upgraded.accounts).every(account=>account.issuer===provider.issuer&&account.connection===provider.databaseConnection));assert.equal(upgraded.credentialsCipher,saved.credentialsCipher);
+      }
+      limitedAccount=null;before=ensureCalls;const resumed=await ok('platform','POST',`${base}/${saved.id}/resume`,{});assert.equal(ensureCalls-before,1);assert.equal(created-beforeCreated,11);assert.equal(resumed.id,saved.id);
+      const completed=await db.salesDemoSetup.findUniqueOrThrow({where:{id:saved.id}});assert.equal(completed.credentialsCipher,saved.credentialsCipher);
+      for(const [key,account]of Object.entries(saved.accounts))assert.deepEqual(completed.accounts[key],account);
+      for(const login of resumed.credentials)assert.equal(login.password,passwords.get(login.email));
+      await ok('platform','POST',`${base}/${saved.id}/teardown`,{expectedVersion:1});
+    }finally{limitedAccount=null;}
+  });
   await t.test('concurrent resume and teardown cannot race an in-flight provider create',async()=>{
     let unblock;pauseEnsure=new Promise(resolve=>{unblock=resolve;});const another={submissionKey:randomUUID()},before=ensureCalls;
     const running=call('platform','POST',base,another);while(ensureCalls===before)await new Promise(resolve=>setTimeout(resolve,10));
@@ -127,7 +150,7 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
       await tx.$queryRaw`SELECT set_config('app.company_id',${demo.companyId},true)`;
       return {
         offline:await tx.residentContact.findUniqueOrThrow({where:{id:s.offlineContactId}}),offlineLease:await tx.lease.findUniqueOrThrow({where:{id:s.offlineLeaseId}}),
-        former:await tx.residentContact.findUniqueOrThrow({where:{id:s.formerContactId}}),ended:await tx.lease.findUniqueOrThrow({where:{id:s.endedLeaseId}}),
+        former:await tx.residentContact.findUniqueOrThrow({where:{id:s.formerContactId}}),ended:await tx.lease.findUniqueOrThrow({where:{id:s.endedLeaseId}}),plannedMoveOut:await tx.leaseTransition.findUniqueOrThrow({where:{id:s.plannedMoveOutId}}),
         invite:await tx.invitation.findUniqueOrThrow({where:{id:s.invitationId}}),prorations:await tx.leaseProration.count({where:{leaseId:s.offlineLeaseId}}),
         settlement:await tx.leaseSettlement.findFirstOrThrow({where:{leaseId:s.endedLeaseId}}),refund:await tx.leaseMovement.findFirstOrThrow({where:{leaseId:s.endedLeaseId,kind:'deposit_refund'},include:{cashEntries:true}}),
         baseline:await tx.leaseInspection.findUniqueOrThrow({where:{id:s.baselineInspectionId}}),moveOut:await tx.leaseInspection.findUniqueOrThrow({where:{id:s.moveOutInspectionId}}),
@@ -141,6 +164,7 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
     assert.equal(facts.invite.acceptedAt,null);assert.equal(facts.invite.revokedAt,null);assert.equal(facts.invite.deliveryStatus,'not_requested');
     assert.equal(facts.former.status,'archived');assert.equal(facts.ended.status,'ended');assert.equal(facts.prorations,1);
     assert.equal(facts.refund.cashEntries.length,1);assert.equal(facts.refund.cashEntries[0].amountCents,facts.refund.amountCents);assert.equal(facts.refund.cashEntries[0].movementId,facts.refund.id);assert.equal(facts.refund.leaseId,facts.ended.id);
+    assert.equal(facts.plannedMoveOut.kind,'plan_end');assert.equal(facts.plannedMoveOut.leaseId,s.offlineLeaseId);assert.equal(facts.offlineLease.status,'active');assert.ok(facts.offlineLease.endsOn.toISOString().slice(0,10)>demo.manifest.today);
     assert.equal(facts.baseline.status,'completed');assert.equal(facts.moveOut.status,'awaiting_review');assert.ok(facts.moveOut.baselineRevisionId);
     assert.equal(facts.agreement.status,'reviewed');assert.ok(facts.shared.receivedAt);assert.equal(facts.shared.userId,users.resident.user_id);
     assert.ok(facts.files.some(f=>f.scanStatus==='pending'));assert.ok(facts.files.filter(f=>f.scanStatus==='clean').every(f=>Buffer.from(f.content).equals(Buffer.from(DEMO_BUNDLED_TEXT))));
@@ -187,7 +211,7 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
   });
   await t.test('legacy hashless create and teardown retain auth, environment, stale-version and non-demo boundaries',async()=>{
     const saved=await db.salesDemoSetup.findUniqueOrThrow({where:{id:sheet.id}});
-    assert.equal(saved.blueprint.seedVersion,4);assert.equal(saved.blueprint.anchorOn,demo.manifest.today);
+    assert.equal(saved.blueprint.seedVersion,SALES_DEMO_SEED_VERSION);assert.equal(saved.blueprint.anchorOn,demo.manifest.today);
     assert.deepEqual(saved.blueprint.environment,{name:'disposable_test',origin:'https://app.test',identityIssuer:provider.issuer,provisioningAllowed:true});
     const snapshot=async()=>({companies:await db.company.count(),users:await db.user.count(),setups:await db.salesDemoSetup.count(),audits:await db.auditEvent.count(),created,ensureCalls,blockCalls,demo:await current(sheet.id),customer:await db.company.findUniqueOrThrow({where:{id:'customer-company'}})});
     const before=await snapshot(),path=`${base}/${sheet.id}/teardown`,teardown={expectedVersion:demo.version};
@@ -249,6 +273,19 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
       assert.equal(patchAttempts,10);assert.ok([...owned.values()].every(row=>row.blocked));assert.deepEqual(await current(sheet.id),readyBefore);assert.deepEqual(await db.company.findUniqueOrThrow({where:{id:'customer-company'}}),customerBefore);
     }finally{await isolated.close();}
   });
+  await t.test('known legacy account or local identity issuer mismatches reject cleanup before all claim effects',async()=>{
+    const original=await db.salesDemoSetup.findUniqueOrThrow({where:{id:sheet.id}}),originalIssuer=provider.issuer,originalConnection=provider.databaseConnection;
+    const snapshot=async()=>({setup:await db.salesDemoSetup.findUniqueOrThrow({where:{id:sheet.id}}),demo:await current(sheet.id),company:await db.company.findUniqueOrThrow({where:{id:sheet.companyId}}),users:await db.user.findMany({where:{id:{in:Object.values(original.accounts).map(account=>account.user_id)}},orderBy:{id:'asc'}}),members:await db.companyMembership.findMany({where:{companyId:sheet.companyId},orderBy:{userId:'asc'}}),sessions:await db.session.count(),audits:await db.auditEvent.count(),ensureCalls,blockCalls});
+    try{
+      for(const variant of ['persisted-issuer','persisted-connection','local-identity']){
+        const accounts=variant==='local-identity'?Object.fromEntries(Object.entries(original.accounts).map(([key,{issuer,connection,...account}])=>[key,account])):original.accounts;
+        await db.salesDemoSetup.update({where:{id:sheet.id},data:{blueprint:Prisma.DbNull,accounts}});
+        if(variant==='persisted-connection')provider.databaseConnection='other-connection';else provider.issuer='https://other.auth0.com/';
+        const before=await snapshot(),result=await call('platform','POST',`${base}/${sheet.id}/teardown`,{expectedVersion:demo.version});assert.equal(result.statusCode,409,result.body);assert.equal(result.json().code,'DEMO_PROVIDER_CHANGED');assert.deepEqual(await snapshot(),before);
+        provider.issuer=originalIssuer;provider.databaseConnection=originalConnection;
+      }
+    }finally{provider.issuer=originalIssuer;provider.databaseConnection=originalConnection;await db.salesDemoSetup.update({where:{id:sheet.id},data:{blueprint:original.blueprint,accounts:original.accounts}});}
+  });
   await t.test('teardown is atomic locally, blocks generated Auth0 users, retries and preserves history',async()=>{
     await admin.query(`CREATE FUNCTION reject_demo_retirement() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='sales_demo.retired' THEN RAISE EXCEPTION 'test failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_demo_retirement BEFORE INSERT ON "AuditEvent" FOR EACH ROW EXECUTE FUNCTION reject_demo_retirement()`);
     try{assert.equal((await call('platform','POST',`${base}/${sheet.id}/teardown`,{expectedVersion:1})).statusCode,503);}finally{await admin.query('DROP TRIGGER reject_demo_retirement ON "AuditEvent"; DROP FUNCTION reject_demo_retirement()');}
@@ -262,7 +299,7 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
     // await: unrelated customer administration must still complete promptly.
     const manager=setup.accounts.manager;let reached,releaseBlock;
     const atProvider=new Promise(resolve=>{reached=resolve;}),continueProvider=new Promise(resolve=>{releaseBlock=resolve;});
-    pauseBlock=async account=>{if(account.user_id===manager.user_id){reached();await continueProvider;}};
+    pauseBlock=async account=>{if(account.user_id===manager.user_id){reached();await continueProvider;throw new IdentityProviderError('update','rate_limit',429,30);}};
     const retirement=call('platform','POST',`${base}/${sheet.id}/teardown`,{expectedVersion:2});
     try{
       await Promise.race([atProvider,retirement.then(response=>{throw Error('Cleanup finished before provider pause: '+response.body);})]);
@@ -289,7 +326,11 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
       const customerMember=await db.companyMembership.findUniqueOrThrow({where:{userId:'customer'}});
       await ok('platform','PUT','/api/platform/users/customer/membership',{companyId:'customer-company',role:'owner',status:'active',expectedVersion:customerMember.version});
     }finally{pauseBlock=null;releaseBlock();}
-    const completed=await retirement;assert.equal(completed.statusCode,200,completed.body);
+    const interrupted=await retirement;assert.equal(interrupted.statusCode,429,interrupted.body);
+    assert.equal((await db.salesDemoSetup.findUniqueOrThrow({where:{id:sheet.id}})).status,'retiring');
+    const stillReserved=await call('platform','PATCH',`/api/platform/users/${encodeURIComponent(manager.user_id)}/status`,{status:'active'});assert.equal(stillReserved.statusCode,409,stillReserved.body);assert.equal(stillReserved.json().code,'DEMO_OPERATION_IN_PROGRESS');
+    const stillAssigned=await db.companyMembership.findUniqueOrThrow({where:{userId:manager.user_id}}),stillTransfer=await call('platform','PUT',`/api/platform/users/${encodeURIComponent(manager.user_id)}/membership`,{companyId:'customer-company',role:'manager',status:'active',expectedVersion:stillAssigned.version});assert.equal(stillTransfer.statusCode,409,stillTransfer.body);assert.equal(stillTransfer.json().code,'DEMO_OPERATION_IN_PROGRESS');
+    await ok('platform','POST',`${base}/${sheet.id}/teardown`,{expectedVersion:2});
     // The reservation ends only after all provider cleanup is confirmed.
     await ok('platform','PATCH',`/api/platform/users/${encodeURIComponent(manager.user_id)}/status`,{status:'active'});
     await ok('platform','PATCH',`/api/platform/users/${encodeURIComponent(manager.user_id)}/status`,{status:'disabled'});
@@ -303,6 +344,12 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
   await t.test('pending cleanup includes an ambiguous Auth0 success whose subject was not recorded',async()=>{
     loseIdentity=true;const p={submissionKey:randomUUID()};assert.equal((await call('platform','POST',base,p)).statusCode,503);
     const pending=(await ok('platform','GET',base)).setups[0];assert.equal(pending.accountsPrepared,0);
+    await db.salesDemoSetup.update({where:{id:pending.id},data:{blueprint:Prisma.DbNull}});
+    pauseBlock=async()=>{throw new IdentityProviderError('update','rate_limit',429,30);};
+    try{const interrupted=await call('platform','POST',`${base}/${pending.id}/teardown`,{expectedVersion:1});assert.equal(interrupted.statusCode,429,interrupted.body);}finally{pauseBlock=null;}
+    const recorded=await db.salesDemoSetup.findUniqueOrThrow({where:{id:pending.id}});assert.equal(Object.keys(recorded.accounts).length,1);assert.ok(Object.values(recorded.accounts).every(account=>account.issuer===provider.issuer&&account.connection===provider.databaseConnection&&!account.cleanupConfirmedSubject));
+    const originalIssuer=provider.issuer,beforeCalls=blockCalls,beforeAudit=await db.auditEvent.count();provider.issuer='https://other.auth0.com/';
+    try{const rejected=await call('platform','POST',`${base}/${pending.id}/teardown`,{expectedVersion:1});assert.equal(rejected.statusCode,409,rejected.body);assert.equal(rejected.json().code,'DEMO_PROVIDER_CHANGED');assert.equal(blockCalls,beforeCalls);assert.equal(await db.auditEvent.count(),beforeAudit);assert.deepEqual(await db.salesDemoSetup.findUniqueOrThrow({where:{id:pending.id}}),recorded);}finally{provider.issuer=originalIssuer;}
     await ok('platform','POST',`${base}/${pending.id}/teardown`,{expectedVersion:1});
     for(const [email,row]of remote)if(email.includes(pending.id))assert.equal(row.blocked,true);
   });
@@ -337,8 +384,10 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
     assert.equal((await call('platform','POST',`${base}/${source.id}/rebuild`,{submissionKey:randomUUID(),expectedVersion:stale.expectedVersion,planHash:stale.planHash,confirmed:true})).statusCode,409);assert.equal(created,count);
     const plan=await ok('platform','GET',`${base}/${source.id}/plan?intent=rebuild`),body={submissionKey:randomUUID(),expectedVersion:plan.expectedVersion,planHash:plan.planHash,confirmed:true};
     await admin.query(`CREATE FUNCTION reject_rebuild_seed() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='sales_demo.created' THEN RAISE EXCEPTION 'test failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_rebuild_seed BEFORE INSERT ON "AuditEvent" FOR EACH ROW EXECUTE FUNCTION reject_rebuild_seed()`);
+    const budgetStart=providerBudgets.length;
     try{assert.equal((await call('platform','POST',`${base}/${source.id}/rebuild`,body)).statusCode,503);}finally{await admin.query('DROP TRIGGER reject_rebuild_seed ON "AuditEvent"; DROP FUNCTION reject_rebuild_seed()');}
-    const replacement=await db.salesDemoSetup.findFirstOrThrow({where:{sourceDemoId:source.id,status:'pending'}});assert.equal(replacement.sourceVersion,original.version);assert.equal(replacement.blueprint.seedVersion,4);assert.ok(replacement.blueprint.anchorOn);
+    const replacement=await db.salesDemoSetup.findFirstOrThrow({where:{sourceDemoId:source.id,status:'pending'}});assert.equal(replacement.sourceVersion,original.version);assert.equal(replacement.blueprint.seedVersion,SALES_DEMO_SEED_VERSION);assert.ok(replacement.blueprint.anchorOn);
+    const budgets=providerBudgets.slice(budgetStart);assert.ok(budgets.some(step=>step.action==='block'&&step.generation===source.id));assert.ok(budgets.some(step=>step.action==='ensure'&&step.generation===replacement.id));assert.ok(budgets.every(step=>Number.isFinite(step.deadline)));assert.equal(new Set(budgets.map(step=>step.deadline)).size,1,'predecessor cleanup and replacement creation share one absolute provider deadline');
     assert.equal((await current(source.id)).status,'retired');assert.equal((await db.company.findUniqueOrThrow({where:{id:source.companyId}})).status,'suspended');
     assert.deepEqual((await current(source.id)).manifest,original.manifest);
     const after=await db.$transaction(async tx=>{await tx.$queryRaw`SELECT set_config('app.company_id',${source.companyId},true)`;return {leases:await tx.lease.findMany({where:{companyId:source.companyId},orderBy:{id:'asc'}}),cash:await tx.ledgerEntry.findMany({where:{companyId:source.companyId},orderBy:{id:'asc'}})};});assert.deepEqual(after,before);
@@ -397,4 +446,47 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
       await row.getByRole('button',{name:'Tear down demo',exact:true}).click();await row.getByRole('checkbox',{name:'I reviewed this demo and the accounts affected by teardown.',exact:true}).check();await row.getByRole('button',{name:'Confirm teardown',exact:true}).click();await expect(page.getByRole('region',{name:'Demo login credentials'})).toHaveCount(0);await expect(row).toContainText('Torn down');
     }finally{await browser.close();}
   });
+  await t.test('browser accepts future move-out and preserves date/reason through the real planned-end review', {skip:!process.env.TEST_SALES_DEMO_BROWSER_URL},async()=>{
+    const built=await ok('platform','POST',base,{submissionKey:randomUUID()}),fixture=await current(built.id),leaseId=fixture.manifest.leases[0];
+    const ownerId=remote.get(built.credentials.find(c=>c.role==='Owner').email).user_id;await session(ownerId);
+    const before=await admin.query(`SELECT (SELECT count(*) FROM "LeaseMovement" WHERE "leaseId"=$1)::int movements,(SELECT count(*) FROM "RentCharge" WHERE "leaseId"=$1)::int charges,(SELECT status FROM "RentSchedule" WHERE "leaseId"=$1 LIMIT 1) billing`,[leaseId]);
+    const end=new Date(fixture.manifest.today+'T00:00:00Z');end.setUTCMonth(end.getUTCMonth()+9,0);const future=end.toISOString().slice(0,10),reason='Future departure agreed with tenant';
+    const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{})});
+    try{
+      const page=await newFixturePage(browser),settlementWrites=[];
+      await page.route('**/api/**',async route=>{
+        const req=route.request(),u=new URL(req.url());
+        if(req.method()==='POST'&&u.pathname.includes('/settlement'))settlementWrites.push(u.pathname);
+        const r=await call(ownerId,req.method(),u.pathname+u.search,req.postDataJSON()||undefined);
+        await route.fulfill({status:r.statusCode,contentType:'application/json',body:r.body});
+      });
+      await page.goto(`${process.env.TEST_SALES_DEMO_BROWSER_URL}/company/leases/${leaseId}?section=settlement`);
+      await page.getByRole('button',{name:'Prepare settlement',exact:true}).click();
+      const date=page.getByLabel('Move-out date',{exact:true});await expect(date).not.toHaveAttribute('max',/.+/);await date.fill(future);
+      await page.getByLabel('Reason shown to the tenant',{exact:true}).fill(reason);
+      await page.getByRole('button',{name:'Review planned move-out',exact:true}).click();
+      await expect(page.getByLabel('Lease action',{exact:true})).toHaveValue('plan_end');
+      await expect(page.getByLabel('Current lease end date',{exact:true})).toHaveValue(future);
+      await expect(page.getByRole('dialog').locator('textarea[name="reason"]')).toHaveValue(reason);
+      assert.deepEqual(settlementWrites,[]);
+      assert.notEqual((await ok(ownerId,'GET',`/api/company/leases/${leaseId}`)).endsOn.slice(0,10),future,'navigation makes no write');
+      await page.getByRole('button',{name:'Review changes',exact:true}).click();
+      await page.getByLabel('These dates and charges match the lease agreement.',{exact:true}).check();
+      await page.getByRole('button',{name:'Save end date',exact:true}).click();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      const lease=await ok(ownerId,'GET',`/api/company/leases/${leaseId}`);assert.equal(lease.status,'active');assert.equal(lease.endsOn.slice(0,10),future);
+      const history=await ok(ownerId,'GET',`/api/company/leases/${leaseId}/transition`);assert.equal(history.history[0].kind,'plan_end');assert.equal(history.history[0].reason,reason);
+      const after=await admin.query(`SELECT (SELECT count(*) FROM "LeaseMovement" WHERE "leaseId"=$1)::int movements,(SELECT count(*) FROM "RentCharge" WHERE "leaseId"=$1)::int charges,(SELECT status FROM "RentSchedule" WHERE "leaseId"=$1 LIMIT 1) billing`,[leaseId]);
+      assert.deepEqual(after.rows,before.rows,'month-end planning creates no deposit application, charge or billing pause');assert.deepEqual(settlementWrites,[]);
+      await page.reload();await page.getByRole('button',{name:'Move-out & settlement',exact:true}).click();
+      await expect(page.getByRole('button',{name:'Prepare settlement',exact:true})).toBeVisible();
+      await page.getByRole('button',{name:'Prepare settlement',exact:true}).click();
+      await page.getByLabel('Move-out date',{exact:true}).fill(fixture.manifest.today);
+      await page.getByLabel('Reason shown to the tenant',{exact:true}).fill('Actual move-out review');
+      await page.getByRole('button',{name:'Continue',exact:true}).click();
+      await expect(page.getByRole('heading',{name:'Forwarding details',exact:true})).toBeVisible();assert.deepEqual(settlementWrites,[]);
+    }finally{await browser.close();}
+    await ok('platform','POST',`${base}/${built.id}/teardown`,{expectedVersion:1});
+  });
+
 });

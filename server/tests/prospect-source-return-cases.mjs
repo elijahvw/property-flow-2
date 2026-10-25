@@ -279,7 +279,7 @@ export async function prospectSourceReturnCases(t, admin, call, db, app, provide
     assert.equal(new URL(page.url()).searchParams.get('prospectId'), 'missing-return-prospect');
     assert.equal(new URL(page.url()).searchParams.has('returnTo'), false);
     await page.getByRole('button', { name: '← Prospect list', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Prospects & applications', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Prospects', exact: true })).toBeVisible();
     assert.equal(new URL(page.url()).searchParams.get('q'), filters.q);
     await page.close();
 
