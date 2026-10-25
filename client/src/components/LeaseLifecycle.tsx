@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -597,12 +597,14 @@ export function LeaseTransition({
   leaseId,
   changed,
   plannedMoveOut,
-  planHandled,
+  planHandled, planRetry, planAccessDenied,
 }: {
   leaseId: string;
   changed: () => void;
   plannedMoveOut?: { key: string; endsOn: string; reason: string } | null;
-  planHandled?: () => void;
+  planHandled?: (key: string) => void;
+  planRetry?: number;
+  planAccessDenied?: (denied: boolean) => void;
 }) {
   const { data } = useAuth();
   return (
@@ -611,7 +613,7 @@ export function LeaseTransition({
       id={leaseId}
       changed={changed}
       plannedMoveOut={plannedMoveOut}
-      planHandled={planHandled}
+      planHandled={planHandled} planRetry={planRetry} planAccessDenied={planAccessDenied}
     />
   );
 }
@@ -619,12 +621,14 @@ function TransitionWorkspace({
   id,
   changed,
   plannedMoveOut,
-  planHandled,
+  planHandled, planRetry, planAccessDenied,
 }: {
   id: string;
   changed: () => void;
   plannedMoveOut?: { key: string; endsOn: string; reason: string } | null;
-  planHandled?: () => void;
+  planHandled?: (key: string) => void;
+  planRetry?: number;
+  planAccessDenied?: (denied: boolean) => void;
 }) {
   const root = `/api/company/leases/${encodeURIComponent(id)}/transition`,
     review = useReview<TransitionPreview>("handoff", id),
@@ -633,13 +637,18 @@ function TransitionWorkspace({
     r = useResource<TransitionData>(root, true, !open),
     d = r.data?.lease ? r.data : undefined;
   const [initialPlan, setInitialPlan] = useState<typeof plannedMoveOut>(null);
+  useEffect(() => { if (plannedMoveOut && (planRetry || 0) > 0) r.reload(); }, [plannedMoveOut?.key, planRetry]);
+  useLayoutEffect(() => {
+    if (!plannedMoveOut) return;
+    if ([401, 403, 404].includes(r.errorStatus || 0)) planAccessDenied?.(true);
+    else if (d && !r.loading && !r.error) planAccessDenied?.(false);
+  }, [plannedMoveOut, d, r.errorStatus, r.loading, r.error, planAccessDenied]);
   useEffect(() => {
-    if (!plannedMoveOut || !d || r.error || open || review.value) return;
+    if (!plannedMoveOut || !d || r.loading || r.error || open || review.value) return;
     setDraft(d);
     setInitialPlan(plannedMoveOut);
     setOpen(true);
-    planHandled?.();
-  }, [plannedMoveOut, d, r.error, open, review.value, planHandled]);
+  }, [plannedMoveOut, d, r.loading, r.error, open, review.value]);
   const clear = () => {
     review.clear();
     setOpen(false);
@@ -763,7 +772,7 @@ function TransitionWorkspace({
         </details>
       ) : null}
       <EditorDialog
-        open={open} hasChanges={!!review.value}
+        open={open} hasChanges={!!review.value || !!initialPlan}
         title={
           review.value
             ? review.value.preview.kind === "renew"
@@ -775,6 +784,7 @@ function TransitionWorkspace({
         }
         onClose={() => setOpen(false)} onDiscard={clear}
       >
+        {plannedMoveOut && open && draft && !review.value && initialPlan?.key === plannedMoveOut.key && <PlannedMoveOutReady planKey={plannedMoveOut.key} handled={planHandled} />}
         {review.value ? (
           <>
             {review.value.preview.ready ? (
@@ -1313,4 +1323,13 @@ export function ResidentLifecycleHistory({ leaseId }: { leaseId: string }) {
       ) : null}
     </>
   );
+}
+
+
+function PlannedMoveOutReady({ planKey, handled }: { planKey: string; handled?: (key: string) => void }) {
+  const acknowledged = useRef<string | null>(null);
+  // Do not release the page's handoff owner until the destination editor body
+  // is mounted and its hasChanges guard has registered before paint.
+  useEffect(() => { if (acknowledged.current !== planKey) { acknowledged.current = planKey; handled?.(planKey); } }, [planKey, handled]);
+  return null;
 }

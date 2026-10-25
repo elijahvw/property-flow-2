@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useLayoutEffect, useState, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api";
@@ -167,10 +167,15 @@ export function LeaseSettlement({
   leaseId,
   resident = false,
   planMoveOut,
+  resumeMoveOut, resumeHandled, resumeRetry, resumeAccessDenied,
 }: {
   leaseId: string;
   resident?: boolean;
   planMoveOut?: (plan: { endsOn: string; reason: string }) => void;
+  resumeMoveOut?: { key: string; endsOn: string; reason: string } | null;
+  resumeHandled?: (key: string) => void;
+  resumeRetry?: number;
+  resumeAccessDenied?: (denied: boolean) => void;
 }) {
   const { data } = useAuth();
   return (
@@ -179,6 +184,7 @@ export function LeaseSettlement({
       leaseId={leaseId}
       resident={resident}
       planMoveOut={planMoveOut}
+      resumeMoveOut={resumeMoveOut} resumeHandled={resumeHandled} resumeRetry={resumeRetry} resumeAccessDenied={resumeAccessDenied}
     />
   );
 }
@@ -186,10 +192,15 @@ function SettlementWorkspace({
   leaseId,
   resident,
   planMoveOut,
+  resumeMoveOut, resumeHandled, resumeRetry, resumeAccessDenied,
 }: {
   leaseId: string;
   resident: boolean;
   planMoveOut?: (plan: { endsOn: string; reason: string }) => void;
+  resumeMoveOut?: { key: string; endsOn: string; reason: string } | null;
+  resumeHandled?: (key: string) => void;
+  resumeRetry?: number;
+  resumeAccessDenied?: (denied: boolean) => void;
 }) {
   const { data: auth } = useAuth(),
     root = `/api/${resident ? "resident" : "company"}/leases/${encodeURIComponent(leaseId)}/settlement`,
@@ -202,6 +213,7 @@ function SettlementWorkspace({
     ),
     [open, setOpen] = useState(false),
     [reopening, setReopening] = useState(false);
+  const [returnedPlan, setReturnedPlan] = useState<typeof resumeMoveOut>(null);
   const [reopenKey, setReopenKey] = useState(() => crypto.randomUUID()),
     [reopenBody, setReopenBody] = useState<Record<string, unknown> | null>(
       null,
@@ -212,6 +224,16 @@ function SettlementWorkspace({
       !open,
     ),
     d = r.data;
+  useEffect(() => { if (resumeMoveOut && (resumeRetry || 0) > 0) r.reload(); }, [resumeMoveOut?.key, resumeRetry]);
+  useEffect(() => {
+    if (!resumeMoveOut || !d || r.loading || r.error || review || open) return;
+    setDraft(d); setReturnedPlan(resumeMoveOut); setOpen(true);
+  }, [resumeMoveOut, d, r.loading, r.error, review, open]);
+  useLayoutEffect(() => {
+    if (!resumeMoveOut) return;
+    if ([401, 403, 404].includes(r.errorStatus || 0)) resumeAccessDenied?.(true);
+    else if (d && !r.loading && !r.error) resumeAccessDenied?.(false);
+  }, [resumeMoveOut, open, draft, returnedPlan, r.errorStatus, r.loading, r.error, d, resumeHandled, resumeAccessDenied]);
   useEffect(() => {
     const refresh = (e: Event) => {
       if ((e as CustomEvent).detail === leaseId && !open) r.reload();
@@ -223,6 +245,7 @@ function SettlementWorkspace({
     sessionStorage.removeItem(key);
     setReview(null);
     setDraft(null);
+    setReturnedPlan(null);
     setOpen(false);
   };
   const history = d?.revisions || [],
@@ -564,7 +587,7 @@ function SettlementWorkspace({
       {!resident && (
         <>
           <EditorDialog
-            open={open} hasChanges={!!review}
+            open={open} hasChanges={!!review || !!returnedPlan}
             title={
               review
                 ? "Confirm move-out settlement"
@@ -573,6 +596,7 @@ function SettlementWorkspace({
             description={`${d.lease.property.name} · ${d.lease.unit.label}`}
             onClose={() => setOpen(false)} onDiscard={clear}
           >
+            {resumeMoveOut && open && draft && !r.error && returnedPlan?.key === resumeMoveOut.key && <ReturnedMoveOutReady planKey={resumeMoveOut.key} handled={resumeHandled} />}
             {review ? (
               <>
                 <p className="record-kicker">Review before saving</p>
@@ -682,9 +706,11 @@ function SettlementWorkspace({
             {draft && (
               <div hidden={!!review}>
                 <SettlementEditor
+                  key={returnedPlan?.key || "standard"}
+                  initialPlan={returnedPlan}
                   data={draft}
                   root={root}
-                  planMoveOut={planMoveOut ? plan => { setOpen(false); planMoveOut(plan); } : undefined}
+                  planMoveOut={planMoveOut ? plan => { setReturnedPlan(null); setOpen(false); planMoveOut(plan); } : undefined}
                   reviewed={(next) => {
 
                     setReview(next);
@@ -753,16 +779,19 @@ function SettlementEditor({
   root,
   reviewed,
   planMoveOut,
+  initialPlan,
 }: {
   data: Data;
   root: string;
   reviewed: (r: Review) => void;
   planMoveOut?: (plan: { endsOn: string; reason: string }) => void;
+  initialPlan?: { endsOn: string; reason: string } | null;
 }) {
+  const sourceEditor = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState(0),
     [values, setValues] = useState<Record<string, FormDataEntryValue>>({}),
     stepHeading = useRef<HTMLHeadingElement>(null);
-  const [moveOutOn, setMoveOutOn] = useState(data.latest?.movedOutOn.slice(0, 10) || data.businessDate);
+  const [moveOutOn, setMoveOutOn] = useState(initialPlan?.endsOn || data.latest?.movedOutOn.slice(0, 10) || data.businessDate);
   const future = moveOutOn > data.businessDate;
   const editor = useEditorBusy();
   useEffect(() => {
@@ -785,7 +814,7 @@ function SettlementEditor({
     ),
     held = data.current?.deposit?.heldCents || "0";
   return (
-    <Form
+    <div ref={sourceEditor}><Form
       reviewOnly
       label={step === 0 && future ? "Review planned move-out" : step === 3 ? "Review settlement" : "Continue"}
       operation="page.data.load"
@@ -805,9 +834,9 @@ function SettlementEditor({
         const captured = { ...values, ...Object.fromEntries(form) };
         setValues(captured);
         if (step === 0 && future && planMoveOut) {
-          // This explicit handoff preserves the entered date/reason. Release
-          // this editor's leave guard before switching to the plan editor.
-          editor.completed();
+          // The page retains and guards the exact handoff until the next
+          // editor acknowledges ownership. Complete only this source form.
+          if (sourceEditor.current) editor.completed(sourceEditor.current);
           planMoveOut({ endsOn: moveOutOn, reason: String(captured.reason) });
           return;
         }
@@ -900,6 +929,7 @@ function SettlementEditor({
             rows={3}
             required
             placeholder="Describe the move-out review and any agreed adjustments."
+            defaultValue={initialPlan?.reason || ""}
           />
         </label>
       </fieldset>
@@ -1104,7 +1134,7 @@ function SettlementEditor({
           <p>No active recurring schedules to pause.</p>
         )}
       </fieldset>
-    </Form>
+    </Form></div>
   );
 }
 function SavedSources({ snapshot }: { snapshot: Snapshot }) {
@@ -1308,4 +1338,13 @@ function ForwardingReview({
       )}
     </div>
   );
+}
+
+
+function ReturnedMoveOutReady({ planKey, handled }: { planKey: string; handled?: (key: string) => void }) {
+  const acknowledged = useRef<string | null>(null);
+  // Mounting inside EditorDialog means its hasChanges guard registered in the
+  // layout phase before this passive ownership acknowledgement is delivered.
+  useEffect(() => { if (acknowledged.current !== planKey) { acknowledged.current = planKey; handled?.(planKey); } }, [planKey, handled]);
+  return null;
 }

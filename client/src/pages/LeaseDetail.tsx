@@ -4,6 +4,8 @@ import { LeaseProration, LeaseTransition } from "../components/LeaseLifecycle";
 import { LeaseTermChanges } from "../components/LeaseTermChanges";
 import { LeaseSettlement } from "../components/LeaseSettlement";
 import { useEffect, useState } from "react";
+import { usePageLeaveGuard } from "../components/PageLeaveGuard";
+import { tenantEditorScope } from "../tenant-write-access";
 import {
   Link,
   useNavigate,
@@ -35,7 +37,7 @@ export function LeaseDetail() {
     { data } = useAuth();
   return (
     <LeaseWorkspace
-      key={`${leaseId}:${data?.user.id}:${data?.membership?.companyId}:${data?.permissions.join(",")}`}
+      key={`${leaseId}:${tenantEditorScope(data)}`}
       id={leaseId}
     />
   );
@@ -57,7 +59,7 @@ function LeaseWorkspace({ id }: { id: string }) {
   const [draftLease, setDraftLease] = useState<Lease | null>(null),
     [renewalDraft, setRenewalDraft] = useState<Lease | null>(null),
     [visited, setVisited] = useState<string[]>([]);
-  const [plannedMoveOut, setPlannedMoveOut] = useState<{ key: string; endsOn: string; reason: string } | null>(null);
+  const [moveOutHandoff, setMoveOutHandoff] = useState<MoveOutHandoff | null>(null), [handoffDenied, setHandoffDenied] = useState(false);
   const requestedSection = [
     "overview",
     "documents",
@@ -89,9 +91,13 @@ function LeaseWorkspace({ id }: { id: string }) {
     return () =>
       window.removeEventListener("lease-lifecycle-changed", listener);
   }, [id]);
+  const handoffGuard = moveOutHandoff && <MoveOutHandoffNotice key={`${moveOutHandoff.key}:${moveOutHandoff.target}:${moveOutHandoff.retry}:${section}`} plan={moveOutHandoff} visible={!!r.data && hasFinance && !handoffDenied}
+    retry={release => { const destination = moveOutHandoff.target === "transition" ? "renewal" : "settlement"; if (section !== destination) release(); setMoveOutHandoff(plan => plan && ({ ...plan, retry: plan.retry + 1 })); if (section !== destination) setParams(previous => { const next = new URLSearchParams(previous); next.set("section", destination); return next; }); }}
+    returnToDetails={release => { release(); setHandoffDenied(false); setMoveOutHandoff(plan => plan && ({ ...plan, target: "settlement", retry: 0 })); setParams(previous => { const next = new URLSearchParams(previous); next.set("section", "settlement"); return next; }); }}
+    discard={release => { if (!window.confirm("Discard the retained move-out date and reason? This has not changed the lease or saved a settlement.")) return; release(); setMoveOutHandoff(null); }} />;
   if (!r.data)
     return (
-      <><TenantReturnLink /><section className="panel">
+      <>{handoffGuard}<TenantReturnLink /><section className="panel">
         <Link to={withProspectContext("/company/leases", params)}>← All leases</Link>
         {r.error ? (
           <>
@@ -137,6 +143,7 @@ function LeaseWorkspace({ id }: { id: string }) {
     `/company/${module}?${new URLSearchParams({ ...context, leaseId: id, leaseReturn: id })}`;
   return (
     <div className="lease-workspace">
+      {handoffGuard}
       <TenantReturnLink />
       {section !== requestedSection && <p className="notice" role="status">The requested lease area is unavailable under this company's feature settings. The lease overview remains available.</p>}
       <nav className="record-breadcrumb" aria-label="Breadcrumb">
@@ -374,9 +381,13 @@ function LeaseWorkspace({ id }: { id: string }) {
           </div>
         )}
       {hasFinance &&
-        (section === "renewal" || visited.includes("renewal")) && (
+        (section === "renewal" || visited.includes("renewal") || moveOutHandoff?.target === "transition") && (
           <div hidden={section !== "renewal"}>
-            <LeaseTransition leaseId={id} changed={r.reload} plannedMoveOut={plannedMoveOut} planHandled={() => setPlannedMoveOut(null)} />
+            <LeaseTransition leaseId={id} changed={r.reload}
+              plannedMoveOut={moveOutHandoff?.target === "transition" ? moveOutHandoff : null}
+              planRetry={moveOutHandoff?.retry}
+              planAccessDenied={setHandoffDenied}
+              planHandled={key => setMoveOutHandoff(plan => plan?.key === key && plan.target === "transition" ? null : plan)} />
           </div>
         )}
       {section === "renewal" && (
@@ -434,13 +445,19 @@ function LeaseWorkspace({ id }: { id: string }) {
         </div>
       )}
       {hasFinance &&
-        (section === "settlement" || visited.includes("settlement")) && (
+        (section === "settlement" || visited.includes("settlement") || moveOutHandoff?.target === "settlement") && (
           <div hidden={section !== "settlement"}>
             {section==="settlement"&&params.get("inspectionId")&&<InspectionSettlementContext leaseId={id} inspectionId={params.get("inspectionId")!}/>}
-            <LeaseSettlement leaseId={id} planMoveOut={plan => {
-              setPlannedMoveOut({ ...plan, key: crypto.randomUUID() });
-              tab("renewal");
-            }} />
+            <LeaseSettlement leaseId={id}
+              resumeMoveOut={moveOutHandoff?.target === "settlement" ? moveOutHandoff : null}
+              resumeRetry={moveOutHandoff?.retry}
+              resumeHandled={key => setMoveOutHandoff(plan => plan?.key === key && plan.target === "settlement" ? null : plan)}
+              resumeAccessDenied={setHandoffDenied}
+              planMoveOut={plan => {
+                setHandoffDenied(false);
+                setMoveOutHandoff({ ...plan, key: crypto.randomUUID(), target: "transition", retry: 0 });
+                tab("renewal");
+              }} />
           </div>
         )}
       {hasDocuments && section === "documents" && <PrivateDocuments source="leases" sourceId={id} />}
@@ -511,4 +528,21 @@ function LeaseWorkspace({ id }: { id: string }) {
       </EditorDialog>
     </div>
   );
+}
+
+
+type MoveOutHandoff = { key: string; endsOn: string; reason: string; target: "transition" | "settlement"; retry: number };
+function MoveOutHandoffNotice({ plan, visible, retry, returnToDetails, discard }: {
+  plan: MoveOutHandoff; visible: boolean;
+  retry: (release: () => void) => void; returnToDetails: (release: () => void) => void; discard: (release: () => void) => void;
+}) {
+  const release = usePageLeaveGuard({ active: true, busy: false, uncertain: false });
+  useEffect(() => { const warn = (event: BeforeUnloadEvent) => event.preventDefault(); window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn); }, []);
+  return <section className="notice" aria-label="Retained move-out plan">
+    <h2>Move-out details kept for review</h2>
+    {visible ? <><p>Your date and reason stay protected until the destination editor is ready. Nothing has been saved to the lease or settlement.</p>
+      <dl><div><dt>Planned move-out</dt><dd>{formatDate(plan.endsOn)}</dd></div><div><dt>Reason</dt><dd className="preserve-lines">{plan.reason}</dd></div></dl></>
+      : <p>Access to the destination is unavailable. Your private move-out details are hidden and kept for recovery.</p>}
+    <div className="actions"><button className="secondary" type="button" onClick={() => retry(release)}>{plan.target === "transition" ? "Retry lease review" : "Retry move-out details"}</button>{plan.target === "transition" && <><button className="secondary" type="button" onClick={() => returnToDetails(release)}>Return to move-out details</button></>}<button className="text-button" type="button" onClick={() => discard(release)}>Discard retained move-out plan</button></div>
+  </section>;
 }
