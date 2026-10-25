@@ -5,7 +5,8 @@
   "database": {
     "identifier": "propertyflow-dev-db",
     "address": "module.rds.aws_db_instance.postgresql",
-    "terraform": "modules/rds/main.tf#aws_db_instance.postgresql"
+    "terraform": "modules/rds/main.tf#aws_db_instance.postgresql",
+    "retention": "Preserve database data across power cycles. Reviewed Terraform enables seven-day automated backups and deletion protection; database/backup storage charges continue while stopped. A verified restore remains required."
   },
   "application": {
     "cluster": "propertyflow-dev-cluster",
@@ -27,6 +28,7 @@
     "aws_iam_role_policy_attachment": "Retain existing service authorization.",
     "aws_db_subnet_group": "Retain database placement.",
     "aws_ecr_repository": "Keep deployable images; storage charges continue.",
+    "aws_ecr_lifecycle_policy": "No compute to stop; remove only untagged images after 30 days while retaining every tagged release and rollback image. Image storage charges continue.",
     "aws_ecs_cluster": "Keep cluster metadata; tasks are stopped through the service.",
     "aws_ecs_task_definition": "Keep launch configuration; all task containers stop with the service.",
     "aws_lb": "Keep public routing stable; load balancer and public IPv4 charges continue.",

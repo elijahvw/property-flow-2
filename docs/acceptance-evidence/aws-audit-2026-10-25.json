@@ -1,0 +1,656 @@
+{
+  "observedOn": "2026-10-25",
+  "account": "800754316001",
+  "scope": "Read-only AWS inventory, estimated account-wide costs and utilization. No configuration applied.",
+  "costs": {
+    "previous": {
+      "start": "2026-09-01",
+      "end_exclusive": "2026-09-25",
+      "estimated": true,
+      "services": [],
+      "total": "0"
+    },
+    "current": {
+      "start": "2026-10-01",
+      "end_exclusive": "2026-10-25",
+      "estimated": true,
+      "services": [
+        {
+          "service": "AWS Certificate Manager",
+          "amount": "0",
+          "unit": "USD"
+        },
+        {
+          "service": "AWS CloudFormation",
+          "amount": "0",
+          "unit": "USD"
+        },
+        {
+          "service": "AWS Cost Explorer",
+          "amount": "0.02",
+          "unit": "USD"
+        },
+        {
+          "service": "AWS Glue",
+          "amount": "0",
+          "unit": "USD"
+        },
+        {
+          "service": "AWS Key Management Service",
+          "amount": "0",
+          "unit": "USD"
+        },
+        {
+          "service": "AWS Lambda",
+          "amount": "0",
+          "unit": "USD"
+        },
+        {
+          "service": "AWS Migration Hub Refactor Spaces",
+          "amount": "0",
+          "unit": "USD"
+        },
+        {
+          "service": "AWS Payment Cryptography",
+          "amount": "0.001",
+          "unit": "USD"
+        },
+        {
+          "service": "AWS Secrets Manager",
+          "amount": "0.1555919482",
+          "unit": "USD"
+        },
+        {
+          "service": "AWS Service Catalog",
+          "amount": "0",
+          "unit": "USD"
+        },
+        {
+          "service": "Amazon CloudFront",
+          "amount": "0.000006829",
+          "unit": "USD"
+        },
+        {
+          "service": "Amazon DynamoDB",
+          "amount": "0.000223",
+          "unit": "USD"
+        },
+        {
+          "service": "Amazon EC2 Container Registry (ECR)",
+          "amount": "0.2979130309",
+          "unit": "USD"
+        },
+        {
+          "service": "Amazon Elastic Container Service",
+          "amount": "6.0075260479",
+          "unit": "USD"
+        },
+        {
+          "service": "Amazon Elastic Load Balancing",
+          "amount": "6.4363676943",
+          "unit": "USD"
+        },
+        {
+          "service": "Amazon Location Service",
+          "amount": "0.0003",
+          "unit": "USD"
+        },
+        {
+          "service": "Amazon Relational Database Service",
+          "amount": "5.257323361",
+          "unit": "USD"
+        },
+        {
+          "service": "Amazon Route 53",
+          "amount": "0.5",
+          "unit": "USD"
+        },
+        {
+          "service": "Amazon Simple Email Service",
+          "amount": "0.00128",
+          "unit": "USD"
+        },
+        {
+          "service": "Amazon Simple Notification Service",
+          "amount": "0",
+          "unit": "USD"
+        },
+        {
+          "service": "Amazon Simple Queue Service",
+          "amount": "0",
+          "unit": "USD"
+        },
+        {
+          "service": "Amazon Simple Storage Service",
+          "amount": "0.0139948588",
+          "unit": "USD"
+        },
+        {
+          "service": "Amazon Virtual Private Cloud",
+          "amount": "3.89343474",
+          "unit": "USD"
+        },
+        {
+          "service": "AmazonCloudWatch",
+          "amount": "0.24254",
+          "unit": "USD"
+        }
+      ],
+      "total": "22.8275015101"
+    }
+  },
+  "regionalInventory": [
+    {
+      "region": "ap-south-1",
+      "errors": {},
+      "databases": [],
+      "load_balancers": [],
+      "nat_gateways": []
+    },
+    {
+      "region": "eu-north-1",
+      "errors": {},
+      "databases": [],
+      "load_balancers": [],
+      "nat_gateways": []
+    },
+    {
+      "region": "eu-west-3",
+      "errors": {},
+      "databases": [],
+      "load_balancers": [],
+      "nat_gateways": []
+    },
+    {
+      "region": "eu-west-2",
+      "errors": {},
+      "databases": [],
+      "load_balancers": [],
+      "nat_gateways": []
+    },
+    {
+      "region": "eu-west-1",
+      "errors": {},
+      "databases": [],
+      "load_balancers": [],
+      "nat_gateways": []
+    },
+    {
+      "region": "ap-northeast-3",
+      "errors": {},
+      "databases": [],
+      "load_balancers": [],
+      "nat_gateways": []
+    },
+    {
+      "region": "ap-northeast-2",
+      "errors": {},
+      "databases": [],
+      "load_balancers": [],
+      "nat_gateways": []
+    },
+    {
+      "region": "ap-northeast-1",
+      "errors": {},
+      "databases": [],
+      "load_balancers": [],
+      "nat_gateways": []
+    },
+    {
+      "region": "ca-central-1",
+      "errors": {},
+      "databases": [],
+      "load_balancers": [],
+      "nat_gateways": []
+    },
+    {
+      "region": "sa-east-1",
+      "errors": {},
+      "databases": [],
+      "load_balancers": [],
+      "nat_gateways": []
+    },
+    {
+      "region": "ap-southeast-1",
+      "errors": {},
+      "databases": [],
+      "load_balancers": [],
+      "nat_gateways": []
+    },
+    {
+      "region": "ap-southeast-2",
+      "errors": {},
+      "databases": [],
+      "load_balancers": [],
+      "nat_gateways": []
+    },
+    {
+      "region": "eu-central-1",
+      "errors": {},
+      "databases": [],
+      "load_balancers": [],
+      "nat_gateways": []
+    },
+    {
+      "region": "us-east-1",
+      "errors": {},
+      "databases": [
+        "propertyflow-dev-db"
+      ],
+      "load_balancers": [
+        "propertyflow-dev-alb"
+      ],
+      "nat_gateways": []
+    },
+    {
+      "region": "us-east-2",
+      "errors": {},
+      "databases": [],
+      "load_balancers": [],
+      "nat_gateways": []
+    },
+    {
+      "region": "us-west-1",
+      "errors": {},
+      "databases": [],
+      "load_balancers": [],
+      "nat_gateways": []
+    },
+    {
+      "region": "us-west-2",
+      "errors": {},
+      "databases": [],
+      "load_balancers": [],
+      "nat_gateways": []
+    }
+  ],
+  "runtime": {
+    "task": {
+      "family": "propertyflow-dev",
+      "revision": 26,
+      "cpu": "512",
+      "memory": "4096",
+      "networkMode": "awsvpc",
+      "containers": [
+        {
+          "name": "app",
+          "image": "800754316001.dkr.ecr.us-east-1.amazonaws.com/propertyflow-dev-app:47badacbd4c36c047f885ff109cbde6e223ea384",
+          "cpu": 256,
+          "memory": 1024,
+          "essential": true
+        },
+        {
+          "name": "document-scanner",
+          "image": "clamav/clamav@sha256:705e0723f02fc13bf6e5e8a8e13a8c44420acf5e7ed06dfa2197081da00c7a73",
+          "cpu": 256,
+          "memory": 3072,
+          "essential": false
+        }
+      ],
+      "plaintext_secret_names": [
+        "AUTH0_MANAGEMENT_CLIENT_SECRET",
+        "DATABASE_URL",
+        "AUTH0_WEB_CLIENT_SECRET",
+        "RUNTIME_DATABASE_URL"
+      ]
+    },
+    "images": {
+      "manifests": 113,
+      "tagged": 34,
+      "untagged": 79,
+      "eligible_untagged_over_30_days": 0,
+      "untagged_compressed_manifest_bytes_sum": 14382367810,
+      "oldest_pushed": "2026-10-13T02:22:02.864000+00:00"
+    },
+    "budgets": {
+      "budgets": [
+        {
+          "BudgetName": "property-flow-dev",
+          "BudgetLimit": {
+            "Amount": "50.0",
+            "Unit": "USD"
+          },
+          "TimeUnit": "MONTHLY",
+          "BudgetType": "COST"
+        }
+      ]
+    },
+    "metrics": {
+      "ecs_cpu": {
+        "hourly_points": 126,
+        "unit": "Percent",
+        "mean_of_hourly_average": 0.7724616552610918,
+        "maximum": 100.33391571044923,
+        "minimum": 0
+      },
+      "ecs_memory": {
+        "hourly_points": 126,
+        "unit": "Percent",
+        "mean_of_hourly_average": 28.838687570826313,
+        "maximum": 35.11962890625,
+        "minimum": 0
+      },
+      "rds_cpu": {
+        "hourly_points": 127,
+        "unit": "Percent",
+        "mean_of_hourly_average": 3.9506389778434956,
+        "maximum": 60.65833333333334,
+        "minimum": 3.0416159730671155
+      },
+      "rds_free_memory": {
+        "hourly_points": 127,
+        "unit": "Bytes",
+        "mean_of_hourly_average": 199213816.28815845,
+        "maximum": 248999936,
+        "minimum": 125493248
+      }
+    }
+  },
+  "verifiedApiCalls": [
+    {
+      "service": "ec2",
+      "operation": "DescribeRegions",
+      "status": "success"
+    },
+    {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "status": "success"
+    },
+    {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeNatGateways",
+      "status": "success"
+    },
+    {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "status": "success"
+    },
+    {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeNatGateways",
+      "status": "success"
+    },
+    {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "status": "success"
+    },
+    {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeNatGateways",
+      "status": "success"
+    },
+    {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "status": "success"
+    },
+    {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeNatGateways",
+      "status": "success"
+    },
+    {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "status": "success"
+    },
+    {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeNatGateways",
+      "status": "success"
+    },
+    {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "status": "success"
+    },
+    {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeNatGateways",
+      "status": "success"
+    },
+    {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "status": "success"
+    },
+    {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeNatGateways",
+      "status": "success"
+    },
+    {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "status": "success"
+    },
+    {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeNatGateways",
+      "status": "success"
+    },
+    {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "status": "success"
+    },
+    {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeNatGateways",
+      "status": "success"
+    },
+    {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "status": "success"
+    },
+    {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeNatGateways",
+      "status": "success"
+    },
+    {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "status": "success"
+    },
+    {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeNatGateways",
+      "status": "success"
+    },
+    {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "status": "success"
+    },
+    {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeNatGateways",
+      "status": "success"
+    },
+    {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "status": "success"
+    },
+    {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeNatGateways",
+      "status": "success"
+    },
+    {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "status": "success"
+    },
+    {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeNatGateways",
+      "status": "success"
+    },
+    {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "status": "success"
+    },
+    {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeNatGateways",
+      "status": "success"
+    },
+    {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "status": "success"
+    },
+    {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeNatGateways",
+      "status": "success"
+    },
+    {
+      "service": "rds",
+      "operation": "DescribeDBInstances",
+      "status": "success"
+    },
+    {
+      "service": "elbv2",
+      "operation": "DescribeLoadBalancers",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeNatGateways",
+      "status": "success"
+    },
+    {
+      "service": "ce",
+      "operation": "GetCostAndUsage",
+      "status": "success"
+    },
+    {
+      "service": "ce",
+      "operation": "GetCostAndUsage",
+      "status": "success"
+    },
+    {
+      "service": "ecs",
+      "operation": "DescribeTaskDefinition",
+      "status": "success"
+    },
+    {
+      "service": "ecr",
+      "operation": "DescribeImages",
+      "status": "success"
+    },
+    {
+      "service": "budgets",
+      "operation": "DescribeBudgets",
+      "status": "success"
+    },
+    {
+      "service": "cloudwatch",
+      "operation": "GetMetricStatistics",
+      "status": "success"
+    },
+    {
+      "service": "cloudwatch",
+      "operation": "GetMetricStatistics",
+      "status": "success"
+    },
+    {
+      "service": "cloudwatch",
+      "operation": "GetMetricStatistics",
+      "status": "success"
+    },
+    {
+      "service": "cloudwatch",
+      "operation": "GetMetricStatistics",
+      "status": "success"
+    }
+  ]
+}
