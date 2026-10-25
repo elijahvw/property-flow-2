@@ -1,5 +1,7 @@
 # Feature acceptance and release handoff — October 24–25, 2026
 
+**PF-30 automatic-login follow-up:**055 (`202610250055_automatic_demo_accounts`) follows054. No manually precreated user is needed: create a demo, reveal its generated credentials and use normal Auth0 sign-in for owner, manager, staff, leaseholder and occupant. Verify demo-only email verification, staff selected-property limits, occupant finance denial, private credential reveal, interrupted setup/resume, local/provider teardown retry, rebuild and preservation of older presenter accounts. Reuse existing Management API scopes and `AUTH0_WEB_CLIENT_SECRET`; key rotation/recovery is documented in [the current runbook](sales-demo.md). Fixture3 also requires real offline/pending/former tenant states, proration/refund/corrections, sharing/receipt, application decisions, archived records and import validation; compare them through actual role logins. Local demo API/browser12, provider/credential units12, safe server120/nine expected DB skips, client14 and operations88 pass. Previous v1 setup instructions below are historical. Migration/live Auth0/deployment acceptance requires the user-controlled release.
+
 **PR #61 follow-up:** additive `202610250054_sales_demo` now follows the canonical041–053 chain below. Build/teardown/rebuild an explicitly fictional demo through platform Companies → Manage sales demos using a dedicated verified Auth0 account; validate account isolation, linked source views and old-generation replay protection. Teardown retains history, suspends its company and releases the account. Do not use a customer account. [Fixture coverage, limitations and recovery](sales-demo.md). The draft close-confirmation fix must show rejected saves immediately and preserve inputs. Follow-up local validation: demo API/browser6/6, saved-task browser13/13, adjacent admin/editor browser8/8, client14 files, safe server116 passes/nine expected DB skips, operations88/88 and power guard. The previously green CI predates this follow-up; check its new head before deployment.
 
 [Draft PR #61](https://github.com/elijahvw/property-flow-2/pull/61) consolidates the platform-owner/manual monthly billing and landlord workflow batch with the useful unique work from [PR #60](https://github.com/elijahvw/property-flow-2/pull/60). Branch: `codex/platform-controls-landlord-workflows`; base: `main` at `75d5342732ab8fc1e67deb3de9d045855eb20dc6`. Consolidated implementation is remote-verified at `33f2df6264ec8163e26f716e813b15fa0eae6cf1`. **Consolidated implementation and local validation are complete; verify the final published head/CI/reviews and migration gates before any user merge or deployment.** No merge, live migration, customer charge/provider activation or real-account acceptance is claimed.
@@ -81,6 +83,7 @@ Apply only pending full names after the target-ledger/schema and restore-point g
 202610240052_task_drafts
 202610240053_document_acknowledgments
 202610250054_sales_demo
+202610250055_automatic_demo_accounts
 ```
 
 ## Run each workflow across its boundaries
