@@ -1,10 +1,11 @@
 import { TenantInvitation } from "./TenantInvitation";
 import { Address } from "./Address";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { Form } from "./Form";
+import { useEditorBusy } from "./EditorDialog";
 import { hasTenantSaveRecovery, tenantEditorScope, tenantLeasingWriteBlock, tenantPortalAvailabilityNote, tenantSaveStorageKey, useTenantAttemptContext } from "../tenant-write-access";
 import { prospectContext } from "../prospect-context";
 import "./LandlordForms.css";
@@ -79,6 +80,12 @@ type TenantFormProps = {
   saved: (row: TenantContact) => void;
   cancel?: () => void;
 };
+function OptionalTenantSection({ title, initialOpen, children }: { title: string; initialOpen: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(initialOpen);
+  return <details className="editor-section" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
+    <summary>{title} · optional</summary>{children}
+  </details>;
+}
 export function TenantForm(props: TenantFormProps) {
   const { data } = useAuth();
   return <TenantFormWorkspace key={`${props.value?.id || "new"}:${tenantEditorScope(data)}`} {...props}/>;
@@ -89,6 +96,7 @@ function TenantFormWorkspace({
   cancel,
   inviteInitially = false,
 }: TenantFormProps) {
+  const editor = useEditorBusy();
   const { data: auth, can, refreshUser } = useAuth(),
     storageKey = tenantSaveStorageKey(auth, value?.id);
   const [params] = useSearchParams();
@@ -295,6 +303,7 @@ function TenantFormWorkspace({
               );
               if (!context.current()) throw new ApiError("Your company or account context changed before the result was acknowledged. The original tenant save is kept for recovery.", 409, "TENANT_CONTEXT_CHANGED", true);
               sessionStorage.removeItem(storageKey);
+              editor.completed();
               if (!value && review.invitePortal === "yes") setCreated(row);
               else finish(row);
             } catch (e) {
@@ -589,15 +598,14 @@ function TenantFormWorkspace({
                 </div>
               </fieldset>
             );
-            return index === 1 ? (
-              <details
+            return index > 0 ? (
+              <OptionalTenantSection
                 key={group.title}
-                className="editor-section"
-                open={!!(initial?.draft.addressLine1 || value?.addressLine1)}
+                title={group.title}
+                initialOpen={group.fields.some(([name]) => !!draft[name])}
               >
-                <summary>Mailing address · optional</summary>
                 {content}
-              </details>
+              </OptionalTenantSection>
             ) : (
               <div key={group.title}>{content}</div>
             );

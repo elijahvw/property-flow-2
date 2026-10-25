@@ -114,12 +114,15 @@ export function safeReturnTo(value: unknown): string {
     for(const key of ["prospectId", "stage"])allowed.add(key);
     for(const key of ["history", "historyFrom", "historyTo", "historyAsOf", "historyProperty", "historyCompareFrom", "historyCompareTo", "entryId"])allowed.add(key);
     const maintenanceReturn = /^\/(?:company|resident)\/maintenance(?:\/[^/]+)?$/.test(url.pathname) || /^\/company\/properties\/[^/]+\/maintenance(?:\/[^/]+)?$/.test(url.pathname);
-    const prospectHandoff = /^\/company\/(?:residents(?:\/[^/]+)?|tenants\/[^/]+|leases(?:\/[^/]+(?:\/statement)?)?|rent|deposits)$/.test(url.pathname)
+    const tenantHandoff = /^\/company\/(?:residents(?:\/[^/]+)?|tenants\/[^/]+|leases(?:\/[^/]+(?:\/statement)?)?|rent|deposits)$/.test(url.pathname)
       || /^\/company\/properties\/[^/]+\/(?:residents|leases|rent|deposits)$/.test(url.pathname);
+    const applicationHandoff = /^\/company\/applications(?:\/(?:new|[^/]+(?:\/(?:edit|convert))?))?$/.test(url.pathname);
+    const prospectHandoff = tenantHandoff || applicationHandoff;
+    const taskHandoff = url.pathname === "/company/drafts" || /^\/company\/(?:leases(?:\/[^/]+)?|properties\/[^/]+\/leases)$/.test(url.pathname);
     const tenantDetail = /^\/company\/(?:residents|tenants)\/[^/]+$/.test(url.pathname);
     const tenantDirectory = url.pathname === "/company/residents" || tenantDetail;
     const tenantId = url.searchParams.get("tenantId");
-    const tenantOrigin = prospectHandoff && !!tenantId && tenantId.length <= 200 && !/[\\\x00-\x1f\x7f]/.test(tenantId);
+    const tenantOrigin = tenantHandoff && !!tenantId && tenantId.length <= 200 && !/[\\\x00-\x1f\x7f]/.test(tenantId);
     const prospectId = url.searchParams.get("prospectId");
     const prospectOrigin = prospectHandoff && !!prospectId && prospectId.length <= 200 && !/[\\\x00-\x1f\x7f]/.test(prospectId);
     const query = new URLSearchParams();
@@ -136,7 +139,8 @@ export function safeReturnTo(value: unknown): string {
         key === "prospectDue" && ["overdue", "today", "upcoming"].includes(item)
       );
       const leaseOnboarding = /^\/company\/leases\/[^/]+$/.test(url.pathname) && key === "onboarding" && item === "household";
-      if ((allowed.has(key) || pageCursor || tenantFilter || nestedMaintenance || prospectPage || prospectFilter || leaseOnboarding) && item.length <= (pageCursor ? 512 : 200) && !/[\\\x00-\x1f\x7f]/.test(item) && (!pageCursor || /^[A-Za-z0-9_-]+$/.test(item))) query.set(key,item);
+      const taskContext = taskHandoff && key === "draftId" && /^[A-Za-z0-9][A-Za-z0-9_|:@.\-]{0,199}$/.test(item);
+      if ((allowed.has(key) || pageCursor || tenantFilter || nestedMaintenance || prospectPage || prospectFilter || leaseOnboarding || taskContext) && item.length <= (pageCursor ? 512 : 200) && !/[\\\x00-\x1f\x7f]/.test(item) && (!pageCursor || /^[A-Za-z0-9_-]+$/.test(item))) query.set(key,item);
     }
     return url.pathname + (query.size ? `?${query}` : "");
   } catch { return "/dashboard"; }

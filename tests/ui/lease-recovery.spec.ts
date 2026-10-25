@@ -442,7 +442,7 @@ test("lease review retains editable details and recovers a lost save after reloa
   await page.getByLabel("New lease monthly rent (USD)").fill("1200.00");
   await page.getByRole("button", { name: "Review lease", exact: true }).click();
   expect(state.leasePosts).toHaveLength(0);
-  await expect(page.getByRole("dialog")).toContainText(
+  await expect(page.getByRole("region", { name: "Record a lease", exact: true })).toContainText(
     "Maple House · Apartment 2",
   );
   await page.getByRole("button", { name: "Back to lease details" }).click();
@@ -456,13 +456,11 @@ test("lease review retains editable details and recovers a lost save after reloa
     .click();
   await expect(page.getByRole("alert")).toBeVisible();
   await page.reload();
-  await page
-    .getByRole("button", { name: "Resume lease review · Maple House" })
-    .click();
+  await expect(page.getByRole("region", { name: "Record a lease", exact: true })).toBeVisible();
   await page
     .getByRole("button", { name: "Create lease record", exact: true })
     .click();
-  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.getByRole("region", { name: "Record a lease", exact: true })).not.toBeVisible();
   expect(state.leasePosts[0]).toEqual(state.leasePosts[1]);
   expect(state.rows).toHaveLength(2);
 });
@@ -482,21 +480,21 @@ test("a denied recovery keeps the uncertain original lease save until access is 
   const original = state.leasePosts[0];
   state.denyLease = true;
   await page.reload();
-  await page.getByRole("button", { name: "Resume lease review · Maple House" }).click();
+  await expect(page.getByRole("region", { name: "Record a lease", exact: true })).toBeVisible();
   await expect(page.getByText("Review lease · checking previous save", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Create lease record", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("temporarily unavailable");
   await expect(page.getByRole("button", { name: "Back to lease details" })).toHaveCount(0);
-  await expect(page.getByRole("dialog")).toContainText("Maple House · Apartment 2");
+  await expect(page.getByRole("region", { name: "Record a lease", exact: true })).toContainText("Maple House · Apartment 2");
   expect(state.leasePosts[1]).toEqual(original);
   expect(state.rows).toHaveLength(2);
   // A denial before receipt lookup says nothing about the earlier commit.
   await page.reload();
-  await page.getByRole("button", { name: "Resume lease review · Maple House" }).click();
-  await expect(page.getByRole("dialog")).toContainText("A previous save may have succeeded");
+  await expect(page.getByRole("region", { name: "Record a lease", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Record a lease", exact: true })).toContainText("A previous save may have succeeded");
   state.denyLease = false;
   await page.getByRole("button", { name: "Create lease record", exact: true }).click();
-  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.getByRole("region", { name: "Record a lease", exact: true })).not.toBeVisible();
   expect(state.leasePosts).toHaveLength(3);
   expect(state.leasePosts[2]).toEqual(original);
   expect(state.rows).toHaveLength(2);

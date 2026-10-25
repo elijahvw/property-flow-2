@@ -964,4 +964,19 @@ export async function notificationCases(t, admin, db, call, app) {
       }
     },
   );
+  await t.test("retained resident creation audits without an intake source still receive safe notices", async () => {
+    for (const source of ["legacy", "management", "missing-audit"]) {
+      const id = `notice-source-${source}`;
+      const title = `Fictional ${source} source request`;
+      await admin.query(`INSERT INTO "MaintenanceRequest"(id,"companyId","propertyId","requesterId",title,description,"updatedAt") VALUES($1,$2,$3,'notice-resident',$4,'Private fictional retained request',NOW())`, [id, company, home, title]);
+      if (source !== "missing-audit") await admin.query(`INSERT INTO "AuditEvent"(id,"actorId","companyId",action,"targetId",detail,"requestId") VALUES($1,'notice-resident',$2,'maintenance.created',$3,$4::jsonb,$1)`, [`${id}-audit`, company, id, JSON.stringify(source === "legacy" ? {} : { source: "management" })]);
+      const before = (await inbox("resident")).total;
+      await ok("notice-owner", "PATCH", `/api/company/maintenance/${id}`, { status: "in_progress", expectedVersion: 1 });
+      const current = await inbox("resident");
+      assert.equal(current.total, before + (source === "legacy" ? 1 : 0));
+      assert.equal(current.items.some(row => row.sourceTitle === title), source === "legacy");
+      assert.equal((await inbox("other")).items.some(row => row.sourceTitle === title), false);
+    }
+  });
+
 }

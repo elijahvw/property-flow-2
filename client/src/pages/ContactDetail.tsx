@@ -1,3 +1,4 @@
+import { activityLabel } from "../activity-label";
 import { InvitationDelivery } from "../components/InvitationDelivery";
 import { Address } from "../components/Address";
 import {
@@ -144,7 +145,7 @@ function ContactWorkspace({ id }: { id: string }) {
               <ol className="tenant-timeline">
                 {person.activity.map((e) => (
                   <li key={e.id}>
-                    <strong>{e.action.replace(/\./g, " ")}</strong>
+                    <strong>{activityLabel(e.action)}</strong>
                     <time dateTime={e.createdAt}>
                       {formatDate(e.createdAt)}
                     </time>

@@ -1,3 +1,4 @@
+import { activityLabel } from "../activity-label";
 import { RecordIdentity } from "./RecordIdentity";
 import { useEffect, useRef, useState } from "react";
 import { useResource } from "../useResource";
@@ -20,7 +21,7 @@ export function ActivityLog({id,revision}:{id?:string;revision?:string}) {
     {r.error?<p role="alert">{r.error} <button onClick={r.reload}>Try again</button></p>:!result?<p role="status">Loading activity…</p>:<>
       <p role="status">{result.total} matching {result.total===1?'event':'events'}</p>
       {!result.items.length?<p>{query?'No recorded activity matches these filters.':id?'No recorded activity for this account.':'No recorded activity yet.'}</p>:<ol className="activity-list">{result.items.map(event=><li key={event.id}>
-        <strong>{event.action.replace(/\./g,' ')}</strong><time dateTime={event.createdAt}>{formatActivityTime(event.createdAt)}</time>
+        <strong>{activityLabel(event.action)}</strong><time dateTime={event.createdAt}>{formatActivityTime(event.createdAt)}</time>
         <span className="cell-detail">Actor: {event.actorLabel||event.actor?.name||event.actor?.email||'Account'}{!id&&` · ${event.companyName||(event.companyId?'Company':'Platform')}`}</span>
         <RecordIdentity id={event.actorId} label="Actor"/>
       </li>)}</ol>}

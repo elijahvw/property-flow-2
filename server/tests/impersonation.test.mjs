@@ -256,6 +256,39 @@ test('impersonation preserves identity, company and read-only support boundaries
     assert.equal(event.detail.revokedBy, 'platform');
   });
 
+  await t.test('queued legacy reads recheck support expiry and original actor authority before exposing company data', async () => {
+    for (const change of ['expiry', 'actor-revoked']) {
+      await start('support', 'manager');
+      const leader = await admin.connect();
+      let pending;
+      try {
+        await leader.query('BEGIN');
+        const pid = (await leader.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+        await leader.query('UPDATE "User" SET "updatedAt"="updatedAt" WHERE id=\'manager\'');
+        if (change === 'expiry') await leader.query('UPDATE "Session" SET "impersonationExpiresAt"=NOW()-interval \'1 second\' WHERE "userId"=\'support\'');
+        else await leader.query('UPDATE "User" SET "platformRole"=NULL WHERE id=\'support\'');
+        pending = call('support', 'GET', '/api/company/residents');
+        let blocked = false;
+        for (let attempt = 0; attempt < 150; attempt++) {
+          blocked = (await admin.query('SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))) blocked', [pid])).rows[0].blocked;
+          if (blocked) break;
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        assert.equal(blocked, true, 'The legacy read must reach the effective-user authority fence');
+        await leader.query('COMMIT');
+        const result = await pending;
+        assert.equal(result.statusCode, 403, result.body);
+        assert.equal(result.json().code, 'IMPERSONATION_UNAVAILABLE');
+      } finally {
+        await leader.query('ROLLBACK');
+        leader.release();
+        if (pending) await pending;
+        await admin.query('UPDATE "User" SET "platformRole"=\'support\' WHERE id=\'support\'');
+        await stop('support');
+      }
+    }
+  });
+
   await t.test('actor access is fresh and logout revokes the original session with actor audit', async () => {
     await start('support', 'manager');
     await admin.query('UPDATE "User" SET status=\'disabled\' WHERE id=\'support\'');

@@ -103,7 +103,9 @@ export async function tenantAdminCompatCases(t, { admin, db, call, provider, rem
       denied(await call(actor, 'PATCH', memberPath, change), 403, 'ACCESS_DENIED');
     }
     denied(await call('tfadmin-foreign', 'PATCH', memberPath, change), 404, 'NOT_FOUND');
-    denied(await call(owner, 'PATCH', `/api/company/members/${owner}`, { role: 'staff', status: 'active' }), 403, 'OWNER_PROTECTED');
+    const ownerMember = members.find(row => row.userId === owner); assert.ok(ownerMember);
+    denied(await call(owner, 'PATCH', `/api/company/members/${owner}`, { role: 'staff', status: 'active', expectedVersion: ownerMember.version }), 403, 'OWNER_PROTECTED');
+    denied(await call(owner, 'PATCH', memberPath, { role: 'staff', status: 'disabled' }), 409, 'STALE_MEMBERSHIP');
     denied(await call(owner, 'PATCH', memberPath, { ...change, expectedVersion: member.version + 1 }), 409, 'STALE_MEMBERSHIP');
     const changed = ok(await call(owner, 'PATCH', memberPath, change));
     assert.equal(changed.status, 'disabled');

@@ -59,7 +59,7 @@ test('first-property guidance disappears after a property is recorded; invitatio
  await page.getByRole('button',{name:'Create property',exact:true}).click();
  await expect(page.getByRole('link',{name:'First home',exact:true})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Start with the place you manage'})).toHaveCount(0);
- await expect(page.getByText('1 property',{exact:true})).toBeVisible();
+ await expect(page.getByText('1 of 1 property',{exact:true})).toBeVisible();
  expect(records.invitationRequests).toBe(0);
 });
 test('an established property directory has no completed onboarding or invitation prerequisite',async({page})=>{

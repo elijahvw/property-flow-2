@@ -1,10 +1,21 @@
 import { createHash } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { AccessError, companyScope, permissions, type Permission } from "./access.js";
+import { AccessError, companyScope, permissions, type Permission, type Principal } from "./access.js";
 import { assignmentId, serializable } from "./application.js";
 import { companyFeatures, memberRouteFeatures, requireFeatures } from "./company-features.js";
 export type Tx = Prisma.TransactionClient;
+export async function revalidateImpersonation(tx: Tx, request: FastifyRequest, current: Principal & { membership: (Principal["membership"] & { version: number }) | null }, companyId: string) {
+  if (!request.impersonation) return;
+  const session = await tx.session.findUnique({ where: { tokenHash: request.appSession!.tokenHash } });
+  const actor = await tx.user.findUnique({ where: { id: request.sessionActor!.id }, include: { membership: { include: { company: true } } } });
+  if (!session || !actor || !permissions(actor).includes("platform.impersonate") || current.platformRole ||
+      session.impersonatedUserId !== current.id || session.impersonationCompanyId !== companyId ||
+      session.impersonationMembershipVersion !== current.membership?.version ||
+      !session.impersonationExpiresAt || session.impersonationExpiresAt.getTime() <= Date.now() ||
+      `${encodeURIComponent(current.id)}:${session.impersonationExpiresAt.toISOString()}` !== request.impersonation.contextId)
+    throw new AccessError(403, "IMPERSONATION_UNAVAILABLE", "This impersonation expired or access changed. Return to your account to continue.");
+}
 export function input(request: FastifyRequest, keys: string[]) {
   const value = request.body;
   if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some(k => !keys.includes(k)))
@@ -69,16 +80,7 @@ export function scoped<T>(db: PrismaClient, request: FastifyRequest, permission:
       request.companyFeatures = await companyFeatures(tx, companyId);
       requireFeatures(request.companyFeatures, required, request.method);
     }
-    if (request.impersonation) {
-      const session = await tx.session.findUnique({ where: { tokenHash: request.appSession!.tokenHash } });
-      const actor = await tx.user.findUnique({ where: { id: request.sessionActor!.id }, include: { membership: { include: { company: true } } } });
-      if (!session || !actor || !permissions(actor).includes("platform.impersonate") || current.platformRole ||
-          session.impersonatedUserId !== current.id || session.impersonationCompanyId !== companyId ||
-          session.impersonationMembershipVersion !== current.membership?.version ||
-          !session.impersonationExpiresAt || session.impersonationExpiresAt.getTime() <= Date.now() ||
-          `${encodeURIComponent(current.id)}:${session.impersonationExpiresAt.toISOString()}` !== request.impersonation.contextId)
-        throw new AccessError(403, "IMPERSONATION_UNAVAILABLE", "This impersonation expired or access changed. Return to your account to continue.");
-    }
+    await revalidateImpersonation(tx, request, current, companyId);
     await tx.$queryRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
     const propertyIds = current.membership?.role === "staff" && current.membership.staffPropertyScope === "selected"
       ? (await tx.staffPropertyAccess.findMany({ where: { companyId, userId: current.id }, select: { propertyId: true } })).map(g => g.propertyId)

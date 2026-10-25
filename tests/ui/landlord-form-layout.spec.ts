@@ -44,7 +44,7 @@ test("lease setup layout preserves reviewed terms and the source identity after 
   const requests = await fixture(context);
   await page.goto("/company/leases");
   await page.getByRole("button", { name: "Record a lease", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Record a lease", exact: true });
+  const dialog = page.getByRole("region", { name: "Record a lease", exact: true });
   await expect(dialog.getByLabel("Unit for new lease")).toBeVisible();
   await capture(page, dialog, "lease-setup");
   if (process.env.UI_AUDIT_PHASE !== "before") {

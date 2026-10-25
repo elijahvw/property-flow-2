@@ -42,6 +42,7 @@ export function prospectReturnPath(params: URLSearchParams): string | null {
 
 export function prospectHandoffPath(pathname: string): boolean {
   return /^\/company\/(?:residents(?:\/[^/]+)?|tenants\/[^/]+|leases(?:\/[^/]+(?:\/statement)?)?|rent|deposits)$/.test(pathname)
+    || /^\/company\/applications(?:\/(?:new|[^/]+(?:\/(?:edit|convert))?))?$/.test(pathname)
     || /^\/company\/properties\/[^/]+\/(?:residents|leases|rent|deposits)$/.test(pathname);
 }
 

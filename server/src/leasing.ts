@@ -64,6 +64,15 @@ export async function activeSlot(tx: Tx, companyId: string, unitId: string, exce
 }
 export function registerLeasing(server: FastifyInstance, db: PrismaClient, authenticate: preValidationHookHandler, origin: string, provider?: IdentityProvider) {
   const auth = { preValidation: authenticate };
+  server.get<{ Params: { unitId: string } }>("/api/company/units/:unitId", auth, request => {
+    const unitId = assignmentId(request.params.unitId);
+    if (Object.keys(request.query as object).length) throw new AccessError(400, "INVALID_INPUT", "Unknown unit detail filter.");
+    return scoped(db, request, "property.read", async (tx, companyId, propertyIds) => {
+      const unit = await tx.unit.findFirst({ where: { id: unitId, companyId, ...(propertyIds ? { propertyId: { in: propertyIds } } : {}) }, select: unitSelect });
+      if (!unit) throw new AccessError(404, "NOT_FOUND", "Unit not found.");
+      return unit;
+    });
+  });
   server.get<{ Params: { propertyId: string }; Querystring: { cursor?: string; status?: string; q?: string } }>("/api/company/properties/:propertyId/units", auth, request => {
     const q = request.query;
     if (Object.keys(q).some(k => !["cursor", "status", "q"].includes(k))) throw new AccessError(400, "INVALID_INPUT", "Unknown unit filter.");

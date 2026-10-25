@@ -24,6 +24,8 @@ async function fixture(page: Page, { stage = "inquiry", allowed = true } = {}) {
       const items = matching.filter(row => !url.searchParams.get("stage") || row.stage === url.searchParams.get("stage"));
       return json({ items, total: items.length, counts: Object.fromEntries(["inquiry", "tour", "application", "review", "approved", "declined", "withdrawn", "converted"].map(value => [value, matching.filter(row => row.stage === value).length])), nextCursor: null, today: "2026-10-24", timezone: "America/New_York" });
     }
+    if (path.endsWith("/acquisition") && request.method() === "GET") { const row = prospects.find(row => row.id === path.split("/")[4]); return row ? json({ companyId: row.companyId, prospect: { ...row, status: ["declined", "withdrawn", "converted"].includes(row.stage) ? "closed" : "open" }, followUps: [], applications: [], history: [], followUpTotal: 0, applicationTotal: 0, historyTotal: 0 }) : json({ error: "Prospect not found." }, 404); }
+    if ((path.endsWith("/follow-ups") || path.endsWith("/acquisition-history")) && request.method() === "GET") return json({ items: [], total: 0, page: Number(url.searchParams.get("page") || 1), pageSize: 25 });
     if (path.startsWith("/api/company/prospects/") && request.method() === "GET") {
       const row = prospects.find(row => row.id === path.split("/").at(-1));
       return row ? json({ prospect: row, history: { items: history.filter(action => action.snapshot.id === row.id), nextCursor: null } }) : json({ error: "Prospect not found." }, 404);

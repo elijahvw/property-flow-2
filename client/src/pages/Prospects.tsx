@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -8,6 +8,10 @@ import { DateField } from "../components/DateField";
 import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "../components/Form";
 import { prospectSourceContext, withProspectContext } from "../prospect-context";
+import { ProspectAcquisition, useAcquisitionResource } from "./RentalApplications";
+import { AcquisitionRecovery } from "../components/AcquisitionRecovery";
+import { hasAcquisitionRecovery, useAcquisitionMutation } from "../acquisition-mutations";
+import { tenantEditorScope } from "../tenant-write-access";
 import "./Prospects.css";
 
 type Stage = "inquiry" | "tour" | "application" | "review" | "approved" | "declined" | "withdrawn" | "converted";
@@ -18,7 +22,7 @@ type Prospect = {
   stage: Stage; version: number; contactId: string | null; leaseId: string | null;
   createdAt: string; updatedAt: string; property: { id: string; name: string }; unit: { id: string; label: string } | null;
 };
-type Action = { id: string; version: number; action: string; reason: string; snapshot: Partial<Prospect> & { previousContactId?: string; previousLeaseId?: string }; createdAt: string };
+type Action = { id: string; version: number; action: string; reason: string; snapshot: Partial<Prospect> & { previousContactId?: string; previousLeaseId?: string; applicationId?: string }; createdAt: string };
 type Page<T> = { items: T[]; nextCursor: string | null };
 type Directory = Page<Prospect> & { total: number; counts: Record<Stage, number>; today: string; timezone: string };
 type Contact = { id: string; name: string; email: string | null; version: number };
@@ -37,11 +41,27 @@ function readableAction(action: string) { return ({ created: "Inquiry recorded",
 function Load({ error, retry, label = "prospects" }: { error?: string; retry: () => void; label?: string }) {
   return error ? <p className="notice error" role="alert">{error} <button className="secondary" onClick={retry}>Retry {label}</button></p> : <p role="status">Loading {label}…</p>;
 }
+type ProspectMutation = ReturnType<typeof useAcquisitionMutation>;
+function ProspectAccessUnavailable() { return <section className="notice error" role="alert"><h2>Prospect access unavailable</h2><p>The private review is hidden. Any original interrupted request is kept for authorized recovery.</p><button type="button" onClick={() => window.location.reload()}>Reload workspace</button></section>; }
+function ProspectRequestForm({ mutation, ...props }: ComponentProps<typeof Form> & { mutation: ProspectMutation }) {
+  const { data } = useAuth(), readOnly = !!data?.impersonation || [data?.companyFeatures?.leasing, data?.companyFeatures?.properties].some(value => value === "read_only" || value === "disabled");
+  return <>{readOnly && <p className="notice" role="status">Prospect changes are read-only. Your review and original interrupted request are kept.</p>}<fieldset disabled={readOnly} className="editor-contents"><Form {...props} recovering={mutation.pending}><fieldset disabled={mutation.pending} className="editor-contents">{props.children}</fieldset></Form></fieldset></>;
+}
+function ProspectPendingSummary({ mutation }: { mutation: ProspectMutation }) {
+  const payload = mutation.request?.body || mutation.initial?.body || {};
+  const labels: Record<string, string> = { name: "Original prospect name", email: "Contact email", phone: "Phone", source: "Inquiry source", desiredMoveIn: "Desired move-in", followUpOn: "Follow-up date", notes: "Original management notes", propertyId: "Original property reference", unitId: "Original unit reference", stage: "Reviewed stage", expectedVersion: "Opening prospect version", contactId: "Reviewed tenant reference", expectedContactVersion: "Reviewed tenant version", leaseId: "Reviewed lease reference", expectedLeaseVersion: "Reviewed lease version", reason: "Review reason" };
+  return <section className="editor-section"><h3>Original interrupted prospect request</h3><p className="help">The person, source versions, original company and submission reference are locked. Retry this exact request; current record changes do not silently replace it.</p><dl className="lease-review-summary">{Object.entries(labels).filter(([name]) => payload[name] !== undefined && payload[name] !== null && payload[name] !== "").map(([name, label]) => <div key={name}><dt>{label}</dt><dd className="preserve-lines">{["desiredMoveIn", "followUpOn"].includes(name) ? formatDate(String(payload[name])) : String(payload[name]).slice(0, 5000)}</dd></div>)}</dl></section>;
+}
+function ProspectCurrentRecovery({ mutation, id, resolved }: { mutation: ProspectMutation; id?: string; resolved: () => void }) {
+  const key = String(mutation.request?.body.submissionKey || mutation.initial?.body.submissionKey || "");
+  return <AcquisitionRecovery mutation={mutation} sourcePath={id ? `${base}/${encodeURIComponent(id)}` : `${base}/recovery/${encodeURIComponent(key)}`} sourceId={id || key} resolved={resolved}/>;
+}
 function Pager({ previous, next, back, forward, label }: { previous: boolean; next: boolean; back: () => void; forward: () => void; label: string }) {
   return <div className="actions"><button type="button" className="secondary" disabled={!previous} onClick={back}>Previous {label}</button><button type="button" className="secondary" disabled={!next} onClick={forward}>Next {label}</button></div>;
 }
 
-export function Prospects() {
+export function Prospects() { const { data } = useAuth(); return <ProspectsWorkspace key={tenantEditorScope(data)}/>; }
+function ProspectsWorkspace() {
   const [params, setParams] = useSearchParams();
   const selected = params.get("prospectId") || "";
   const select = (id: string) => setParams(previous => { const next = new URLSearchParams(previous); id ? next.set("prospectId", id) : next.delete("prospectId"); return next; });
@@ -56,9 +76,13 @@ function ProspectDirectory({ selected }: { selected: (id: string) => void }) {
   const [params, setParams] = useSearchParams();
   const query = new URLSearchParams();
   for (const key of ["q", "propertyId", "stage", "due", "cursor"]) if (params.get(key)) query.set(key, params.get(key)!);
-  const resource = useResource<Directory>(`${base}?${query}`, true, true);
+  const resource = useAcquisitionResource<Directory>(`${base}?${query}`, true, true);
   const properties = useResource<{ id: string; name: string }[]>("/api/company/properties");
-  const [adding, setAdding] = useState(false), [draft, setDraft] = useState(false), [key, setKey] = useState(() => crypto.randomUUID());
+  const mutation = useAcquisitionMutation("prospect:new");
+  const [adding, setAdding] = useState(!!mutation.initial), [draft, setDraft] = useState(!!mutation.initial), [key, setKey] = useState(() => crypto.randomUUID());
+  const authorized = useRef(false);
+  if ([401, 403, 404].includes(resource.errorStatus || 0)) authorized.current = false;
+  else if (resource.data) authorized.current = true;
   const [cursors, setCursors] = useState<string[]>([]);
   const cursor = params.get("cursor") || "";
   useEffect(() => { setCursors(previous => !cursor ? [] : previous.includes(cursor) ? previous.slice(0, previous.indexOf(cursor) + 1) : []); }, [cursor]);
@@ -71,6 +95,7 @@ function ProspectDirectory({ selected }: { selected: (id: string) => void }) {
   }
   function forward() { if (!resource.data?.nextCursor) return; const next = new URLSearchParams(params); next.set("cursor", resource.data.nextCursor); setCursors(previous => [...previous, resource.data!.nextCursor!]); setParams(next); }
   function back() { const previous = cursors.slice(0, -1), next = new URLSearchParams(params); previous.length ? next.set("cursor", previous[previous.length - 1]) : next.delete("cursor"); setCursors(previous); setParams(next); }
+  if (mutation.denied) return <ProspectAccessUnavailable/>;
   return <>
     <header className="page-heading"><p className="eyebrow">Leasing operations</p><h1>Prospects & applications</h1><p>Follow inquiries, tours, manual applications and reviewed decisions through the tenant and lease handoff.</p></header>
     <p className="notice">These are management records. An approval does not sign a lease, verify screening, create an account or grant portal access. Follow-up dates are a work queue; no message or calendar invitation is sent.</p>
@@ -89,13 +114,14 @@ function ProspectDirectory({ selected }: { selected: (id: string) => void }) {
       {!resource.data.items.length ? <p>No prospects match these filters. Record an inquiry or review the selected filters.</p> : <div className="table-wrap"><table className="prospect-table"><thead><tr><th scope="col">Prospect</th><th scope="col">Property & preference</th><th scope="col">Stage</th><th scope="col">Dates</th><th scope="col">Action</th></tr></thead><tbody>{resource.data.items.map(prospect => <tr key={prospect.id}><td><strong>{prospect.name}</strong>{prospect.email && <p>{prospect.email}</p>}{prospect.phone && <p>{prospect.phone}</p>}<span className="help">{sourceLabel(prospect.source)}</span></td><td><Link to={propertyPath(prospect.propertyId)}>{prospect.property.name}</Link><p>{prospect.unit?.label || "No preferred unit"}</p></td><td>{stageLabel(prospect.stage)}</td><td><p>Move-in: {formatDate(prospect.desiredMoveIn, "Not recorded")}</p><p>{terminal(prospect.stage) ? "Recorded follow-up" : "Follow-up"}: {formatDate(prospect.followUpOn, "Not scheduled")}</p></td><td><button className="secondary" onClick={() => selected(prospect.id)}>Open {prospect.name}</button></td></tr>)}</tbody></table></div>}
       <Pager label="prospects" previous={!!cursor} next={!!resource.data.nextCursor} back={back} forward={forward}/>
     </section>}
-    <EditorDialog open={adding} title="Record prospect inquiry" onClose={() => setAdding(false)} onDiscard={reset} onSaveDraft={() => setAdding(false)}>
-      <Form key={key} operation="prospect.create" label="Record inquiry" feedbackText="Prospect inquiry recorded." submit={async form => {
-        const created = await api<Prospect | { prospect: Prospect }>(base, { method: "POST", body: { ...prospectFields(form), propertyId: text(form, "propertyId"), reason: text(form, "reason"), submissionKey: key } });
+    {authorized.current && <EditorDialog open={adding} title="Record prospect inquiry" onClose={() => setAdding(false)} onDiscard={reset} onSaveDraft={() => setAdding(false)}>
+      <ProspectCurrentRecovery mutation={mutation} resolved={reset}/>
+      <ProspectRequestForm mutation={mutation} key={key} operation="prospect.create" label="Record inquiry" feedbackText="Prospect inquiry recorded." submit={async form => {
+        const created = await mutation.run<Prospect | { prospect: Prospect }>(base, "POST", { ...prospectFields(form), propertyId: text(form, "propertyId"), reason: text(form, "reason") });
         const prospect = "prospect" in created ? created.prospect : created;
-        reset(); resource.reload(); selected(prospect.id);
-      }}><ProspectFields properties={properties.data || []} defaultProperty={params.get("propertyId") || ""}/><label>Reason for recording this inquiry<textarea name="reason" required maxLength={500}/></label></Form>
-    </EditorDialog>
+        if (mutation.current()) { reset(); resource.reload(); selected(prospect.id); }
+      }}>{mutation.initial && mutation.pending ? <ProspectPendingSummary mutation={mutation}/> : <><ProspectFields properties={properties.data || []} defaultProperty={params.get("propertyId") || ""}/><label>Reason for recording this inquiry<textarea name="reason" required maxLength={500}/></label></>}</ProspectRequestForm>
+    </EditorDialog>}
   </>;
 }
 
@@ -122,12 +148,17 @@ function ProspectRecord({ id, back }: { id: string; back: () => void }) {
   const { data } = useAuth();
   const [params] = useSearchParams();
   const sourceContext = new URLSearchParams(prospectSourceContext(params, id));
-  const resource = useResource<{ prospect: Prospect; history: Page<Action> }>(`${base}/${encodeURIComponent(id)}`, true, true);
+  const resource = useAcquisitionResource<{ prospect: Prospect; history: Page<Action> }>(`${base}/${encodeURIComponent(id)}`, true, true);
+  const editMutation = useAcquisitionMutation(`prospect:${id}:edit`), stageMutation = useAcquisitionMutation(`prospect:${id}:stage`), conversionMutation = useAcquisitionMutation(`prospect:${id}:convert`), unlinkMutation = useAcquisitionMutation(`prospect:${id}:unlink`);
+  const mutations = { edit: editMutation, stage: stageMutation, convert: conversionMutation, unlink: unlinkMutation };
+  const pendingKind = (Object.keys(mutations) as EditReview["kind"][]).find(kind => mutations[kind].pending);
   const [review, setReview] = useState<EditReview | null>(null), [open, setOpen] = useState(false);
+  useEffect(() => { if (!review && pendingKind && resource.data) { setReview({ kind: pendingKind, prospect: resource.data.prospect, key: crypto.randomUUID() }); setOpen(true); } }, [review, pendingKind, resource.data]);
   const readOnly = !!data?.impersonation || data?.companyFeatures?.leasing === "read_only" || data?.companyFeatures?.properties === "read_only";
   const reset = () => { setReview(null); setOpen(false); };
   const discard = () => { reset(); resource.reload(); };
-  function begin(kind: EditReview["kind"]) { if (!resource.data || review) return; setReview({ kind, prospect: resource.data.prospect, key: crypto.randomUUID() }); setOpen(true); }
+  function begin(kind: EditReview["kind"]) { if (!resource.data || review || pendingKind) return; setReview({ kind, prospect: resource.data.prospect, key: crypto.randomUUID() }); setOpen(true); }
+  if (Object.values(mutations).some(mutation => mutation.denied)) return <ProspectAccessUnavailable/>;
   if (!resource.data) return <><button className="text-button" onClick={back}>← Prospect list</button><Load error={resource.error} retry={resource.reload}/></>;
   const prospect = resource.data.prospect;
   const title = review?.kind === "convert" ? "Review tenant and lease handoff" : review?.kind === "unlink" ? "Correct prospect conversion link" : review?.kind === "stage" ? "Review prospect stage" : "Edit prospect details";
@@ -141,15 +172,14 @@ function ProspectRecord({ id, back }: { id: string; back: () => void }) {
       {prospect.stage === "converted" && <div className="notice"><strong>Tenant and lease handoff recorded</strong><p>The original prospect and its decision history remain unchanged. Manage later account or rental changes from the source records.</p><div className="actions">{prospect.contactId && <Link to={withProspectContext(`/company/tenants/${encodeURIComponent(prospect.contactId)}`,sourceContext)}>Open linked tenant</Link>}{prospect.leaseId && <Link to={withProspectContext(`/company/leases/${encodeURIComponent(prospect.leaseId)}`,sourceContext)}>Open linked lease</Link>}{!readOnly && <button className="secondary" disabled={!!review} onClick={() => begin("unlink")}>Correct conversion link</button>}</div></div>}
       {review && !open && <p className="notice">A review is kept on this page. <button className="secondary" onClick={() => setOpen(true)}>Continue prospect review</button></p>}
     </section>
+    <ProspectAcquisition id={id}/>
     <section className="panel"><h2>Recorded history</h2><ProspectHistory key={`${id}:${prospect.version}`} id={id} initial={resource.data.history}/></section>
     <EditorDialog open={open} title={title} onClose={() => setOpen(false)} onDiscard={discard} onSaveDraft={() => setOpen(false)}>
-      {review?.kind === "edit" && <Form key={review.key} operation="prospect.update" label="Save prospect details" feedbackText="Prospect details saved." submit={async form => { await api(`${base}/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...prospectFields(form), expectedVersion: review.prospect.version, reason: text(form, "reason"), submissionKey: review.key } }); reset(); resource.reload(); }}><ProspectFields prospect={review.prospect}/><label>Reason for this update<textarea name="reason" required maxLength={500}/></label><p className="help">The property and original inquiry identity stay attached. Changed records require a new review; this form keeps its opening version.</p></Form>}
-      {review?.kind === "stage" && <StageReview key={review.key} review={review} saved={() => { reset(); resource.reload(); }}/>}
-      {review?.kind === "convert" && <ConversionReview key={review.key} review={review} saved={() => { reset(); resource.reload(); }}/>}
-      {review?.kind === "unlink" && <Form key={review.key} operation="prospect.stage" label="Confirm conversion link correction" feedbackText="Conversion link corrected; prospect returned to review." submit={async form => {
-        if (form.get("confirmedUnlink") !== "on") throw new Error("Confirm that only this prospect's conversion link will change.");
-        await api(`${base}/${encodeURIComponent(id)}/reopen-conversion`, { method: "POST", body: { expectedVersion: review.prospect.version, confirmedUnlink: true, reason: text(form, "reason"), submissionKey: review.key } }); reset(); resource.reload();
-      }}><p><strong>{review.prospect.name}</strong> is currently linked to an existing tenant and lease.</p><p>This corrects this prospect's conversion link and returns it to review. The tenant account, lease, memberships, portal access and financial records remain unchanged. Previous links remain in prospect history.</p><label className="prospect-match"><input type="checkbox" name="confirmedUnlink" required/>I confirm that only the prospect link is being corrected; tenant and lease records remain unchanged.</label><label>Reason for correcting the conversion link<textarea name="reason" required maxLength={500}/></label></Form>}
+      {review && <ProspectCurrentRecovery mutation={mutations[review.kind]} id={id} resolved={() => { reset(); resource.reload(); }}/>}
+      {review?.kind === "edit" && <EditProspectReview key={review.key} review={review} readOnly={readOnly} mutation={editMutation} saved={() => { reset(); resource.reload(); }}/>}
+      {review?.kind === "stage" && <StageReview key={review.key} review={review} readOnly={readOnly} mutation={stageMutation} saved={() => { reset(); resource.reload(); }}/>}
+      {review?.kind === "convert" && <ConversionReview key={review.key} review={review} readOnly={readOnly} mutation={conversionMutation} saved={() => { reset(); resource.reload(); }}/>}
+      {review?.kind === "unlink" && <UnlinkProspectReview key={review.key} review={review} readOnly={readOnly} mutation={unlinkMutation} saved={() => { reset(); resource.reload(); }}/>}
     </EditorDialog>
   </>;
 }
@@ -166,16 +196,34 @@ function FetchedHistory({ id, cursor, back, forward }: { id: string; cursor: str
 function HistoryRows({ id, page, previous, back, forward }: { id: string; page: Page<Action>; previous: boolean; back: () => void; forward: () => void }) {
   const [params] = useSearchParams();
   const context = new URLSearchParams(prospectSourceContext(params,id));
-  return <>{page.items.length ? <ol className="record-list">{page.items.map(action => <li key={action.id}><strong>Revision {action.version} · {readableAction(action.action)}</strong><p>{action.reason}</p><p className="help">{action.snapshot.stage ? stageLabel(action.snapshot.stage) + " · " : ""}{formatActivityTime(action.createdAt)}{action.snapshot.followUpOn ? ` · Follow-up ${formatDate(action.snapshot.followUpOn)}` : ""}</p><div className="actions">{(action.snapshot.contactId || action.snapshot.previousContactId) && <Link to={withProspectContext(`/company/tenants/${encodeURIComponent(action.snapshot.contactId || action.snapshot.previousContactId!)}`,context)}>{action.snapshot.previousContactId ? "Previous tenant source" : "Tenant source from this review"}</Link>}{(action.snapshot.leaseId || action.snapshot.previousLeaseId) && <Link to={withProspectContext(`/company/leases/${encodeURIComponent(action.snapshot.leaseId || action.snapshot.previousLeaseId!)}`,context)}>{action.snapshot.previousLeaseId ? "Previous lease source" : "Lease source from this review"}</Link>}</div></li>)}</ol> : <p>No history has been recorded.</p>}<Pager label="history" previous={previous} next={!!page.nextCursor} back={back} forward={forward}/></>;
+  return <>{page.items.length ? <ol className="record-list">{page.items.map(action => <li key={action.id}><strong>Revision {action.version} · {readableAction(action.action)}</strong><p>{action.reason}</p><p className="help">{action.snapshot.stage ? stageLabel(action.snapshot.stage) + " · " : ""}{formatActivityTime(action.createdAt)}{action.snapshot.followUpOn ? ` · Follow-up ${formatDate(action.snapshot.followUpOn)}` : ""}</p><div className="actions">{action.snapshot.applicationId && <Link to={withProspectContext(`/company/applications/${encodeURIComponent(action.snapshot.applicationId)}`,context)}>Application source from this review</Link>}{(action.snapshot.contactId || action.snapshot.previousContactId) && <Link to={withProspectContext(`/company/tenants/${encodeURIComponent(action.snapshot.contactId || action.snapshot.previousContactId!)}`,context)}>{action.snapshot.previousContactId ? "Previous tenant source" : "Tenant source from this review"}</Link>}{(action.snapshot.leaseId || action.snapshot.previousLeaseId) && <Link to={withProspectContext(`/company/leases/${encodeURIComponent(action.snapshot.leaseId || action.snapshot.previousLeaseId!)}`,context)}>{action.snapshot.previousLeaseId ? "Previous lease source" : "Lease source from this review"}</Link>}</div></li>)}</ol> : <p>No history has been recorded.</p>}<Pager label="history" previous={previous} next={!!page.nextCursor} back={back} forward={forward}/></>;
 }
 
-function StageReview({ review, saved }: { review: EditReview; saved: () => void }) {
+type ProspectReviewProps = { review: EditReview; readOnly: boolean; mutation: ProspectMutation; saved: () => void };
+function InterruptedProspectAction({ review, mutation, saved }: ProspectReviewProps) {
+  const labels = { edit: "Save prospect details", stage: "Save reviewed stage", convert: "Confirm tenant & lease link", unlink: "Confirm conversion link correction" };
+  const suffix = { edit: "", stage: "/stage", convert: "/convert", unlink: "/reopen-conversion" };
+  return <ProspectRequestForm mutation={mutation} operation={review.kind === "convert" ? "prospect.convert" : review.kind === "edit" ? "prospect.update" : "prospect.stage"} label={labels[review.kind]} submit={async () => { await mutation.run(`${base}/${encodeURIComponent(review.prospect.id)}${suffix[review.kind]}`, review.kind === "edit" ? "PATCH" : "POST", {}); if (mutation.current()) saved(); }}><ProspectPendingSummary mutation={mutation}/></ProspectRequestForm>;
+}
+function EditProspectReview(props: ProspectReviewProps) {
+  if (props.mutation.initial && props.mutation.pending) return <InterruptedProspectAction {...props}/>;
+  const { review, mutation, saved } = props;
+  return <ProspectRequestForm mutation={mutation} operation="prospect.update" label="Save prospect details" feedbackText="Prospect details saved." submit={async form => { await mutation.run(`${base}/${encodeURIComponent(review.prospect.id)}`, "PATCH", { ...prospectFields(form), expectedVersion: review.prospect.version, reason: text(form, "reason") }); if (mutation.current()) saved(); }}><ProspectFields prospect={review.prospect}/><label>Reason for this update<textarea name="reason" required maxLength={500}/></label><p className="help">The original property, version and person stay attached. Changed sources require a new explicit review.</p></ProspectRequestForm>;
+}
+function UnlinkProspectReview(props: ProspectReviewProps) {
+  if (props.mutation.initial && props.mutation.pending) return <InterruptedProspectAction {...props}/>;
+  const { review, mutation, saved } = props;
+  return <ProspectRequestForm mutation={mutation} operation="prospect.stage" label="Confirm conversion link correction" feedbackText="Conversion link corrected; prospect returned to review." submit={async form => { if (form.get("confirmedUnlink") !== "on") throw new Error("Confirm that only the prospect conversion link will change."); await mutation.run(`${base}/${encodeURIComponent(review.prospect.id)}/reopen-conversion`, "POST", { expectedVersion: review.prospect.version, confirmedUnlink: true, reason: text(form, "reason") }); if (mutation.current()) saved(); }}><p>This corrects only this prospect's source link. Tenant accounts, leases, access and money remain unchanged.</p><label className="prospect-match"><input type="checkbox" name="confirmedUnlink" required/>I confirm that only the prospect link is being corrected; tenant and lease records remain unchanged.</label><label>Reason for correcting the conversion link<textarea name="reason" required maxLength={500}/></label></ProspectRequestForm>;
+}
+function StageReview(props: ProspectReviewProps) { return props.mutation.initial && props.mutation.pending ? <InterruptedProspectAction {...props}/> : <StageDraftReview {...props}/>; }
+function ConversionReview(props: ProspectReviewProps) { return props.mutation.initial && props.mutation.pending ? <InterruptedProspectAction {...props}/> : <ConversionDraftReview {...props}/>; }
+function StageDraftReview({ review, readOnly, mutation, saved }: ProspectReviewProps) {
   const prospect = review.prospect;
   const choices = ["declined", "withdrawn"].includes(prospect.stage) ? stages.filter(([stage]) => ["inquiry", "review"].includes(stage)) : stages.filter(([stage]) => stage !== "converted" && stage !== prospect.stage);
-  return <Form operation="prospect.stage" label="Save reviewed stage" feedbackText="Prospect stage recorded." submit={async form => { await api(`${base}/${encodeURIComponent(prospect.id)}/stage`, { method: "POST", body: { expectedVersion: prospect.version, stage: text(form, "stage"), reason: text(form, "reason"), submissionKey: review.key } }); saved(); }}><p><strong>{prospect.name}</strong> · Current stage: {stageLabel(prospect.stage)}</p><label>New stage<select name="stage" required defaultValue={choices[0]?.[0]}>{choices.map(([stage, label]) => <option key={stage} value={stage}>{label}</option>)}</select></label><label>Decision or stage-change reason<textarea name="reason" required maxLength={500}/></label><p className="help">Record your actual management review. Approval does not verify screening, sign a contract, create a tenant account or grant resident access. Declined and withdrawn inquiries can be reopened through a new reviewed stage change.</p></Form>;
+  return <ProspectRequestForm mutation={mutation} operation="prospect.stage" label="Save reviewed stage" feedbackText="Prospect stage recorded." submit={async form => { if (readOnly) throw new Error("Prospect changes are read-only under the current company settings."); await mutation.run(`${base}/${encodeURIComponent(prospect.id)}/stage`, "POST", { expectedVersion: prospect.version, stage: text(form, "stage"), reason: text(form, "reason") }); if (mutation.current()) saved(); }}><p><strong>{prospect.name}</strong> · Current stage: {stageLabel(prospect.stage)}</p><label>New stage<select name="stage" required defaultValue={choices[0]?.[0]}>{choices.map(([stage, label]) => <option key={stage} value={stage}>{label}</option>)}</select></label><label>Decision or stage-change reason<textarea name="reason" required maxLength={500}/></label><p className="help">Record your actual management review. Approval does not verify screening, sign a contract, create a tenant account or grant resident access. Declined and withdrawn inquiries can be reopened through a new reviewed stage change.</p></ProspectRequestForm>;
 }
 
-function ConversionReview({ review, saved }: { review: EditReview; saved: () => void }) {
+function ConversionDraftReview({ review, readOnly, mutation, saved }: ProspectReviewProps) {
   const prospect = review.prospect;
   const [origin] = useSearchParams();
   const context = new URLSearchParams(prospectSourceContext(origin,prospect.id));
@@ -190,9 +238,10 @@ function ConversionReview({ review, saved }: { review: EditReview; saved: () => 
   const options = useResource<ConversionOptions>(`${base}/${encodeURIComponent(prospect.id)}/conversion-options?${params}`);
   const tenantSetup = withProspectContext(`/company/residents?${new URLSearchParams({ propertyId: prospect.propertyId })}`,context);
   const leaseSetup = withProspectContext(`/company/leases?${new URLSearchParams({ new: "lease", propertyId: prospect.propertyId, ...(contact ? { contactId: contact.id } : {}), ...(prospect.unitId ? { unitId: prospect.unitId } : {}) })}`,context);
-  return <Form operation="prospect.convert" label="Confirm tenant & lease link" feedbackText="Prospect linked to the existing tenant and lease." submit={async form => {
+  return <ProspectRequestForm mutation={mutation} operation="prospect.convert" label="Confirm tenant & lease link" feedbackText="Prospect linked to the existing tenant and lease." submit={async form => {
+    if (readOnly) throw new Error("Prospect changes are read-only under the current company settings.");
     if (!contact || !lease || !confirmed) throw new Error("Select the exact existing tenant and matching lease, then confirm the person match.");
-    await api(`${base}/${encodeURIComponent(prospect.id)}/convert`, { method: "POST", body: { expectedVersion: prospect.version, contactId: contact.id, expectedContactVersion: contact.version, leaseId: lease.id, expectedLeaseVersion: lease.version, confirmedMatch: true, reason: text(form, "reason"), submissionKey: review.key } }); saved();
+    await mutation.run(`${base}/${encodeURIComponent(prospect.id)}/convert`, "POST", { expectedVersion: prospect.version, contactId: contact.id, expectedContactVersion: contact.version, leaseId: lease.id, expectedLeaseVersion: lease.version, confirmedMatch: true, reason: text(form, "reason") }); if (mutation.current()) saved();
   }}>
     <p><strong>Approved prospect: {prospect.name}</strong><br/>{[prospect.email, prospect.phone].filter(Boolean).join(" · ")}<br/>{prospect.property.name}{prospect.unit ? ` · ${prospect.unit.label}` : ""}</p>
     <p className="help">Review the actual account-backed tenant and its primary lease. Matching email alone never proves identity. This action links existing sources; it creates no account, lease, membership or portal grant.</p>
@@ -204,5 +253,5 @@ function ConversionReview({ review, saved }: { review: EditReview; saved: () => 
     {contact && lease && <section className="notice"><strong>Reviewed sources</strong><p>Prospect: {prospect.name}<br/>Existing tenant: {contact.name} · {contact.email || "No contact email"}<br/>Lease: {lease.unit.label} · {formatDate(lease.startsOn)} – {formatDate(lease.endsOn, "Open ended")} · {lease.status === "draft" ? "Draft" : "Active"}</p><p className="help">The opening prospect, tenant and lease versions are retained. Changed sources require a fresh review.</p></section>}
     <label className="prospect-match"><input type="checkbox" required checked={confirmed} onChange={event => setConfirmed(event.target.checked)}/>I reviewed the sources and confirm this prospect is the exact person represented by the selected tenant and primary lease.</label>
     <label>Reason for linking these existing records<textarea name="reason" required maxLength={500}/></label>
-  </Form>;
+  </ProspectRequestForm>;
 }

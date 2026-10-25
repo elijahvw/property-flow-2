@@ -171,7 +171,7 @@ test("resident profile is a focused form with conflict recovery, assignments, ac
   expect(state.version).toBe(3);
   expect(state.notes).toBe("Call after 5 PM");
   await dialog.getByRole("button", {name:"Close",exact:true}).click();
-  await expect(page.getByText("membership assigned")).toBeVisible();
+  await expect(page.locator(".tenant-activity").getByText("Company access granted", { exact: true })).toBeVisible();
   await page.getByRole("button", {name:"Edit resident profile",exact:true}).click();
   await page.screenshot({
     path: "/tmp/propertyflow-resident-profile-desktop.png",

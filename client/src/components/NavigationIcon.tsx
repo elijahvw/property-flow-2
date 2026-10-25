@@ -12,11 +12,11 @@ export function NavigationIcon({ path }: { path: string }) {
       <rect x="3" y="14" width="7" height="7" rx="1" />
       <rect x="14" y="14" width="7" height="7" rx="1" />
     </>
-  ) : path.includes("properties") || path === "/resident" ? (
+  ) : path.includes("properties") || path.includes("availability") || path === "/resident" ? (
     <>
       <path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8" />
     </>
-  ) : /users|residents|members|impersonation/.test(path) ? (
+  ) : /users|residents|members|impersonation|applications/.test(path) ? (
     people
   ) : /finances|rent|deposits|subscription|plans/.test(path) ? (
     <>

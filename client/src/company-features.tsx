@@ -18,6 +18,8 @@ export function featureKeysForPage(path: string, role?: string): FeatureKey[] {
   if (/^\/imports\/units(?:\/|$)/.test(area)) return result("properties");
   if (/^\/imports\/expenses(?:\/|$)/.test(area)) return result("finances", "leasing", "properties");
   if (/^\/prospects(?:\/|$)/.test(area)) return result("leasing", "properties");
+  if (/^\/applications(?:\/|$)/.test(area)) return result("leasing", "properties");
+  if (/^\/drafts(?:\/|$)/.test(area)) return result("leasing");
   if (/\/statement(?:\/|$)/.test(area) || /\/(?:rent|finances|deposits|settlement|terms)(?:\/|$)/.test(area)) return result("finances", "leasing");
   if (/\/reports(?:\/|$)/.test(area)) return result("reports", "finances");
   if (/\/documents(?:\/|$)/.test(area)) return resident ? result("documents", "leasing") : result("documents");

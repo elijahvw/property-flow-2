@@ -7,7 +7,7 @@ import { audit, boundedText, choice, conflict, date, input, mutation, sameSubmis
 import { companyDay } from "./reports.js";
 
 export const AVAILABILITY_STATES = ["occupied", "future_occupancy", "ready", "turnover", "unavailable", "unconfirmed", "archived"] as const;
-export const AVAILABILITY_DEFINITION = "Lease projections use the selected planning date and current recorded lease status and dates. Operational readiness is the latest management review, not reconstructed historical occupancy or a guarantee of future availability. Draft leases do not reserve a unit. A unit without a current lease remains unconfirmed until reviewed.";
+export const AVAILABILITY_DEFINITION = "Lease projections use the selected planning date and current recorded lease status and dates. Operational readiness is the latest management review, not reconstructed historical occupancy or a guarantee of future availability. Draft leases do not reserve a unit. Rental listing intent is the current explicit owner decision, not reconstructed historical advertising. A unit without a current lease remains unconfirmed until reviewed.";
 const currentSelect = { version: true, condition: true, availableOn: true, reason: true, updatedAt: true } as const;
 const isoDay = (value: Date | null) => value?.toISOString().slice(0, 10) ?? null;
 type BoardRow = {
@@ -15,6 +15,7 @@ type BoardRow = {
   availabilityVersion: number | null; condition: string | null; availableOn: Date | null; reason: string | null; updatedAt: Date | null;
   state: typeof AVAILABILITY_STATES[number]; readinessStale: boolean;
   currentLeaseId: string | null; currentLeaseStartsOn: Date | null; currentLeaseEndsOn: Date | null;
+  forRent: boolean; listedAt: Date | null; listingVersion: number | null;
   nextLeaseId: string | null; nextLeaseStartsOn: Date | null; nextLeaseEndsOn: Date | null; latestLeaseEnd: Date | null;
 };
 function dto(row: BoardRow) {
@@ -22,6 +23,7 @@ function dto(row: BoardRow) {
     unit: { id: row.id, propertyId: row.propertyId, label: row.label, status: row.unitStatus, version: row.unitVersion, marketRentCents: row.marketRentCents, property: { id: row.propertyId, name: row.propertyName } },
     availability: row.availabilityVersion === null ? null : { version: row.availabilityVersion, condition: row.condition, availableOn: isoDay(row.availableOn), reason: row.reason, updatedAt: row.updatedAt },
     state: row.state, readinessStale: row.readinessStale,
+    listing: { version: row.listingVersion, forRent: row.forRent === true, listedAt: row.listedAt },
     currentLease: row.currentLeaseId ? { id: row.currentLeaseId, startsOn: isoDay(row.currentLeaseStartsOn), endsOn: isoDay(row.currentLeaseEndsOn), status: "active" } : null,
     nextLease: row.nextLeaseId ? { id: row.nextLeaseId, startsOn: isoDay(row.nextLeaseStartsOn), endsOn: isoDay(row.nextLeaseEndsOn), status: "active" } : null,
     latestLeaseEnd: isoDay(row.latestLeaseEnd),
@@ -32,9 +34,11 @@ export function registerUnitAvailability(server: FastifyInstance, db: PrismaClie
   const auth = { preValidation: authenticate };
   server.get<{ Querystring: Record<string, unknown> }>("/api/company/availability", auth, request => {
     const query = request.query;
-    if (Object.keys(query).some(key => !["propertyId", "q", "status", "asOf", "cursor"].includes(key))) throw new AccessError(400, "INVALID_INPUT", "Choose valid availability filters.");
+    if (Object.keys(query).some(key => !["propertyId", "unitId", "q", "status", "asOf", "cursor", "listing"].includes(key))) throw new AccessError(400, "INVALID_INPUT", "Choose valid availability filters.");
     if (query.q !== undefined && (typeof query.q !== "string" || query.q.length > 200 || query.q.includes("\0"))) throw new AccessError(400, "INVALID_INPUT", "Search must be at most 200 characters.");
     const propertyId = query.propertyId === undefined ? null : assignmentId(query.propertyId);
+    const unitId = query.unitId === undefined ? null : assignmentId(query.unitId);
+    const listing = query.listing === undefined ? null : choice(query.listing, ["for_rent", "not_listed"], "listing view");
     const cursor = query.cursor === undefined ? null : assignmentId(query.cursor);
     const status = query.status === undefined ? null : choice(query.status, [...AVAILABILITY_STATES], "availability state");
     const planning = query.asOf === undefined ? null : date(query.asOf, "planning date");
@@ -43,18 +47,23 @@ export function registerUnitAvailability(server: FastifyInstance, db: PrismaClie
       const company = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { timezone: true } });
       const today = companyDay(company.timezone), planningDate = planning ?? date(today, "planning date");
       if (propertyId && !await tx.property.findFirst({ where: { id: propertyId, companyId }, select: { id: true } })) throw new AccessError(404, "NOT_FOUND", "Property not found.");
+      if (unitId && !await tx.unit.findFirst({ where: { id: unitId, companyId, ...(propertyId ? { propertyId } : {}) }, select: { id: true } })) throw new AccessError(404, "NOT_FOUND", "Unit not found.");
       const data = Prisma.sql`WITH source AS (
         SELECT u.id,u."propertyId",u.label,u.status AS "unitStatus",u.version AS "unitVersion",u."marketRentCents",p.name AS "propertyName",
           a.version AS "availabilityVersion",a.condition,a."availableOn",a.reason,a."updatedAt",
+          COALESCE(listing."forRent",false) AS "forRent",listing."listedAt",listing.version AS "listingVersion",
           current_lease.id AS "currentLeaseId",current_lease."startsOn" AS "currentLeaseStartsOn",current_lease."endsOn" AS "currentLeaseEndsOn",
           next_lease.id AS "nextLeaseId",next_lease."startsOn" AS "nextLeaseStartsOn",next_lease."endsOn" AS "nextLeaseEndsOn",past_lease."endsOn" AS "latestLeaseEnd"
         FROM "Unit" u JOIN "Property" p ON p.id=u."propertyId" AND p."companyId"=u."companyId"
         LEFT JOIN "UnitAvailability" a ON a."unitId"=u.id AND a."propertyId"=u."propertyId" AND a."companyId"=u."companyId"
+        LEFT JOIN "UnitRentalListing" listing ON listing."unitId"=u.id AND listing."propertyId"=u."propertyId" AND listing."companyId"=u."companyId"
         LEFT JOIN LATERAL (SELECT l.id,l."startsOn",l."endsOn" FROM "Lease" l WHERE l."companyId"=u."companyId" AND l."unitId"=u.id AND l.status='active' AND l."startsOn"<=${planningDate} AND (l."endsOn" IS NULL OR l."endsOn">=${planningDate}) ORDER BY l."startsOn" DESC,l.id DESC LIMIT 1) current_lease ON true
         LEFT JOIN LATERAL (SELECT l.id,l."startsOn",l."endsOn" FROM "Lease" l WHERE l."companyId"=u."companyId" AND l."unitId"=u.id AND l.status='active' AND l."startsOn">${planningDate} ORDER BY l."startsOn",l.id LIMIT 1) next_lease ON true
         LEFT JOIN LATERAL (SELECT l."endsOn" FROM "Lease" l WHERE l."companyId"=u."companyId" AND l."unitId"=u.id AND l.status IN ('active','ended') AND l."endsOn"<${planningDate} ORDER BY l."endsOn" DESC,l.id DESC LIMIT 1) past_lease ON true
         WHERE u."companyId"=${companyId}
           ${propertyId ? Prisma.sql`AND u."propertyId"=${propertyId}` : Prisma.empty}
+          ${unitId ? Prisma.sql`AND u.id=${unitId}` : Prisma.empty}
+          ${listing ? Prisma.sql`AND COALESCE(listing."forRent",false)=${listing === "for_rent"}` : Prisma.empty}
           ${search ? Prisma.sql`AND (strpos(lower(u.label),lower(${search}))>0 OR strpos(lower(p.name),lower(${search}))>0)` : Prisma.empty}
       ), classified AS (SELECT *,
         condition='ready' AND ("availableOn" IS NULL OR "latestLeaseEnd">="availableOn") AS "readinessStale",

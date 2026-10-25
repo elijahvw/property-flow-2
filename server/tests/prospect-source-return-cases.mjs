@@ -171,7 +171,7 @@ export async function prospectSourceReturnCases(t, admin, call, db, app, provide
     assert.equal(mutationCalls().at(-1)[0], 'create');
 
     await page.getByRole('link', { name: 'Record a lease for Prepared Return Person', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'Record a lease', exact: true })).toBeVisible(); assertMarker(page);
+    await expect(page.getByRole('region', { name: 'Record a lease', exact: true })).toBeVisible(); assertMarker(page);
     await page.getByLabel('Property for new lease').selectOption(property);
     await expect(page.getByLabel('Unit for new lease')).toHaveValue('return-other-unit');
     await page.getByLabel('Unit for new lease').selectOption('return-chosen-unit');
@@ -185,7 +185,7 @@ export async function prospectSourceReturnCases(t, admin, call, db, app, provide
     await page.getByRole('button', { name: 'Create lease record', exact: true }).click();
     await expect(page.getByRole('alert')).toBeVisible();
     await page.getByRole('button', { name: 'Create lease record', exact: true }).click();
-    await expect(page.getByRole('dialog')).not.toBeVisible();
+    await expect(page.getByRole('region', { name: 'Record a lease', exact: true })).not.toBeVisible();
     await expect(page.getByLabel('Lease section', { exact: true })).toHaveValue('household');
     lease = (await admin.query('SELECT id,"residentContactId","residentId","unitId",status,version FROM "Lease" WHERE "companyId"=$1', [company])).rows[0];
     assert.equal(new URL(page.url()).pathname, '/company/leases/' + lease.id);

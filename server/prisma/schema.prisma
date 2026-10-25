@@ -13,6 +13,7 @@ datasource db {
 }
 
 model Company {
+  taskDrafts TaskDraft[]
   notificationPreferences NotificationPreference[]
   notificationPreferenceActions NotificationPreferenceAction[]
   notificationPreferenceFence NotificationPreferenceFence?
@@ -215,6 +216,7 @@ model SaaSInvoiceEvent {
 }
 
 model User {
+  taskDrafts TaskDraft[]
   notificationPreferences NotificationPreference[]
   notificationPreferenceActions NotificationPreferenceAction[]
   receivedDocumentShares LeaseDocumentShare[] @relation("SharedDocumentRecipient")
@@ -392,6 +394,7 @@ model AuditEvent {
 }
 
 model Property {
+  taskDrafts TaskDraft[]
   prospects Prospect[]
   notificationEvents NotificationEvent[]
   preventivePlans PreventivePlan[]
@@ -807,6 +810,7 @@ model Prospect {
   updatedAt DateTime @updatedAt
   actions ProspectAction[]
   @@unique([id, companyId])
+  @@unique([id, propertyId, companyId])
   @@unique([companyId, leaseId])
   @@index([companyId, propertyId, stage, id])
   @@index([companyId, followUpOn, id])
@@ -1436,6 +1440,7 @@ model LeaseDocumentShare {
   version Int @default(1)
   expiresOn DateTime @db.Date
   reason String
+  receivedAt DateTime?
   revokedAt DateTime?
   createdById String
   createdAt DateTime @default(now())
@@ -1737,4 +1742,106 @@ model NotificationAction {
  notification InboxNotification @relation(fields:[notificationId,companyId,userId],references:[id,companyId,userId],onDelete:Restrict,onUpdate:Restrict)
  user User @relation(fields:[userId],references:[id],onDelete:Restrict,onUpdate:Restrict)
  @@unique([companyId,userId,submissionKey])
+}
+
+
+model TaskDraft {
+  id String @id @default(cuid())
+  companyId String
+  userId String
+  propertyId String
+  kind String
+  sourceId String?
+  sourceVersions Json
+  values Json
+  context Json
+  title String
+  actionKey String
+  version Int @default(1)
+  submissionKey String
+  submissionHash String
+  lastMutationKey String?
+  lastMutationHash String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime
+  company Company @relation(fields:[companyId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  user User @relation(fields:[userId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  property Property @relation(fields:[propertyId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+  @@unique([companyId,userId,submissionKey])
+  @@index([companyId,userId,expiresAt,updatedAt,id])
+}
+
+
+model ProspectFollowUp {
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  prospectId String
+  kind String
+  title String
+  dueOn DateTime @db.Date
+  notes String @default("")
+  status String @default("open")
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([companyId,prospectId,dueOn,id])
+}
+
+
+model RentalApplication {
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  unitId String
+  prospectId String
+  notes String @default("")
+  status String @default("draft")
+  version Int @default(1)
+  contactId String?
+  leaseId String? @unique
+  createdById String
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([id,propertyId,companyId])
+  @@unique([companyId,createdById,submissionKey])
+  @@index([companyId,propertyId,status,createdAt,id])
+  @@index([companyId,prospectId])
+}
+
+
+model AdmissionsEvent {
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  entityType String
+  entityId String
+  action String
+  actorId String
+  version Int
+  submissionKey String
+  submissionHash String
+  snapshot Json
+  createdAt DateTime @default(now())
+  @@unique([companyId,actorId,submissionKey])
+  @@index([companyId,entityType,entityId,createdAt,id])
+}
+
+// Listing intent is independent of operational readiness; no existing unit is
+// advertised by vacancy, a ready condition, or the addition of this model.
+model UnitRentalListing {
+  unitId String @id
+  companyId String
+  propertyId String
+  forRent Boolean @default(false)
+  listedAt DateTime?
+  version Int @default(1)
+  updatedById String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([unitId, propertyId, companyId])
+  @@index([companyId, propertyId, forRent])
 }

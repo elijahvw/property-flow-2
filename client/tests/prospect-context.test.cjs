@@ -94,10 +94,12 @@ test("the handoff whitelist includes tenant, lease and financial source routes w
   for (const target of [
     "/company/residents", "/company/residents/account", "/company/tenants/contact", "/company/leases", "/company/leases/lease", "/company/leases/lease/statement", "/company/rent", "/company/deposits",
     "/company/properties/property/residents", "/company/properties/property/leases", "/company/properties/property/rent", "/company/properties/property/deposits",
+    "/company/applications", "/company/applications/new", "/company/applications/application", "/company/applications/application/edit", "/company/applications/application/convert",
   ]) assert.equal(prospectHandoffPath(target), true, target);
   for (const target of [
     "/company/prospects", "/platform/users", "/resident", "/resident/leases/lease/statement", "/account", "/company/maintenance", "/company/finances",
     "/company/leases/lease/statement/extra", "/company/residents/account/extra", "/company/properties/property/maintenance", "/company/properties/property/units", "/company/tenants",
+    "/company/applications/application/delete", "/company/applications/application/convert/extra",
   ]) assert.equal(prospectHandoffPath(target), false, target);
 });
 

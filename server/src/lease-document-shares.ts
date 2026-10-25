@@ -7,7 +7,7 @@ import { audit, boundedText, conflict, date, input, mutation, sameSubmission, sc
 import { sharedLeaseAccess } from "./lease-participants.js";
 import { companyDay } from "./reports.js";
 
-const grantSelect = { id: true, companyId: true, leaseId: true, documentId: true, documentVersionId: true, userId: true, version: true, expiresOn: true, reason: true, revokedAt: true, createdAt: true } as const;
+const grantSelect = { id: true, companyId: true, leaseId: true, documentId: true, documentVersionId: true, userId: true, version: true, expiresOn: true, reason: true, revokedAt: true, receivedAt: true, createdAt: true } as const;
 type Grant = Prisma.LeaseDocumentShareGetPayload<{ select: typeof grantSelect }>;
 const json = (value: unknown): Prisma.InputJsonValue => JSON.parse(JSON.stringify(value));
 const missing = () => new AccessError(404, "NOT_FOUND", "Shared document not found.");
@@ -105,7 +105,7 @@ export function registerLeaseDocumentShares(server: FastifyInstance, db: PrismaC
       if (original.scanStatus !== "clean") throw new AccessError(409, "FILE_QUARANTINED", "Only this exact original cleared by scanning can be shared.");
       const current = await tx.leaseDocumentShare.findUnique({ where: { companyId_documentVersionId_userId: { companyId, documentVersionId: payload.documentVersionId, userId: payload.userId } }, select: grantSelect });
       if ((current?.version ?? null) !== payload.expectedVersion) throw conflict();
-      const row = current ? await tx.leaseDocumentShare.update({ where: { id: current.id, companyId }, data: { expiresOn: payload.expiresOn, reason: payload.reason, revokedAt: null, version: { increment: 1 } }, select: grantSelect }) : await tx.leaseDocumentShare.create({ data: { companyId, leaseId, documentId, documentVersionId: payload.documentVersionId, userId: payload.userId, expiresOn: payload.expiresOn, reason: payload.reason, createdById: request.principal!.id }, select: grantSelect });
+      const row = current ? await tx.leaseDocumentShare.update({ where: { id: current.id, companyId }, data: { expiresOn: payload.expiresOn, reason: payload.reason, revokedAt: null, receivedAt: null, version: { increment: 1 } }, select: grantSelect }) : await tx.leaseDocumentShare.create({ data: { companyId, leaseId, documentId, documentVersionId: payload.documentVersionId, userId: payload.userId, expiresOn: payload.expiresOn, reason: payload.reason, createdById: request.principal!.id }, select: grantSelect });
       await tx.leaseDocumentShareAction.create({ data: { companyId, shareId: row.id, action: "grant", detail: json({ ...payload, version: row.version }), createdById: request.principal!.id, ...key } });
       await audit(tx, request, companyId, documentId, "document.share.granted", { shareId: row.id, recipientId: row.userId, documentVersionId: row.documentVersionId, expiresOn: payload.expiresOn.toISOString().slice(0, 10), version: row.version });
       return { share: await grantDto(tx, companyId, row, day) };
@@ -140,17 +140,30 @@ export function registerLeaseDocumentShares(server: FastifyInstance, db: PrismaC
   function visible(companyId: string, userId: string, day: Date): Prisma.LeaseDocumentShareWhereInput {
     return { companyId, userId, revokedAt: null, expiresOn: { gte: day }, document: { companyId, archivedAt: null }, documentVersion: { companyId, scanStatus: "clean" }, lease: { companyId, status: "active", AND: [sharedLeaseAccess(companyId, userId, day), { OR: [{ endsOn: null }, { endsOn: { gte: day } }] }] } };
   }
-  const residentSelect = { id: true, expiresOn: true, document: { select: { title: true } }, documentVersion: { select: { number: true, filename: true, mediaType: true, byteLength: true } }, lease: { select: { id: true, property: { select: { name: true } }, unit: { select: { label: true } } } } } as const;
+  const residentSelect = { id: true, version: true, receivedAt: true, createdAt: true, expiresOn: true, document: { select: { title: true } }, documentVersion: { select: { number: true, filename: true, mediaType: true, byteLength: true } }, lease: { select: { id: true, property: { select: { name: true } }, unit: { select: { label: true } } } } } as const;
+  const residentDto = (row: Prisma.LeaseDocumentShareGetPayload<{ select: typeof residentSelect }>) => ({ id: row.id, version: row.version, receivedAt: row.receivedAt, sharedAt: row.createdAt, title: row.document.title, versionNumber: row.documentVersion.number, filename: row.documentVersion.filename, mediaType: row.documentVersion.mediaType, byteLength: row.documentVersion.byteLength, expiresOn: row.expiresOn.toISOString().slice(0, 10), lease: row.lease });
   server.get("/api/resident/documents", auth, request => {
-    const cursor = after(request);
+    const cursor = after(request, ["q"]), query = request.query as { q?: unknown };
+    if (query.q !== undefined && (typeof query.q !== "string" || query.q.length > 160 || /[\u0000-\u001f\u007f]/.test(query.q))) throw new AccessError(400, "INVALID_INPUT", "Search shared documents with up to 160 characters.");
+    const search = typeof query.q === "string" ? query.q.trim() : "", needle = search.replace(/[\\%_]/g, "\\$&");
     return scoped(db, request, "resident.self", async (tx, companyId) => {
       const userId = request.principal!.id, day = await today(tx, companyId);
       if (!await eligibleResident(tx, companyId, userId)) throw missing();
-      const where = visible(companyId, userId, day), [rows, total] = await Promise.all([
+      const where: Prisma.LeaseDocumentShareWhereInput = { ...visible(companyId, userId, day), ...(search ? { OR: [{ document: { title: { contains: needle, mode: "insensitive" } } }, { lease: { property: { name: { contains: needle, mode: "insensitive" } } } }, { lease: { unit: { label: { contains: needle, mode: "insensitive" } } } }] } : {}) }, [rows, total] = await Promise.all([
         tx.leaseDocumentShare.findMany({ where: { ...where, ...(cursor ? { id: { lt: cursor } } : {}) }, select: residentSelect, orderBy: { id: "desc" }, take: 51 }),
         tx.leaseDocumentShare.count({ where }),
       ]);
-      return { items: rows.slice(0, 50).map(row => ({ id: row.id, title: row.document.title, versionNumber: row.documentVersion.number, filename: row.documentVersion.filename, mediaType: row.documentVersion.mediaType, byteLength: row.documentVersion.byteLength, expiresOn: row.expiresOn.toISOString().slice(0, 10), lease: row.lease })), total, nextCursor: rows.length > 50 ? rows[49].id : null };
+      return { companyId, items: rows.slice(0, 50).map(residentDto), total, nextCursor: rows.length > 50 ? rows[49].id : null };
+    });
+  });
+  server.get<{ Params: { shareId: string } }>("/api/resident/documents/:shareId", auth, request => {
+    const shareId = assignmentId(request.params.shareId);
+    return scoped(db, request, "resident.self", async (tx, companyId) => {
+      const userId = request.principal!.id, day = await today(tx, companyId);
+      if (!await eligibleResident(tx, companyId, userId)) throw missing();
+      const row = await tx.leaseDocumentShare.findFirst({ where: { id: shareId, ...visible(companyId, userId, day) }, select: residentSelect });
+      if (!row) throw missing();
+      return { companyId, document: residentDto(row) };
     });
   });
   server.get<{ Params: { shareId: string } }>("/api/resident/documents/:shareId/download", auth, async (request, reply) => {
@@ -164,9 +177,40 @@ export function registerLeaseDocumentShares(server: FastifyInstance, db: PrismaC
       await tx.$queryRaw`SELECT id FROM "LeaseDocumentShare" WHERE id=${shareId} AND "companyId"=${companyId} FOR SHARE`;
       const share = await tx.leaseDocumentShare.findFirst({ where: { id: shareId, ...visible(companyId, userId, day) }, select: { ...grantSelect, documentVersion: { select: { filename: true, mediaType: true, content: true } } } });
       if (!share) throw missing();
+      await tx.leaseDocumentShareAction.create({ data: { companyId, shareId, action: "downloaded", detail: json({ documentVersionId: share.documentVersionId, recipientId: userId, impersonated: !!request.impersonation }), createdById: request.sessionActor?.id ?? userId, ...submission(randomUUID(), { action: "downloaded", shareId, userId }) } });
       await audit(tx, request, companyId, share.documentId, "document.shared.downloaded", { shareId, documentVersionId: share.documentVersionId, leaseId: share.leaseId, recipientId: userId });
       return { filename: share.documentVersion.filename, mediaType: share.documentVersion.mediaType, contentBase64: Buffer.from(share.documentVersion.content).toString("base64") };
     });
     return reply.header("Cache-Control", "private, no-store").header("X-Content-Type-Options", "nosniff").send(result);
+  });
+  server.post<{ Params: { shareId: string } }>("/api/resident/documents/:shareId/received", auth, request => {
+    mutation(request, origin);
+    const shareId = assignmentId(request.params.shareId), body = input(request, ["expectedVersion", "submissionKey"]), expectedVersion = version(body.expectedVersion);
+    const payload = { action: "received", shareId, userId: request.principal!.id, expectedVersion }, key = submission(body.submissionKey, payload);
+    return scoped(db, request, "resident.self", async (tx, companyId) => {
+      const userId = request.principal!.id, day = await today(tx, companyId);
+      if (!await eligibleResident(tx, companyId, userId)) throw missing();
+      const selected = await tx.leaseDocumentShare.findFirst({ where: { id: shareId, ...visible(companyId, userId, day) }, select: grantSelect });
+      if (!selected) throw missing();
+      await source(tx, companyId, selected.leaseId, selected.documentId);
+      await tx.$queryRaw`SELECT id FROM "LeaseDocumentShare" WHERE id=${shareId} AND "companyId"=${companyId} FOR UPDATE`;
+      const share = await tx.leaseDocumentShare.findFirst({ where: { id: shareId, ...visible(companyId, userId, day) }, select: grantSelect });
+      if (!share) throw missing();
+      const previous = await tx.leaseDocumentShareAction.findUnique({ where: { companyId_submissionKey: { companyId, submissionKey: key.submissionKey } } });
+      if (previous) {
+        sameSubmission(previous.submissionHash, key.submissionHash);
+        if (previous.action !== "received" || previous.shareId !== shareId || previous.createdById !== userId) throw conflict();
+        // A later owner review may have begun a new access grant. Return its
+        // current state without acknowledging it with this earlier receipt.
+        return { id: share.id, version: share.version, receivedAt: share.receivedAt, receipt: { id: previous.id, recordedAt: previous.createdAt } };
+      }
+      if (share.version !== expectedVersion) throw conflict();
+      if (share.receivedAt) throw new AccessError(409, "ALREADY_RECEIVED", "Receipt is already confirmed for this access grant. Refresh the current document status.");
+      const receivedAt = new Date();
+      const updated = await tx.leaseDocumentShare.update({ where: { id: shareId, companyId }, data: { receivedAt, version: { increment: 1 } }, select: grantSelect });
+      const receipt = await tx.leaseDocumentShareAction.create({ data: { companyId, shareId, action: "received", detail: json({ documentVersionId: share.documentVersionId, userId, fromVersion: expectedVersion, receivedAt }), createdById: userId, ...key } });
+      await audit(tx, request, companyId, share.documentId, "document.share.received", { shareId, documentVersionId: share.documentVersionId, leaseId: share.leaseId, recipientId: userId, version: updated.version });
+      return { id: updated.id, version: updated.version, receivedAt: updated.receivedAt, receipt: { id: receipt.id, recordedAt: receipt.createdAt } };
+    });
   });
 }

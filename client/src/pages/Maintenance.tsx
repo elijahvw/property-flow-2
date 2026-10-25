@@ -8,7 +8,8 @@ import { DateField } from "../components/DateField";
 import { useAuth } from "../context/AuthContext";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { api } from "../api";
+import { api, ApiError } from "../api";
+import { tenantEditorScope, useTenantAttemptContext } from "../tenant-write-access";
 import { formatDate, formatActivityDate, formatActivityTime } from "../dates";
 import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
@@ -656,7 +657,7 @@ export function MaintenanceRequestDetail({
     { requestId = "" } = useParams();
   return (
     <RequestDetail
-      key={`${resident}:${requestId}:${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}:${data?.permissions.join(",")}`}
+      key={`${resident}:${requestId}:${tenantEditorScope(data)}`}
       id={requestId}
       resident={resident}
     />
@@ -666,12 +667,14 @@ function RequestDetail({ id, resident }: { id: string; resident: boolean }) {
   const { can } = useAuth();
   const [params] = useSearchParams(),
     [editing, setEditing] = useState(false),
+    [conversationDenied, setConversationDenied] = useState(false),
     [success, setSuccess] = useState("");
   const endpoint = `${resident ? "/api/resident" : "/api/company"}/maintenance/${encodeURIComponent(id)}`;
   const r = useResource<Detail>(endpoint, true, true),
     row = r.data;
   // Freeze the opening record: a background refresh must not authorize a stale draft.
   const [draft, setDraft] = useState<Row | null>(null);
+  if (conversationDenied) return <><Link to={directoryPath(params, resident)}>← Back to maintenance</Link><section className="notice error" role="alert"><h1>Maintenance request access unavailable</h1><p>Private request details and the reply review are hidden. Any original interrupted reply is kept for authorized recovery.</p><button type="button" onClick={() => window.location.reload()}>Reload workspace</button></section></>;
   return (
     <>
       <nav className="record-breadcrumb">
@@ -832,7 +835,7 @@ function RequestDetail({ id, resident }: { id: string; resident: boolean }) {
               {!row.activity.length && <p>No recorded activity available.</p>}
             </section>
           </div>
-          <RequestUpdates endpoint={endpoint} resident={resident} canShare={row.residentUpdatesAvailable === true} requestStatus={row.status} />
+          <RequestUpdates endpoint={endpoint} resident={resident} canShare={row.residentUpdatesAvailable === true} requestStatus={row.status} source={row} onAccessDenied={setConversationDenied} />
           {!resident && <PreventiveSource requestId={id}/>}
           {!resident && <MaintenanceVendor requestId={id} changed={r.reload} />}
           {!resident && can("finance.manage") && <MaintenanceCosts requestId={id} propertyId={row.propertyId} />}
@@ -948,17 +951,48 @@ function RequestDetail({ id, resident }: { id: string; resident: boolean }) {
   );
 }
 
-function RequestUpdates({ endpoint, resident, canShare, requestStatus }: { endpoint: string; resident: boolean; canShare: boolean; requestStatus: string }) {
-  const { data } = useAuth();
-  const readOnly = !!data?.impersonation || data?.companyFeatures?.maintenance === "read_only" || (resident && data?.companyFeatures?.resident_portal === "read_only");
+type RequesterReplyAttempt = {
+  companyId: string; endpoint: string; propertyId: string; sourceVersion: number;
+  content: string; submissionKey: string;
+};
+function requesterReplyAttempt(storageKey: string, companyId: string | undefined, endpoint: string, propertyId: string): RequesterReplyAttempt | null {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(storageKey) || "null");
+    return companyId && value?.companyId === companyId && value.endpoint === endpoint && value.propertyId === propertyId &&
+      Number.isSafeInteger(value.sourceVersion) && value.sourceVersion > 0 &&
+      typeof value.content === "string" && value.content.length <= 4000 &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.submissionKey)
+      ? { companyId, endpoint, propertyId, sourceVersion: value.sourceVersion, content: value.content, submissionKey: value.submissionKey } : null;
+  } catch { return null; }
+}
+function replyReadDenied(error: ApiError) {
+  return ["IMPERSONATION_CONTEXT_CHANGED", "MAINTENANCE_CONTEXT_CHANGED"].includes(error.code) || error.status === 401 || error.status === 404 || error.status === 403 &&
+    ["ACCESS_DENIED", "COMPANY_ACCESS_DENIED", "FEATURE_DISABLED", "EMAIL_VERIFICATION_REQUIRED", "IMPERSONATION_UNAVAILABLE"].includes(error.code);
+}
+function RequestUpdates({ endpoint, resident, canShare, requestStatus, source, onAccessDenied }: { endpoint: string; resident: boolean; canShare: boolean; requestStatus: string; source: Row; onAccessDenied: (denied: boolean) => void }) {
+  const { data, refreshUser } = useAuth();
+  const readOnly = !!data?.impersonation || ["read_only", "disabled"].includes(data?.companyFeatures?.maintenance || "") || (resident && ["read_only", "disabled"].includes(data?.companyFeatures?.resident_portal || ""));
+  const storageKey = `pf-maintenance-reply:${data?.user.id}:${data?.membership?.companyId}:${endpoint}`;
+  const [initial] = useState(() => resident && !data?.impersonation ? requesterReplyAttempt(storageKey, data?.membership?.companyId, endpoint, source.propertyId) : null);
+  const [attempt, setAttempt] = useState(initial), attempted = useRef(initial);
+  const context = useTenantAttemptContext(data, initial?.companyId), [privateDenied, setPrivateDenied] = useState(false);
+  const [replyText, setReplyText] = useState(initial?.content || ""), [formKey, setFormKey] = useState(() => crypto.randomUUID());
   const [cursor, setCursor] = useState(""),
-    [adding, setAdding] = useState(false),
-    [submissionKey, setSubmissionKey] = useState(() => crypto.randomUUID()),
+    [adding, setAdding] = useState(!!initial),
+    [submissionKey, setSubmissionKey] = useState(() => initial?.submissionKey || crypto.randomUUID()),
     [success, setSuccess] = useState("");
+  const clearUnsubmitted = () => {
+    setAdding(false);
+    if (attempted.current) return;
+    setReplyText(""); setSubmissionKey(crypto.randomUUID()); setFormKey(crypto.randomUUID());
+  };
   const updates = useResource<{
     items: { id: string; content: string; visibility: string; author: string; authorType?: "requester" | "team"; createdAt: string }[];
     nextCursor: string | null;
   }>(`${endpoint}/updates${cursor ? `?${new URLSearchParams({ cursor })}` : ""}`, true, true);
+  const deniedRead = [401, 403, 404].includes(updates.errorStatus || 0);
+  useEffect(() => { if (resident && deniedRead) onAccessDenied(true); }, [resident, deniedRead, onAccessDenied]);
+  if (resident && (privateDenied || deniedRead)) return <p className="notice error" role="alert">The request conversation is unavailable. Any original interrupted reply is kept for authorized recovery.</p>;
   return (
     <section className="panel maintenance-updates" aria-label={resident ? "Request conversation" : "Request updates"}>
       <div className="section-heading">
@@ -986,19 +1020,37 @@ function RequestUpdates({ endpoint, resident, canShare, requestStatus }: { endpo
           {updates.data.nextCursor && <button className="secondary" onClick={() => setCursor(updates.data!.nextCursor!)}>{resident ? "Older conversation" : "Older updates"}</button>}
         </div>
       </>}
-      <EditorDialog open={adding} title={resident ? "Reply to your maintenance request" : "Add maintenance update"} onClose={() => setAdding(false)} onDiscard={() => { setAdding(false); setSubmissionKey(crypto.randomUUID()); }}>
-        <Form key={submissionKey} operation={resident ? "maintenance.reply" : "maintenance.update"} label={resident ? "Post reply" : "Record update"} feedbackText={resident ? "Maintenance reply recorded." : "Maintenance update recorded."}
-          secondaryActions={<DraftReset reset={() => setSubmissionKey(crypto.randomUUID())} />}
+      {(!resident || updates.data) && <EditorDialog open={adding} title={resident ? "Reply to your maintenance request" : "Add maintenance update"} onClose={() => setAdding(false)} onDiscard={clearUnsubmitted}>
+        <Form key={resident ? formKey : submissionKey} operation={resident ? "maintenance.reply" : "maintenance.update"} label={resident ? "Post reply" : "Record update"} feedbackText={resident ? "Maintenance reply recorded." : "Maintenance update recorded."}
+          recovering={resident && !!attempt} locked={resident && readOnly}
+          secondaryActions={!attempt && <DraftReset reset={() => { setReplyText(""); setSubmissionKey(crypto.randomUUID()); setFormKey(crypto.randomUUID()); }} />}
           submit={async form => {
             if (readOnly) throw new Error("This request conversation is read-only under your current access settings.");
-            await api(`${endpoint}/updates`, { method: "POST", body: { content: form.get("content"), ...(!resident ? { visibility: form.get("visibility") } : {}), submissionKey } });
-            setAdding(false);
-            setSubmissionKey(crypto.randomUUID());
-            setSuccess(resident ? "Reply recorded." : "Update recorded.");
-            setCursor("");
-            updates.reload();
+            if (resident && !context.current()) { setPrivateDenied(true); onAccessDenied(true); throw new ApiError("Your account or company changed. Reload before replying.", 409, "MAINTENANCE_CONTEXT_CHANGED"); }
+            const wasRecovering = !!attempted.current;
+            const original = attempted.current || { companyId: context.companyId!, endpoint, propertyId: source.propertyId, sourceVersion: source.version, content: replyText, submissionKey };
+            try {
+              if (resident) { sessionStorage.setItem(storageKey, JSON.stringify(original)); attempted.current = original; setAttempt(original); }
+              await api(`${endpoint}/updates`, { method: "POST", body: resident ? { content: original.content, submissionKey: original.submissionKey } : { content: form.get("content"), visibility: form.get("visibility"), submissionKey }, ...(resident ? { expectedCompanyId: original.companyId } : {}) });
+              if (resident && !context.current()) throw new ApiError("Your account or company changed before the reply was acknowledged. The original reply is kept for recovery.", 409, "MAINTENANCE_CONTEXT_CHANGED", true);
+              if (resident) { sessionStorage.removeItem(storageKey); attempted.current = null; setAttempt(null); setReplyText(""); }
+              setAdding(false);
+              setSubmissionKey(crypto.randomUUID()); setFormKey(crypto.randomUUID());
+              setSuccess(resident ? "Reply recorded." : "Update recorded.");
+              setCursor(""); updates.reload();
+            } catch (error) {
+              if (resident && error instanceof ApiError) {
+                if (replyReadDenied(error)) { setPrivateDenied(true); onAccessDenied(true); void refreshUser(); }
+                if (!wasRecovering && !error.submissionUncertain && !["SUBMISSION_MISMATCH", "IMPERSONATION_CONTEXT_CHANGED", "MAINTENANCE_CONTEXT_CHANGED"].includes(error.code) && [400, 403, 404, 409, 422].includes(error.status)) {
+                  sessionStorage.removeItem(storageKey); attempted.current = null; setAttempt(null); setSubmissionKey(crypto.randomUUID());
+                } else if (attempted.current) error.submissionUncertain = true;
+              }
+              throw error;
+            }
           }}>
-          <fieldset className="form-section">
+          {resident && readOnly && <p className="notice" role="status">Replies are read-only under the current company settings. The original interrupted reply is kept.</p>}
+          {resident && attempt && <p className="notice">This original reply may already be recorded. Retry its exact text and submission reference. It was reviewed from request version {attempt.sourceVersion}; later request changes do not replace it or reopen the request.</p>}
+          <fieldset className="form-section" disabled={resident && (readOnly || !!attempt)}>
             <legend>{resident ? "Reply to the property team" : "Update and audience"}</legend>
             {!resident && <label>Who can see this update?
               <select name="visibility" aria-label="Update audience" defaultValue="internal">
@@ -1007,11 +1059,11 @@ function RequestUpdates({ endpoint, resident, canShare, requestStatus }: { endpo
               </select>
             </label>}
             <p className="help">{resident ? "Your reply is visible to you and the property team while you retain request access. The property team can receive an in-app notification when company notifications are enabled. No email or text message is sent." : canShare ? "Shared updates are visible only to the resident who submitted this request, while they retain property access. They can create an in-app notification when company notifications are enabled." : "This management-created request has no resident requester. Its updates stay internal."}</p>
-            <label>{resident ? "Your reply (required)" : "Update (required)"}<textarea name="content" aria-label={resident ? "Reply text" : "Update text"} required maxLength={4000} rows={6} /></label>
+            <label>{resident ? "Your reply (required)" : "Update (required)"}<textarea name="content" aria-label={resident ? "Reply text" : "Update text"} required maxLength={4000} rows={6} {...(resident ? { value: replyText, onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => setReplyText(event.target.value) } : {})} /></label>
           </fieldset>
           <p className="help">{resident ? "Replies are retained in the conversation and do not change request status. Add a follow-up reply to correct an earlier message." : "Review the audience before saving. Recorded updates and their audience are retained; add a follow-up to correct an earlier update."}</p>
         </Form>
-      </EditorDialog>
+      </EditorDialog>}
     </section>
   );
 }

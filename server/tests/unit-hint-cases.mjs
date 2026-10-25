@@ -124,7 +124,7 @@ export async function unitHintCases(t, admin, call, db, app, providerCalls) {
   }
   const unitPicker = page => page.getByLabel('Unit for new lease');
   const formReady = async page => {
-    await expect(page.getByRole('dialog', { name: 'Record a lease', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Record a lease', exact: true })).toBeVisible();
     await expect(unitPicker(page)).toBeVisible();
   };
   const fillTerms = async (page, rent = '1234.56') => {
@@ -143,7 +143,21 @@ export async function unitHintCases(t, admin, call, db, app, providerCalls) {
     await page.goto(origin + '/company/prospects?' + new URLSearchParams({ prospectId: prospect.id, propertyId: home, stage: 'approved' }));
     await page.getByRole('button', { name: 'Review tenant & lease link', exact: true }).click();
     await page.getByRole('combobox', { name: /^Tenant account/ }).selectOption(contact.id);
-    await page.getByRole('link', { name: 'Prepare a lease through the normal lease workflow', exact: true }).click();
+    const prepareLink = page.getByRole('link', { name: 'Prepare a lease through the normal lease workflow', exact: true });
+    const preparation = new URL(await prepareLink.getAttribute('href'), origin);
+    assert.equal(preparation.searchParams.get('new'), 'lease');
+    assert.equal(preparation.searchParams.get('propertyId'), home);
+    assert.equal(preparation.searchParams.get('contactId'), contact.id);
+    assert.equal(preparation.searchParams.get('unitId'), targetId);
+    assert.equal(preparation.searchParams.get('prospectId'), prospect.id);
+    assert.equal(preparation.searchParams.get('prospectProperty'), home);
+    assert.equal(preparation.searchParams.get('prospectStage'), 'approved');
+    page.once('dialog', async dialog => { assert.equal(dialog.type(), 'confirm'); assert.match(dialog.message(), /discard its unsaved changes/); await dialog.dismiss(); });
+    await prepareLink.click();
+    await expect(page.getByRole('combobox', { name: /^Tenant account/ })).toHaveValue(contact.id);
+    assert.equal(posts.length, beforePosts, 'canceling departure cannot write source records');
+    page.once('dialog', dialog => dialog.accept());
+    await prepareLink.click();
     await formReady(page); await expect(unitPicker(page)).toHaveValue(targetId);
     assert.equal(new URL(page.url()).searchParams.get('unitId'), targetId);
     await expect(page.getByLabel('New lease monthly rent (USD)')).toHaveValue('');
@@ -190,7 +204,7 @@ export async function unitHintCases(t, admin, call, db, app, providerCalls) {
     await expect(page.locator('.lease-review-summary')).toContainText('Preferred beyond page fifty');
     assert.equal(await page.evaluate(key => sessionStorage.getItem(key), journalKey), originalJournal);
     await page.getByRole('button', { name: 'Create lease record', exact: true }).click();
-    await expect(page.getByRole('dialog')).not.toBeVisible();
+    await expect(page.getByRole('region', { name: 'Record a lease', exact: true })).not.toBeVisible();
     const second = posts.at(-1); assert.deepEqual(second.body, first.body); assert.equal(second.status, 200);
     assert.equal(posts.length, beforePosts + 3); assert.deepEqual(posts.slice(beforePosts).map(row => row.status), [200, 403, 200]);
     const rows = (await admin.query('SELECT id,"unitId","submissionKey","rentCents",status FROM "Lease" WHERE "companyId"=$1', [company])).rows;

@@ -278,7 +278,7 @@ test("month-name date filters apply together, persist on refresh and retain retu
     page.getByLabel("Statement from date", { exact: true }),
   ).toHaveValue("2026-10-01");
   await expect(
-    page.getByRole("link", { name: "Back to rent ledger" }),
+    page.getByRole("link", { name: "Back to rent & payments" }),
   ).toHaveAttribute(
     "href",
     "/company/properties/home/rent?tenantId=tenant-a&leaseId=lease-a&leaseReturn=lease-a",
@@ -402,7 +402,7 @@ test("resident statement uses their API and returns to their rent without manage
     false,
   );
   await expect(
-    page.getByRole("link", { name: "Back to rent ledger" }),
+    page.getByRole("link", { name: "Back to rent & payments" }),
   ).toHaveAttribute("href", "/resident/rent?tenantId=other&leaseId=lease-a");
   await expect(
     page.getByRole("link", { name: "Back to tenant", exact: false }),

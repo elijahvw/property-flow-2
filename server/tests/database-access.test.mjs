@@ -44,6 +44,7 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
   const call = async (user, method, path, body, extra = {}) => {
     if (body && method==='PATCH' && path.startsWith('/api/platform/companies/') && !Object.hasOwn(body,'expectedVersion')) body={...body,expectedVersion:(await db.company.findUnique({where:{id:path.split('/').pop()}}))?.version};
     if (body && method==='PUT' && path.endsWith('/membership') && !Object.hasOwn(body,'expectedVersion')) body={...body,expectedVersion:(await db.companyMembership.findUnique({where:{userId:decodeURIComponent(path.split('/').at(-2))}}))?.version??null};
+    if (body && method==='PATCH' && path.startsWith('/api/company/members/') && !Object.hasOwn(body,'expectedVersion')) body={...body,expectedVersion:(await db.companyMembership.findUnique({where:{userId:decodeURIComponent(path.split('/').at(-1))}}))?.version};
     return app.inject({ method, url: path, headers: { ...(user ? { cookie: `__Host-pf-session=token-${user}` } : {}), origin: 'https://app.test', 'x-csrf-token': 'test-csrf', ...extra }, ...(body === undefined ? {} : { payload: body }) }); };
   const property = { name:'Test property', address:'Test street',city:'Test city',state:'Test state',zip:'Test code' };
   await t.test('populated legacy records survive migrations without automatic privilege grants', async () => {
@@ -135,7 +136,7 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
     let timer;
     return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Race barrier timed out')),4000);})]).finally(()=>clearTimeout(timer));
   };
-  const coordinatedDb = intercept => new Proxy(db, {
+  const coordinatedDb = (intercept, targetId) => new Proxy(db, {
     get(target,key) {
       if(key !== '$transaction') { const value=Reflect.get(target,key); return typeof value==='function'?value.bind(target):value; }
       return (run,options)=>target.$transaction(tx=>run(new Proxy(tx,{
@@ -143,7 +144,7 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
           if(method !== '$queryRaw') { const value=Reflect.get(transaction,method);return typeof value==='function'?value.bind(transaction):value; }
           return async (strings,...values)=> {
             const execute=()=>transaction.$queryRaw(strings,...values);
-            return strings.join('').includes('UPDATE "User" SET "updatedAt"') ? intercept(transaction,execute) : execute();
+            return strings.join('').includes('UPDATE "User" SET "updatedAt"') && values[0] === targetId ? intercept(transaction,execute) : execute();
           };
         },
       })),{...options,timeout:10000});
@@ -157,6 +158,7 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
   };
   const controlledCall = async(instance,user,method,path,body) => {
     if(body&&method==='PUT'&&path.endsWith('/membership')&&!Object.hasOwn(body,'expectedVersion'))body={...body,expectedVersion:(await db.companyMembership.findUnique({where:{userId:decodeURIComponent(path.split('/').at(-2))}}))?.version??null};
+    if(body&&method==='PATCH'&&path.startsWith('/api/company/members/')&&!Object.hasOwn(body,'expectedVersion'))body={...body,expectedVersion:(await db.companyMembership.findUnique({where:{userId:decodeURIComponent(path.split('/').at(-1))}}))?.version};
     return instance.inject({method,url:path,headers:{cookie:`__Host-pf-session=token-${user}`,origin:'https://app.test','x-csrf-token':'test-csrf'},...(body===undefined?{}:{payload:body})});};
   const seedRaceUser = async (id,role) => {
     await admin.query('INSERT INTO "User" (id,email,"emailVerified","updatedAt") VALUES ($1,$2,true,NOW())',[id,`${id}@test.invalid`]);
@@ -189,12 +191,12 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
           const leader=await controlledApp(coordinatedDb(async(_tx,execute)=>{
             leaderAttempts++;const result=await execute();
             if(leaderAttempts===1) {locked.resolve();await bounded(release.promise);}return result;
-          }));
+          }, targetId));
           const follower=await controlledApp(coordinatedDb(async(tx,execute)=>{
             followerAttempts++;
             if(followerAttempts===1) followerPid.resolve((await tx.$queryRaw`SELECT pg_backend_pid() AS pid`)[0].pid);
             return execute();
-          }));
+          }, targetId));
           const assignment=instance=>controlledCall(instance,'manager-a','PUT',`/api/company/properties/${a.id}/residents/${targetId}`);
           const lifecycle=instance=> {
             if(change==='account-disable')return controlledCall(instance,'platform','PATCH',`/api/platform/users/${targetId}/status`,{status:'disabled'});
@@ -254,11 +256,97 @@ test('PostgreSQL migration, session and authorization integration', { skip: !url
       // tuple change externally before each lock query to force SQLSTATE 40001.
       await admin.query('UPDATE "User" SET "updatedAt"="updatedAt" WHERE id=$1',[targetId]);
       return execute();
-    }));
+    }, targetId));
     const result=await controlledCall(controlled,'manager-a','PUT',`/api/company/properties/${a.id}/residents/${targetId}`);
     assert.equal(result.statusCode,409,result.body);assert.equal(result.json().code,'ACCESS_CONFLICT');assert.equal(attempts,5);
     assert.deepEqual(await tenantTransaction(db,'a',tx=>tx.residentPropertyAssignment.findMany({where:{userId:targetId}})),[]);
     assert.equal(await db.auditEvent.count({where:{action:'resident.assignment.assigned',targetId}}),0);
+  });
+  await t.test('legacy administration and assignment requests wait for actor revocation and company suspension', async raceTest => {
+    const propertyId = (await tenantTransaction(db,'a',tx=>tx.property.findMany()))[0].id;
+    for (const revoke of ['account','membership','company']) {
+      for (const operation of ['member-edit','assignment','member-list']) {
+        await raceTest.test(`${revoke} completes before ${operation}`, async () => {
+          const actorId=`authority-${revoke}-${operation}`, targetId=`target-${actorId}`;
+          await seedRaceUser(actorId,'owner');
+          await seedRaceUser(targetId,'resident');
+          const before=await db.auditEvent.count({where:{actorId}});
+          const lock=await admin.connect();
+          let pending;
+          try {
+            await lock.query('BEGIN');
+            const {pid}=(await lock.query('SELECT pg_backend_pid() pid')).rows[0];
+            if(revoke==='company') await lock.query('UPDATE "Company" SET status=\'suspended\' WHERE id=\'a\'');
+            else {
+              await lock.query('UPDATE "User" SET "updatedAt"="updatedAt" WHERE id=$1',[actorId]);
+              if(revoke==='account') await lock.query('UPDATE "User" SET status=\'disabled\' WHERE id=$1',[actorId]);
+              else await lock.query('UPDATE "CompanyMembership" SET status=\'disabled\' WHERE "userId"=$1',[actorId]);
+            }
+            pending=operation==='member-edit'
+              ? call(actorId,'PATCH',`/api/company/members/${targetId}`,{role:'staff',status:'active',expectedVersion:1})
+              : operation==='assignment'
+                ? call(actorId,'PUT',`/api/company/properties/${propertyId}/residents/${targetId}`)
+                : call(actorId,'GET','/api/company/members');
+            let blocked=false;
+            for(let attempt=0;attempt<200;attempt++) {
+              blocked=(await admin.query('SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))) blocked',[pid])).rows[0].blocked;
+              if(blocked) break;
+              await new Promise(resolve=>setTimeout(resolve,10));
+            }
+            assert.equal(blocked,true,'Request must wait on the authority row before reading current grants');
+            await lock.query('COMMIT');
+            const result=await bounded(pending);
+            assert.equal(result.statusCode,403,result.body);
+            assert.equal(await db.auditEvent.count({where:{actorId}}),before);
+            assert.equal((await db.companyMembership.findUnique({where:{userId:targetId}})).role,'resident');
+            assert.deepEqual(await tenantTransaction(db,'a',tx=>tx.residentPropertyAssignment.findMany({where:{userId:targetId}})),[]);
+          } finally {
+            await lock.query('ROLLBACK');
+            lock.release();
+            if(pending) await pending;
+            await admin.query('UPDATE "Company" SET status=\'active\' WHERE id=\'a\'');
+            await admin.query('DELETE FROM "CompanyMembership" WHERE "userId"=ANY($1::text[])',[[actorId,targetId]]);
+            await admin.query('DELETE FROM "Session" WHERE "userId"=ANY($1::text[])',[[actorId,targetId]]);
+            await admin.query('DELETE FROM "Identity" WHERE "userId"=ANY($1::text[])',[[actorId,targetId]]);
+            await admin.query('DELETE FROM "User" WHERE id=ANY($1::text[])',[[actorId,targetId]]);
+          }
+        });
+      }
+    }
+  });
+  await t.test('platform assignment waits for target company suspension before granting membership', async () => {
+    const targetId='authority-platform-target';
+    await seedRaceUser(targetId,'resident');
+    const before=await db.auditEvent.count({where:{targetId,action:'membership.assigned'}});
+    const lock=await admin.connect();
+    let pending;
+    try {
+      await lock.query('BEGIN');
+      const {pid}=(await lock.query('SELECT pg_backend_pid() pid')).rows[0];
+      await lock.query('UPDATE "Company" SET status=\'suspended\' WHERE id=\'a\'');
+      pending=call('platform','PUT',`/api/platform/users/${targetId}/membership`,{companyId:'a',role:'staff',status:'active',expectedVersion:1});
+      let blocked=false;
+      for(let attempt=0;attempt<200;attempt++) {
+        blocked=(await admin.query('SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))) blocked',[pid])).rows[0].blocked;
+        if(blocked) break;
+        await new Promise(resolve=>setTimeout(resolve,10));
+      }
+      assert.equal(blocked,true,'Assignment must wait for the target company status');
+      await lock.query('COMMIT');
+      const result=await bounded(pending);
+      assert.equal(result.statusCode,403,result.body);
+      assert.equal((await db.companyMembership.findUnique({where:{userId:targetId}})).role,'resident');
+      assert.equal(await db.auditEvent.count({where:{targetId,action:'membership.assigned'}}),before);
+    } finally {
+      await lock.query('ROLLBACK');
+      lock.release();
+      if(pending) await pending;
+      await admin.query('UPDATE "Company" SET status=\'active\' WHERE id=\'a\'');
+      await admin.query('DELETE FROM "CompanyMembership" WHERE "userId"=$1',[targetId]);
+      await admin.query('DELETE FROM "Session" WHERE "userId"=$1',[targetId]);
+      await admin.query('DELETE FROM "Identity" WHERE "userId"=$1',[targetId]);
+      await admin.query('DELETE FROM "User" WHERE id=$1',[targetId]);
+    }
   });
   await t.test('company suspension revokes an existing session’s access immediately', async () => {
     assert.equal((await call('platform','PATCH','/api/platform/companies/a',{name:'a',status:'suspended'})).statusCode,200);

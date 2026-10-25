@@ -1,11 +1,11 @@
 import {test,expect,Page} from '@playwright/test';
 async function fixture(page:Page,role='owner'){
- const state={company:'a',propertyStatus:200,units:[] as any[],leases:[] as any[],residents:[{userId:'r',membership:{user:{name:'Resident',email:'r@test.invalid'}}}],loseUnit:false,loseLease:false,keys:[] as string[],writes:0};
+ const state={company:'a',propertyStatus:200,additionalProperty:false,units:[] as any[],leases:[] as any[],residents:[{userId:'r',membership:{user:{name:'Resident',email:'r@test.invalid'}}}],loseUnit:false,loseLease:false,keys:[] as string[],writes:0};
  await page.route('**/api/**',async route=>{
   const req=route.request(),url=new URL(req.url()),path=url.pathname,json=(value:unknown,status=200)=>route.fulfill({json:value,status});
   const property={id:'home',name:'Home',address:'1 Main St',city:'City',state:'PA',zip:'19100'};
   if(path==='/api/bootstrap')return json({user:{id:role,email:`${role}@test.invalid`,status:'active'},membership:{companyId:state.company,version:1,role,status:'active',company:{name:state.company,status:'active'}},permissions:role==='owner'||role==='manager'?['property.read','property.write','lease.manage','resident.assignment.manage']:role==='staff'?['property.read']:role==='resident'?['resident.self']:['platform.manage'],csrfToken:'fixture'});
-  if(path==='/api/company/properties')return json([property]);
+  if(path==='/api/company/properties')return json([property,...(state.additionalProperty?[{...property,id:'other',name:'Other property'}]:[])]);
   if(path==='/api/company/properties/home')return state.propertyStatus===200?json(property):json({error:'Property unavailable'},state.propertyStatus);
   if(path.endsWith('/residents'))return json(state.residents);
   if(req.method()==='GET'&&/^\/api\/company\/leases\/[^/]+(?:\/participants)?$/.test(path)){
@@ -30,7 +30,7 @@ async function fixture(page:Page,role='owner'){
   }
   if(path.endsWith('/units')||path==='/api/company/leases'){
    const isUnit=path.endsWith('/units'),rows=isUnit?state.units:state.leases,cursor=url.searchParams.get('cursor'),q=(url.searchParams.get('q')||'').trim().toLowerCase(),status=url.searchParams.get('status'),unitId=url.searchParams.get('unitId');
-   const selected=rows.filter(r=>(!cursor||r.id<cursor)&&(!status||r.status===status)&&(!unitId||r.unitId===unitId)&&(!q||[r.label,r.floor,r.unit?.label,r.resident?.name].some(v=>v?.toLowerCase().includes(q)))).sort((a,b)=>b.id.localeCompare(a.id));
+   const selected=rows.filter(r=>(!isUnit||r.propertyId===path.split('/')[4])&&(!cursor||r.id<cursor)&&(!status||r.status===status)&&(!unitId||r.unitId===unitId)&&(!q||[r.label,r.floor,r.unit?.label,r.resident?.name].some(v=>v?.toLowerCase().includes(q)))).sort((a,b)=>b.id.localeCompare(a.id));
    return json({items:selected.slice(0,50),nextCursor:selected.length>50?selected[49].id:null,...(unitId?{unit:state.units.find(r=>r.id===unitId)}:{})});
   }
   return json([]);
@@ -60,10 +60,38 @@ test('unit search keeps typing responsive and batches the API query',async({page
  await page.reload();await expect(page.getByLabel('Find unit',{exact:true})).toHaveValue('Garden');
 });
 test('lease creation retries same key and records exact monthly rent',async({page})=>{
- const state=await fixture(page,'manager');state.units.push({id:'u1',label:'Unit 1',propertyId:'home',status:'active',version:1});state.loseLease=true;
+ const state=await fixture(page,'manager');state.additionalProperty=true;state.units.push({id:'u1',label:'Unit 1',propertyId:'home',status:'active',version:1});state.loseLease=true;
  await page.goto('/company/leases');await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await page.getByLabel('New lease start date').fill('2026-11-01');await page.getByLabel('New lease monthly rent (USD)').fill('1234.56');
- await page.getByRole('button',{name:'Review lease',exact:true}).click();await page.getByRole('button',{name:'Create lease record'}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create lease record'}).click();await expect(page.getByRole('dialog')).not.toBeVisible();expect(state.leases.length).toBe(1);expect(state.leases[0].rentCents).toBe(123456);expect(state.keys[0]).toBe(state.keys[1]);
+ await page.getByRole('button',{name:'Review lease',exact:true}).click();await page.getByRole('button',{name:'Create lease record'}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create lease record'}).click();await expect(page.getByRole('region',{name:'Record a lease',exact:true})).not.toBeVisible();expect(state.leases.length).toBe(1);expect(state.leases[0].rentCents).toBe(123456);expect(state.keys[0]).toBe(state.keys[1]);
  await expect(page).toHaveURL(/\/company\/leases\/l1\?onboarding=household/);await expect(page.getByRole('heading',{name:'Leaseholders and occupants',exact:true})).toBeVisible();await page.getByRole('link',{name:'← All leases',exact:true}).click();await expect(page.getByText(/1234\.56|1,234\.56/)).toBeVisible();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await expect(page.getByLabel('New lease monthly rent (USD)')).toHaveValue('');
+});
+
+test('completing one property lease keeps another property task protected',async({page})=>{
+ const state=await fixture(page);state.additionalProperty=true;
+ state.units.push({id:'u1',label:'Unit 1',propertyId:'home',status:'active',version:1},{id:'u2',label:'Other suite',propertyId:'other',status:'active',version:1});
+ const active=page.locator('.lease-property-draft:not([hidden])');
+ await page.goto('/company/leases?new=lease');
+ await page.getByLabel('Property for new lease').selectOption('other');
+ await active.getByLabel('New lease monthly rent (USD)').fill('2222.00');
+ await active.getByLabel('New lease payment instructions shared with resident (optional)').fill('Keep the other property task');
+ await page.getByLabel('Property for new lease').selectOption('home');
+ await active.getByLabel('New lease start date').fill('2026-11-01');
+ await active.getByLabel('New lease monthly rent (USD)').fill('1250.00');
+ await active.getByRole('button',{name:'Review lease',exact:true}).click();
+ let confirmations=0;
+ page.on('dialog',async dialog=>{confirmations++;expect(dialog.type()).toBe('confirm');expect(dialog.message()).toContain('discard its unsaved changes');await dialog.dismiss();});
+ await active.getByRole('button',{name:'Create lease record',exact:true}).click();
+ await expect(page.getByRole('link',{name:'Open the recorded lease workspace',exact:true})).toBeVisible();
+ await expect(page).toHaveURL(/\/company\/leases\?new=lease$/);
+ expect(state.leases).toHaveLength(1);expect(state.leases[0].propertyId).toBe('home');
+ await page.getByLabel('Property for new lease').selectOption('other');
+ await expect(active.getByLabel('New lease monthly rent (USD)')).toHaveValue('2222.00');
+ await expect(active.getByLabel('New lease payment instructions shared with resident (optional)')).toHaveValue('Keep the other property task');
+ const beforeHelp=confirmations;
+ await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Help',exact:true}).click();
+ await expect.poll(()=>confirmations).toBe(beforeHelp+1);
+ await expect(page).toHaveURL(/\/company\/leases\?new=lease$/);expect(state.leases).toHaveLength(1);
+ await expect(active.getByLabel('New lease monthly rent (USD)')).toHaveValue('2222.00');
 });
 test('stale unit edit requires list reload before retry with refreshed version',async({page})=>{
  const state=await fixture(page);state.units.push({id:'u1',label:'Unit 1',propertyId:'home',status:'active',version:1});await page.goto('/company/properties/home/units');await page.getByRole('button',{name:'Edit unit'}).click();await page.getByLabel('Name for Unit 1').fill('New name');state.units[0].version=2;
@@ -86,7 +114,7 @@ test('unit-picker pagination preserves an ambiguous committed lease draft and re
  await page.goto('/company/leases');await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await page.getByLabel('New lease start date').fill('2026-11-01');await page.getByLabel('New lease monthly rent (USD)').fill('1500.00');
  await page.getByRole('button',{name:'Review lease',exact:true}).click();await page.getByRole('button',{name:'Create lease record'}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Next page'}).click();await expect(page.getByRole('button',{name:'First page'})).toBeVisible();
  await expect(page.getByLabel('New lease start date')).toHaveValue('2026-11-01');await expect(page.getByLabel('New lease monthly rent (USD)')).toHaveValue('1500.00');await expect(page.getByLabel('Unit for new lease')).toHaveValue('u051');
- await page.getByRole('button',{name:'First page'}).click();await expect(page.getByRole('button',{name:'Next page'})).toBeVisible();await page.getByRole('button',{name:'Create lease record'}).click();await expect(page.getByRole('dialog')).not.toBeVisible();expect(state.leases.length).toBe(1);expect(state.keys[0]).toBe(state.keys[1]);
+ await page.getByRole('button',{name:'First page'}).click();await expect(page.getByRole('button',{name:'Next page'})).toBeVisible();await page.getByRole('button',{name:'Create lease record'}).click();await expect(page.getByRole('region',{name:'Record a lease',exact:true})).not.toBeVisible();expect(state.leases.length).toBe(1);expect(state.keys[0]).toBe(state.keys[1]);
 });
 
 test('unit directory searches all pages, resets pagination and keeps filters on refresh',async({page})=>{

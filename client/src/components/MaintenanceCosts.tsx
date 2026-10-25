@@ -6,7 +6,7 @@ import { formatDate, formatActivityTime } from "../dates";
 import { useResource } from "../useResource";
 import { dollars } from "../money";
 import { Form } from "./Form";
-import { EditorDialog } from "./EditorDialog";
+import { EditorDialog, useEditorBusy } from "./EditorDialog";
 import { DraftReset } from "./DraftReset";
 
 type Expense = {
@@ -65,6 +65,7 @@ export function MaintenanceCosts({ requestId, propertyId }: { requestId: string;
 }
 
 function ExpensePicker({ endpoint, saved }: { endpoint: string; saved: () => void }) {
+  const editor = useEditorBusy();
   const [query, setQuery] = useState(""), [cursor, setCursor] = useState(""),
     [selected, setSelected] = useState<Expense | null>(null), [key, setKey] = useState(() => crypto.randomUUID());
   const r = useResource<{ items: Expense[]; nextCursor: string | null }>(`${endpoint}/candidates?${new URLSearchParams(Object.entries({ q: query, cursor }).filter(([, value]) => value))}`, true, true);
@@ -83,7 +84,7 @@ function ExpensePicker({ endpoint, saved }: { endpoint: string; saved: () => voi
     </>}
     {selected && <Form key={key} operation="maintenance.cost.link" label="Link expense" feedbackText="Maintenance expense linked."
       secondaryActions={<DraftReset reset={() => { setSelected(null); setKey(crypto.randomUUID()); r.reload(); }} />}
-      submit={async () => { await api(endpoint, { method: "POST", body: { entryId: selected.id, expectedEntryVersion: selected.version, submissionKey: key } }); setSelected(null); setKey(crypto.randomUUID()); r.reload(); saved(); }}>
+      submit={async () => { await api(endpoint, { method: "POST", body: { entryId: selected.id, expectedEntryVersion: selected.version, submissionKey: key } }); editor.completed(); setSelected(null); setKey(crypto.randomUUID()); r.reload(); saved(); }}>
       <fieldset className="form-section"><legend>Review selected expense</legend><p>{selected.reference} · {dollars(selected.amountCents)} · {formatDate(selected.occurredOn)}</p>{selected.memo && <p className="preserve-lines">{selected.memo}</p>}<p className="help">This links the existing payment; it creates no new transaction or resident charge. If the expense has changed, clear this draft and choose its latest record.</p></fieldset>
     </Form>}
   </>;

@@ -138,6 +138,11 @@ test('sign-in retains allowlisted task context and rejects redirect tricks or pr
  assert.equal(safeReturnTo('/company/leases/lease-source?prospectId=case-source&prospectStage=unknown&prospectDue=unknown&prospectReturn=https%3A%2F%2Fevil.test&onboarding=unknown'), '/company/leases/lease-source?prospectId=case-source');
  assert.equal(safeReturnTo('/company/subscription?subscriptionTab=billing&invoiceId=invoice-source'),'/company/subscription?subscriptionTab=billing&invoiceId=invoice-source');
  assert.equal(safeReturnTo('/company/leases/record?section=renewal&propertyId=home'),'/company/leases/record?section=renewal&propertyId=home');
+ for(const path of ['/company/applications','/company/applications/new','/company/applications/application/convert'])assert.equal(safeReturnTo(`${path}?${prospect}`),`${path}?${prospect}`);
+ for(const path of ['/company/drafts','/company/leases','/company/leases/lease-source','/company/properties/home/leases'])assert.equal(safeReturnTo(`${path}?draftId=saved-task`),`${path}?draftId=saved-task`);
+ assert.equal(safeReturnTo('/platform/users?draftId=saved-task'),'/platform/users');
+ assert.equal(safeReturnTo('/company/drafts?draftId=bad%2Fsource'),'/company/drafts');
+ assert.equal(safeReturnTo('/company/applications/application?tenantId=contact-source&tenantCursor=page&tenantQ=private'),'/company/applications/application?tenantId=contact-source');
  assert.equal(safeReturnTo('/company/residents/auth0%7Cperson?access=active'),'/company/residents/auth0%7Cperson?access=active');
  assert.equal(safeReturnTo('/invite?token=private-test-only&lease=1'),'/invite');
  for(const path of ['/company/a/../platform/users','/company/%2e%2e/platform','/company/a%2fb','/company/%252f','/company/record%0a'])assert.equal(safeReturnTo(path),'/dashboard');

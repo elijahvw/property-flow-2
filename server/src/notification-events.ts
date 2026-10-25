@@ -68,14 +68,15 @@ export const publishNotification: NotificationPublisher = async (tx, input) => {
     if (["maintenance.status", "maintenance.update"].includes(kind)) {
       audience = "requester";
       recipientId = row.requesterId;
-      // Management-created work has no resident requester delivery contract.
+      // Retained resident creation audits predate the intake source field.
+      // Explicit management intake has no resident requester delivery contract.
       const creation = await tx.auditEvent.findFirst({
         where: { companyId, targetId: row.id, action: "maintenance.created" },
         select: { detail: true },
       });
       if (
         !creation ||
-        (creation.detail as { source?: string } | null)?.source !== "resident"
+        (creation.detail as { source?: string } | null)?.source === "management"
       )
         return;
     } else if (

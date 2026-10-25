@@ -1,0 +1,15 @@
+.property-filter-panel { background: #f8fbfa; border-color: #cdded8; }
+.property-filter-panel .section-heading h2 { margin-bottom: .3rem; }
+.property-filter-panel .section-heading p { margin-bottom: 0; }
+.property-filter-panel .directory-toolbar { grid-template-columns: minmax(14rem, 2fr) minmax(12rem, 1fr); margin-bottom: 0; }
+.property-filter-panel .directory-toolbar label { margin-bottom: 0; }
+.property-results-panel { margin-top: 1.5rem; }
+.property-results-panel .section-heading { align-items: baseline; }
+.resident-service-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 0 0 1.5rem; }
+.resident-service-grid > div { background: #fff; border: 1px solid #d8e3df; border-radius: 12px; padding: 1.25rem; }
+.resident-service-grid a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 650; font-size: 1.05rem; }
+.resident-service-grid p { margin: .4rem 0 0; max-width: 52ch; }
+@media (max-width: 640px) {
+  .property-filter-panel .directory-toolbar, .resident-service-grid { grid-template-columns: 1fr; }
+  .property-filter-panel .section-heading { align-items: flex-start; }
+}

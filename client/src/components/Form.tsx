@@ -16,6 +16,8 @@ export function Form({
   secondaryActions,
   reviewOnly = false,
   recovering = false,
+  taskValues = false,
+  locked = false,
 }: {
   children: React.ReactNode;
   submit: (data: FormData) => Promise<void>;
@@ -26,6 +28,8 @@ export function Form({
   secondaryActions?: React.ReactNode;
   reviewOnly?: boolean;
   recovering?: boolean;
+  taskValues?: boolean;
+  locked?: boolean;
 }) {
   const notify = useFeedback();
   const editor = useEditorBusy(),
@@ -54,9 +58,17 @@ export function Form({
   return (
     <form
       className="workflow-form"
+      data-task-values={taskValues || undefined}
+      onInvalidCapture={event => {
+        let section = event.target instanceof HTMLElement ? event.target.closest("details") : null;
+        while (section) {
+          section.open = true;
+          section = section.parentElement?.closest("details") || null;
+        }
+      }}
       onSubmit={async (event) => {
         event.preventDefault();
-        if (busy || editor.busy) return;
+        if (busy || editor.busy || locked) return;
         const form = event.currentTarget;
         const data = retryData.current || new FormData(form);
         setBusy(true);
@@ -117,7 +129,7 @@ export function Form({
         <p>{error}</p>
         {uncertain && <p>This request may already be saved. Retry with the original details before starting another record.</p>}
       </div>}
-      <fieldset disabled={busy || editor.busy}>
+      <fieldset disabled={busy || editor.busy || locked}>
         <fieldset className="workflow-fields" disabled={uncertain && !!retryData.current}>{children}</fieldset>
         <div className="actions form-actions">
           <fieldset disabled={uncertain}>{secondaryActions}</fieldset>

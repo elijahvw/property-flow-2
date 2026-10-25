@@ -8,6 +8,8 @@ import { registerUnitImports } from "./unit-imports.js";
 import { registerProspects } from "./prospects.js";
 import { registerLeaseDocumentShares } from "./lease-document-shares.js";
 import { registerExpenseImports } from "./expense-imports.js";
+import { registerTaskDrafts } from "./task-drafts.js";
+import { registerRentalApplications } from "./rental-applications.js";
 import { companyFeatures, requireFeatures, routeFeatures, type CompanyFeatures } from "./company-features.js";
 import type { NotificationPublisher } from "./notification-events.js";
 import { registerWorkspaceGuide } from "./workspace-guide.js";
@@ -71,7 +73,7 @@ import type { DocumentScanner } from "./document-scanner.js";
 import { registerMaintenanceCosts } from "./maintenance-costs.js";
 import { digest } from "./sessions.js";
 import { propertySelect, propertyData, propertyKeys } from "./property-fields.js";
-import { scoped, sameSubmission, submission } from "./operational.js";
+import { scoped, sameSubmission, submission, revalidateImpersonation } from "./operational.js";
 import { registerOverview } from "./overview.js";
 import { registerReports } from "./reports.js";
 import { registerPropertyDetail } from "./property-detail.js";
@@ -193,6 +195,7 @@ export async function serializable<T>(db: PrismaClient, run: (tx: Tx) => Promise
   }
 }
 async function activeCompany(tx: Tx, id: string) {
+  await tx.$queryRaw`SELECT id FROM "Company" WHERE id=${id} FOR SHARE`;
   const company = await tx.company.findUnique({ where: { id } });
   if (!company) throw new AccessError(404, "NOT_FOUND", "Company not found.");
   if (company.status !== "active")
@@ -274,6 +277,8 @@ export function registerApplication(
   registerProspects(server, db, authenticate, origin);
   registerLeaseDocumentShares(server, db, authenticate, origin);
   registerExpenseImports(server, db, authenticate, origin);
+  registerTaskDrafts(server, db, authenticate, origin);
+  registerRentalApplications(server, db, authenticate, origin, identityProvider);
   registerNotifications(server, db, authenticate, origin);
   registerWorkspaceGuide(server, db, authenticate, origin);
   registerInvitations(server, db, authenticate, origin, identityProvider, options.invitationMailer);
@@ -317,6 +322,13 @@ export function registerApplication(
   const serial = <T>(request: FastifyRequest, run: (tx: Tx) => Promise<T>, membershipMayBeEstablished = false) =>
     serializable(db,
       async (tx) => {
+        // Legacy administration and assignment routes share the actor/company
+        // fence used by scoped operations before rereading current authority.
+        if (request.method === "GET")
+          await tx.$queryRaw`SELECT id FROM "User" WHERE id=${request.principal!.id} FOR SHARE`;
+        else await lockTarget(tx, request.principal!.id);
+        if (request.principal!.membership?.companyId)
+          await tx.$queryRaw`SELECT id FROM "Company" WHERE id=${request.principal!.membership.companyId} FOR SHARE`;
         const current = await tx.user.findUnique({
           where: { id: request.principal!.id },
           include: { membership: { include: { company: true } } },
@@ -337,6 +349,7 @@ export function registerApplication(
             "Your access changed. Refresh to continue.",
           );
         const required = routeFeatures(request.routeOptions.url ?? request.url);
+        await revalidateImpersonation(tx, request, current, current.membership?.companyId ?? "");
         if (current.membership && required.length) {
           const companyId = current.membership.companyId;
           await tx.$queryRaw`SELECT id FROM "Company" WHERE id=${companyId} FOR SHARE`;
@@ -387,7 +400,7 @@ export function registerApplication(
 
   server.get("/api/platform/users", auth, async (request) => {
     platform(request);
-    return db.user.findMany({
+    return serial(request, tx => tx.user.findMany({
       orderBy: { email: "asc" },
       select: {
         id: true,
@@ -401,7 +414,7 @@ export function registerApplication(
         companyId: true,
         role: true,
       },
-    });
+    }));
   });
   server.put<{ Params: { userId: string } }>(
     "/api/platform/users/:userId/membership",
@@ -557,14 +570,13 @@ export function registerApplication(
 
   registerCompanyProfile(server,db,authenticate,origin);
   server.get("/api/company/members", auth, async (request) => {
-    const companyId = scope(request, "members.manage");
-    return db.companyMembership.findMany({
+    return scoped(db, request, "members.manage", (tx, companyId) => tx.companyMembership.findMany({
       where: { companyId },
       select: {
         ...membershipAccessSelect, user: { select: { id: true, name: true, email: true, status: true } },
       },
       orderBy: { createdAt: "asc" },
-    });
+    }));
   });
   server.patch<{ Params: { userId: string } }>(
     "/api/company/members/:userId",
@@ -588,7 +600,7 @@ export function registerApplication(
         });
         if (!member || member.companyId !== companyId)
           throw new AccessError(404, "NOT_FOUND", "Member not found.");
-        if (Object.hasOwn(body, "expectedVersion") && body.expectedVersion !== member.version)
+        if (!Object.hasOwn(body, "expectedVersion") || body.expectedVersion !== member.version)
           throw new AccessError(409, "STALE_MEMBERSHIP", "This person's access changed. Close and reopen their record before saving.");
         if (member.role === "owner")
           throw new AccessError(

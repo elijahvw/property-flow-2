@@ -1256,6 +1256,11 @@ test(
       const path = "/api/company/members/profile-resident";
       const before = await db.auditEvent.count({where:{targetId:"profile-resident",action:"membership.updated"}});
       const body = {role:"resident",status:"disabled",expectedVersion:member.version};
+      for (const expectedVersion of [undefined, null, member.version + 1]) {
+        assert.equal((await call("profile-foreign","PATCH",path,{...body,expectedVersion})).statusCode,409,'Missing or stale versions cannot bypass an access review');
+      }
+      assert.equal((await db.companyMembership.findUnique({where:{userId:"profile-resident"}})).status,"active");
+      assert.equal(await db.auditEvent.count({where:{targetId:"profile-resident",action:"membership.updated"}}),before);
       assert.equal((await call("profile-owner","PATCH",path,body)).statusCode,404);
       assert.equal((await call("profile-foreign","PATCH",path,body,{"x-csrf-token":"wrong"})).statusCode,403);
       assert.equal((await call("profile-foreign","PATCH",path,body)).statusCode,200);

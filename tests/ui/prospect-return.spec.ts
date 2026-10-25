@@ -26,6 +26,8 @@ async function fixture(page: Page, options: { allowed?: boolean; leasing?: strin
     if (path === "/api/telemetry") return json({ accepted: true });
     if (path === "/api/company/properties") return json([{ id: "actual-property", name: "Actual source property" }]);
     if (path === "/api/company/prospects") return json({ items: [], total: 0, counts: {}, today: "2026-10-24", timezone: "UTC", nextCursor: null });
+    if (path === `/api/company/prospects/${marker.prospectId}/acquisition`) return json({ companyId: "fictional-company", prospect: { ...prospect, status: "closed" }, followUps: [], applications: [], history: [], followUpTotal: 0, applicationTotal: 0, historyTotal: 0 });
+    if (path.endsWith("/follow-ups") || path.endsWith("/acquisition-history")) return json({ items: [], total: 0, page: 1, pageSize: 25 });
     if (path === `/api/company/prospects/${marker.prospectId}`) return json({ prospect, history: { items: [{ id: "fictional-action", version: 1, action: "conversion.reopened", reason: "Fictional prior source review", snapshot: { previousContactId: "previous-contact", previousLeaseId: "previous-lease", stage: "review" }, createdAt: "2026-10-24T11:00:00Z" }], nextCursor: null } });
     if (path === "/api/company/resident-profiles/directory") return json(tenantDirectoryFixture([{...contact,contactId:contact.id,recordStatus:"active",portalState:"offline",rentals:[]}],request.url(),{companyId:"fictional-company"}));
     if (path === "/api/company/resident-profiles") return json([{ contactId: contact.id, userId: contact.userId, name: contact.name, email: contact.email, recordStatus: "active", portalState: "offline", rentals: [] }]);

@@ -70,6 +70,8 @@ export function routeFeatures(path: string): FeatureKey[] {
   if (/^\/imports\/units(?:\/|$)/.test(companyRoot)) return result("properties");
   if (/^\/imports\/expenses(?:\/|$)/.test(companyRoot)) return result("finances", "leasing", "properties");
   if (/^\/prospects(?:\/|$)/.test(companyRoot)) return result("leasing", "properties");
+  if (/^\/applications(?:\/|$)/.test(companyRoot) || /^\/units\/[^/]+\/rental-listing(?:\/|$)/.test(companyRoot)) return result("leasing", "properties");
+  if (/^\/task-drafts(?:\/|$)/.test(companyRoot)) return result("leasing");
   if (resident && /^\/documents(?:\/|$)/.test(companyRoot)) return result("documents", "leasing");
   if (/^\/leases\/[^/]+\/documents\/[^/]+\/shares(?:\/|$)/.test(companyRoot)) return result("documents", "leasing", "resident_portal");
   if (/\/documents(?:\/|$)/.test(companyRoot)) return result("documents", ...(companyRoot.startsWith("/leases/") ? ["leasing" as const] : companyRoot.startsWith("/maintenance/") ? ["maintenance" as const] : []));

@@ -278,9 +278,11 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  assert.equal((await call('manager','PUT','/api/company/properties/home/residents/resident')).statusCode,200);
  assert.equal((await call('resident','GET','/api/resident/maintenance')).json().length,1);
  for(const change of [{role:'resident',status:'disabled'},{role:'staff',status:'active'}]) {
-   assert.equal((await call('owner','PATCH','/api/company/members/resident',change)).statusCode,200);
+   const openingVersion=(await admin.query('SELECT version FROM "CompanyMembership" WHERE "userId"=$1',['resident'])).rows[0].version;
+   assert.equal((await call('owner','PATCH','/api/company/members/resident',{...change,expectedVersion:openingVersion})).statusCode,200);
    assert.equal((await call('resident','GET','/api/resident/maintenance')).statusCode,403);
-   assert.equal((await call('owner','PATCH','/api/company/members/resident',{role:'resident',status:'active'})).statusCode,200);
+   const restoringVersion=(await admin.query('SELECT version FROM "CompanyMembership" WHERE "userId"=$1',['resident'])).rows[0].version;
+   assert.equal((await call('owner','PATCH','/api/company/members/resident',{role:'resident',status:'active',expectedVersion:restoringVersion})).statusCode,200);
    assert.deepEqual((await call('resident','GET','/api/resident/maintenance')).json(),[]);
    assert.equal((await call('manager','PUT','/api/company/properties/home/residents/resident')).statusCode,200);
  }

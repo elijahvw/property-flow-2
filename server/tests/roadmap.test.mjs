@@ -10,6 +10,7 @@ import { registerApplication } from '../dist/application.js';
 import { registerSessions, digest } from '../dist/sessions.js';
 import { historicalCashCases } from './historical-cash-cases.mjs';
 import { expenseImportCases } from './expense-import-cases.mjs';
+import { documentAcknowledgmentCases } from './document-acknowledgment-cases.mjs';
 
 const url = process.env.TEST_ROADMAP_DATABASE_URL;
 test('roadmap workflows preserve recorded history, property scope and retry integrity', { skip: !url }, async t => {
@@ -685,5 +686,6 @@ test('roadmap workflows preserve recorded history, property scope and retry inte
     assert.equal(archiveAudit[0].detail.revokedCount, 2);
     assert.equal((await admin.query('SELECT count(*)::int n FROM "LeaseDocumentShareAction" WHERE action=\'source_archived\'')).rows[0].n, 2);
   });
+  await documentAcknowledgmentCases(t, { admin, db, call, sharingBase, residentDocuments, sharePayload, policy, today, shift });
   await expenseImportCases(t, admin, call, app, db, pool);
 });

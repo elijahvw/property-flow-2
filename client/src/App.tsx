@@ -1,20 +1,22 @@
 import { NotificationBell, NotificationReturnLink } from "./components/NotificationNavigation";
+import { EditorNavigationProvider } from "./components/PageLeaveGuard";
 import { ContextHelp } from "./components/ContextHelp";
 import { WorkspaceGuide } from "./components/WorkspaceGuide";
 import { recordBrowserEvent } from "./browser-telemetry";
 import React, { Component, lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
-  BrowserRouter,
+  createBrowserRouter,
+  RouterProvider,
   Routes,
   Route,
   Link,
-  NavLink,
   Navigate,
   useLocation,
+  useNavigationType,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
-import { routes, visibleRoutes } from "./navigation";
+import { routes, visibleRoutes, pageContext, navigationActive } from "./navigation";
 import { PropertySearch } from "./components/PropertySearch";
 import { FeedbackProvider } from "./components/Feedback";
 import { NavigationIcon } from "./components/NavigationIcon";
@@ -25,6 +27,8 @@ import { availableFeatureRoute, CompanyFeatureBoundary } from "./company-feature
 import "./App.css";
 
 const Notifications = lazy(() => import("./pages/Notifications").then(module=>({default:module.Notifications})));
+const SavedDrafts = lazy(() => import("./pages/SavedDrafts").then(module=>({default:module.SavedDrafts})));
+const RentalApplications = lazy(() => import("./pages/RentalApplications").then(module=>({default:module.RentalApplications})));
 const PlatformPlans = lazy(() => import("./pages/PlatformPlans").then(module=>({default:module.PlatformPlans})));
 const CompanySubscription = lazy(() => import("./components/CompanySubscription").then(module=>({default:module.CompanySubscriptionPage})));
 const Impersonation = lazy(() => import("./pages/Impersonation").then(module=>({default:module.Impersonation})));
@@ -103,24 +107,61 @@ function Shell({ children }: { children: React.ReactNode }) {
   const platformWorkspace=location.pathname.startsWith("/platform")||!data?.membership;
   const [menuOpen, setMenuOpen] = useState(false);
   const main = useRef<HTMLElement>(null);
-  const route =
-    ((location.pathname.startsWith("/company/vendors")||location.pathname.startsWith("/company/preventive")||location.pathname==="/company/work-calendar") ? {...routes.find(r=>r.path==="/company/maintenance")!,title:location.pathname==="/company/work-calendar"?"Work calendar":location.pathname.startsWith("/company/preventive")?"Preventive maintenance":"Vendors"} : undefined) ||
-    (location.pathname.startsWith("/help/") ? routes.find(r=>r.path==="/help") : undefined) ||
-    routes.find((r) => r.path === location.pathname) ||
-    (location.pathname.startsWith("/company/properties/")
-      ? routes.find((r) => r.path === "/company/properties")
-      : (location.pathname.startsWith("/company/residents/")||location.pathname.startsWith("/company/tenants/"))
-        ? routes.find((r) => r.path === "/company/residents")
-        : location.pathname.startsWith("/company/leases/")
-          ? routes.find((r) => r.path === "/company/leases")
-          : location.pathname.startsWith("/company/maintenance/") ? routes.find(r=>r.path==="/company/maintenance")
-          : location.pathname.startsWith("/company/work-orders/") ? routes.find(r=>r.path==="/company/work-orders")
-          : location.pathname.startsWith("/resident/maintenance/") ? routes.find(r=>r.path==="/resident/maintenance")
-      : undefined);
+  const route = pageContext(location.pathname, location.search);
+  const navigationType = useNavigationType();
   useEffect(() => {
-    document.title = `${route?.title || "Property Flow"} · Property Flow`;
-    main.current?.focus();
-  }, [location.pathname, route?.title]);
+    document.title = `${route.title} · Property Flow`;
+  }, [route.title]);
+  useEffect(() => {
+    setMenuOpen(false);
+    if (navigationType !== "POP") window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    // Dialogs restore their opener as they close. Wait for that handoff and
+    // lazy content, then move keyboard focus to the destination heading.
+    // A later user interaction cancels this work so slow loads cannot steal it.
+    const content = main.current;
+    if (!content) return;
+    let frame = 0, stopped = false, focusedMain = false;
+    const stop = () => {
+      stopped = true;
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      document.removeEventListener("pointerdown", stop, true);
+      document.removeEventListener("keydown", stop, true);
+      document.removeEventListener("input", stop, true);
+      document.removeEventListener("change", stop, true);
+    };
+    const focusHeading = () => {
+      frame = 0;
+      if (stopped || document.querySelector("dialog[open]")) return;
+      if (!focusedMain) {
+        content.focus({ preventScroll: true });
+        focusedMain = true;
+      }
+      const heading = Array.from(content.querySelectorAll<HTMLElement>("h1"))
+        .find(node => node.getClientRects().length > 0);
+      if (!heading) return;
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+      if (document.activeElement === heading) stop();
+    };
+    const schedule = () => {
+      if (stopped || frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = requestAnimationFrame(focusHeading);
+      });
+    };
+    const observer = new MutationObserver(schedule);
+    observer.observe(document.body, {
+      childList: true, subtree: true, attributes: true,
+      attributeFilter: ["open", "style", "hidden"],
+    });
+    document.addEventListener("pointerdown", stop, true);
+    document.addEventListener("keydown", stop, true);
+    document.addEventListener("input", stop, true);
+    document.addEventListener("change", stop, true);
+    schedule();
+    return stop;
+  }, [location.pathname]);
   return (
     <div className="workspace">
       <a className="skip-link" href="#main">
@@ -151,7 +192,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           {[
             "Workspace",
             "Operations",
-            "Money",
+            "Finance",
             "Administration",
             "Account",
           ].map((group) => {
@@ -163,8 +204,8 @@ function Shell({ children }: { children: React.ReactNode }) {
                   : r.section === "Account"
                     ? "Account"
                     : /finances|reports|rent|deposits|imports\/expenses/.test(r.path)
-                      ? "Money"
-                      : /leases|maintenance|work-orders|documents/.test(r.path)
+                      ? "Finance"
+                      : /leases|maintenance|work-orders|documents|availability|prospects|applications|drafts/.test(r.path)
                         ? "Operations"
                         : "Workspace";
               return section === group;
@@ -173,16 +214,16 @@ function Shell({ children }: { children: React.ReactNode }) {
               <div className="nav-group" key={group}>
                 <p>{group}</p>
                 {links.map((r) => (
-                  <NavLink
+                  <Link
                     key={r.path}
                     to={r.path}
-                    end={r.path === "/account"}
-                    className={({isActive})=>isActive||(r.path==="/company/maintenance"&&(location.pathname.startsWith("/company/vendors")||location.pathname.startsWith("/company/preventive")||location.pathname==="/company/work-calendar"))||(r.path==="/company/residents"&&location.pathname.startsWith("/company/tenants/"))?"active":undefined}
+                    className={navigationActive(r.path, location.pathname) ? "active" : undefined}
+                    aria-current={navigationActive(r.path, location.pathname) ? "page" : undefined}
                     onClick={() => setMenuOpen(false)}
                   >
                     <NavigationIcon path={r.path} />
                     {r.title}
-                  </NavLink>
+                  </Link>
                 ))}
               </div>
             ) : null;
@@ -208,15 +249,16 @@ function Shell({ children }: { children: React.ReactNode }) {
       </aside>
       <div className="workspace-main">
         <header className="topbar">
-          <div className="topbar-location">
+          <nav className="topbar-location" aria-label="Breadcrumb">
             {data?.permissions.includes("property.read") ? (
               <Link to="/company/overview">Workspace</Link>
             ) : (
               <span>Property Flow</span>
             )}
             <span aria-hidden="true">/</span>
-            <span>{route?.title || route?.section || "Workspace"}</span>
-          </div>
+            {route.parent && <><Link to={route.parent.path}>{route.parent.title}</Link><span aria-hidden="true">/</span></>}
+            <span aria-current="page">{route.title}</span>
+          </nav>
           {data?.permissions.includes("property.read") && availableFeatureRoute("/company/properties", data.companyFeatures) && <PropertySearch />}
           {data?.permissions.includes("notification.read") && availableFeatureRoute("/account/notifications", data.companyFeatures, data.membership?.role) && <NotificationBell/>}
           <ContextHelp/>
@@ -316,6 +358,8 @@ function Pages() {
     "/company/availability": <Availability />,
     "/company/imports/units": <UnitImports />,
     "/company/prospects": <Prospects />,
+    "/company/applications": <RentalApplications />,
+    "/company/drafts": <SavedDrafts />,
     "/resident/documents": <SharedDocuments />,
     "/company/imports/expenses": <ExpenseImports />,
     "/account/notifications": <Notifications/>,
@@ -325,6 +369,9 @@ function Pages() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
+      {["new", ":applicationId", ":applicationId/edit", ":applicationId/convert"].map(path => (
+        <Route key={path} path={`/company/applications/${path}`} element={<Shell><ProtectedRoute permission="lease.manage"><RentalApplications /></ProtectedRoute></Shell>} />
+      ))}
       <Route path="/company/work-calendar" element={<Shell><ProtectedRoute permission="maintenance.manage"><WorkCalendar/></ProtectedRoute></Shell>}/>
       <Route path="/company/preventive" element={<Shell><ProtectedRoute permission="maintenance.manage"><Preventive/></ProtectedRoute></Shell>}/>
       <Route path="/company/preventive/:planId" element={<Shell><ProtectedRoute permission="maintenance.manage"><Preventive/></ProtectedRoute></Shell>}/>
@@ -498,10 +545,10 @@ function Pages() {
     </Routes>
   );
 }
-export default function App() {
+function WorkspaceRoot() {
   return (
     <ErrorBoundary>
-      <BrowserRouter>
+      <EditorNavigationProvider>
         <AuthProvider>
           <FeedbackProvider>
             <ImpersonationBanner/>
@@ -509,7 +556,11 @@ export default function App() {
             <WorkspaceGuide/>
           </FeedbackProvider>
         </AuthProvider>
-      </BrowserRouter>
+      </EditorNavigationProvider>
     </ErrorBoundary>
   );
+}
+const workspaceRouter = createBrowserRouter([{ path: "*", element: <WorkspaceRoot /> }]);
+export default function App() {
+  return <RouterProvider router={workspaceRouter} useTransitions={false} />;
 }

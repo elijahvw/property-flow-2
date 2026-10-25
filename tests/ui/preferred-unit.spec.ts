@@ -63,7 +63,7 @@ async function fixture(page: Page) {
   });
   return { state, release() { state.holdMetadata = false; for (const release of state.releases.splice(0)) release(); }, releaseUnits() { state.holdUnitPages = false; for (const release of state.unitReleases.splice(0)) release(); } };
 }
-const dialog = (page: Page) => page.getByRole("dialog", { name: "Record a lease", exact: true });
+const dialog = (page: Page) => page.getByRole("region", { name: "Record a lease", exact: true });
 const activeDraft = (page: Page) => dialog(page).locator(".lease-property-draft:not([hidden])");
 const picker = (page: Page) => activeDraft(page).getByRole("combobox", { name: "Unit for new lease", exact: true });
 async function terms(page: Page, rent = "1234.56") {

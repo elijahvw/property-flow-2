@@ -56,10 +56,12 @@ export async function workOrderCases(t,admin,db,call,app){
   const accepted=act('accept');assert.equal((await call('staff','POST',detail()+'/actions',accepted)).statusCode,200);version++;
   assert.equal((await grant('staff',false)).statusCode,200);assert.equal((await call('staff','POST',detail()+'/actions',accepted)).statusCode,403);assert.equal((await call('staff','GET',detail())).statusCode,403);
   assert.equal((await grant('staff')).statusCode,200);await admin.query(`DELETE FROM "StaffPropertyAccess" WHERE "userId"='staff'`);assert.equal((await call('staff','GET',detail())).statusCode,404);assert.deepEqual((await call('staff','GET','/api/company/work-orders')).json().items,[]);
-  assert.equal((await call('owner','PATCH','/api/company/members/staff',{role:'staff',status:'disabled'})).statusCode,200);assert.equal((await admin.query(`SELECT "maintenanceExecution" FROM "CompanyMembership" WHERE "userId"='staff'`)).rows[0].maintenanceExecution,false);
+  const memberVersion=(await admin.query('SELECT version FROM "CompanyMembership" WHERE "userId"=$1',['staff'])).rows[0].version;
+  assert.equal((await call('owner','PATCH','/api/company/members/staff',{role:'staff',status:'disabled',expectedVersion:memberVersion})).statusCode,200);assert.equal((await admin.query(`SELECT "maintenanceExecution" FROM "CompanyMembership" WHERE "userId"='staff'`)).rows[0].maintenanceExecution,false);
  });
  await t.test('real browser completes assigned work and privately uploads/scans/downloads a job original',{skip:!process.env.TEST_MAINTENANCE_BROWSER_URL},async()=>{
-  assert.equal((await call('owner','PATCH','/api/company/members/staff',{role:'staff',status:'active'})).statusCode,200);
+  const memberVersion=(await admin.query('SELECT version FROM "CompanyMembership" WHERE "userId"=$1',['staff'])).rows[0].version;
+  assert.equal((await call('owner','PATCH','/api/company/members/staff',{role:'staff',status:'active',expectedVersion:memberVersion})).statusCode,200);
   const propertyVersion=(await admin.query(`SELECT version FROM "CompanyMembership" WHERE "userId"='staff'`)).rows[0].version;
   assert.equal((await call('owner','PUT','/api/company/members/staff/property-access',{scope:'all',propertyIds:[],expectedVersion:propertyVersion})).statusCode,200);assert.equal((await grant('staff')).statusCode,200);
   const work=(await call('manager','POST','/api/company/maintenance',{propertyId:'home',title:'Browser fixture repair',description:'Fictional isolated browser repair.',priority:'normal',submissionKey:randomUUID()})).json();

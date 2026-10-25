@@ -103,6 +103,15 @@ export function registerProspects(server: FastifyInstance, db: PrismaClient, aut
     });
   });
 
+  server.get<{ Params: { submissionKey: string } }>("/api/company/prospects/recovery/:submissionKey", auth, request => {
+    const key = submission(request.params.submissionKey, {}).submissionKey;
+    return scoped(db, request, "lease.manage", async (tx, companyId) => {
+      const action = await tx.prospectAction.findFirst({ where: { companyId, actorId: request.principal!.id, submissionKey: key }, select: { prospectId: true } });
+      const row = action ? await prospect(tx, companyId, action.prospectId) : null;
+      return { companyId, receiptRecorded: !!row, prospect: row, request: { id: key, title: row?.name || "Original inquiry request", version: row?.version ?? null, status: row?.stage || "Receipt not visible", notes: row?.notes || (row ? "None" : "No matching receipt is currently visible. Stopping this browser's retry does not cancel an in-flight request.") } };
+    });
+  });
+
   server.get<{ Params: { prospectId: string } }>("/api/company/prospects/:prospectId", auth, request => {
     const id = assignmentId(request.params.prospectId);
     return scoped(db, request, "lease.manage", async (tx, companyId) => ({ prospect: await prospect(tx, companyId, id), history: await history(tx, companyId, id) }));
@@ -120,6 +129,7 @@ export function registerProspects(server: FastifyInstance, db: PrismaClient, aut
       const row = await prospect(tx, companyId, id, true), replay = await receipt(tx, companyId, key, id); if (replay) return replay;
       if (row.stage === "converted") throw converted();
       if (row.version !== expectedVersion) throw conflict();
+      if (await tx.rentalApplication.count({ where: { companyId, prospectId: id, leaseId: null, status: { in: ["submitted", "in_review", "approved"] } } })) throw new AccessError(409, "APPLICATION_REVIEW_ACTIVE", "Withdraw the submitted or reviewed application before changing the prospect's contact details. Its reviewed history remains retained.");
       await target(tx, companyId, row.propertyId, data.unitId);
       const updated = await tx.prospect.update({ where: { id, companyId }, data: { ...data, version: { increment: 1 } }, select: prospectSelect });
       await record(tx, request, companyId, updated, "updated", reason, key);

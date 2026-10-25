@@ -182,6 +182,7 @@ export async function tenantFormRecoveryCases(t, { admin, db, call, app, provide
     const cashBefore = (await admin.query('SELECT count(*)::int n FROM "LedgerEntry" WHERE "companyId"=$1', [company])).rows[0].n;
     await page.goto(origin + '/company/residents'); await page.getByRole('button', { name: 'Add tenant', exact: true }).click();
     await page.getByText('Mailing address · optional', { exact: true }).click();
+    await page.getByText('Emergency contact · optional', { exact: true }).click();
     for (const [label, value] of [
       ['Full name *', name], ['Contact email', email], ['Preferred name', 'Kept nickname'], ['Primary phone', '555-0139'], ['Alternate phone', '555-0141'],
       ['Address line 1', '17 Fixture Way'], ['Address line 2', 'Unit Fiction'], ['City', 'Fiction City'], ['State / region', 'NY'], ['Postal code', '10001'], ['Country', 'US'],

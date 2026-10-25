@@ -7,9 +7,12 @@ export default defineConfig({
     sourcemap: false,
   },
   server: {
-    host: '0.0.0.0',
+    // Bind locally unless a developer deliberately exposes the preview.
+    // Vite's default allowed-host checks remain enabled. For a remote preview,
+    // allow its exact hostname with __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS.
+    host: process.env.PROPERTY_FLOW_DEV_HOST || '127.0.0.1',
     port: 5010,
-    allowedHosts: true,
+    forwardConsole: false,
     proxy: {
       '/api': {
         target: 'http://localhost:5011',

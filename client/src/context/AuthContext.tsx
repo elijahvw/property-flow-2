@@ -6,6 +6,7 @@ import React, {
   useRef,
   useCallback,
 } from "react";
+import { flushSync } from "react-dom";
 import { api, ApiError, setCsrfToken, setImpersonationContext } from "../api";
 import { monitorOperation } from "../operations";
 import type { Capability } from "../navigation";
@@ -57,7 +58,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [error, setError] = useState<string | null>(null);
   const version = useRef(0);
   const restoredIdentity = useRef<string | null>(null);
+  const contextInvalidated = useRef(false);
+  const invalidatePrivateContext = useCallback(() => {
+    contextInvalidated.current = true;
+    ++version.current;
+    setCsrfToken("");
+    setImpersonationContext("");
+    // A native unload warning can cancel navigation. Remove the former
+    // workspace first, including its private editors; recovery journals stay.
+    flushSync(() => {
+      setData(null);
+      setLoading(false);
+      setError("Your account or support session changed. Reload the workspace to continue.");
+    });
+  }, []);
   const refreshUser = useCallback(async () => {
+    if (contextInvalidated.current) { window.location.reload(); return; }
     const current = ++version.current;
     try {
       const result = await monitorOperation("auth.session.restore", () =>
@@ -66,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (current !== version.current) return;
       const identity = `${result.user.id}:${result.impersonation?.contextId || ""}`;
       if (restoredIdentity.current !== null && restoredIdentity.current !== identity) {
+        invalidatePrivateContext();
         window.location.assign("/dashboard");
         return;
       }
@@ -87,7 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       if (current === version.current) setLoading(false);
     }
-  }, []);
+  }, [invalidatePrivateContext]);
   useEffect(() => {
     void refreshUser();
     const expired = () => {
@@ -96,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setImpersonationContext("");
     };
     const focus = () => {
-      void refreshUser();
+      if (!contextInvalidated.current) void refreshUser();
     };
     window.addEventListener("session-expired", expired);
     window.addEventListener("focus", focus);
@@ -104,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const changed = () => {
       if (reloading) return;
       reloading = true;
+      invalidatePrivateContext();
       window.location.reload();
     };
     const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("property-flow-support-session");
@@ -118,7 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener("impersonation-context-changed", changed);
       channel?.close();
     };
-  }, [refreshUser]);
+  }, [refreshUser, invalidatePrivateContext]);
   const signIn = () => {
     if (data?.impersonation) {
       setError("End impersonation before starting another sign-in.");

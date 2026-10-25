@@ -1,7 +1,10 @@
 import { formatDate } from "../dates";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api, ApiError } from "../api";
 import { Form } from "./Form";
+import { useEditorBusy } from "./EditorDialog";
+import { useAuth } from "../context/AuthContext";
+import { useTenantAttemptContext } from "../tenant-write-access";
 export type LeaseReviewData = {
   payload: Record<string, unknown>;
   property: string;
@@ -23,13 +26,24 @@ export function LeaseReview({
   storageKey,
   back,
   saved,
+  prepare,
+  finished,
+  completedElement,
+  failed,
 }: {
   review: LeaseReviewData;
   storageKey: string;
   back: () => void;
   saved: (row: { id: string }) => void;
+  prepare?: (payload: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  finished?: () => Promise<void>;
+  completedElement?: { current: HTMLElement | null };
+  failed?: (error: unknown) => void;
 }) {
+  const editor = useEditorBusy(), auth = useAuth().data;
+  const context = useTenantAttemptContext(auth);
   const [pending, setPending] = useState(!!leasePending(storageKey));
+  const attempt = useRef<LeaseReviewData | null>(leasePending(storageKey));
   const p = review.payload;
   return (
     <Form
@@ -38,17 +52,25 @@ export function LeaseReview({
       operation="lease.create"
       successText="Lease recorded."
       submit={async () => {
+        if (!context.current()) throw new ApiError("Your company or account changed. Reload the workspace before continuing this lease.", 409, "LEASE_CONTEXT_CHANGED", pending);
         const wasRecovering = pending || !!leasePending(storageKey);
-        sessionStorage.setItem(storageKey, JSON.stringify(review));
+        const prepared = attempt.current || { ...review, payload: prepare ? await prepare(p) : p };
+        attempt.current = prepared;
+        sessionStorage.setItem(storageKey, JSON.stringify(prepared));
         setPending(true);
         try {
           const row = await api<{ id: string }>("/api/company/leases", {
             method: "POST",
-            body: p,
+            body: prepared.payload,
+            expectedCompanyId: context.companyId,
           });
+          if (!context.current()) throw new ApiError("Your company or account changed before the lease result was acknowledged. Keep the original request for recovery.", 409, "LEASE_CONTEXT_CHANGED", true);
           sessionStorage.removeItem(storageKey);
+          editor.completed(completedElement?.current || undefined);
+          void finished?.();
           saved(row);
         } catch (error) {
+          failed?.(error);
           if (
             !wasRecovering && error instanceof ApiError && !error.submissionUncertain &&
             !["IMPERSONATION_CONTEXT_CHANGED", "SUBMISSION_MISMATCH"].includes(error.code) &&
@@ -56,6 +78,7 @@ export function LeaseReview({
           ) {
             sessionStorage.removeItem(storageKey);
             setPending(false);
+            attempt.current = null;
           }
           if (error instanceof ApiError && ["IMPERSONATION_CONTEXT_CHANGED", "SUBMISSION_MISMATCH"].includes(error.code)) error.submissionUncertain = true;
           throw error;

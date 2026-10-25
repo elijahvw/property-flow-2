@@ -51,7 +51,7 @@ test("disabled finance keeps tenant lease history without financial balances or 
   await expect(page.getByRole("heading", { name: "Lease history", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Tenant balance overview" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Fictional apartment", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Open rent ledger|View statement|Open deposit details/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /View rent and payments|View statement|Open deposit details/ })).toHaveCount(0);
   await expect(page.getByText("$0.00", { exact: true })).toHaveCount(0);
 });
 
@@ -62,7 +62,7 @@ test("disabled nested lease areas show an explanation without mounting their que
   await expect(page.getByRole("status").filter({ hasText: "The requested lease area is unavailable" })).toBeVisible();
   for (const name of ["Documents", "Inspections", "Agreements", "Terms & changes", "Partial rent", "Invitations & approvals", "Move-out & settlement"])
     await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Rent & billing", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Rent & payments", exact: true })).toHaveCount(0);
   await expect(page.getByText("Manual billing", { exact: true })).toHaveCount(0);
   await expect(page.getByText("No deposit recorded", { exact: true })).toHaveCount(0);
   expect(requests.filter(path => /\/documents(?:\/|$)|\/inspections(?:\/|$)|\/agreements(?:\/|$)/.test(path))).toEqual([]);
