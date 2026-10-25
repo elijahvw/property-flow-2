@@ -2,6 +2,8 @@
 
 Read when changing a user workflow.
 
+Use [the platform experience contract](platform-experience.md) for the canonical adopted tokens, shell, forms and directory patterns. Keep the matching user Help and workflow contract current with behavior changes; `AGENTS.md` is the governing delivery contract.
+
 - Properties, units, tenants, leases and maintenance form connected workflows. Preserve context and offer clear next actions from actual record state.
 - Show setup prompts only for missing setup. Portal activation is distinct from account creation. Every new tenant and lease participant has an Auth0 account; recording their lease does not require first sign-in or grant portal authority.
 - Make directories useful for daily work: meaningful labels, property/unit context, search, clear status and direct detail links. Keep secondary and archival actions unobtrusive.

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { identityProvider } from "../dist/identity-provider.js";
+import { identityProvider, IdentityProviderError } from "../dist/identity-provider.js";
 import { randomUUID } from 'node:crypto';
 const env = {
   AUTH0_DOMAIN: "tenant.auth0.com",
@@ -159,11 +159,6 @@ test("case-insensitive duplicates cannot be hidden by a single exact email resul
  await assert.rejects(p.create(profile.email,'A'),e=>e.code==='IDENTITY_AMBIGUOUS');assert.equal(writes,0);
 });
 
-const fakeTiming = () => {
- let now = Date.now();
- return { now: () => now, sleep: async ms => { now += ms; }, advance: ms => { now += ms; } };
-};
-
 test('automatic demo creates verified role logins and recovers an ambiguous provider success by exact marker',async()=>{
  const demoId=randomUUID(),account={demoId,accountKey:'owner',email:`owner.${demoId}@sales-demo.invalid`,name:'Fictional demo owner',password:'isolated-test-password-aA1!'};
  let stored=null,writes=0;
@@ -175,7 +170,7 @@ test('automatic demo creates verified role logins and recovers an ambiguous prov
    stored={...profile,user_id:'auth0|generated-demo',email:account.email,name:account.name,app_metadata:b.app_metadata};throw Error('response lost');
   }
   throw Error('unexpected endpoint');
- },fakeTiming());
+ });
  const created=await p.salesDemo.ensure(account);assert.equal(created.user_id,'auth0|generated-demo');assert.equal(created.email_verified,true);assert.equal(created.password,undefined);assert.equal(created.app_metadata,undefined);
  assert.equal((await p.salesDemo.ensure(account)).user_id,created.user_id);assert.equal(writes,1);
 });
@@ -188,7 +183,7 @@ test('demo lifecycle cannot adopt, verify, reset or block an unrelated identity'
    if(url.endsWith('/oauth/token'))return Response.json({access_token:'token',expires_in:3600});
    if(url.includes('users-by-email'))return Response.json([{...profile,email:account.email,app_metadata:{property_flow_sales_demo:marker}}]);
    writes++;throw Error('unexpected write');
-  },fakeTiming());
+  });
   await assert.rejects(p.salesDemo.ensure(account),e=>e.code==='DEMO_IDENTITY_CONFLICT');
   await assert.rejects(p.salesDemo.block(account),e=>e.code==='DEMO_IDENTITY_CONFLICT');assert.equal(writes,0);
  }
@@ -201,90 +196,53 @@ test('demo teardown blocks only its marked subject and safely repeats or skips m
   if(url.includes('users-by-email'))return Response.json(missing?[]:[{...profile,email:account.email,blocked,app_metadata:{property_flow_sales_demo:{id:demoId,account:'staff'}}}]);
   if(options.method==='PATCH'){patches++;assert.deepEqual(JSON.parse(options.body),{blocked:true});blocked=true;return Response.json({...profile,email:account.email,blocked:true});}
   throw Error('unexpected endpoint');
- },fakeTiming());
+ });
  await assert.rejects(p.salesDemo.block(account,'auth0|wrong-subject'),e=>e.code==='DEMO_IDENTITY_CONFLICT');assert.equal(patches,0);
  await p.salesDemo.block(account,profile.user_id);await p.salesDemo.block(account,profile.user_id);assert.equal(patches,1);
  missing=true;await p.salesDemo.block(account,profile.user_id);assert.equal(patches,1);
 });
 
-const demoAccount = () => {
- const demoId=randomUUID();return {demoId,accountKey:'owner',email:`owner.${demoId}@sales-demo.invalid`,name:'Demo owner',password:'test-only-aA1!'};
-};
-const demoProfile = account => ({...profile,email:account.email,app_metadata:{property_flow_sales_demo:{id:account.demoId,account:account.accountKey}}});
-
-test('demo lookup honors Retry-After and the later tenant reset, then continues automatically',async()=>{
- const clock=fakeTiming(),account=demoAccount(),calls=[];let reads=0;
- const p=identityProvider(env,async(url,options)=>{
-  calls.push({url,at:clock.now(),method:options.method});
+test('provider429 identifies token, lookup and block stages, respects cooldown and never retries creation POSTs',async()=>{
+ for(const stage of ['token','lookup','update']){
+  const demoId=randomUUID(),account={demoId,accountKey:'staff',email:`staff.${demoId}@sales-demo.invalid`};let clock=Date.now(),calls=0;
+  const p=identityProvider(env,async(url,options)=>{
+   calls++;
+   if(url.endsWith('/oauth/token'))return stage==='token'?new Response('PRIVATE token diagnostic',{status:429,headers:{'retry-after':'30'}}):Response.json({access_token:'token',expires_in:3600});
+   if(url.includes('users-by-email'))return stage==='lookup'?new Response('PRIVATE lookup diagnostic',{status:429,headers:{'retry-after':'30'}}):Response.json([{...profile,email:account.email,app_metadata:{property_flow_sales_demo:{id:demoId,account:'staff'}}}]);
+   assert.equal(options.method,'PATCH');return new Response('PRIVATE update diagnostic',{status:429,headers:{'retry-after':'30'}});
+  },{now:()=>clock,wait:async ms=>{clock+=ms;}});
+  await assert.rejects(p.salesDemo.block(account,profile.user_id),error=>error instanceof IdentityProviderError&&error.operation===stage&&error.failure==='rate_limit'&&error.upstreamStatus===429&&error.rateSource==='upstream'&&error.retryAfterSeconds>=30&&!error.message.includes('PRIVATE'));
+  const before=calls;await assert.rejects(p.salesDemo.block(account,profile.user_id),error=>error.failure==='rate_limit'&&error.upstreamStatus===undefined&&error.rateSource==='cooldown');assert.equal(calls,before,'long cooldown must not send another provider request');
+ }
+ const demoId=randomUUID(),account={demoId,accountKey:'owner',email:`owner.${demoId}@sales-demo.invalid`,name:'Fictional',password:'test-only-aA1!'};let posts=0,lookups=0;
+ const create=identityProvider(env,async(url,options)=>{
   if(url.endsWith('/oauth/token'))return Response.json({access_token:'token',expires_in:3600});
-  assert.ok(url.includes('users-by-email'));
-  if(++reads===1)return new Response('private provider body',{status:429,headers:{'retry-after':'2','x-ratelimit-reset':String((clock.now()+5000)/1000)}});
-  return Response.json([demoProfile(account)]);
- },clock);
- assert.equal((await p.salesDemo.ensure(account)).user_id,profile.user_id);
- assert.equal(reads,2);assert.ok(calls[1].at-calls[0].at>=1000);assert.ok(calls[2].at-calls[1].at>=5000);
- assert.equal(calls.filter(c=>c.method==='POST').length,1,'only token acquisition writes');
+  if(url.includes('users-by-email')){lookups++;return Response.json([]);}
+  posts++;return new Response('PRIVATE create body',{status:429,headers:{'retry-after':'30'}});
+ });
+ await assert.rejects(create.salesDemo.ensure(account),error=>error.operation==='create'&&error.failure==='rate_limit');assert.equal(posts,1);assert.equal(lookups,1);
 });
 
-test('demo token and create rate limits retry without changing credentials or duplicating lookup work',async()=>{
- const clock=fakeTiming(),account=demoAccount(),bodies=[];let tokens=0,reads=0;
- const p=identityProvider(env,async(url,options)=>{
-  if(url.endsWith('/oauth/token'))return ++tokens===1?new Response(null,{status:429,headers:{'retry-after':'1'}}):Response.json({access_token:'token',expires_in:3600});
-  if(url.includes('users-by-email')){reads++;return Response.json([]);}
-  bodies.push(options.body);
-  return bodies.length===1?new Response(null,{status:429,headers:{'retry-after':'2'}}):Response.json(demoProfile(account));
- },clock);
- await p.salesDemo.ensure(account);
- assert.equal(tokens,2);assert.equal(reads,1);assert.equal(bodies.length,2);assert.equal(bodies[0],bodies[1]);assert.equal(JSON.parse(bodies[0]).password,account.password);
-});
-
-test('demo retry dates and malformed headers have bounded fallback, sanitized errors and a reusable lane',async()=>{
- for(const headers of [{'retry-after':'garbage','x-ratelimit-reset':'garbage'},{'retry-after':new Date(Date.now()+5000).toUTCString()}]){
-  const clock=fakeTiming(),account=demoAccount(),calls=[];let limited=true;
-  const p=identityProvider(env,async url=>{
-   if(url.endsWith('/oauth/token'))return Response.json({access_token:'token',expires_in:3600});
-   calls.push(clock.now());return limited?new Response('SECRET provider diagnostics',{status:429,headers}):Response.json([demoProfile(account)]);
-  },clock);
-  await assert.rejects(p.salesDemo.ensure(account),e=>e.statusCode===429&&e.code==='DEMO_IDENTITY_BUSY'&&e.message.includes('saved')&&!e.message.includes('SECRET'));
-  assert.equal(calls.length,4);assert.ok(calls.every((at,i)=>!i||at-calls[i-1]>=1000));
-  if(headers['retry-after']!=='garbage')assert.ok(calls[1]-calls[0]>=3000);
-  limited=false;await p.salesDemo.ensure(account);assert.equal(calls.length,5);
+test('provider quota headers pace the next request outside transactions and malformed headers stay bounded',async()=>{
+ let clock=Date.now(),lookups=0;const waits=[];
+ const p=identityProvider(env,async url=>{
+  if(url.endsWith('/oauth/token'))return Response.json({access_token:'token',expires_in:3600});
+  lookups++;return Response.json(profile,lookups===1?{headers:{'x-ratelimit-remaining':'0','x-ratelimit-reset':String((clock+1000)/1000)}}:undefined);
+ },{now:()=>clock,wait:async ms=>{waits.push(ms);clock+=ms;}});
+ await p.get(profile.user_id);await p.get(profile.user_id);assert.deepEqual(waits,[1025]);assert.equal(lookups,2);
+ for(const header of ['invalid','-1','Infinity']){
+  const bad=identityProvider(env,async()=>new Response('PRIVATE',{status:429,headers:{'retry-after':header}}));
+  await assert.rejects(bad.get(profile.user_id),error=>error.retryAfterSeconds===60&&error.failure==='rate_limit');
  }
 });
 
-test('long provider cooldown exceeds the shared deadline without sleeping or lookup churn on resume',async()=>{
- const clock=fakeTiming(),account=demoAccount();let calls=0;
- const p=identityProvider(env,async url=>{
-  if(url.endsWith('/oauth/token'))return Response.json({access_token:'token',expires_in:3600});
-  calls++;return calls===1?new Response(null,{status:429,headers:{'retry-after':'120'}}):Response.json([demoProfile(account)]);
- },clock);
- const start=clock.now();
- await assert.rejects(p.salesDemo.ensure(account,{deadline:start+30000}),e=>e.code==='DEMO_IDENTITY_BUSY');
- assert.equal(calls,1);assert.ok(clock.now()-start<30000);
- await assert.rejects(p.salesDemo.ensure(account,{deadline:clock.now()+30000}),e=>e.code==='DEMO_IDENTITY_BUSY');assert.equal(calls,1);
- clock.advance(121000);await p.salesDemo.ensure(account);assert.equal(calls,2);
-});
-
-test('demo block retries a rejected PATCH only after the local-access fence, preserving exact subject',async()=>{
- const clock=fakeTiming(),account=demoAccount(),events=[];let patches=0;
- const p=identityProvider(env,async(url,options)=>{
-  if(url.endsWith('/oauth/token'))return Response.json({access_token:'token',expires_in:3600});
-  if(url.includes('users-by-email'))return Response.json([demoProfile(account)]);
-  events.push('patch');patches++;assert.ok(url.endsWith(encodeURIComponent(profile.user_id)));assert.deepEqual(JSON.parse(options.body),{blocked:true});
-  return patches===1?new Response(null,{status:429}):Response.json({...demoProfile(account),blocked:true});
- },clock);
- await p.salesDemo.block(account,profile.user_id,async()=>{events.push('local-disabled');});
- assert.deepEqual(events,['local-disabled','patch','patch']);
-});
-
-test('concurrent demo calls share pacing while ordinary provider 429s remain immediate',async()=>{
- const clock=fakeTiming(),account=demoAccount(),calls=[];
- const p=identityProvider(env,async url=>{
-  if(url.endsWith('/oauth/token'))return Response.json({access_token:'token',expires_in:3600});
-  if(url.includes('users-by-email')){calls.push(clock.now());return Response.json([demoProfile(account)]);}
-  return new Response('private error',{status:429});
- },clock);
- await Promise.all([p.salesDemo.ensure(account),p.salesDemo.ensure(account),p.salesDemo.ensure(account)]);
- assert.equal(calls.length,3);assert.ok(calls.every((at,i)=>!i||at-calls[i-1]>=1000));
- const before=clock.now();await assert.rejects(p.get(profile.user_id),e=>e.statusCode===429&&e.code==='IDENTITY_PROVIDER_UNAVAILABLE');assert.equal(clock.now(),before);
+test('provider failures distinguish permissions, authentication, outage, transport and invalid response without raw details',async()=>{
+ for(const [status,failure]of [[401,'authentication'],[403,'permission'],[500,'unavailable']]){
+  const p=identityProvider(env,async()=>new Response('PRIVATE upstream body',{status}));
+  await assert.rejects(p.get(profile.user_id),error=>error.operation==='token'&&error.failure===failure&&error.upstreamStatus===status&&error.statusCode===503&&!error.message.includes('PRIVATE'));
+ }
+ const network=identityProvider(env,async()=>{throw Error('PRIVATE network URL?token=secret');});
+ await assert.rejects(network.get(profile.user_id),error=>error.failure==='transport'&&error.upstreamStatus===undefined&&!error.message.includes('PRIVATE'));
+ const malformed=identityProvider(env,async()=>new Response('PRIVATE malformed JSON'));
+ await assert.rejects(malformed.get(profile.user_id),error=>error.operation==='token'&&error.failure==='invalid_response'&&!error.message.includes('PRIVATE'));
 });

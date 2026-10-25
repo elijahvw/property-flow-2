@@ -90,6 +90,19 @@ test("a pending submission blocks navigation until its outcome is available", as
   await expect(page).toHaveURL(/new=lease/);
   state.release?.();
   await expect(page.getByRole("alert").filter({ hasText: "Lease details changed" })).toBeVisible();
+  // The failed queued Help navigation is settled. A fresh destination must
+  // protect the retained review instead of inheriting that older wait flag.
+  let confirmations = 0;
+  page.once("dialog", async dialog => {
+    confirmations++;
+    expect(dialog.message()).toContain("discard its unsaved changes");
+    await dialog.dismiss();
+  });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Properties", exact: true }).click();
+  await expect.poll(() => confirmations).toBe(1);
+  await expect(page).toHaveURL(/new=lease/);
+  await expect(page.getByRole("alert").filter({ hasText: "Lease details changed" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create lease record", exact: true })).toBeEnabled();
 });
 
 test("an interrupted request explains recovery before leaving", async ({ page }) => {
@@ -113,9 +126,9 @@ test("an interrupted request explains recovery before leaving", async ({ page })
 test("canceling a property-search destination keeps both the search and unfinished lease", async ({ page }) => {
   await fixture(page);
   await startLease(page);
-  await page.getByRole("button", { name: /Find a property/ }).click();
-  const finder = page.getByRole("dialog", { name: "Find a property", exact: true });
-  await finder.getByRole("searchbox", { name: "Search properties" }).fill("Maple");
+  await page.getByRole("button", { name: /Search workspace/ }).click();
+  const finder = page.getByRole("dialog", { name: "Search workspace", exact: true });
+  await finder.getByRole("searchbox", { name: "Search workspace" }).fill("Maple");
   page.once("dialog", dialog => dialog.dismiss());
   await finder.getByRole("link", { name: /Maple House/ }).click();
   await expect(finder).toBeVisible();
@@ -133,7 +146,7 @@ test("browser Back and Forward across routes protect a page task",async({page})=
  await page.goForward();await expect(page.getByLabel('New lease monthly rent (USD)')).toHaveValue('1850.00');
 });
 test("a native editor also protects browser Back across routes",async({page})=>{
- await fixture(page);await page.goto('/help');await page.getByRole('button',{name:/Find a property/}).click();await page.getByRole('dialog',{name:'Find a property',exact:true}).getByRole('searchbox',{name:'Search properties'}).fill('Maple');await page.getByRole('dialog',{name:'Find a property',exact:true}).getByRole('link',{name:/Maple House/}).click();
+ await fixture(page);await page.goto('/help');await page.getByRole('button',{name:/Search workspace/}).click();await page.getByRole('dialog',{name:'Search workspace',exact:true}).getByRole('searchbox',{name:'Search workspace'}).fill('Maple');await page.getByRole('dialog',{name:'Search workspace',exact:true}).getByRole('link',{name:/Maple House/}).click();
  await page.getByRole('navigation',{name:'Property navigation'}).getByRole('link',{name:'Units',exact:true}).click();
  await page.getByRole('button',{name:'Add a unit',exact:true}).click();await page.getByLabel('Unit name',{exact:true}).fill('Unfinished native task');
  page.once('dialog',dialog=>dialog.dismiss());await page.goBack();await expect(page.getByRole('dialog',{name:'Add a unit',exact:true})).toBeVisible();await expect(page.getByLabel('Unit name',{exact:true})).toHaveValue('Unfinished native task');

@@ -2,6 +2,11 @@
 
 # Property workspace: detail and edit checkpoint
 
+## October 25 property workflow refinement (local)
+
+Current property details retains the same source/edit/history behavior and adds grouped task workspaces for spaces, people/leasing, finance and maintenance. Every link stays property-scoped and combines existing role and company feature availability. Read-only property editing keeps current entered values mounted and locked; new tenant-access changes use the read-only Tenant access workspace when applicable. Desktop property navigation and the mobile Property section selector expose the same feature-aware groups. No new records, schema, provider or financial authority are introduced. Integrated current validation is tracked in [platform status](mvp-status.md); the original implementation checkpoints below remain historical.
+
+
 Date: 2026-10-14. Base: verified origin/main `163df0b` (PR13 merged).
 Branch: `codex/property-detail-edit`.
 Checkout: `/Users/elijahward/Documents/Codex/2026-10-13/task-8/property-detail`.

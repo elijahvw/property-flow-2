@@ -279,6 +279,7 @@ model User {
 }
 
 model SalesDemo {
+  replacementSetups SalesDemoSetup[] @relation("SalesDemoReplacement")
   setup SalesDemoSetup?
   id String @id @default(cuid())
   companyId String @unique
@@ -308,13 +309,18 @@ model SalesDemoSetup {
   credentialsCipher String
   accounts Json @default("{}")
   salesDemoId String? @unique
+  sourceDemoId String?
+  sourceVersion Int?
+  blueprint Json?
   leaseToken String?
   leaseUntil DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   creator User @relation(fields:[createdById],references:[id],onDelete:Restrict,onUpdate:Restrict)
   demo SalesDemo? @relation(fields:[salesDemoId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  sourceDemo SalesDemo? @relation("SalesDemoReplacement",fields:[sourceDemoId],references:[id],onDelete:Restrict,onUpdate:Restrict)
   @@unique([createdById,submissionKey])
+  @@index([sourceDemoId,status])
 }
 
 model Identity {

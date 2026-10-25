@@ -97,7 +97,7 @@ function ProspectDirectory({ selected }: { selected: (id: string) => void }) {
   function back() { const previous = cursors.slice(0, -1), next = new URLSearchParams(params); previous.length ? next.set("cursor", previous[previous.length - 1]) : next.delete("cursor"); setCursors(previous); setParams(next); }
   if (mutation.denied) return <ProspectAccessUnavailable/>;
   return <>
-    <header className="page-heading"><p className="eyebrow">Leasing operations</p><h1>Prospects & applications</h1><p>Follow inquiries, tours, manual applications and reviewed decisions through the tenant and lease handoff.</p></header>
+    <header className="page-heading"><p className="eyebrow">Leasing operations</p><h1>Prospects</h1><p>Follow inquiries, tours, manual applications and reviewed decisions through the tenant and lease handoff.</p></header>
     <p className="notice">These are management records. An approval does not sign a lease, verify screening, create an account or grant portal access. Follow-up dates are a work queue; no message or calendar invitation is sent.</p>
     <button disabled={readOnly} onClick={() => { setDraft(true); setAdding(true); }}>{draft ? "Continue inquiry draft" : "Record inquiry"}</button>
     <form className="panel prospect-filters" key={`${params.get("q")}:${params.get("propertyId")}:${params.get("stage")}:${params.get("due")}`} onSubmit={event => { event.preventDefault(); const form = new FormData(event.currentTarget); filter(Object.fromEntries(["q", "propertyId", "stage", "due"].map(field => [field, text(form, field)]))); }}>

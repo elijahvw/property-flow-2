@@ -20,9 +20,11 @@ Each change requires a durable submission key; edits require the opening vendor 
 
 The shared editor supplies explicit page-only draft saving, changed-form close choices and a separate immutable retry guard for uncertain submissions. No unsubmitted contact data is written to browser storage or saved automatically. Refresh or leaving the page clears unsubmitted work.
 
+If refreshing the current request/vendor link or candidate list fails, stale choices cannot be saved as a new review. The editor keeps its selected vendor and explains that the current link must be refreshed before saving. Candidate selection/paging is disabled while its latest read is loading or failed; successful refresh restores the review without silently replacing entered selections.
+
 ## Release, signals and recovery
 
-Additive migration `202610180035_maintenance_vendors` creates Vendor/VendorAction and adds a nullable vendor reference to existing maintenance requests. It preserves all existing requests and financial sources. Apply through the normal reviewed migration deployment with its restore point. The live and preview databases have not been migrated for this feature.
+Additive migration `202610180035_maintenance_vendors` creates Vendor/VendorAction and adds a nullable vendor reference to existing maintenance requests. It preserves all existing requests and financial sources. Apply through the normal reviewed migration deployment with its restore point. The deployment evidence at the top records the historical release; verify the actual target schema before applying migrations.
 
 The existing database holds these records; no extra service, provider, background job or cloud resource is introduced. Existing Start/Stop lifecycle coverage applies. Bounded `vendor.save` and `maintenance.vendor` operation signals accompany existing request/error metrics. Contact names, email, phone, notes, search text and snapshots must stay out of telemetry; URL queries and record IDs remain scrubbed.
 
