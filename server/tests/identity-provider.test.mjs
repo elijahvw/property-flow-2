@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { identityProvider } from "../dist/identity-provider.js";
+import { identityProvider, IdentityProviderError } from "../dist/identity-provider.js";
 import { randomUUID } from 'node:crypto';
 const env = {
   AUTH0_DOMAIN: "tenant.auth0.com",
@@ -200,4 +200,49 @@ test('demo teardown blocks only its marked subject and safely repeats or skips m
  await assert.rejects(p.salesDemo.block(account,'auth0|wrong-subject'),e=>e.code==='DEMO_IDENTITY_CONFLICT');assert.equal(patches,0);
  await p.salesDemo.block(account,profile.user_id);await p.salesDemo.block(account,profile.user_id);assert.equal(patches,1);
  missing=true;await p.salesDemo.block(account,profile.user_id);assert.equal(patches,1);
+});
+
+test('provider429 identifies token, lookup and block stages, respects cooldown and never retries creation POSTs',async()=>{
+ for(const stage of ['token','lookup','update']){
+  const demoId=randomUUID(),account={demoId,accountKey:'staff',email:`staff.${demoId}@sales-demo.invalid`};let clock=Date.now(),calls=0;
+  const p=identityProvider(env,async(url,options)=>{
+   calls++;
+   if(url.endsWith('/oauth/token'))return stage==='token'?new Response('PRIVATE token diagnostic',{status:429,headers:{'retry-after':'30'}}):Response.json({access_token:'token',expires_in:3600});
+   if(url.includes('users-by-email'))return stage==='lookup'?new Response('PRIVATE lookup diagnostic',{status:429,headers:{'retry-after':'30'}}):Response.json([{...profile,email:account.email,app_metadata:{property_flow_sales_demo:{id:demoId,account:'staff'}}}]);
+   assert.equal(options.method,'PATCH');return new Response('PRIVATE update diagnostic',{status:429,headers:{'retry-after':'30'}});
+  },{now:()=>clock,wait:async ms=>{clock+=ms;}});
+  await assert.rejects(p.salesDemo.block(account,profile.user_id),error=>error instanceof IdentityProviderError&&error.operation===stage&&error.failure==='rate_limit'&&error.upstreamStatus===429&&error.rateSource==='upstream'&&error.retryAfterSeconds>=30&&!error.message.includes('PRIVATE'));
+  const before=calls;await assert.rejects(p.salesDemo.block(account,profile.user_id),error=>error.failure==='rate_limit'&&error.upstreamStatus===undefined&&error.rateSource==='cooldown');assert.equal(calls,before,'long cooldown must not send another provider request');
+ }
+ const demoId=randomUUID(),account={demoId,accountKey:'owner',email:`owner.${demoId}@sales-demo.invalid`,name:'Fictional',password:'test-only-aA1!'};let posts=0,lookups=0;
+ const create=identityProvider(env,async(url,options)=>{
+  if(url.endsWith('/oauth/token'))return Response.json({access_token:'token',expires_in:3600});
+  if(url.includes('users-by-email')){lookups++;return Response.json([]);}
+  posts++;return new Response('PRIVATE create body',{status:429,headers:{'retry-after':'30'}});
+ });
+ await assert.rejects(create.salesDemo.ensure(account),error=>error.operation==='create'&&error.failure==='rate_limit');assert.equal(posts,1);assert.equal(lookups,1);
+});
+
+test('provider quota headers pace the next request outside transactions and malformed headers stay bounded',async()=>{
+ let clock=Date.now(),lookups=0;const waits=[];
+ const p=identityProvider(env,async url=>{
+  if(url.endsWith('/oauth/token'))return Response.json({access_token:'token',expires_in:3600});
+  lookups++;return Response.json(profile,lookups===1?{headers:{'x-ratelimit-remaining':'0','x-ratelimit-reset':String((clock+1000)/1000)}}:undefined);
+ },{now:()=>clock,wait:async ms=>{waits.push(ms);clock+=ms;}});
+ await p.get(profile.user_id);await p.get(profile.user_id);assert.deepEqual(waits,[1025]);assert.equal(lookups,2);
+ for(const header of ['invalid','-1','Infinity']){
+  const bad=identityProvider(env,async()=>new Response('PRIVATE',{status:429,headers:{'retry-after':header}}));
+  await assert.rejects(bad.get(profile.user_id),error=>error.retryAfterSeconds===60&&error.failure==='rate_limit');
+ }
+});
+
+test('provider failures distinguish permissions, authentication, outage, transport and invalid response without raw details',async()=>{
+ for(const [status,failure]of [[401,'authentication'],[403,'permission'],[500,'unavailable']]){
+  const p=identityProvider(env,async()=>new Response('PRIVATE upstream body',{status}));
+  await assert.rejects(p.get(profile.user_id),error=>error.operation==='token'&&error.failure===failure&&error.upstreamStatus===status&&error.statusCode===503&&!error.message.includes('PRIVATE'));
+ }
+ const network=identityProvider(env,async()=>{throw Error('PRIVATE network URL?token=secret');});
+ await assert.rejects(network.get(profile.user_id),error=>error.failure==='transport'&&error.upstreamStatus===undefined&&!error.message.includes('PRIVATE'));
+ const malformed=identityProvider(env,async()=>new Response('PRIVATE malformed JSON'));
+ await assert.rejects(malformed.get(profile.user_id),error=>error.operation==='token'&&error.failure==='invalid_response'&&!error.message.includes('PRIVATE'));
 });

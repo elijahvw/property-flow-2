@@ -4,6 +4,7 @@ import { AccessError, COMPANY_ROLES, defaultDestination, requirePermission } fro
 import { assignmentId, opaqueUserId, serializable } from "./application.js";
 import { boundedText, input, mutation, page, type Tx } from "./operational.js";
 import { validSession } from "./sessions.js";
+import { assertDemoIdentityAvailable } from "./demo-identity-guard.js";
 
 export const IMPERSONATION_MS = 30 * 60 * 1000;
 const includeAccess = { membership: { include: { company: true } } } as const;
@@ -100,6 +101,7 @@ export function registerImpersonation(
       const actor = await tx.user.findUnique({ where: { id: actorId(request) }, include: includeAccess });
       if (!actor) throw new AccessError(403, "ACCESS_DENIED", "Access is unavailable.");
       requirePermission(actor, "platform.manage");
+      if (body.enabled) await assertDemoIdentityAvailable(tx, targetId);
       const target = await tx.user.findUnique({ where: { id: targetId }, select: supportSelect });
       if (!target) throw new AccessError(404, "NOT_FOUND", "User not found.");
       if (target.platformRole === "owner" || target.id === actor.id)

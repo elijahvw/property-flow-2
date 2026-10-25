@@ -8,7 +8,7 @@ export const DEMO_BUNDLED_TEXT = "BUNDLED FICTIONAL DEMO ORIGINAL. Plain UTF-8 t
 // Every shipped company feature must retain representative connected sources.
 // New catalog entries require this map, fixture and walkthrough to be reviewed.
 export const DEMO_FEATURE_COVERAGE = {
-  properties: ["properties", "units", "scenarios.archivedUnitId"],
+  properties: ["properties", "units", "scenarios.archivedUnitId", "presentation.anchorOn"],
   leasing: ["leases", "scenarios.offlineLeaseId", "scenarios.invitationId", "scenarios.endedLeaseId", "scenarios.approvedApplicationId", "scenarios.rejectedApplicationId", "savedTaskId"],
   maintenance: ["requests", "vendorId", "scenarios.privateUpdateId", "scenarios.pausedPreventivePlanId"],
   documents: ["documentId", "scenarios.receivedShareId", "scenarios.archivedDocumentId"],
@@ -19,6 +19,20 @@ export const DEMO_FEATURE_COVERAGE = {
   notifications: ["scenarios.readNotificationId", "requests"],
   resident_portal: ["residents", "occupantId", "scenarios.offlineContactId", "scenarios.pendingContactId"],
 } as const;
+// Presentation stops point at retained source records, not made-up dashboard
+// values. Keep these state expectations and the walkthrough current together.
+export const DEMO_PRESENTATION_STOPS = [
+  { title: "Offline tenant with an active lease", role: "Owner or manager", source: "scenarios.offlineLeaseId", route: "/company/leases/", state: "An existing account and lease without portal membership or issued login credentials." },
+  { title: "Invitation awaiting acceptance", role: "Owner", source: "scenarios.pendingContactId", route: "/company/tenants/", state: "A prepared tenant and unaccepted invitation; no email delivery is claimed." },
+  { title: "Ended lease, settlement and refund", role: "Owner or manager", source: "scenarios.endedLeaseId", route: "/company/leases/", state: "Retained move-in/move-out evidence, deposit application and linked fictional manual refund source." },
+  { title: "Approved application", role: "Owner or manager", source: "scenarios.approvedApplicationId", route: "/company/applications/", state: "A management decision with history, not screening, a signature or portal authority." },
+  { title: "Rejected application", role: "Owner or manager", source: "scenarios.rejectedApplicationId", route: "/company/applications/", state: "A different outcome and retained reason; no lease is created." },
+  { title: "Completed maintenance and paid expense", role: "Owner or manager", source: "requests.0", route: "/company/maintenance/", state: "Assigned and approved work linked to the same retained paid expense." },
+  { title: "Upcoming assigned work", role: "Staff technician", source: "requests.2", route: "/company/work-orders/", state: "Execution stays within current property scope and assignment; finances remain denied." },
+  { title: "Household rental terms", role: "Jordan Rivera · resident / leaseholder", source: "leases.0", route: "/resident/leases/", suffix: "/terms", state: "Only this household's permitted lease terms; no management controls." },
+  { title: "Leaseholder statement", role: "Jordan Rivera · resident / leaseholder", source: "leases.0", route: "/resident/leases/", suffix: "/statement", state: "Shared lease finances follow the recorded leaseholder relationship, never occupant access." },
+  { title: "Occupant service home", role: "Riley Rivera · occupant", source: "occupantId", route: "/resident", appendSource: false, state: "The same household's service view without lease finance or leaseholder document access." },
+] as const;
 type Call = (method: "GET" | "POST" | "PUT" | "PATCH", url: string, body?: Record<string, unknown>) => Promise<any>;
 export async function seedDemoScenarios(c: { call: Call; tx: Tx; companyId: string; accounts: DemoSeedAccounts; today: string; offset: (months: number, day?: number) => string; properties: string[]; units: string[]; leases: string[]; requests: string[]; asActor: (id: string) => void }) {
   const { call, tx, companyId, accounts, today, offset, properties, leases, asActor } = c, ownerId = accounts.users.owner.user_id;

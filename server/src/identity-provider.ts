@@ -1,5 +1,18 @@
 import { randomBytes } from "node:crypto";
 import { AccessError } from "./access.js";
+type ProviderOperation = "token" | "lookup" | "directory" | "create" | "update" | "verification" | "password_setup";
+type ProviderFailure = "rate_limit" | "authentication" | "permission" | "rejected" | "unavailable" | "transport" | "invalid_response";
+export class IdentityProviderError extends AccessError {
+  readonly rateSource?: "cooldown" | "upstream";
+  constructor(public operation: ProviderOperation, public failure: ProviderFailure, public upstreamStatus?: number, public retryAfterSeconds?: number) {
+    super(failure === "rate_limit" ? 429 : 503, "IDENTITY_PROVIDER_UNAVAILABLE",
+      failure === "rate_limit" ? `Identity service is busy. Wait ${retryAfterSeconds || 60} seconds before retrying the same request.` :
+      failure === "authentication" || failure === "permission" || failure === "rejected" ? "The identity connection is not authorized for this action. Ask a platform administrator to review its configuration and permissions." :
+      failure === "invalid_response" ? "Identity service returned an unreadable response. Retry the same request or contact your administrator." :
+      "Identity service could not be reached or is unavailable. Retry the same request or contact your administrator.");
+    if (failure === "rate_limit") this.rateSource = upstreamStatus === 429 ? "upstream" : "cooldown";
+  }
+}
 export type ProviderUser = {
   user_id: string;
   email: string;
@@ -30,6 +43,7 @@ export interface IdentityProvider {
 export function identityProvider(
   env = process.env,
   send: typeof fetch = fetch,
+  timing: { now?: () => number; wait?: (milliseconds: number) => Promise<void> } = {},
 ): IdentityProvider | undefined {
   const domain = env.AUTH0_DOMAIN,
     clientId = env.AUTH0_MANAGEMENT_CLIENT_ID,
@@ -42,24 +56,41 @@ export function identityProvider(
   let token = "",
     expires = 0,
     pending: Promise<string> | undefined;
+  const now = timing.now || Date.now, wait = timing.wait || ((milliseconds: number) => new Promise<void>(resolve => setTimeout(resolve, milliseconds)));
+  let notBefore = 0, queue: Promise<unknown> = Promise.resolve();
+  const operation = (path: string, options: RequestInit): ProviderOperation => path === "/oauth/token" ? "token" : path.includes("/users-by-email?") ? "lookup" : path.includes("/jobs/") ? "verification" : path.includes("/dbconnections/") ? "password_setup" : options.method === "PATCH" ? "update" : options.method === "POST" ? "create" : path.includes("/users?") ? "directory" : "lookup";
+  function retryDelay(response: Response) {
+    const retry = response.headers.get("retry-after"), reset = response.headers.get("x-ratelimit-reset");
+    const seconds = retry === null ? NaN : /^\d+(?:\.\d+)?$/.test(retry.trim()) ? Number(retry) : (Date.parse(retry) - now()) / 1000;
+    const resetSeconds = reset && /^\d+(?:\.\d+)?$/.test(reset.trim()) ? Number(reset) - now() / 1000 : NaN;
+    const advertised = Number.isFinite(seconds) && seconds >= 0 ? seconds : Number.isFinite(resetSeconds) && resetSeconds >= 0 ? resetSeconds : NaN;
+    return Number.isFinite(advertised) ? Math.min(86400000, Math.max(50, Math.ceil(advertised * 1000) + 25)) : response.status === 429 ? 60000 : 0;
+  }
   async function request(path: string, options: RequestInit = {}) {
-    const response = await send(base + path, {
-      ...options,
-      redirect: "error",
-      signal: AbortSignal.timeout(10000),
+    const stage = operation(path, options);
+    const run = queue.then(async () => {
+      // Serialize this client's requests and respect the provider's next slot.
+      // Short quota windows are paced; long cooldowns return actionable retry
+      // guidance instead of holding HTTP requests or database transactions open.
+      const delay = notBefore - now();
+      if (delay > 2000) throw new IdentityProviderError(stage, "rate_limit", undefined, Math.ceil(delay / 1000));
+      if (delay > 0) await wait(delay);
+      let response: Response;
+      try { response = await send(base + path, { ...options, redirect: "error", signal: AbortSignal.timeout(10000) }); }
+      catch { throw new IdentityProviderError(stage, "transport"); }
+      if (response.status === 429 || response.headers.get("x-ratelimit-remaining") === "0") notBefore = Math.max(notBefore, now() + retryDelay(response));
+      if (!response.ok) throw new IdentityProviderError(stage, response.status === 429 ? "rate_limit" : response.status === 401 ? "authentication" : response.status === 403 ? "permission" : response.status < 500 ? "rejected" : "unavailable", response.status, response.status === 429 ? Math.max(1, Math.ceil((notBefore - now()) / 1000)) : undefined);
+      return response;
     });
-    if (!response.ok)
-      throw new AccessError(
-        response.status === 429 ? 429 : 503,
-        "IDENTITY_PROVIDER_UNAVAILABLE",
-        response.status === 429
-          ? "Identity service is busy. Wait a minute before retrying."
-          : "Identity service is unavailable or lacks permission. Please retry or contact your administrator.",
-      );
-    return response;
+    queue = run.catch(() => {});
+    return run;
+  }
+  async function json(response: Response, stage: ProviderOperation) {
+    try { return await response.json(); }
+    catch { throw new IdentityProviderError(stage, "invalid_response", response.status); }
   }
   async function access() {
-    if (token && expires > Date.now()) return token;
+    if (token && expires > now()) return token;
     if (!pending)
       pending = (async () => {
         try {
@@ -74,15 +105,15 @@ export function identityProvider(
               scope: "read:users create:users update:users",
             }),
           });
-          const b = (await r.json()) as any;
+          const b = (await json(r, "token")) as any;
           if (
-            typeof b.access_token !== "string" ||
+            !b || typeof b.access_token !== "string" ||
             !Number.isFinite(b.expires_in) ||
             b.expires_in <= 60
           )
-            throw Error("Invalid provider token");
+            throw new IdentityProviderError("token", "invalid_response", r.status);
           token = b.access_token;
-          expires = Date.now() + (b.expires_in - 60) * 1000;
+          expires = now() + (b.expires_in - 60) * 1000;
           return token;
         } finally {
           pending = undefined;
@@ -99,7 +130,7 @@ export function identityProvider(
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
-    return await r.json();
+    return await json(r, operation("/api/v2/" + path, { method: method ?? (body === undefined ? "GET" : "POST") }));
   }
   function user(value: any): ProviderUser {
     if (
@@ -184,7 +215,12 @@ export function identityProvider(
           if (!result.email_verified || result.blocked) throw new AccessError(409, "DEMO_IDENTITY_UNAVAILABLE", "The provider did not activate this demo account.");
           return result;
         } catch (error) {
-          const recovered = await findDemo(account);
+          // An explicit rejection did not create an identity. In particular,
+          // avoid spending another lookup immediately after a quota response.
+          if (error instanceof IdentityProviderError && ["rate_limit", "authentication", "permission", "rejected"].includes(error.failure)) throw error;
+          let recovered;
+          try { recovered = await findDemo(account); }
+          catch (recoveryError) { if (error instanceof AccessError) throw error; throw recoveryError; }
           if (recovered?.email_verified && !recovered.blocked) return recovered;
           if (error instanceof AccessError) throw error;
           throw new AccessError(503, "DEMO_IDENTITY_RETRY", "Demo account setup was interrupted. Retry the same setup.");
