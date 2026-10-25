@@ -1,9 +1,10 @@
 import {test,expect,Page} from '@playwright/test';
 async function fixture(page:Page,role='owner'){
- const state={features:{properties:'enabled',leasing:'enabled',finances:'enabled',maintenance:'enabled',documents:'enabled',reports:'enabled',resident_portal:'enabled',inspections:'enabled',agreements:'enabled',notifications:'enabled'},financeAllowed:false,company:'a',propertyStatus:200,additionalProperty:false,units:[] as any[],leases:[] as any[],residents:[{userId:'r',membership:{user:{name:'Resident',email:'r@test.invalid'}}}],loseUnit:false,loseLease:false,keys:[] as string[],writes:0};
+ const state={features:{properties:'enabled',leasing:'enabled',finances:'enabled',maintenance:'enabled',documents:'enabled',reports:'enabled',resident_portal:'enabled',inspections:'enabled',agreements:'enabled',notifications:'enabled'},financeAllowed:false,company:'a',propertyStatus:200,additionalProperty:false,units:[] as any[],leases:[] as any[],residents:[{userId:'r',membership:{user:{name:'Resident',email:'r@test.invalid'}}}],loseUnit:false,loseLease:false,keys:[] as string[],writes:0,writeRequests:[] as string[],telemetry:0};
  await page.route('**/api/**',async route=>{
   const req=route.request(),url=new URL(req.url()),path=url.pathname,json=(value:unknown,status=200)=>route.fulfill({json:value,status});
   const property={id:'home',name:'Home',address:'1 Main St',city:'City',state:'PA',zip:'19100'};
+  if(path==='/api/telemetry'&&req.method()==='POST'){expect(req.headers()['x-csrf-token']).toBe('fixture');state.telemetry++;return route.fulfill({status:204,body:''});}
   if(path==='/api/bootstrap')return json({user:{id:role,email:`${role}@test.invalid`,status:'active'},membership:{companyId:state.company,version:1,role,status:'active',company:{name:state.company,status:'active'}},permissions:role==='owner'||role==='manager'?['property.read','property.write','lease.manage','resident.assignment.manage',...(state.financeAllowed?['finance.manage']:[])]:role==='staff'?['property.read']:role==='resident'?['resident.self']:['platform.manage'],companyFeatures:state.features,csrfToken:'fixture'});
   if(path==='/api/company/properties')return json([property,...(state.additionalProperty?[{...property,id:'other',name:'Other property'}]:[])]);
   if(path==='/api/company/properties/home')return state.propertyStatus===200?json(property):json({error:'Property unavailable'},state.propertyStatus);
@@ -13,7 +14,7 @@ async function fixture(page:Page,role='owner'){
    return path.endsWith('/participants')?json({lease:row,items:[],candidates:[]}):json(row);
   }
   if(req.method()!=='GET'){
-   expect(req.headers()['x-csrf-token']).toBe('fixture');state.writes++;
+   expect(req.headers()['x-csrf-token']).toBe('fixture');state.writes++;state.writeRequests.push(req.method()+' '+path);
    const data=req.postDataJSON();
    if(req.method()==='POST'){
     state.keys.push(data.submissionKey);
@@ -182,6 +183,7 @@ test('unit policy refresh retains an unfinished form and an exact uncertain save
 });
 
 test('lease view exposes reset and next-step links while respecting current feature access',async({page})=>{
+ await page.clock.install({time:new Date('2026-10-25T12:00:00Z')});
  const state=await fixture(page);state.financeAllowed=true;state.features.finances='disabled';
  state.leases.push({id:'lease',propertyId:'home',unitId:'u1',status:'draft',startsOn:'2026-11-01',endsOn:null,rentCents:125000,version:1,property:{name:'Home'},unit:{label:'Garden suite'},resident:{name:'Resident',email:'r@test.invalid'}});
  await page.goto('/company/leases?status=draft&prospectId=original-prospect&prospectQ=retained-search');
@@ -198,8 +200,11 @@ test('lease view exposes reset and next-step links while respecting current feat
  await expect(page.getByRole('button',{name:'Edit lease',exact:true})).toBeDisabled();expect(state.writes).toBe(0);
  state.units.push({id:'u1',label:'Garden suite',propertyId:'home',status:'active',version:1});
  await page.goto('/company/leases?new=lease');
- await expect(page.getByRole('button',{name:'Review lease',exact:true})).toBeDisabled();expect(state.writes).toBe(0);
+ await expect(page.getByRole('button',{name:'Review lease',exact:true})).toBeDisabled();expect(state.writes,state.writeRequests.join(', ')).toBe(0);
+ // Exercise the actual15s monitoring flush without counting it as a domain write.
+ await page.clock.runFor(15000);await expect.poll(()=>state.telemetry).toBeGreaterThan(0);
+ expect(state.writes,state.writeRequests.join(', ')).toBe(0);
  state.features.leasing='disabled';await page.goto('/company/leases?new=lease');
  await expect(page.getByRole('heading',{name:'Feature unavailable',exact:true})).toBeVisible();
- await expect(page.getByRole('region',{name:'Record a lease',exact:true})).toHaveCount(0);expect(state.writes).toBe(0);
+ await expect(page.getByRole('region',{name:'Record a lease',exact:true})).toHaveCount(0);expect(state.writes,state.writeRequests.join(', ')).toBe(0);
 });
