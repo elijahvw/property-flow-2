@@ -7,6 +7,7 @@ import { input, mutation, submission, sameSubmission, version, type Tx } from ".
 import type { IdentityProvider, ProviderUser } from "./identity-provider.js";
 import { seedSalesDemo, SALES_DEMO_SEED_VERSION } from "./sales-demo-seed.js";
 import { DEMO_PEOPLE, newDemoCredentials, openDemoCredentials, sealDemoCredentials } from "./sales-demo-credentials.js";
+type PreparedAccount = ProviderUser & { issuer?: string };
 
 const busy = () => new AccessError(409, "DEMO_SETUP_BUSY", "This demo operation is running. Wait briefly, then refresh or retry the same setup.");
 const retired = () => new AccessError(409, "DEMO_RETIRED", "This demo was torn down. Build a new demo for fresh accounts and data.");
@@ -64,18 +65,34 @@ export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, aut
     });
     if (setup.status === "ready") return reveal(request, id);
     try {
+      // Leave room for the bounded source transaction and response within the
+      // browser's three-minute budget, including any provider backoff.
+      const deadline = Date.now() + 110000;
+      if (Object.values(setup.accounts as Record<string, PreparedAccount>).some(a => a.issuer && a.issuer !== provider!.issuer))
+        throw new AccessError(409, "DEMO_PROVIDER_CHANGED", "The demo identity connection changed. Restore its original Auth0 connection before resuming this setup.");
       const credentials = openDemoCredentials(id, setup.credentialsCipher, credentialSecret);
       for (const account of credentials) {
-        await checked(request, async tx => { await currentRun(tx, id, token, "pending"); await tx.salesDemoSetup.update({ where: { id }, data: { leaseUntil: leaseUntil() } }); });
+        const prepared = await checked(request, async tx => {
+          const current = await currentRun(tx, id, token, "pending");
+          await tx.salesDemoSetup.update({ where: { id }, data: { leaseUntil: leaseUntil() } });
+          return (current.accounts as Record<string, PreparedAccount>)[account.accountKey];
+        });
+        // Exact, provider-confirmed subjects were durably recorded after each
+        // success. Replaying those lookups can exhaust quota before reaching
+        // the missing account. Local assignment checks still run atomically.
+        if (prepared?.issuer === provider!.issuer) {
+          if (!prepared.user_id?.startsWith("auth0|") || prepared.email !== account.email || !prepared.email_verified || prepared.blocked) throw secretFailure();
+          continue;
+        }
         // Provider calls stay outside DB locks. Exact generation metadata recovers
         // ambiguous creates without adopting unrelated accounts by email.
-        const remote = await identities.ensure(account);
+        const remote = await identities.ensure(account, { deadline });
         if (remote.email !== account.email || !remote.email_verified || remote.blocked) throw secretFailure();
         await checked(request, async tx => {
           const current = await currentRun(tx, id, token, "pending");
           const accounts = current.accounts as Record<string, ProviderUser>;
           if (accounts[account.accountKey] && accounts[account.accountKey].user_id !== remote.user_id) throw new AccessError(409, "DEMO_IDENTITY_CONFLICT", "The generated demo identity changed. Tear down this setup before creating another.");
-          await tx.salesDemoSetup.update({ where: { id }, data: { accounts: { ...accounts, [account.accountKey]: { user_id: remote.user_id, email: remote.email, name: account.name, email_verified: true } } } });
+          await tx.salesDemoSetup.update({ where: { id }, data: { accounts: { ...accounts, [account.accountKey]: { user_id: remote.user_id, email: remote.email, name: account.name, email_verified: true, issuer: provider!.issuer } } } });
         });
       }
       await checked(request, async tx => {
@@ -128,6 +145,7 @@ export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, aut
     });
     if (claimed.status === "retired") return { id, status: "retired" };
     try {
+      const deadline = Date.now() + 110000;
       const accounts = claimed.accounts as Record<string, ProviderUser>;
       for (const [accountKey] of DEMO_PEOPLE) {
         await checked(request, async tx => { await currentRun(tx, id, token, "retiring"); await tx.salesDemoSetup.update({ where: { id }, data: { leaseUntil: leaseUntil() } }); });
@@ -142,7 +160,7 @@ export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, aut
             await tx.session.deleteMany({ where: { OR: [{ userId: remote.user_id }, { impersonatedUserId: remote.user_id }] } });
             await tx.salesDemoSetup.update({ where: { id }, data: { accounts: { ...(current.accounts as Record<string, ProviderUser>), [accountKey]: { user_id: remote.user_id, email: remote.email, email_verified: remote.email_verified } } } });
           });
-        });
+        }, { deadline });
       }
       await checked(request, async tx => {
         await currentRun(tx, id, token, "retiring");

@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { setTimeout as pause } from "node:timers/promises";
 import { AccessError } from "./access.js";
 export type ProviderUser = {
   user_id: string;
@@ -9,9 +10,10 @@ export type ProviderUser = {
   identities?: { connection: string; provider?: string }[];
 };
 export type DemoIdentity = { demoId: string; accountKey: string; email: string; name: string; password: string };
+export type DemoCallOptions = { deadline?: number };
 export type DemoIdentityProvider = {
-  ensure(account: DemoIdentity): Promise<ProviderUser>;
-  block(account: Pick<DemoIdentity, "demoId" | "accountKey" | "email">, expectedSubject?: string, beforeBlock?: (user: ProviderUser) => Promise<void>): Promise<void>;
+  ensure(account: DemoIdentity, options?: DemoCallOptions): Promise<ProviderUser>;
+  block(account: Pick<DemoIdentity, "demoId" | "accountKey" | "email">, expectedSubject?: string, beforeBlock?: (user: ProviderUser) => Promise<void>, options?: DemoCallOptions): Promise<void>;
 };
 export interface IdentityProvider {
   salesDemo?: DemoIdentityProvider;
@@ -30,6 +32,7 @@ export interface IdentityProvider {
 export function identityProvider(
   env = process.env,
   send: typeof fetch = fetch,
+  timing = { now: Date.now, sleep: async (ms: number) => { await pause(ms); } },
 ): IdentityProvider | undefined {
   const domain = env.AUTH0_DOMAIN,
     clientId = env.AUTH0_MANAGEMENT_CLIENT_ID,
@@ -42,12 +45,43 @@ export function identityProvider(
   let token = "",
     expires = 0,
     pending: Promise<string> | undefined;
-  async function request(path: string, options: RequestInit = {}) {
-    const response = await send(base + path, {
-      ...options,
-      redirect: "error",
-      signal: AbortSignal.timeout(10000),
-    });
+  let demoQueue: Promise<void> = Promise.resolve(), demoNextAt = 0;
+  const demoBusy = () => new AccessError(429, "DEMO_IDENTITY_BUSY", "Auth0 is still rate limiting demo accounts. Progress and passwords are saved. Wait a minute, then retry this operation. Setup continues with remaining accounts; teardown keeps local access disabled.");
+  // Serialize only demo calls in this provider instance. Other replicas still
+  // need to honor the tenant-wide rate-limit response from Auth0.
+  async function demoSend(path: string, options: RequestInit, deadline: number) {
+    const previous = demoQueue;
+    let release!: () => void;
+    demoQueue = new Promise<void>(resolve => { release = resolve; });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      // A different demo may already own the lane. Expire this caller without
+      // allowing its queue slot to overtake that operation.
+      await Promise.race([previous, new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(demoBusy()), Math.max(0, deadline - timing.now() - 10000));
+      })]);
+      clearTimeout(timer);
+      for (let attempt = 0; ; attempt++) {
+        const start = Math.max(timing.now(), demoNextAt);
+        if (start + 10000 > deadline) throw demoBusy();
+        if (start > timing.now()) await timing.sleep(start - timing.now());
+        if (timing.now() + 10000 > deadline) throw demoBusy();
+        const response = await send(base + path, { ...options, redirect: "error", signal: AbortSignal.timeout(10000) })
+          .finally(() => { demoNextAt = timing.now() + 1000; });
+        if (response.status !== 429) return response;
+        const retry = response.headers.get("retry-after"), reset = response.headers.get("x-ratelimit-reset");
+        const retryAt = retry === null ? NaN : /^\d+(\.\d+)?$/.test(retry) ? timing.now() + Number(retry) * 1000 : Date.parse(retry);
+        const resetAt = reset !== null && /^\d+(\.\d+)?$/.test(reset) ? Number(reset) * 1000 : NaN;
+        demoNextAt = Math.max(demoNextAt, timing.now() + 1000 * 2 ** attempt, Number.isFinite(retryAt) ? retryAt : 0, Number.isFinite(resetAt) ? resetAt : 0);
+        await response.body?.cancel();
+        if (attempt >= 3) throw demoBusy();
+      }
+    } finally { clearTimeout(timer); void previous.then(release); }
+  }
+  async function request(path: string, options: RequestInit = {}, demoDeadline?: number) {
+    const response = demoDeadline === undefined
+      ? await send(base + path, { ...options, redirect: "error", signal: AbortSignal.timeout(10000) })
+      : await demoSend(path, options, demoDeadline);
     if (!response.ok)
       throw new AccessError(
         response.status === 429 ? 429 : 503,
@@ -58,7 +92,7 @@ export function identityProvider(
       );
     return response;
   }
-  async function access() {
+  async function access(demoDeadline?: number) {
     if (token && expires > Date.now()) return token;
     if (!pending)
       pending = (async () => {
@@ -73,7 +107,7 @@ export function identityProvider(
               audience: base + "/api/v2/",
               scope: "read:users create:users update:users",
             }),
-          });
+          }, demoDeadline);
           const b = (await r.json()) as any;
           if (
             typeof b.access_token !== "string" ||
@@ -90,15 +124,15 @@ export function identityProvider(
       })();
     return pending;
   }
-  async function api(path: string, body?: unknown, method?: "PATCH") {
+  async function api(path: string, body?: unknown, method?: "PATCH", demoDeadline?: number) {
     const r = await request("/api/v2/" + path, {
       method: method ?? (body === undefined ? "GET" : "POST"),
       headers: {
-        authorization: `Bearer ${await access()}`,
+        authorization: `Bearer ${await access(demoDeadline)}`,
         "content-type": "application/json",
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    });
+    }, demoDeadline);
     return await r.json();
   }
   function user(value: any): ProviderUser {
@@ -161,10 +195,10 @@ export function identityProvider(
       throw new AccessError(409, "DEMO_IDENTITY_CONFLICT", "This identity is not owned by this demo. No existing account was changed.");
     return result;
   }
-  async function findDemo(account: Pick<DemoIdentity, "demoId" | "accountKey" | "email">) {
+  async function findDemo(account: Pick<DemoIdentity, "demoId" | "accountKey" | "email">, deadline: number) {
     if (!/^[0-9a-f-]{36}$/.test(account.demoId) || !/^[a-z0-9]+$/.test(account.accountKey) || account.email !== `${account.accountKey}.${account.demoId}@sales-demo.invalid`)
       throw new AccessError(400, "INVALID_DEMO_IDENTITY", "Invalid generated demo identity.");
-    const rows = await api("users-by-email?" + new URLSearchParams({ email: account.email }));
+    const rows = await api("users-by-email?" + new URLSearchParams({ email: account.email }), undefined, undefined, deadline);
     if (!Array.isArray(rows) || rows.length > 1) throw new AccessError(409, "DEMO_IDENTITY_CONFLICT", "Demo identity requires review. No existing account was changed.");
     return rows.length ? demoProfile(rows[0], account) : null;
   }
@@ -172,33 +206,38 @@ export function identityProvider(
     issuer: base + "/",
     databaseConnection: connection,
     salesDemo: {
-      async ensure(account) {
-        const existing = await findDemo(account);
+      async ensure(account, options) {
+        const deadline = Math.min(options?.deadline ?? Infinity, timing.now() + 110000);
+        const existing = await findDemo(account, deadline);
         if (existing) {
           if (!existing.email_verified || existing.blocked) throw new AccessError(409, "DEMO_IDENTITY_UNAVAILABLE", "The demo identity was changed or disabled. Tear down this setup and create a new demo.");
           return existing;
         }
         try {
           const result = demoProfile(await api("users", { connection, email: account.email, name: account.name, password: account.password,
-            email_verified: true, verify_email: false, app_metadata: { property_flow_sales_demo: { id: account.demoId, account: account.accountKey } } }), account);
+            email_verified: true, verify_email: false, app_metadata: { property_flow_sales_demo: { id: account.demoId, account: account.accountKey } } }, undefined, deadline), account);
           if (!result.email_verified || result.blocked) throw new AccessError(409, "DEMO_IDENTITY_UNAVAILABLE", "The provider did not activate this demo account.");
           return result;
         } catch (error) {
-          const recovered = await findDemo(account);
+          // A rejected 429 needs no ambiguity lookup. Lost write responses still
+          // recover through exact generation markers before another create.
+          if (error instanceof AccessError && error.code === "DEMO_IDENTITY_BUSY") throw error;
+          const recovered = await findDemo(account, deadline);
           if (recovered?.email_verified && !recovered.blocked) return recovered;
           if (error instanceof AccessError) throw error;
           throw new AccessError(503, "DEMO_IDENTITY_RETRY", "Demo account setup was interrupted. Retry the same setup.");
         }
       },
-      async block(account, expectedSubject, beforeBlock) {
-        const found = await findDemo(account);
+      async block(account, expectedSubject, beforeBlock, options) {
+        const deadline = Math.min(options?.deadline ?? Infinity, timing.now() + 110000);
+        const found = await findDemo(account, deadline);
         if (!found) return;
         if (expectedSubject && expectedSubject !== found.user_id) throw new AccessError(409, "DEMO_IDENTITY_CONFLICT", "The demo identity changed. No account was disabled.");
         // A create response may have been lost before its subject was recorded.
         // Fence the discovered local account before disabling it upstream.
         await beforeBlock?.(found);
         if (!found.blocked) {
-          const result = user(await api("users/" + encodeURIComponent(found.user_id), { blocked: true }, "PATCH"));
+          const result = user(await api("users/" + encodeURIComponent(found.user_id), { blocked: true }, "PATCH", deadline));
           if (result.user_id !== found.user_id || !result.blocked) throw new AccessError(503, "DEMO_BLOCK_RETRY", "Retry teardown to finish disabling the demo logins.");
         }
       },

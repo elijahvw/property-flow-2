@@ -596,9 +596,13 @@ function ProrationHistory({ rows }: { rows: ProrationRecord[] }) {
 export function LeaseTransition({
   leaseId,
   changed,
+  plannedMoveOut,
+  planHandled,
 }: {
   leaseId: string;
   changed: () => void;
+  plannedMoveOut?: { key: string; endsOn: string; reason: string } | null;
+  planHandled?: () => void;
 }) {
   const { data } = useAuth();
   return (
@@ -606,15 +610,21 @@ export function LeaseTransition({
       key={`${leaseId}:${data?.user.id}:${data?.membership?.companyId}`}
       id={leaseId}
       changed={changed}
+      plannedMoveOut={plannedMoveOut}
+      planHandled={planHandled}
     />
   );
 }
 function TransitionWorkspace({
   id,
   changed,
+  plannedMoveOut,
+  planHandled,
 }: {
   id: string;
   changed: () => void;
+  plannedMoveOut?: { key: string; endsOn: string; reason: string } | null;
+  planHandled?: () => void;
 }) {
   const root = `/api/company/leases/${encodeURIComponent(id)}/transition`,
     review = useReview<TransitionPreview>("handoff", id),
@@ -622,10 +632,19 @@ function TransitionWorkspace({
     [draft, setDraft] = useState<TransitionData | null>(null),
     r = useResource<TransitionData>(root, true, !open),
     d = r.data?.lease ? r.data : undefined;
+  const [initialPlan, setInitialPlan] = useState<typeof plannedMoveOut>(null);
+  useEffect(() => {
+    if (!plannedMoveOut || !d || r.error || open || review.value) return;
+    setDraft(d);
+    setInitialPlan(plannedMoveOut);
+    setOpen(true);
+    planHandled?.();
+  }, [plannedMoveOut, d, r.error, open, review.value, planHandled]);
   const clear = () => {
     review.clear();
     setOpen(false);
     setDraft(null);
+    setInitialPlan(null);
   };
   return (
     <div className="lifecycle-workspace">
@@ -715,6 +734,7 @@ function TransitionWorkspace({
             <DraftReset reset={clear} />
           </div>
         )}
+        {plannedMoveOut && review.value && <p className="notice">Your future move-out date is waiting. Finish or discard the unfinished lease review before reviewing this plan.</p>}
       </section>
       {d?.history?.length ? (
         <details className="panel lifecycle-history">
@@ -817,10 +837,11 @@ function TransitionWorkspace({
         {draft && (
           <div hidden={!!review.value}>
             <TransitionEditor
+              key={initialPlan?.key || "standard"}
               snapshot={draft}
               root={root}
               reviewed={review.retain}
-              initialBody={review.value?.body}
+              initialBody={review.value?.body ?? (initialPlan ? { kind: "plan_end", endsOn: initialPlan.endsOn, reason: initialPlan.reason } : undefined)}
             />
           </div>
         )}

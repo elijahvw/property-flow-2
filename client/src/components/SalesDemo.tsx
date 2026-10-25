@@ -41,7 +41,7 @@ function SalesDemoControls({ onChange }: { onChange: () => void }) {
         present(await api<LoginSheet>("/api/platform/sales-demos", { method: "POST", body: { submissionKey: key }, timeoutMs: 180000 }));
         setKey(crypto.randomUUID());
       } finally { refresh(); }
-    }}><p className="help">Setup can take a few minutes. Retry an interrupted submission or resume it below. Each new demo gets separate accounts and passwords.</p></Form>
+    }}><p className="help">Setup can take a few minutes. Brief identity-service rate limits are retried automatically. If interrupted, retry this submission or resume below to continue from saved progress. Each new demo gets separate accounts and passwords.</p></Form>
     {logins && <section aria-label="Demo login credentials" className="panel">
       <h3>Demo login credentials</h3>
       <p>Use these accounts on the normal sign-in screen. Keep the passwords private; teardown disables them. Passwords stay hidden until you choose to show them.</p>

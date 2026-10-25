@@ -57,6 +57,7 @@ function LeaseWorkspace({ id }: { id: string }) {
   const [draftLease, setDraftLease] = useState<Lease | null>(null),
     [renewalDraft, setRenewalDraft] = useState<Lease | null>(null),
     [visited, setVisited] = useState<string[]>([]);
+  const [plannedMoveOut, setPlannedMoveOut] = useState<{ key: string; endsOn: string; reason: string } | null>(null);
   const requestedSection = [
     "overview",
     "documents",
@@ -375,7 +376,7 @@ function LeaseWorkspace({ id }: { id: string }) {
       {hasFinance &&
         (section === "renewal" || visited.includes("renewal")) && (
           <div hidden={section !== "renewal"}>
-            <LeaseTransition leaseId={id} changed={r.reload} />
+            <LeaseTransition leaseId={id} changed={r.reload} plannedMoveOut={plannedMoveOut} planHandled={() => setPlannedMoveOut(null)} />
           </div>
         )}
       {section === "renewal" && (
@@ -436,7 +437,10 @@ function LeaseWorkspace({ id }: { id: string }) {
         (section === "settlement" || visited.includes("settlement")) && (
           <div hidden={section !== "settlement"}>
             {section==="settlement"&&params.get("inspectionId")&&<InspectionSettlementContext leaseId={id} inspectionId={params.get("inspectionId")!}/>}
-            <LeaseSettlement leaseId={id} />
+            <LeaseSettlement leaseId={id} planMoveOut={plan => {
+              setPlannedMoveOut({ ...plan, key: crypto.randomUUID() });
+              tab("renewal");
+            }} />
           </div>
         )}
       {hasDocuments && section === "documents" && <PrivateDocuments source="leases" sourceId={id} />}

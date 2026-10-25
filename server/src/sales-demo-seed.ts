@@ -10,7 +10,7 @@ import { seedDemoScenarios, DEMO_BUNDLED_TEXT } from "./sales-demo-scenarios.js"
 
 // Bump whenever the fixture changes. Only constant fictional content goes here;
 // never copy customer data or call an external identity/email/payment provider.
-export const SALES_DEMO_SEED_VERSION = 3;
+export const SALES_DEMO_SEED_VERSION = 4;
 export type DemoSeedAccounts = { issuer: string; databaseConnection: string; users: Record<string, ProviderUser> };
 export async function seedSalesDemo(tx: Tx, companyId: string, accounts: DemoSeedAccounts) {
   const ownerId = accounts.users.owner.user_id;

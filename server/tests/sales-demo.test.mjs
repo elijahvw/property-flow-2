@@ -29,11 +29,12 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
   t.after(async()=>{await db.$disconnect();await pool.end();});
   for(const id of ['platform','customer']) await admin.query(`INSERT INTO "User"(id,email,name,"emailVerified","platformRole","updatedAt") VALUES($1,$2,$1,true,$3,NOW())`,[id,`${id}@test.invalid`,id==='platform'?'owner':null]);
   await admin.query(`INSERT INTO "Company"(id,name,"updatedAt") VALUES('customer-company','Customer sentinel',NOW()); INSERT INTO "CompanyMembership"("userId","companyId",role,"updatedAt") VALUES('customer','customer-company','owner',NOW())`);
-  const remote=new Map(),passwords=new Map();let normalCalls=0,created=0,ensureCalls=0,blockCalls=0,loseIdentity=false,failBlock=false,pauseEnsure=null;
+  const remote=new Map(),passwords=new Map();let normalCalls=0,created=0,ensureCalls=0,blockCalls=0,loseIdentity=false,failBlock=false,pauseEnsure=null,limitedAccount=null;
   const unavailable=async()=>{normalCalls++;throw Error('Unexpected ordinary identity operation');};
   const provider={issuer:'https://unused.auth0.com/',databaseConnection:'test',get:unavailable,create:unavailable,rename:unavailable,verify:unavailable,setup:unavailable,list:unavailable,salesDemo:{
     async ensure(account){
       ensureCalls++;if(pauseEnsure)await pauseEnsure;
+      if(account.accountKey===limitedAccount)throw new AccessError(429,'DEMO_IDENTITY_BUSY','Auth0 rate limited this demo. Progress is saved.');
       if(!remote.has(account.email)){remote.set(account.email,{user_id:'auth0|demo-'+randomUUID(),email:account.email,name:account.name,email_verified:true,blocked:false});passwords.set(account.email,account.password);created++;}
       if(loseIdentity){loseIdentity=false;throw new AccessError(503,'DEMO_IDENTITY_RETRY','Retry setup');}
       return {...remote.get(account.email)};
@@ -98,6 +99,31 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
     await db.companyMembership.update({where:{userId:users.manager.user_id},data:{companyId:demo.companyId}});
     const audits=await db.auditEvent.findMany();for(const c of sheet.credentials)assert.ok(!JSON.stringify(audits).includes(c.password));
   });
+  await t.test('a setup stopped at ten accounts resumes only the missing account and preserves passwords',async()=>{
+    const p={submissionKey:randomUUID()},beforeCreated=created;limitedAccount='former';
+    try{
+      assert.equal((await call('platform','POST',base,p)).statusCode,429);
+      const pending=(await ok('platform','GET',base)).setups[0];assert.equal(pending.accountsPrepared,10);assert.equal(created-beforeCreated,10);
+      const saved=await db.salesDemoSetup.findUniqueOrThrow({where:{id:pending.id}}),beforeRetry=ensureCalls;
+      const originalIssuer=provider.issuer;provider.issuer='https://different.auth0.com/';
+      try{const changed=await call('platform','POST',`${base}/${pending.id}/resume`,{});assert.equal(changed.statusCode,409);assert.equal(changed.json().code,'DEMO_PROVIDER_CHANGED');assert.equal(ensureCalls,beforeRetry);}finally{provider.issuer=originalIssuer;}
+      assert.equal((await call('platform','POST',`${base}/${pending.id}/resume`,{})).statusCode,429);
+      assert.equal(ensureCalls-beforeRetry,1,'only the missing account consumes quota on a failed retry');
+      // Pending setups created before this fix have no persisted issuer. Verify
+      // those once through the paced provider before trusting their snapshots.
+      const legacy=Object.fromEntries(Object.entries(saved.accounts).map(([key,{issuer,...user}])=>[key,user]));
+      await db.salesDemoSetup.update({where:{id:pending.id},data:{accounts:legacy}});
+      const beforeLegacy=ensureCalls;assert.equal((await call('platform','POST',`${base}/${pending.id}/resume`,{})).statusCode,429);assert.equal(ensureCalls-beforeLegacy,11);
+      const rechecked=await db.salesDemoSetup.findUniqueOrThrow({where:{id:pending.id}});assert.ok(Object.values(rechecked.accounts).every(a=>a.issuer===provider.issuer));assert.equal(rechecked.credentialsCipher,saved.credentialsCipher);
+      limitedAccount=null;const beforeResume=ensureCalls,finished=await ok('platform','POST',`${base}/${pending.id}/resume`,{});
+      assert.equal(ensureCalls-beforeResume,1);assert.equal(created-beforeCreated,11);assert.equal(finished.id,pending.id);
+      const final=await db.salesDemoSetup.findUniqueOrThrow({where:{id:pending.id}});assert.equal(final.credentialsCipher,saved.credentialsCipher);
+      for(const [key,user]of Object.entries(saved.accounts))assert.deepEqual(final.accounts[key],user);
+      for(const c of finished.credentials)assert.equal(c.password,passwords.get(c.email));
+      assert.equal(await db.salesDemo.count({where:{id:pending.id}}),1);
+      await ok('platform','POST',`${base}/${pending.id}/teardown`,{expectedVersion:1});
+    }finally{limitedAccount=null;}
+  });
   await t.test('concurrent resume and teardown cannot race an in-flight provider create',async()=>{
     let unblock;pauseEnsure=new Promise(resolve=>{unblock=resolve;});const another={submissionKey:randomUUID()},before=ensureCalls;
     const running=call('platform','POST',base,another);while(ensureCalls===before)await new Promise(resolve=>setTimeout(resolve,10));
@@ -118,7 +144,7 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
       await tx.$queryRaw`SELECT set_config('app.company_id',${demo.companyId},true)`;
       return {
         offline:await tx.residentContact.findUniqueOrThrow({where:{id:s.offlineContactId}}),offlineLease:await tx.lease.findUniqueOrThrow({where:{id:s.offlineLeaseId}}),
-        former:await tx.residentContact.findUniqueOrThrow({where:{id:s.formerContactId}}),ended:await tx.lease.findUniqueOrThrow({where:{id:s.endedLeaseId}}),
+        former:await tx.residentContact.findUniqueOrThrow({where:{id:s.formerContactId}}),ended:await tx.lease.findUniqueOrThrow({where:{id:s.endedLeaseId}}),plannedMoveOut:await tx.leaseTransition.findUniqueOrThrow({where:{id:s.plannedMoveOutId}}),
         invite:await tx.invitation.findUniqueOrThrow({where:{id:s.invitationId}}),prorations:await tx.leaseProration.count({where:{leaseId:s.offlineLeaseId}}),
         settlement:await tx.leaseSettlement.findFirstOrThrow({where:{leaseId:s.endedLeaseId}}),refund:await tx.leaseMovement.findFirstOrThrow({where:{leaseId:s.endedLeaseId,kind:'deposit_refund'},include:{cashEntries:true}}),
         baseline:await tx.leaseInspection.findUniqueOrThrow({where:{id:s.baselineInspectionId}}),moveOut:await tx.leaseInspection.findUniqueOrThrow({where:{id:s.moveOutInspectionId}}),
@@ -133,6 +159,7 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
     assert.equal(facts.former.status,'archived');assert.equal(facts.ended.status,'ended');assert.equal(facts.prorations,1);
     assert.equal(facts.refund.cashEntries.length,1);assert.equal(facts.refund.cashEntries[0].amountCents,facts.refund.amountCents);assert.equal(facts.refund.cashEntries[0].movementId,facts.refund.id);assert.equal(facts.refund.leaseId,facts.ended.id);
     assert.equal(facts.baseline.status,'completed');assert.equal(facts.moveOut.status,'awaiting_review');assert.ok(facts.moveOut.baselineRevisionId);
+    assert.equal(facts.plannedMoveOut.kind,'plan_end');assert.equal(facts.plannedMoveOut.leaseId,s.offlineLeaseId);assert.equal(facts.offlineLease.status,'active');assert.ok(facts.offlineLease.endsOn.toISOString().slice(0,10)>demo.manifest.today);
     assert.equal(facts.agreement.status,'reviewed');assert.ok(facts.shared.receivedAt);assert.equal(facts.shared.userId,users.resident.user_id);
     assert.ok(facts.files.some(f=>f.scanStatus==='pending'));assert.ok(facts.files.filter(f=>f.scanStatus==='clean').every(f=>Buffer.from(f.content).equals(Buffer.from(DEMO_BUNDLED_TEXT))));
     assert.ok(facts.archivedDoc.archivedAt);assert.equal(facts.archivedUnit.status,'archived');assert.ok(facts.voided.voidedAt);assert.equal(facts.schedule.status,'paused');
@@ -202,5 +229,47 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
       const row=page.getByRole('listitem').filter({hasText:email});await row.getByRole('button',{name:'View role logins',exact:true}).click();await expect(page.getByRole('region',{name:'Demo login credentials'})).toBeVisible();
       await row.getByRole('button',{name:'Tear down demo',exact:true}).click();await row.getByRole('button',{name:'Confirm teardown',exact:true}).click();await expect(page.getByRole('region',{name:'Demo login credentials'})).toHaveCount(0);await expect(row).toContainText('Torn down');
     }finally{await browser.close();}
+  });
+  await t.test('browser accepts future move-out and preserves date/reason through the real planned-end review', {skip:!process.env.TEST_SALES_DEMO_BROWSER_URL},async()=>{
+    const built=await ok('platform','POST',base,{submissionKey:randomUUID()}),fixture=await current(built.id),leaseId=fixture.manifest.leases[0];
+    const ownerId=remote.get(built.credentials.find(c=>c.role==='Owner').email).user_id;await session(ownerId);
+    const before=await admin.query(`SELECT (SELECT count(*) FROM "LeaseMovement" WHERE "leaseId"=$1)::int movements,(SELECT count(*) FROM "RentCharge" WHERE "leaseId"=$1)::int charges,(SELECT status FROM "RentSchedule" WHERE "leaseId"=$1 LIMIT 1) billing`,[leaseId]);
+    const end=new Date(fixture.manifest.today+'T00:00:00Z');end.setUTCMonth(end.getUTCMonth()+9,0);const future=end.toISOString().slice(0,10),reason='Future departure agreed with tenant';
+    const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{})});
+    try{
+      const page=await newFixturePage(browser),settlementWrites=[];
+      await page.route('**/api/**',async route=>{
+        const req=route.request(),u=new URL(req.url());
+        if(req.method()==='POST'&&u.pathname.includes('/settlement'))settlementWrites.push(u.pathname);
+        const r=await call(ownerId,req.method(),u.pathname+u.search,req.postDataJSON()||undefined);
+        await route.fulfill({status:r.statusCode,contentType:'application/json',body:r.body});
+      });
+      await page.goto(`${process.env.TEST_SALES_DEMO_BROWSER_URL}/company/leases/${leaseId}?section=settlement`);
+      await page.getByRole('button',{name:'Prepare settlement',exact:true}).click();
+      const date=page.getByLabel('Move-out date',{exact:true});await expect(date).not.toHaveAttribute('max',/.+/);await date.fill(future);
+      await page.getByLabel('Reason shown to the tenant',{exact:true}).fill(reason);
+      await page.getByRole('button',{name:'Review planned move-out',exact:true}).click();
+      await expect(page.getByLabel('Lease action',{exact:true})).toHaveValue('plan_end');
+      await expect(page.getByLabel('Current lease end date',{exact:true})).toHaveValue(future);
+      await expect(page.getByRole('dialog').locator('textarea[name="reason"]')).toHaveValue(reason);
+      assert.deepEqual(settlementWrites,[]);
+      assert.notEqual((await ok(ownerId,'GET',`/api/company/leases/${leaseId}`)).endsOn.slice(0,10),future,'navigation makes no write');
+      await page.getByRole('button',{name:'Review changes',exact:true}).click();
+      await page.getByLabel('These dates and charges match the lease agreement.',{exact:true}).check();
+      await page.getByRole('button',{name:'Save end date',exact:true}).click();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      const lease=await ok(ownerId,'GET',`/api/company/leases/${leaseId}`);assert.equal(lease.status,'active');assert.equal(lease.endsOn.slice(0,10),future);
+      const history=await ok(ownerId,'GET',`/api/company/leases/${leaseId}/transition`);assert.equal(history.history[0].kind,'plan_end');assert.equal(history.history[0].reason,reason);
+      const after=await admin.query(`SELECT (SELECT count(*) FROM "LeaseMovement" WHERE "leaseId"=$1)::int movements,(SELECT count(*) FROM "RentCharge" WHERE "leaseId"=$1)::int charges,(SELECT status FROM "RentSchedule" WHERE "leaseId"=$1 LIMIT 1) billing`,[leaseId]);
+      assert.deepEqual(after.rows,before.rows,'month-end planning creates no deposit application, charge or billing pause');assert.deepEqual(settlementWrites,[]);
+      await page.reload();await page.getByRole('button',{name:'Move-out & settlement',exact:true}).click();
+      await expect(page.getByRole('button',{name:'Prepare settlement',exact:true})).toBeVisible();
+      await page.getByRole('button',{name:'Prepare settlement',exact:true}).click();
+      await page.getByLabel('Move-out date',{exact:true}).fill(fixture.manifest.today);
+      await page.getByLabel('Reason shown to the tenant',{exact:true}).fill('Actual move-out review');
+      await page.getByRole('button',{name:'Continue',exact:true}).click();
+      await expect(page.getByRole('heading',{name:'Forwarding details',exact:true})).toBeVisible();assert.deepEqual(settlementWrites,[]);
+    }finally{await browser.close();}
+    await ok('platform','POST',`${base}/${built.id}/teardown`,{expectedVersion:1});
   });
 });

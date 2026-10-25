@@ -6,6 +6,8 @@ Implemented as one local batch on 2026-10-16. No PR, push, cloud migration, Terr
 
 ## Owner experience
 
+The current local/PR move-out correction connects **Move-out & settlement** to this review: select a future move-out date, enter its reason and choose **Review planned move-out**. The date/reason open **Set an end date** without writing sources or replacing an unfinished lease review. Review effects and explicitly save; the lease stays active until a later final ending. A partial final month can still require the existing reviewed billing pause, which is shown before confirmation. The sales-demo version4 includes a real planned-end source for its offline tenant.
+
 **Partial rent** reviews the first or final calendar month of a recorded lease. It shows the included dates, monthly rent, exact calendar day count and agreed charge. A manual amount override requires a reason. Calculation review and posting are separate actions. A posted month is never silently recomputed; corrections use its original ledger and separately reviewed differences.
 
 The **Renewal** section offers **Renew or end lease**. The owner chooses a lease action and dates; a linked draft also offers manual or automatic future rent. **Review changes** presents dates, each new charge once, and plain billing/deposit effects. Day-count mathematics and record details are collapsed by default. The final action is **Complete renewal**, **End lease** or **Save end date**, with an explicit agreement checkbox. The review footer remains available while scrolling. Retained reviews can be resumed; edits retain inputs, and potentially committed saves keep their original submission identity.
