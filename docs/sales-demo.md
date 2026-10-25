@@ -1,36 +1,63 @@
-# Repeatable sales demo
+# Automatic sales demos
 
-PF-30, PR #61 follow-up. Additive migration `202610250054_sales_demo` follows the existing 041–053 chain. No infrastructure, activation variable, new secret or live provider operation is added. Merge/deployment and actual Auth0 acceptance remain user-controlled.
+PF-30 follow-up to merged PR61. Migration `202610250055_automatic_demo_accounts` follows054; fixture version3 adds real role logins and an occupant household record. No cloud infrastructure, new application secret, pricing or payment activation is added. Deployment and actual Auth0 account acceptance remain user-controlled.
 
-## Use
+## Create and present
 
-1. In platform **Users**, create or import a dedicated Auth0 account. Complete email verification. It must be active and have neither company membership nor platform authority. Existing customer assignments are rejected, never transferred.
-2. Open platform **Companies → Manage sales demos**, choose that account and **Build sales demo**. Setup is atomic; a failed step or audit leaves no partial company, users or business records. If the response is lost, retry the unchanged form. Its durable submission key returns the existing generation.
-3. Sign in as the selected sales account. **Oak & Elm · SALES DEMO** uses the normal owner workspace, company authorization and linked source/detail/history views. All fixtures are fictional. Supporting demo people have non-login identities and no passwords or sessions; the existing configured Auth0 issuer cannot authenticate them. No identity provisioning, email, bank, signature or screening provider is contacted during setup.
-4. Return as platform owner and select **Tear down demo**, then **Confirm teardown**. This suspends that generation's company, revokes its members' sessions, disables supporting memberships and releases the presenter's membership. The Auth0 account is preserved for reuse. Rebuild by choosing it in a new setup. Replaying an old create cannot resurrect a retired generation, and replaying its teardown cannot affect a newer one.
+Open platform **Companies → Manage sales demos → Build sales demo**. No user selection, manual Auth0 creation or verification-email step is required. The backend provisions eight role logins plus three prepared tenant identities without portal access, then builds one fictional source-linked company. Passwords are issued only for the eight role logins. The credential panel shows each account's email and a unique generated password:
 
-Teardown is retirement, not physical erasure: immutable cash, documents, task drafts, source links and audit history remain in the suspended demo company. Suspended companies stop rent billing through the normal company-state fence. Platform company administration can still inspect retained history. The demo list shows the latest 50 generations, each fixture version and rebuild guidance when it is behind the current fixture.
-
-## Fixture coverage (version 1)
-
-| Area | Connected examples |
+| Role | Example person and scope |
 | --- | --- |
-| Portfolio | Two properties, six detailed units, four tenants and active leases; two unoccupied units with separately reviewed ready/turnover states; explicit owner listing intent |
-| Rent and cash | Three months of charges and manual receipts per active lease, current/partial/unpaid balances, parking charge, four refundable deposit accounts and linked cash receipts, future rent terms, upcoming recurring schedule and linked draft renewal |
-| Maintenance | Three property work orders, a plumbing vendor linked to a request, paid repair expense reused by its cost link, selected-property technician, accepted/submitted/approved completion and immutable action history |
-| Calendar and notices | Due preventive safety plan, dated work orders, real notification events/deliveries from the source actions, manager-submitted inspection review notification for the presenter |
-| Leasing pipeline | Prospect attached to the ready unit, dated tour follow-up, manual application and a private saved lease task owned by the presenter |
-| Documents and review | Move-in inspection and its submitted revision; unsigned agreement preparation linked to recorded leaseholder/company signers; actual private sample original in quarantine |
-| Reports | Normal dashboards, statements, historical cash and usage derive from the same scoped source records |
+| Owner | Full company operating access; no platform authority |
+| Manager | Normal management access; no owner-only team/listing controls |
+| Staff technician | Explicit maintenance execution and selected-property access; assigned upcoming work and completed history |
+| Residents / leaseholders | Four distinct households with scoped rent, deposits, lease history, notifications and maintenance |
+| Occupant | Recorded member of the first household, with portal approval and property assignment; no lease financial access |
 
-Documents stay quarantined until the real scanner clears them. The agreement has no cleared file attached and cannot be submitted until management scans and selects the original; no signature is claimed. Supporting residents are fictional and cannot use the resident portal. Real portal delivery, electronic signatures, online payments, external notifications, provider integrations and platform pricing/billing are not fabricated. Import workflows are available against the dedicated company and do not need precommitted fake batches.
+Passwords start masked. **Show passwords** reveals them; **Close credentials** clears the panel. After refresh, an authorized platform owner can use **View role logins**. Credentials are not saved to browser storage or included in ordinary demo lists. Use the normal sign-in screen to present each role. Email verification is set to true only when these marked demo identities are created; `verify_email:false` suppresses verification delivery. Normal accounts retain their existing verification/setup rules. Tenant-level MFA and other Auth0 sign-in policies still apply.
 
-The factory uses an unbound internal Fastify application and an adapter bound to the outer Prisma transaction. There is no HTTP listener or authentication bypass in the served application. It runs the existing handlers and their validation, RLS and audits; only the fixture's supporting identity adapter is simulated. The provider cannot read or create arbitrary identities. Setup is bounded by a 60-second transaction and serializes with current administrator/account fences. A competing mutation may return 409; retry the same details.
+Each new demo uses a random generation identifier, generated `@sales-demo.invalid` addresses, per-account passwords and an Auth0 `app_metadata.property_flow_sales_demo` ownership marker. A matching email alone is never enough to reuse, change, verify or disable an account. Provider operations require the existing configured Auth0 Management API connection and its existing read/create/update-user scopes. No verification/password email, payment, electronic signature or screening provider is invoked by demo setup.
 
-## Maintenance and recovery
+## Recovery and teardown
 
-Every feature/schema/workflow change must review the fixture and this matrix, bump its version when content changes, and keep the lifecycle regression passing. Do not edit previously seeded history to upgrade a demo. Retire and create a fresh generation. Add representative linked records for newly delivered features; unavailable providers must remain honestly unavailable.
+Auth0 calls run outside database transactions. Before any provider write, the server durably records the generation, submission identity and encrypted credentials. A short database transaction claims a bounded five-minute operation lease; each provider step renews it. Exact generation markers recover provider success after a lost response. Fresh platform authority is checked between steps. A failed source/audit write rolls back the entire business graph while keeping the setup and owned identities available for retry.
 
-Setup/teardown emit fixed `sales_demo.create` / `sales_demo.teardown` browser outcomes and durations, standard bounded HTTP signals, and atomic `sales_demo.created` / `sales_demo.retired` audit events. No private contacts or fixture contents are metric labels. On failure, inspect the request ID and safe error code, fix the underlying schema/validation/permissions, then retry the original submission. Never grant runtime delete privileges or disable immutable-history triggers to reset fixtures.
+If setup is interrupted, retry the original form or select **Resume demo setup** under **Unfinished setups**. Completed retries return the same generation and passwords. Concurrent setup/teardown returns a useful busy conflict. After a process crash, a lease can take up to five minutes to expire before retry is allowed. A stale browser cannot silently create a second copy through the original submission.
 
-Validation: both builds, the disposable lifecycle runner and focused draft-save/browser regression results are recorded in the PR follow-up release notes. These checks do not establish live provider, deployment or user acceptance.
+**Tear down demo → Confirm teardown** first suspends the demo company, disables its generated local users/memberships and revokes company and support sessions atomically. It then blocks only the exact marked Auth0 identities. If Auth0 is unavailable, local access stays disabled and **Teardown needs retry** remains visible. Retry finishes provider cleanup, including an ambiguous create whose subject was not yet recorded. Successful teardown removes the encrypted credential payload. Source, cash, document and audit history is retained. Build a new demo for fresh accounts/data; an old teardown cannot affect it.
+
+A generated account moved to another company or given platform authority blocks credential reveal and teardown until its assignment is reviewed. Those actions never change a customer's assignment or identity. Version-one demos remain listed for retirement: their existing presenter account is released and preserved, rather than disabled in Auth0. Rebuild them through version3 for automatic role logins.
+
+## Linked fixture coverage (version 3)
+
+| Area | Connected source examples |
+| --- | --- |
+| Accounts and access | Verified role logins; Jamie Wells has an active offline lease and no portal membership/issued credentials/sign-in history; Drew Patel has an unaccepted invitation with no email delivery; Robin Lane is an archived former tenant |
+| Portfolio | Two populated properties, active/vacant/turnover units, an archived storage unit, imported inventory, separately reviewed readiness and explicit owner listing intent |
+| Leasing/households | Four online households, a non-portal active tenant, primary leaseholder plus approved nonfinancial occupant, a draft renewal, an ended lease and personal saved lease task |
+| Rent/collections | Three months of charges and receipts, paid/partial/unpaid balances, calendar proration for mid-month move-in, parking concession, corrected/reversed credit and unapplied cash credit |
+| Deposits/move-out | Held and pending deposits; reviewed repair charge and settlement, deposit application, manual refund linked to cash outflow, retained ended-lease ledger and archived tenant history |
+| Billing schedules/terms | Upcoming recurring rent, a paused rent schedule and future-effective terms |
+| Maintenance | Resident intake, private team notes, shared updates, resident reply, assigned upcoming staff work and accepted/submitted/approved completion history, vendor contact and reused paid-expense source |
+| Preventive/calendar | Active due safety schedule and a paused filter-service schedule, source-linked work dates and tour follow-up |
+| Pipeline | Draft, approved and rejected manual applications, complete decision history, ready-unit prospect and dated tour; no external screening result |
+| Imports | Committed unit and paid-expense imports, retained source/results, invalid unit-row preview and duplicate expense-source preview requiring correction |
+| Documents | Quarantined sample, an exact bundled inert text original, explicit owner share, resident received/download history and archived original |
+| Inspection/agreement review | Submitted inspection, completed move-in baseline and comparative move-out review; unsigned draft and reviewed agreement preparation with exact intended signers/original |
+| Personal notices | Read/unread management notices, requester/staff deliveries, source links, preference/history example and opted-out work notices |
+| Reports | Statement, collections, historical cash, property/portfolio totals and exports from the same charges, receipts, refunds, corrections and import sources |
+| Platform controls | Generated roles are actual support-view targets; company profile/features/usage remain available to the existing platform administrator. Pricing is unconfigured until the administrator chooses a real configured plan; no global plan prices, fake SaaS invoices or support grants are invented |
+
+All entries in the shipped company feature catalog have representative linked sources, enforced by the coverage regression. `DEMO_FEATURE_COVERAGE` and this matrix must change when new feature areas ship. Individual screens can show useful missing/pending/archived states; the demo does not pretend every provider or future feature is activated.
+
+Only the exact bundled UTF-8 text constant is cleared by the private factory's deterministic content validator. It contains no active content and is labeled a fictional original. No live ClamAV result is claimed. Other originals remain quarantined until the real application scanner checks them; normal user uploads always use the configured application scanner. Reviewed agreements remain unsigned. Provider-backed collection, signatures, external messages, screening, bank reconciliation, and unimplemented roadmap features are not fabricated.
+
+For a sales walkthrough, sign in as owner and compare **Tenants**: Jordan (online leaseholder), Jamie (offline active lease), Drew (invitation pending), Robin (archived, ended lease and settlement). Follow Jamie's lease to partial-month rent and pending deposit; follow Robin's lease through baseline/move-out, itemization, applied deposit and refund source. Show Jordan's concession/correction and excess cash, then shared original/receipt history and unsigned reviewed package. Use the application/import lists for approved/rejected and validation/recovery cases. Sign in as resident and occupant to compare financial/document access, and as staff to show selected-property assigned work. Manager has operational queues, read/unread notices and saved preference history; owner-only actions remain denied.
+
+## Credential protection and maintenance
+
+The existing `AUTH0_WEB_CLIENT_SECRET` derives a separate AES-256-GCM key through HKDF with a demo-specific purpose. Random nonces and the generation ID as authenticated data prevent cross-generation substitution. Passwords are encrypted in `SalesDemoSetup.credentialsCipher`; they appear only in authenticated, CSRF-protected, freshly authorized, audited POST responses with `Cache-Control:no-store`. Lists, audits, telemetry and provider DTOs exclude passwords. App/client secrets are never returned. Initial generated passwords may stop working if changed separately in Auth0; rebuild to reset the demo.
+
+Retain the application secret while existing encrypted credentials are needed. Rotating it makes older credential payloads unreadable; restore the prior secret or tear down/rebuild. Teardown can block known demo identities without decrypting passwords. No plaintext passwords, dumps or credential artifacts belong in Git or diagnostics.
+
+Keep the seed, coverage matrix, identity lifecycle and role-access regressions current as features change; bump `SALES_DEMO_SEED_VERSION` for fixture changes. Never upgrade posted demo history in place. The no-login examples have no company membership or issued password; account preparation alone never grants portal authority. Fixed browser operations are `sales_demo.create`, `sales_demo.teardown` and `sales_demo.credentials`; source/setup/reveal/retirement audit events contain safe identifiers only. Standard request failure/duration monitoring covers the platform endpoints. Use `node scripts/test-sales-demo.mjs` for disposable API/browser validation and the provider/credential unit tests. These checks simulate Auth0 and do not establish live provider or deployed acceptance.

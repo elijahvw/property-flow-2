@@ -8,7 +8,13 @@ export type ProviderUser = {
   blocked?: boolean;
   identities?: { connection: string; provider?: string }[];
 };
+export type DemoIdentity = { demoId: string; accountKey: string; email: string; name: string; password: string };
+export type DemoIdentityProvider = {
+  ensure(account: DemoIdentity): Promise<ProviderUser>;
+  block(account: Pick<DemoIdentity, "demoId" | "accountKey" | "email">, expectedSubject?: string, beforeBlock?: (user: ProviderUser) => Promise<void>): Promise<void>;
+};
 export interface IdentityProvider {
+  salesDemo?: DemoIdentityProvider;
   issuer: string;
   databaseConnection: string;
   list(
@@ -148,9 +154,55 @@ export function identityProvider(
       throw new AccessError(409,"IDENTITY_AMBIGUOUS","Multiple sign-in identities use this email. Choose the intended existing account in Property Flow Users; no account was created or linked.");
     return [...found.values()];
   }
+  function demoProfile(raw: any, account: Pick<DemoIdentity, "demoId" | "accountKey" | "email">) {
+    const result = user(raw), marker = raw.app_metadata?.property_flow_sales_demo;
+    if (marker?.id !== account.demoId || marker?.account !== account.accountKey || result.email !== account.email ||
+        !result.user_id.startsWith("auth0|") || !result.identities?.some(i => i.connection === connection && i.provider === "auth0"))
+      throw new AccessError(409, "DEMO_IDENTITY_CONFLICT", "This identity is not owned by this demo. No existing account was changed.");
+    return result;
+  }
+  async function findDemo(account: Pick<DemoIdentity, "demoId" | "accountKey" | "email">) {
+    if (!/^[0-9a-f-]{36}$/.test(account.demoId) || !/^[a-z0-9]+$/.test(account.accountKey) || account.email !== `${account.accountKey}.${account.demoId}@sales-demo.invalid`)
+      throw new AccessError(400, "INVALID_DEMO_IDENTITY", "Invalid generated demo identity.");
+    const rows = await api("users-by-email?" + new URLSearchParams({ email: account.email }));
+    if (!Array.isArray(rows) || rows.length > 1) throw new AccessError(409, "DEMO_IDENTITY_CONFLICT", "Demo identity requires review. No existing account was changed.");
+    return rows.length ? demoProfile(rows[0], account) : null;
+  }
   return {
     issuer: base + "/",
     databaseConnection: connection,
+    salesDemo: {
+      async ensure(account) {
+        const existing = await findDemo(account);
+        if (existing) {
+          if (!existing.email_verified || existing.blocked) throw new AccessError(409, "DEMO_IDENTITY_UNAVAILABLE", "The demo identity was changed or disabled. Tear down this setup and create a new demo.");
+          return existing;
+        }
+        try {
+          const result = demoProfile(await api("users", { connection, email: account.email, name: account.name, password: account.password,
+            email_verified: true, verify_email: false, app_metadata: { property_flow_sales_demo: { id: account.demoId, account: account.accountKey } } }), account);
+          if (!result.email_verified || result.blocked) throw new AccessError(409, "DEMO_IDENTITY_UNAVAILABLE", "The provider did not activate this demo account.");
+          return result;
+        } catch (error) {
+          const recovered = await findDemo(account);
+          if (recovered?.email_verified && !recovered.blocked) return recovered;
+          if (error instanceof AccessError) throw error;
+          throw new AccessError(503, "DEMO_IDENTITY_RETRY", "Demo account setup was interrupted. Retry the same setup.");
+        }
+      },
+      async block(account, expectedSubject, beforeBlock) {
+        const found = await findDemo(account);
+        if (!found) return;
+        if (expectedSubject && expectedSubject !== found.user_id) throw new AccessError(409, "DEMO_IDENTITY_CONFLICT", "The demo identity changed. No account was disabled.");
+        // A create response may have been lost before its subject was recorded.
+        // Fence the discovered local account before disabling it upstream.
+        await beforeBlock?.(found);
+        if (!found.blocked) {
+          const result = user(await api("users/" + encodeURIComponent(found.user_id), { blocked: true }, "PATCH"));
+          if (result.user_id !== found.user_id || !result.blocked) throw new AccessError(503, "DEMO_BLOCK_RETRY", "Retry teardown to finish disabling the demo logins.");
+        }
+      },
+    },
     async list(page, email) {
       if (email) return { users: await byEmail(email), nextPage: null };
       const b = await api(

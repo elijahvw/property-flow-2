@@ -267,7 +267,7 @@ export function registerApplication(
   authenticate: preValidationHookHandler,
   origin: string,
   identityProvider?: IdentityProvider,
-  options: { documentScanner?: DocumentScanner; invitationMailer?: InvitationMailer; notificationPublisher?: NotificationPublisher; salesDemo?: boolean } = {},
+  options: { documentScanner?: DocumentScanner; invitationMailer?: InvitationMailer; notificationPublisher?: NotificationPublisher; salesDemo?: boolean; salesDemoCredentialSecret?: string } = {},
 ) {
   registerImpersonation(server, db, origin, authenticate);
   registerCompanyBilling(server, db, authenticate, origin);
@@ -280,7 +280,7 @@ export function registerApplication(
   registerExpenseImports(server, db, authenticate, origin);
   registerTaskDrafts(server, db, authenticate, origin);
   registerRentalApplications(server, db, authenticate, origin, identityProvider);
-  if (options.salesDemo !== false) registerSalesDemo(server, db, authenticate, origin, identityProvider?.issuer);
+  if (options.salesDemo !== false) registerSalesDemo(server, db, authenticate, origin, identityProvider, options.salesDemoCredentialSecret);
   registerNotifications(server, db, authenticate, origin);
   registerWorkspaceGuide(server, db, authenticate, origin);
   registerInvitations(server, db, authenticate, origin, identityProvider, options.invitationMailer);

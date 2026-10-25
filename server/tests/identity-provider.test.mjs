@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { identityProvider } from "../dist/identity-provider.js";
+import { randomUUID } from 'node:crypto';
 const env = {
   AUTH0_DOMAIN: "tenant.auth0.com",
   AUTH0_MANAGEMENT_CLIENT_ID: "test-client",
@@ -156,4 +157,47 @@ test("case-insensitive duplicates cannot be hidden by a single exact email resul
   throw Error('unexpected endpoint');
  });
  await assert.rejects(p.create(profile.email,'A'),e=>e.code==='IDENTITY_AMBIGUOUS');assert.equal(writes,0);
+});
+
+test('automatic demo creates verified role logins and recovers an ambiguous provider success by exact marker',async()=>{
+ const demoId=randomUUID(),account={demoId,accountKey:'owner',email:`owner.${demoId}@sales-demo.invalid`,name:'Fictional demo owner',password:'isolated-test-password-aA1!'};
+ let stored=null,writes=0;
+ const p=identityProvider(env,async(url,options)=>{
+  if(url.endsWith('/oauth/token'))return Response.json({access_token:'token',expires_in:3600});
+  if(url.includes('users-by-email'))return Response.json(stored?[stored]:[]);
+  if(url.endsWith('/users')){
+   writes++;const b=JSON.parse(options.body);assert.equal(b.email_verified,true);assert.equal(b.verify_email,false);assert.equal(b.password,account.password);assert.deepEqual(b.app_metadata,{property_flow_sales_demo:{id:demoId,account:'owner'}});
+   stored={...profile,user_id:'auth0|generated-demo',email:account.email,name:account.name,app_metadata:b.app_metadata};throw Error('response lost');
+  }
+  throw Error('unexpected endpoint');
+ });
+ const created=await p.salesDemo.ensure(account);assert.equal(created.user_id,'auth0|generated-demo');assert.equal(created.email_verified,true);assert.equal(created.password,undefined);assert.equal(created.app_metadata,undefined);
+ assert.equal((await p.salesDemo.ensure(account)).user_id,created.user_id);assert.equal(writes,1);
+});
+
+test('demo lifecycle cannot adopt, verify, reset or block an unrelated identity',async()=>{
+ const demoId=randomUUID(),account={demoId,accountKey:'resident',email:`resident.${demoId}@sales-demo.invalid`,name:'Demo resident',password:'isolated-test-only-aA1!'};
+ for(const marker of [undefined,{id:randomUUID(),account:'resident'},{id:demoId,account:'owner'}]){
+  let writes=0;
+  const p=identityProvider(env,async(url,options)=>{
+   if(url.endsWith('/oauth/token'))return Response.json({access_token:'token',expires_in:3600});
+   if(url.includes('users-by-email'))return Response.json([{...profile,email:account.email,app_metadata:{property_flow_sales_demo:marker}}]);
+   writes++;throw Error('unexpected write');
+  });
+  await assert.rejects(p.salesDemo.ensure(account),e=>e.code==='DEMO_IDENTITY_CONFLICT');
+  await assert.rejects(p.salesDemo.block(account),e=>e.code==='DEMO_IDENTITY_CONFLICT');assert.equal(writes,0);
+ }
+});
+
+test('demo teardown blocks only its marked subject and safely repeats or skips missing users',async()=>{
+ const demoId=randomUUID(),account={demoId,accountKey:'staff',email:`staff.${demoId}@sales-demo.invalid`};let patches=0,blocked=false,missing=false;
+ const p=identityProvider(env,async(url,options)=>{
+  if(url.endsWith('/oauth/token'))return Response.json({access_token:'token',expires_in:3600});
+  if(url.includes('users-by-email'))return Response.json(missing?[]:[{...profile,email:account.email,blocked,app_metadata:{property_flow_sales_demo:{id:demoId,account:'staff'}}}]);
+  if(options.method==='PATCH'){patches++;assert.deepEqual(JSON.parse(options.body),{blocked:true});blocked=true;return Response.json({...profile,email:account.email,blocked:true});}
+  throw Error('unexpected endpoint');
+ });
+ await assert.rejects(p.salesDemo.block(account,'auth0|wrong-subject'),e=>e.code==='DEMO_IDENTITY_CONFLICT');assert.equal(patches,0);
+ await p.salesDemo.block(account,profile.user_id);await p.salesDemo.block(account,profile.user_id);assert.equal(patches,1);
+ missing=true;await p.salesDemo.block(account,profile.user_id);assert.equal(patches,1);
 });

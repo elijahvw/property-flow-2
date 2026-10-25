@@ -4,13 +4,16 @@ import type { PrismaClient } from "@prisma/client";
 import { registerApplication } from "./application.js";
 import { AccessError } from "./access.js";
 import type { Tx } from "./operational.js";
-import type { IdentityProvider } from "./identity-provider.js";
+import type { IdentityProvider, ProviderUser } from "./identity-provider.js";
 import { companyDay } from "./reports.js";
+import { seedDemoScenarios, DEMO_BUNDLED_TEXT } from "./sales-demo-scenarios.js";
 
 // Bump whenever the fixture changes. Only constant fictional content goes here;
 // never copy customer data or call an external identity/email/payment provider.
-export const SALES_DEMO_SEED_VERSION = 1;
-export async function seedSalesDemo(tx: Tx, companyId: string, ownerId: string) {
+export const SALES_DEMO_SEED_VERSION = 3;
+export type DemoSeedAccounts = { issuer: string; databaseConnection: string; users: Record<string, ProviderUser> };
+export async function seedSalesDemo(tx: Tx, companyId: string, accounts: DemoSeedAccounts) {
+  const ownerId = accounts.users.owner.user_id;
   // Existing business handlers run inside the single outer transaction. This
   // private, unbound Fastify instance has no socket, login route or real provider.
   const db = new Proxy(tx, {
@@ -22,15 +25,19 @@ export async function seedSalesDemo(tx: Tx, companyId: string, ownerId: string) 
   }) as unknown as PrismaClient;
   const origin = "https://sales-demo.invalid", csrf = randomUUID();
   const app = Fastify();
-  const people = new Map<string, { user_id: string; email: string; name: string; email_verified: boolean }>();
+  const people = new Map(Object.values(accounts.users).map(user => [user.user_id, user]));
   const provider: IdentityProvider = {
-    issuer: "https://sales-demo.invalid/", databaseConnection: "fictional-demo",
+    issuer: accounts.issuer, databaseConnection: accounts.databaseConnection,
     async get(id) {
       const row = people.get(id);
       if (!row) throw new AccessError(409, "DEMO_IDENTITY_ONLY", "Choose a fictional demo account.");
       return row;
     },
-    async create() { throw new Error("Demo fixture cannot provision real identities"); },
+    async create(email) {
+      const row = [...people.values()].find(p => p.email === email);
+      if (!row) throw new Error("Only preprovisioned demo identities are allowed");
+      return row;
+    },
     async list() { return { users: [], nextPage: null }; },
     async rename() { throw new Error("Demo fixture cannot change identities"); },
     async verify() { throw new Error("Demo fixture cannot send email"); },
@@ -42,13 +49,23 @@ export async function seedSalesDemo(tx: Tx, companyId: string, ownerId: string) 
     request.appSession = { tokenHash: csrf, csrfToken: csrf, userId: actingId, createdAt: new Date(), expiresAt: new Date(Date.now()+60000), idleExpiresAt: new Date(Date.now()+60000), impersonatedUserId: null, impersonationExpiresAt: null, impersonationReason: null, impersonationCompanyId: null, impersonationMembershipVersion: null };
   }, origin, provider, {
     salesDemo: false,
-    // Keep originals quarantined until the real scanner checks them later.
-    documentScanner: Object.assign(async () => { throw new AccessError(503, "SCANNER_UNAVAILABLE", "Demo original awaits scanning."); }, { available: async () => false }),
+    // This unbound fixture can clear only the exact bundled, inert UTF-8 text.
+    // User uploads always use the application's real scanner; no external scan
+    // success is inferred. Other fixture originals stay quarantined.
+    documentScanner: Object.assign(async (content: Buffer) => {
+      if (content.equals(Buffer.from(DEMO_BUNDLED_TEXT))) return "clean" as const;
+      throw new AccessError(503, "SCANNER_UNAVAILABLE", "This demo original awaits the application scanner.");
+    }, { available: async () => true }),
   });
-  app.setErrorHandler((error, _request, reply) => reply.code(error instanceof AccessError ? error.statusCode : 500).send({ code: (error as AccessError).code || "DEMO_SEED_FAILED" }));
-  async function call(method: "GET" | "POST" | "PUT", url: string, body?: Record<string, unknown>): Promise<any> {
-    const response = await app.inject({ method, url, headers: { origin, "x-csrf-token": csrf }, ...(body ? { payload: { ...body, ...(method !== "GET" && !url.endsWith("/preview") ? { submissionKey: randomUUID() } : {}) } } : {}) });
-    if (response.statusCode !== 200) throw new AccessError(503, "DEMO_SEED_FAILED", `Demo setup could not finish (${response.json().code}). Retry to rebuild the entire fixture.`);
+  app.setErrorHandler((error, request, reply) => reply.code(error instanceof AccessError ? error.statusCode : 500).send({ code: (error as AccessError).code || "DEMO_SEED_FAILED", step: request.routeOptions.url }));
+  async function call(method: "GET" | "POST" | "PUT" | "PATCH", url: string, body?: Record<string, unknown>): Promise<any> {
+    const keyed = method !== "GET" && method !== "PATCH" && !url.endsWith("/scan") && !url.endsWith("/void") && (!url.endsWith("/preview") || url.startsWith("/api/company/imports/"));
+    const response = await app.inject({ method, url, headers: { origin, "x-csrf-token": csrf }, ...(body ? { payload: { ...body, ...(keyed ? { submissionKey: randomUUID() } : {}) } } : {}) });
+    if (response.statusCode !== 200) {
+      const failure = response.json();
+      console.error(JSON.stringify({ code: "DEMO_SEED_FAILED", step: failure.step, sourceCode: failure.code }));
+      throw new AccessError(503, "DEMO_SEED_FAILED", `Demo setup could not finish (${failure.code}). Retry to rebuild the entire fixture.`);
+    }
     return response.json();
   }
   const today = companyDay("America/New_York"), month = today.slice(0,7)+"-01";
@@ -56,9 +73,8 @@ export async function seedSalesDemo(tx: Tx, companyId: string, ownerId: string) 
   try {
     await tx.$queryRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
     const properties = [], leases = [], residents = [], units = [];
-    const managerId = `demo-${randomUUID()}`, staffId = `demo-${randomUUID()}`;
+    const managerId = accounts.users.manager.user_id, staffId = accounts.users.staff.user_id;
     for (const [id, role, name] of [[managerId, "manager", "Alex Parker · DEMO Manager"], [staffId, "staff", "Sam Ellis · DEMO Technician"]]) {
-      await tx.user.create({ data: { id, email: `${id}@sales-demo.invalid`, name, emailVerified: true, accessInitializedAt: new Date(), identities: { create: { issuer: provider.issuer, subject: id } } } });
       await tx.companyMembership.create({ data: { userId: id, companyId, role, staffPropertyScope: role === "staff" ? "selected" : "all", maintenanceExecution: role === "staff" } });
     }
     for (const [index, name] of ["Maple Court · DEMO", "Harbor House · DEMO"].entries()) {
@@ -68,10 +84,8 @@ export async function seedSalesDemo(tx: Tx, companyId: string, ownerId: string) 
         const unit = await call("POST", `/api/company/properties/${property.id}/units`, { label: `Apartment ${n}`, bedrooms: n === 1 ? 1 : 2, bathrooms: "1.00", marketRent: n === 1 ? "1500.00" : "1800.00" });
         units.push(unit.id);
         if (n === 3) continue;
-        const personId = `demo-${randomUUID()}`, name = ["Jordan Rivera", "Taylor Morgan", "Casey Chen", "Avery Brooks"][index*2+n-1];
-        const person = { user_id: personId, email: `${personId}@sales-demo.invalid`, name: `${name} · DEMO`, email_verified: false };
-        people.set(personId, person);
-        await tx.user.create({ data: { id: personId, email: person.email, name: person.name, accessInitializedAt: new Date(), identities: { create: { issuer: provider.issuer, subject: personId } } } });
+        const accountKey = ["resident", "resident2", "resident3", "resident4"][index*2+n-1];
+        const personId = accounts.users[accountKey].user_id;
         await tx.companyMembership.create({ data: { userId: personId, companyId, role: "resident" } });
         await tx.residentPropertyAssignment.create({ data: { userId: personId, companyId, propertyId: property.id } });
         residents.push(personId);
@@ -124,6 +138,16 @@ export async function seedSalesDemo(tx: Tx, companyId: string, ownerId: string) 
     const termBody = { effectiveOn: offset(2), monthlyRent: "1550.00", rentDueDay: 1, graceDays: 5, paymentInstructions: "DEMO future agreed terms.", reason: "DEMO reviewed future rent adjustment.", expectedLeaseVersion: 1 };
     const termPreview = await call("POST", `/api/company/leases/${leases[0]}/terms/preview`, termBody);
     await call("POST", `/api/company/leases/${leases[0]}/terms`, { ...termBody, sourceHash: termPreview.sourceHash, confirmed: true });
-    return { today, properties, units, leases, residents, managerId, staffId, requests, vendorId: vendor.vendorId, preventivePlanId: plan.planId, inspectionId, agreementId: agreement.agreementId, documentId: file.documentId, documentVersionId: file.versionId, prospectId: prospect.id, followUpId: followUp.id, applicationId: application.id, savedTaskId: savedTask.id, scheduleId: schedule.id, renewalId: renewal.id };
+    const occupant = accounts.users.occupant;
+    await tx.companyMembership.create({ data: { userId: occupant.user_id, companyId, role: "resident" } });
+    await call("POST", `/api/company/leases/${leases[0]}/participants`, { userId: occupant.user_id, name: occupant.name, email: occupant.email, role: "occupant", startsOn: offset(-5), endsOn: null, portalApproved: true });
+    const pendingWork = await call("GET", `/api/company/work-orders/${requests[2]}`);
+    await call("POST", `/api/company/work-orders/${requests[2]}/actions`, { action: "assign", assigneeId: staffId, expectedVersion: pendingWork.version, note: "DEMO upcoming seasonal service." });
+    actingId = accounts.users.resident.user_id;
+    const residentRequest = await call("POST", "/api/resident/maintenance", { propertyId: properties[0], title: "Bedroom window draft · DEMO", description: "Fictional resident request for the shared maintenance timeline.", priority: "normal" });
+    actingId = ownerId;
+    requests.push(residentRequest.id);
+    const scenarios = await seedDemoScenarios({ call, tx, companyId, accounts, today, offset, properties, units, leases, requests, asActor: id => { actingId = id; } });
+    return { today, properties, units, leases, residents, occupantId: occupant.user_id, managerId, staffId, requests, vendorId: vendor.vendorId, preventivePlanId: plan.planId, inspectionId, agreementId: agreement.agreementId, documentId: file.documentId, documentVersionId: file.versionId, prospectId: prospect.id, followUpId: followUp.id, applicationId: application.id, savedTaskId: savedTask.id, scheduleId: schedule.id, renewalId: renewal.id, scenarios };
   } finally { await app.close(); }
 }
