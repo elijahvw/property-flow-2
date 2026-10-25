@@ -116,6 +116,9 @@ jobs:
       - name: Test historical cash, availability and reviewed unit imports
         run: node scripts/test-roadmap.mjs
 
+      - name: Test sales demo setup, source links, recovery and teardown
+        run: node scripts/test-sales-demo.mjs
+
       - name: Keep test reports in GitHub
         if: always()
         uses: actions/upload-artifact@v4

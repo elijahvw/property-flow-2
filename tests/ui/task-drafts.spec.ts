@@ -69,6 +69,32 @@ test('Save draft and close persists the selected task before hiding its form',as
  await expect(page.getByRole('region',{name:'Record a lease',exact:true})).not.toBeVisible();expect(state.drafts.size).toBe(1);const id=[...state.drafts.keys()][0];await page.goto('/company/drafts?draftId='+id);await expect(page.getByLabel('New lease monthly rent (USD)')).toHaveValue('1234.50');expect(state.posts).toHaveLength(0);
 });
 
+test('a rejected close-confirmation draft save explains the failure and preserves entered values',async({page})=>{
+ const state=await fixture(page);await enterLease(page);state.draftStatus=403;
+ await page.getByRole('button',{name:'Back to leases',exact:true}).click();
+ const confirmation=page.getByRole('alertdialog',{name:'Close without saving changes?',exact:true});
+ await confirmation.getByRole('button',{name:'Save draft & close',exact:true}).click();
+ await expect(confirmation.getByRole('alert')).toContainText('Task area is read-only');
+ expect(state.drafts.size).toBe(0);expect(state.posts).toHaveLength(0);
+ await confirmation.getByRole('button',{name:'Keep editing',exact:true}).click();
+ await expect(page.getByLabel('New lease monthly rent (USD)')).toHaveValue('1234.50');
+ await expect(page.getByLabel('New lease payment instructions shared with resident (optional)')).toHaveValue('Fictional reviewed payment instructions');
+});
+
+test('a stale close-confirmation draft save remains visible until the user returns to the editor',async({page})=>{
+ const state=await fixture(page);await enterLease(page);
+ await page.getByRole('button',{name:'Save task draft',exact:true}).click();await expect.poll(()=>state.drafts.size).toBe(1);
+ const row=[...state.drafts.values()][0];row.version++;
+ await page.getByLabel('New lease monthly rent (USD)').fill('1650.00');
+ await page.getByRole('button',{name:'Back to leases',exact:true}).click();
+ const confirmation=page.getByRole('alertdialog',{name:'Close without saving changes?',exact:true});
+ await confirmation.getByRole('button',{name:'Save draft & close',exact:true}).click();
+ await expect(confirmation.getByRole('alert')).toContainText('This record changed');
+ await confirmation.getByRole('button',{name:'Keep editing',exact:true}).click();
+ await expect(page.getByLabel('New lease monthly rent (USD)')).toHaveValue('1650.00');
+ expect(state.posts).toHaveLength(0);expect(row.values.monthlyRent).toBe('1234.50');
+});
+
 test('an interrupted task save keeps its body through a later read-only denial and locks business submission',async({page})=>{
  const state=await fixture(page);await enterLease(page);state.abortDraft=true;
  await page.getByRole('button',{name:'Save task draft',exact:true}).click();

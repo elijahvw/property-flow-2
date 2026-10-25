@@ -267,6 +267,7 @@ export function EditorDialog({
   const confirmationContents = <>
     <h3>{confirmationTitle}</h3>
     <p id={`${titleId}-close-help`}>{uncertain ? "The response was interrupted and the request may already be saved. Keep its original details and retry identity to avoid creating it twice. Closing keeps recovery available on this page; it does not create a new draft." : closingAdapter.current ? "Keep editing, discard this form’s unfinished changes, or save this task to your account. You can resume it from Saved drafts after signing in again. Closing does not undo a request that was already submitted." : "Keep editing, discard this form’s unfinished changes, or explicitly save a draft for this page. Closing does not undo a request that was already submitted."}</p>
+    {draftError && <p role="alert" className="notice error">{draftError}</p>}
     <div className="actions"><button ref={keepEditing} type="button" onClick={() => setConfirming(false)}>Keep editing</button>{uncertain ? <button type="button" className="secondary" onClick={keepRecovery}>Close &amp; keep recovery</button> : <><button type="button" className="secondary" onClick={discard}>Close without saving</button><button type="button" className="secondary" onClick={saveDraft}>Save draft &amp; close</button></>}</div>
   </>;
   const contents = <>

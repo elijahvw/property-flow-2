@@ -76,7 +76,7 @@ export function Form({
         setSaved(false);
         notify("");
         try {
-          await monitorOperation(operation, () => submit(data), operation.startsWith("document.") ? 60000 : undefined);
+          await monitorOperation(operation, () => submit(data), operation === "sales_demo.create" ? 65000 : operation.startsWith("document.") ? 60000 : undefined);
           if (!reviewOnly) editor.completed(form);
           retryData.current = null;
           setUncertain(false);

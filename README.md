@@ -10,6 +10,8 @@ Merged main `75d5342` includes PR59 inspections, unsigned agreement preparation 
 
 ## Workflow contracts
 
+- [Sales demo setup, teardown, rebuild and fixture maintenance](docs/sales-demo.md).
+
 - [Lease and household workspace](docs/lease-workflow.md), [tenant workspace](docs/tenant-workspace.md), [account/portal boundaries](docs/resident-contacts.md).
 - [Rent and allocations](docs/rent-workflow.md), [deposits](docs/security-deposits.md), [settlement](docs/move-out-settlements.md), [terms/proration/renewal](docs/proration-renewal-transitions.md).
 - [Assigned maintenance](docs/delegated-maintenance.md), [vendors](docs/maintenance-vendors.md), [schedules/calendar](docs/preventive-maintenance.md), [paid expense sources](docs/maintenance-costs.md).

@@ -50,6 +50,7 @@ import { registerResidentProfiles } from "./resident-profiles.js";
 import { input, mutation, boundedText } from "./operational.js";
 import { registerCompanyAdministration } from "./company-administration.js";
 import { registerUserAdministration } from "./user-administration.js";
+import { registerSalesDemo } from "./sales-demo.js";
 import type { IdentityProvider } from "./identity-provider.js";
 import { registerRentSchedules } from "./rent-schedules.js";
 import { registerRent } from "./rent.js";
@@ -172,9 +173,9 @@ export function opaqueUserId(value: unknown): string {
     throw new AccessError(400, "INVALID_ID", "Choose a valid user identifier.");
   return value;
 }
-export async function serializable<T>(db: PrismaClient, run: (tx: Tx) => Promise<T>): Promise<T> {
+export async function serializable<T>(db: PrismaClient, run: (tx: Tx) => Promise<T>, options: { timeout?: number; maxWait?: number } = {}): Promise<T> {
   for (let attempt = 0; ; attempt++) {
-    try { return await db.$transaction(run, { isolationLevel: "Serializable" }); }
+    try { return await db.$transaction(run, { isolationLevel: "Serializable", ...options }); }
     catch (error) {
       const failure = error as { name?: string; code?: string; cause?: { kind?: string; originalCode?: string }; meta?: { code?: string; driverAdapterError?: { cause?: { originalCode?: string } } } };
       // Raw queries wrap SQLSTATE in P2010; COMMIT may expose the adapter's
@@ -266,7 +267,7 @@ export function registerApplication(
   authenticate: preValidationHookHandler,
   origin: string,
   identityProvider?: IdentityProvider,
-  options: { documentScanner?: DocumentScanner; invitationMailer?: InvitationMailer; notificationPublisher?: NotificationPublisher } = {},
+  options: { documentScanner?: DocumentScanner; invitationMailer?: InvitationMailer; notificationPublisher?: NotificationPublisher; salesDemo?: boolean } = {},
 ) {
   registerImpersonation(server, db, origin, authenticate);
   registerCompanyBilling(server, db, authenticate, origin);
@@ -279,6 +280,7 @@ export function registerApplication(
   registerExpenseImports(server, db, authenticate, origin);
   registerTaskDrafts(server, db, authenticate, origin);
   registerRentalApplications(server, db, authenticate, origin, identityProvider);
+  if (options.salesDemo !== false) registerSalesDemo(server, db, authenticate, origin, identityProvider?.issuer);
   registerNotifications(server, db, authenticate, origin);
   registerWorkspaceGuide(server, db, authenticate, origin);
   registerInvitations(server, db, authenticate, origin, identityProvider, options.invitationMailer);

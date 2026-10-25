@@ -35,6 +35,7 @@ model Company {
   saasPayments SaaSPayment[]
   saasPaymentReversals SaaSPaymentReversal[]
   saasInvoiceEvents SaaSInvoiceEvent[]
+  salesDemo SalesDemo?
   preventivePlans PreventivePlan[]
   preventiveActions PreventiveAction[]
   preventiveOccurrences PreventiveOccurrence[]
@@ -220,6 +221,8 @@ model User {
   notificationPreferences NotificationPreference[]
   notificationPreferenceActions NotificationPreferenceAction[]
   receivedDocumentShares LeaseDocumentShare[] @relation("SharedDocumentRecipient")
+  salesDemos SalesDemo[] @relation("SalesDemoOwner")
+  createdSalesDemos SalesDemo[] @relation("SalesDemoCreator")
   notificationEvents NotificationEvent[]
   inboxNotifications InboxNotification[]
   notificationActions NotificationAction[]
@@ -272,6 +275,26 @@ model User {
   updatedAt  DateTime @updatedAt
 
   @@index([companyId])
+}
+
+model SalesDemo {
+  id String @id @default(cuid())
+  companyId String @unique
+  ownerId String
+  createdById String
+  submissionKey String
+  submissionHash String
+  seedVersion Int
+  status String @default("ready")
+  version Int @default(1)
+  manifest Json
+  createdAt DateTime @default(now())
+  retiredAt DateTime?
+  company Company @relation(fields:[companyId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  owner User @relation("SalesDemoOwner",fields:[ownerId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  creator User @relation("SalesDemoCreator",fields:[createdById],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  @@unique([createdById,submissionKey])
+  @@index([ownerId,status])
 }
 
 model Identity {
