@@ -5,6 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 import { companyDay } from "./reports.js";
 import { AccessError } from "./access.js";
 import { assignmentId } from "./application.js";
+import { readTenantRentals, tenantRentalQuery } from "./tenant-directory.js";
 import {
   audit,
   boundedText,
@@ -371,6 +372,12 @@ export function registerContactRecords(
         await audit(tx, request, companyId, row.id, "resident.contact.created");
         return row;
       },
+    );
+  });
+  server.get<{ Params: { contactId: string } }>("/api/company/resident-contacts/:contactId/rentals", auth, (request) => {
+    const id = assignmentId(request.params.contactId), query = tenantRentalQuery(request.query as Record<string, unknown>);
+    return scoped(db, request, "resident.assignment.manage", (tx, companyId) =>
+      readTenantRentals(tx, companyId, request.principal!.id, { kind: "contact", id }, query),
     );
   });
   server.get<{ Params: { contactId: string } }>(

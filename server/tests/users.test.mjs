@@ -2,6 +2,7 @@ import { newFixturePage } from "./browser-fixture.mjs";
 import {workspaceGuideCases} from "./workspace-guide-cases.mjs";
 import {invitationWorkflowCases} from "./invitation-workflow-cases.mjs";
 import {residentAccountCases} from "./resident-account-cases.mjs";
+import {tenantFormRecoveryCases} from "./tenant-form-recovery-cases.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -1255,6 +1256,11 @@ test(
       const path = "/api/company/members/profile-resident";
       const before = await db.auditEvent.count({where:{targetId:"profile-resident",action:"membership.updated"}});
       const body = {role:"resident",status:"disabled",expectedVersion:member.version};
+      for (const expectedVersion of [undefined, null, member.version + 1]) {
+        assert.equal((await call("profile-foreign","PATCH",path,{...body,expectedVersion})).statusCode,409,'Missing or stale versions cannot bypass an access review');
+      }
+      assert.equal((await db.companyMembership.findUnique({where:{userId:"profile-resident"}})).status,"active");
+      assert.equal(await db.auditEvent.count({where:{targetId:"profile-resident",action:"membership.updated"}}),before);
       assert.equal((await call("profile-owner","PATCH",path,body)).statusCode,404);
       assert.equal((await call("profile-foreign","PATCH",path,body,{"x-csrf-token":"wrong"})).statusCode,403);
       assert.equal((await call("profile-foreign","PATCH",path,body)).statusCode,200);
@@ -1345,5 +1351,6 @@ test(
       assert.equal((await call('platform','GET','/api/platform/audit?page=-1')).statusCode,400);
     });
     await t.test("resident identity lifecycle", sub=>residentAccountCases(sub,db,admin,call,provider,remote,()=>({create:createCalls,setup:setupCalls,verification:verificationCalls})));
+    await t.test("tenant leasing controls and interrupted form recovery", {skip:!process.env.TEST_USERS_BROWSER_URL}, sub=>tenantFormRecoveryCases(sub, {admin,db,call,app,provider,remote,counts:()=>({create:createCalls,setup:setupCalls,verification:verificationCalls}),invitationDeliveries}));
   },
 );

@@ -58,6 +58,13 @@ export function registerResidentWorkspace(
           orderBy: [{ startsOn: "desc" }, { id: "desc" }], take: 1001,
         }), 1000);
         const leases=await currentLeaseTerms(tx,companyId,leaseRows,businessDate);
+        if (request.companyFeatures?.finances === "disabled") {
+          return {
+            businessDate, timezone: company.timezone, generatedAt: new Date().toISOString(),
+            financeAvailable: false, rent: null, deposits: null,
+            leases: leases.map(lease => ({ ...lease, rent: null, deposit: null })),
+          };
+        }
         const leaseIds = leases.map(l => l.id);
         const data = await readRentSources(tx, companyId, leaseIds);
         const grouped = new Map(leaseIds.map(id => [id, {
@@ -95,6 +102,7 @@ export function registerResidentWorkspace(
             depositTotals[key] += BigInt(deposit[key]);
         return {
           businessDate, timezone: company.timezone, generatedAt: new Date().toISOString(),
+          financeAvailable: true,
           rent: summary(data, businessDate),
           deposits: Object.fromEntries(Object.entries(depositTotals).map(([k, v]) => [k, String(v)])),
           leases: leases.map(lease => ({

@@ -1,0 +1,21 @@
+.document-sharing { margin-block: 1rem; border-top: 1px solid var(--border, #d9e2e9); padding-top: 1rem; }
+.document-sharing > summary { cursor: pointer; font-weight: 650; padding-block: .35rem; }
+.document-sharing-content { padding-block: 1rem .25rem; }
+.sharing-review-facts { display: grid; gap: 1rem; margin: 0; }
+.sharing-review-facts div { min-width: 0; }
+.sharing-review-facts dt { font-size: .85rem; color: var(--muted, #596b7b); }
+.sharing-review-facts dd { margin: .3rem 0 0; overflow-wrap: anywhere; }
+.sharing-history { min-width: 16rem; padding: .75rem; background: var(--surface-muted, #f5f8fa); border-radius: .5rem; }
+.sharing-history ol { padding-left: 1.2rem; }
+.shared-document-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1rem; }
+.shared-document-card { padding: 1.25rem; border: 1px solid var(--border, #d9e2e9); border-radius: .75rem; background: var(--surface, white); }
+.shared-document-card h2 { font-size: 1.1rem; margin-top: 0; overflow-wrap: anywhere; }
+.shared-document-card dl { display: grid; gap: .75rem; }
+.shared-document-card dt { font-size: .85rem; color: var(--muted, #596b7b); }
+.shared-document-card dd { margin: .2rem 0 0; overflow-wrap: anywhere; }
+.shared-document-search { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; margin-block: 1rem; }
+.shared-document-search label { flex: 1 1 18rem; }
+.document-receipt-recovery { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border, #d9e2e9); }
+.document-receipt-recovery > .checkbox-label { display: flex; align-items: start; gap: .6rem; margin-block: 1rem; }
+.document-receipt-recovery input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: .2rem; }
+@media (min-width: 700px) { .sharing-review-facts { grid-template-columns: 1fr 1fr; } }

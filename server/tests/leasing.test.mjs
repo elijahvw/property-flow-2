@@ -2,6 +2,10 @@ import { newFixturePage } from "./browser-fixture.mjs";
 import {fixtureIdentities} from "./fixture-identities.mjs";
 import {renewalCases} from "./renewal-cases.mjs";
 import {staffPropertyAccessCases} from "./staff-property-access-cases.mjs";
+import {prospectSourceReturnCases} from "./prospect-source-return-cases.mjs";
+import {unitHintCases} from "./unit-hint-cases.mjs";
+import {taskDraftCases} from "./task-draft-cases.mjs";
+import {acquisitionConsolidationCases} from "./acquisition-consolidation-cases.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID,createHash} from 'node:crypto';
@@ -37,7 +41,8 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
  }
  for(const [id,company] of [['home','a'],['other-home','a'],['foreign-home','b']])await admin.query(`INSERT INTO "Property"(id,name,address,city,state,zip,"companyId","updatedAt") VALUES($1,$1,'street','city','state','zip',$2,NOW())`,[id,company]);
  await admin.query(`INSERT INTO "ResidentPropertyAssignment"("companyId","propertyId","userId") VALUES('a','home','resident'),('a','home','resident2'),('b','foreign-home','foreign-resident')`);
- const app=Fastify();t.after(()=>app.close());const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(app,db,auth,'https://app.test',await fixtureIdentities(admin));
+ const providerCalls=[];
+ const app=Fastify();t.after(()=>app.close());const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(app,db,auth,'https://app.test',await fixtureIdentities(admin,providerCalls));
  const call=(user,method,path,payload,extra={})=>app.inject({method,url:path,headers:{...(user?{cookie:`__Host-pf-session=token-${user}`} : {}),origin:'https://app.test','x-csrf-token':'csrf',...extra},...(payload?{payload}:{})});
  const units='/api/company/properties/home/units',leases='/api/company/leases';
  let unit,lease;
@@ -53,6 +58,12 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
   const results=await Promise.all([call('owner','POST',units,unitBody),call('owner','POST',units,unitBody)]);
   for(const response of results)assert.equal(response.statusCode,200,response.body);
   unit=results[0].json();assert.equal(results[1].json().id,unit.id);
+  const detail=`/api/company/units/${encodeURIComponent(unit.id)}`;
+  for(const user of ['owner','manager','staff'])assert.equal((await call(user,'GET',detail)).json().id,unit.id);
+  assert.equal((await call('foreign','GET',detail)).statusCode,404);
+  for(const user of ['resident','platform'])assert.equal((await call(user,'GET',detail)).statusCode,403);
+  assert.equal((await call('owner','GET',detail+'?unknown=1')).statusCode,400);
+  assert.equal((await call('owner','GET',detail,undefined,{'x-company-id':'b'})).statusCode,403);
   assert.equal((await call('owner','POST',units,{...unitBody,label:'Different'})).statusCode,409);
   assert.equal((await call('manager','POST',units,{...unitBody,submissionKey:randomUUID()})).statusCode,409);
   assert.equal((await call('staff','GET',units)).json().items.length,1);
@@ -200,11 +211,33 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
    await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Leases',exact:true}).click();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await page.getByLabel('Unit for new lease').selectOption(browserUnit[0].id);
    const candidates=(await call('owner','GET','/api/company/properties/home/residents?includeContacts=true')).json();const primary=candidates.find(p=>p.userId==='resident');assert.ok(primary);await page.getByLabel('Primary resident').selectOption(primary.contactId||primary.userId);
    await page.getByLabel('New lease start date').fill('2026-11-01');await page.getByLabel('New lease end date',{exact:true}).fill('2027-10-31');await page.getByLabel('New lease monthly rent (USD)').fill('1250.50');
-   await page.getByRole('button',{name:'Review lease',exact:true}).click();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();assert.equal(keys.lease[0],keys.lease[1]);
+   await page.getByRole('button',{name:'Review lease',exact:true}).click();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('region',{name:'Record a lease',exact:true})).not.toBeVisible();assert.equal(keys.lease[0],keys.lease[1]);
    assert.equal((await admin.query(`SELECT count(*)::int n FROM "Lease" WHERE "unitId"=$1`,[browserUnit[0].id])).rows[0].n,1);
    assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='lease.created' AND "targetId" IN (SELECT id FROM "Lease" WHERE "unitId"=$1)`,[browserUnit[0].id])).rows[0].n,1);
   }finally{await browser.close();}
  });
  await t.test('staff property access',async scopeTest=>staffPropertyAccessCases(scopeTest,admin,call,db,app));
  await t.test('linked lease renewals',async renewalTest=>renewalCases(renewalTest,admin,call,db));
+ await t.test('prospect source-return browser workflows',{skip:!process.env.TEST_LEASING_BROWSER_URL},async scopeTest=>prospectSourceReturnCases(scopeTest,admin,call,db,app,providerCalls));
+ await t.test('preferred-unit advisory and recovery',{skip:!process.env.TEST_LEASING_BROWSER_URL},async scopeTest=>unitHintCases(scopeTest,admin,call,db,app,providerCalls));
+ await taskDraftCases(t,admin,call,db);
+ await t.test('consolidated acquisition, listing and follow-ups',async scopeTest=>acquisitionConsolidationCases(scopeTest,admin,call,db,app,providerCalls));
+ await t.test('a property create pinned to its opening company cannot follow a stale actor into another company',async()=>{
+  const member=await db.companyMembership.findUnique({where:{userId:'owner'}});
+  const payload={name:'Pinned fictional property',address:'1 Test Street',city:'Test City',state:'Test State',zip:'00000',submissionKey:randomUUID()};
+  const countB=(await admin.query('SELECT count(*)::int n FROM "Property" WHERE "companyId"=\'b\'')).rows[0].n;
+  const auditsB=(await admin.query('SELECT count(*)::int n FROM "AuditEvent" WHERE "companyId"=\'b\' AND "actorId"=\'owner\' AND action=\'property.created\'')).rows[0].n;
+  try {
+   await admin.query('UPDATE "CompanyMembership" SET "companyId"=\'b\',version=version+1 WHERE "userId"=\'owner\'');
+   const denied=await call('owner','POST','/api/company/properties',payload,{'x-company-id':member.companyId});
+   assert.equal(denied.statusCode,403,denied.body);
+   assert.equal((await admin.query('SELECT count(*)::int n FROM "Property" WHERE "companyId"=\'b\'')).rows[0].n,countB);
+   assert.equal((await admin.query('SELECT count(*)::int n FROM "AuditEvent" WHERE "companyId"=\'b\' AND "actorId"=\'owner\' AND action=\'property.created\'')).rows[0].n,auditsB);
+  } finally { await admin.query('UPDATE "CompanyMembership" SET "companyId"=$1,version=version+1 WHERE "userId"=\'owner\'',[member.companyId]); }
+  const saved=await call('owner','POST','/api/company/properties',payload,{'x-company-id':member.companyId});
+  assert.equal(saved.statusCode,200,saved.body);
+  const retry=await call('owner','POST','/api/company/properties',payload,{'x-company-id':member.companyId});
+  assert.equal(retry.statusCode,200,retry.body);assert.equal(retry.json().id,saved.json().id);
+  assert.equal((await admin.query('SELECT count(*)::int n FROM "AuditEvent" WHERE "targetId"=$1 AND action=\'property.created\'',[saved.json().id])).rows[0].n,1);
+ });
 });

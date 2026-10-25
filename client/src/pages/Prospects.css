@@ -1,0 +1,16 @@
+.prospect-filters { display: grid; grid-template-columns: minmax(12rem, 2fr) repeat(3, minmax(9rem, 1fr)); gap: 1rem; align-items: end; margin-top: 1rem; }
+.prospect-filters .actions { grid-column: 1 / -1; }
+.prospect-counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .7rem; margin: 1rem 0; }
+.prospect-counts > div { border: 1px solid #dfe7e1; border-radius: 8px; padding: .8rem; min-width: 0; }
+.prospect-counts dt { font-size: .8rem; color: #536b5d; }
+.prospect-counts dd { margin: .3rem 0 0; font-size: 1.45rem; font-weight: 650; }
+.prospect-table { min-width: 800px; }
+.prospect-table td { vertical-align: top; overflow-wrap: anywhere; max-width: 20rem; }
+.prospect-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 1rem; }
+.prospect-facts dt { color: #536b5d; font-size: .82rem; }
+.prospect-facts dd { margin: .3rem 0 0; overflow-wrap: anywhere; }
+.prospect-notes { white-space: pre-wrap; overflow-wrap: anywhere; }
+.prospect-match { display: flex; align-items: start; gap: .7rem; }
+.prospect-match input { width: auto; margin-top: .35rem; }
+@media (max-width: 1100px) { .prospect-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .prospect-filters { grid-template-columns: minmax(0, 1fr); } .prospect-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

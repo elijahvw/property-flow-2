@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import Fastify from 'fastify';
 import { registerApplication, assignmentId, opaqueUserId, MAX_USER_ID_BYTES, serializable } from '../dist/application.js';
 import { permissions } from '../dist/access.js';
-const person = (id, role = 'resident', companyId = 'a') => ({ id, email: `${id}@test.invalid`, name: id, status: 'active', emailVerified: true, platformRole: null, membership: {userId:id, companyId, role, status:'active', company:{id:companyId,status:'active'}} });
+const person = (id, role = 'resident', companyId = 'a') => ({ id, email: `${id}@test.invalid`, name: id, status: 'active', emailVerified: true, platformRole: null, membership: {userId:id, companyId, role, status:'active', version:1, company:{id:companyId,status:'active'}} });
 async function fixture(t, actor = person('owner','owner')) {
   const users = new Map([actor,person('resident'),person('other'),person('foreign','resident','b'),person('staff','staff')].map(u=>[u.id,u]));
   const rows = [], locks = [], audits = [], contacts = []; let company;
@@ -12,6 +12,7 @@ async function fixture(t, actor = person('owner','owner')) {
     $queryRaw: async (strings,...values) => { if(strings.join('').includes('UPDATE')) locks.push(values[0]); else company=values[0]; return []; },
     user: {findUnique:async({where})=>users.get(where.id), update:async({where,data})=>Object.assign(users.get(where.id),data)},
     company: {findUnique:async({where})=>({id:where.id,status:'active'})},
+    companySubscription: {findUnique:async()=>null},
     residentContact: {
       findUnique:async({where})=>contacts.find(c=>c.companyId===where.companyId_userId.companyId&&c.userId===where.companyId_userId.userId),
       create:async({data})=>{assert.equal(company,data.companyId);const row={id:'contact-'+contacts.length,...data};contacts.push(row);return row;},
@@ -22,8 +23,8 @@ async function fixture(t, actor = person('owner','owner')) {
       findFirst:async({where})=>{const u=users.get(where.userId);return u?.membership?.companyId===where.companyId&&(!where.role||u.membership.role===where.role)?{...u.membership,user:u}:null;},
       findUnique:async({where})=>{const u=users.get(where.userId); return u?.membership ? {...u.membership,user:u}:null;},
       findMany:async({where})=>[...users.values()].filter(u=>u.membership?.companyId===where.companyId && u.membership.role==='resident' && u.membership.status==='active' && u.status==='active').map(u=>({userId:u.id,user:{name:u.name,email:u.email}})),
-      update:async({where,data})=>Object.assign(users.get(where.userId).membership,{role:data.role,status:data.status}),
-      upsert:async({where,update})=>Object.assign(users.get(where.userId).membership,{companyId:update.companyId,role:update.role,status:update.status}),
+      update:async({where,data})=>{const member=users.get(where.userId).membership;return Object.assign(member,{role:data.role,status:data.status,version:member.version+1});},
+      upsert:async({where,update})=>{const member=users.get(where.userId).membership;return Object.assign(member,{companyId:update.companyId,role:update.role,status:update.status,version:member.version+1});},
     },
     property:{findFirst:async({where})=>properties.find(p=>p.id===where.id&&p.companyId===where.companyId&&company===p.companyId)},
     staffPropertyAccess:{deleteMany:async({where})=>{assert.equal(company,where.companyId);return {count:0};}},
@@ -37,12 +38,15 @@ async function fixture(t, actor = person('owner','owner')) {
   const db={$transaction:async(run,options)=>{assert.equal(options.isolationLevel,'Serializable'); return run(tx);}};
   const app=Fastify({routerOptions:{maxParamLength:MAX_USER_ID_BYTES}}); t.after(()=>app.close());
   registerApplication(app,db,async request=>{request.principal=actor;},'https://example.test');
-  const call=(method,url,payload,headers={})=>{if(payload&&url.endsWith('/membership'))payload={...payload,expectedVersion:null};return app.inject({method,url,headers,...(payload?{payload}:{})});};
+  const call=(method,url,payload,headers={})=>{
+    if(payload&&!Object.hasOwn(payload,'expectedVersion')&&(url.endsWith('/membership')||url.startsWith('/api/company/members/'))){const userId=decodeURIComponent(url.split('/').at(url.endsWith('/membership')?-2:-1));payload={...payload,expectedVersion:users.get(userId)?.membership?.version??null};}
+    return app.inject({method,url,headers,...(payload?{payload}:{})});};
   return {call,users,rows,locks,audits,actor,contacts};
 }
 test('assignment permission belongs only to active company owners/managers',()=>{
  for(const role of ['owner','manager','staff','resident',null]) assert.equal(permissions(person('u',role)).includes('resident.assignment.manage'),['owner','manager'].includes(role));
- const p=person('p');p.membership=null;p.platformRole='owner'; assert.deepEqual(permissions(p),['platform.manage']);
+ const p=person('p');p.membership=null;p.platformRole='owner'; assert.deepEqual(permissions(p),['platform.manage','platform.impersonate']);
+ p.platformRole='support';assert.deepEqual(permissions(p),['platform.impersonate']);
 });
 test('property identifiers retain their existing bounded grammar',()=>{
  for(const id of ['auth0|abc','google-oauth2|123','home']) assert.equal(assignmentId(id),id);
@@ -74,7 +78,7 @@ test('resident self route filters same-company residents and returns only id/nam
 test('company and platform lifecycle mutations lock and clear assignments; reactivation does not restore them',async t=>{
  for(const [platform,path,body] of [[false,'/api/company/members/resident',{role:'resident',status:'disabled'}],[false,'/api/company/members/resident',{role:'staff',status:'active'}],[true,'/api/platform/users/resident/status',{status:'disabled'}],[true,'/api/platform/users/resident/membership',{companyId:'b',role:'resident',status:'active'}],[true,'/api/platform/users/resident/membership',{companyId:'a',role:'manager',status:'active'}]]) {
   const actor=person('owner','owner');if(platform)actor.platformRole='owner';const f=await fixture(t,actor);f.rows.push({companyId:'a',propertyId:'home',userId:'resident'});
-  assert.equal((await f.call(path.endsWith('membership')?'PUT':'PATCH',path,body)).statusCode,200);assert.equal(f.rows.length,0);assert.deepEqual(f.locks,['resident']);
+  assert.equal((await f.call(path.endsWith('membership')?'PUT':'PATCH',path,body)).statusCode,200);assert.equal(f.rows.length,0);assert.deepEqual(f.locks,['owner','resident']);
   if(!platform) { assert.equal((await f.call('PATCH',path,{role:'resident',status:'active'})).statusCode,200);assert.equal(f.rows.length,0); }
  }
 });
@@ -87,7 +91,7 @@ test('serialization failures retry boundedly and expose actionable 409 after exh
 
 test('ownership transfer removes former resident associations under the shared lock',async t=>{
  const f=await fixture(t);f.rows.push({companyId:'a',propertyId:'home',userId:'resident'});
- assert.equal((await f.call('POST','/api/company/transfer-ownership',{userId:'resident'})).statusCode,200);assert.equal(f.rows.length,0);assert.deepEqual(f.locks,['resident']);
+ assert.equal((await f.call('POST','/api/company/transfer-ownership',{userId:'resident'})).statusCode,200);assert.equal(f.rows.length,0);assert.deepEqual(f.locks,['owner','resident']);
  assert.equal(f.contacts.length,1);assert.equal(f.contacts[0].userId,'resident');assert.equal(f.contacts[0].companyId,'a');
 });
 

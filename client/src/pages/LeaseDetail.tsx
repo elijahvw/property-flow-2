@@ -24,9 +24,11 @@ import { LeaseInvitations } from "../components/LeaseInvitations";
 import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "../components/Form";
 import { dollars } from "../money";
-import { leaseContext, leaseDirectoryPath } from "../lease-links";
+import { leaseContext, leaseDirectoryPath, leasePath } from "../lease-links";
 import { TenantReturnLink } from "../components/TenantReturnLink";
 import { statementPath } from "../statement";
+import { prospectContext, withProspectContext } from "../prospect-context";
+import "./LeaseDetailNavigation.css";
 
 export function LeaseDetail() {
   const { leaseId = "" } = useParams(),
@@ -39,7 +41,10 @@ export function LeaseDetail() {
   );
 }
 function LeaseWorkspace({ id }: { id: string }) {
-  const { can } = useAuth();
+  const { can, data: auth } = useAuth();
+  const visible = (key: "finances" | "documents" | "inspections" | "agreements" | "resident_portal") => auth?.companyFeatures?.[key] !== "disabled";
+  const hasFinance = can("finance.manage") && visible("finances");
+  const hasDocuments = visible("documents"), hasInspections = visible("inspections"), hasAgreements = visible("agreements") && hasDocuments, hasPortal = visible("resident_portal");
   const r = useResource<Lease>(
       `/api/company/leases/${encodeURIComponent(id)}`,
       true,
@@ -52,7 +57,7 @@ function LeaseWorkspace({ id }: { id: string }) {
   const [draftLease, setDraftLease] = useState<Lease | null>(null),
     [renewalDraft, setRenewalDraft] = useState<Lease | null>(null),
     [visited, setVisited] = useState<string[]>([]);
-  const section = [
+  const requestedSection = [
     "overview",
     "documents",
     "inspections",
@@ -68,6 +73,8 @@ function LeaseWorkspace({ id }: { id: string }) {
     : params.has("onboarding")
       ? "household"
       : "overview";
+  const available = (value: string) => value === "documents" ? hasDocuments : value === "inspections" ? hasInspections : value === "agreements" ? hasAgreements : value === "invitations" ? hasPortal : ["terms", "proration", "settlement"].includes(value) ? hasFinance : true;
+  const section = available(requestedSection) ? requestedSection : "overview";
   useEffect(() => {
     setVisited((previous) =>
       previous.includes(section) ? previous : [...previous, section],
@@ -83,8 +90,8 @@ function LeaseWorkspace({ id }: { id: string }) {
   }, [id]);
   if (!r.data)
     return (
-      <section className="panel">
-        <Link to="/company/leases">← All leases</Link>
+      <><TenantReturnLink /><section className="panel">
+        <Link to={withProspectContext("/company/leases", params)}>← All leases</Link>
         {r.error ? (
           <>
             <h1>Lease unavailable</h1>
@@ -94,35 +101,43 @@ function LeaseWorkspace({ id }: { id: string }) {
         ) : (
           <p role="status">Loading lease workspace…</p>
         )}
-      </section>
+      </section></>
     );
   const lease = r.data;
   const context = leaseContext(params),
-    directory = leaseDirectoryPath(params);
+    directory = withProspectContext(leaseDirectoryPath(params), params);
   const editTerms = (activate = false) => {
     setDraftLease((previous) => activate ? { ...(previous || lease), status: "active" } : previous || lease);
     setEditing(true);
   };
   const tab = (value: string) => setParams({ ...context, ...documentLibraryContext(params), ...agreementContext(params), ...notificationContext(params), ...(params.get("inspectionId")?{inspectionId:params.get("inspectionId")!}:{}), section: value });
-  const sections = [
-          ["overview", "Overview"],
-          ["documents", "Documents"],
-          ["inspections", "Inspections"],
-          ["agreements", "Agreements"],
-          ["terms", "Terms & changes"],
-          ...(can("finance.manage") ? [["proration", "Partial rent"]] : []),
-          ["household", "Leaseholders & occupants"],
-          ["invitations", "Invitations & approvals"],
-          ["renewal", "Renewal"],
-          ...(can("finance.manage")
-            ? [["settlement", "Move-out & settlement"]]
-            : []),
-        ];
+  const sectionGroups = [
+    { title: "Lease details", items: [
+      ["overview", "Overview"],
+      ...(hasFinance ? [["terms", "Terms & changes"], ["proration", "Partial rent"]] : []),
+    ] },
+    { title: "People & access", items: [
+      ["household", "Leaseholders & occupants"],
+      ...(hasPortal ? [["invitations", "Invitations & approvals"]] : []),
+    ] },
+    { title: "Documents & condition", items: [
+      ...(hasDocuments ? [["documents", "Documents"]] : []),
+      ...(hasAgreements ? [["agreements", "Agreements"]] : []),
+      ...(hasInspections ? [["inspections", "Inspections"]] : []),
+    ] },
+    { title: "Renewal & move-out", items: [
+      ["renewal", "Renewal"],
+      ...(hasFinance ? [["settlement", "Move-out & settlement"]] : []),
+    ] },
+  ].filter(group => group.items.length);
+  const currentGroup = sectionGroups.find(group => group.items.some(([value]) => value === section))!;
+  const currentSection = currentGroup.items.find(([value]) => value === section)![1];
   const source = (module: string) =>
     `/company/${module}?${new URLSearchParams({ ...context, leaseId: id, leaseReturn: id })}`;
   return (
     <div className="lease-workspace">
       <TenantReturnLink />
+      {section !== requestedSection && <p className="notice" role="status">The requested lease area is unavailable under this company's feature settings. The lease overview remains available.</p>}
       <nav className="record-breadcrumb" aria-label="Breadcrumb">
         {documentLibraryBack(params)&&<Link to={documentLibraryBack(params)!}>Back to document library →</Link>}
         <Link to={directory}>← All leases</Link>
@@ -151,19 +166,27 @@ function LeaseWorkspace({ id }: { id: string }) {
           {r.error} <button onClick={r.reload}>Refresh lease</button>
         </p>
       )}
-      <label className="lease-section-select">Lease section<select aria-label="Lease section" value={section} onChange={event=>tab(event.target.value)}>{sections.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
-      <nav className="lease-section-nav" aria-label="Lease sections">
-        {sections.map(([value, label]) => (
-          <button
-            key={value}
-            className={section === value ? "" : "secondary"}
-            aria-current={section === value ? "page" : undefined}
-            onClick={() => tab(value)}
-          >
-            {label}
-          </button>
+      <label className="lease-section-select">Lease section<select aria-label="Lease section" value={section} onChange={event=>tab(event.target.value)}>{sectionGroups.map(group => <optgroup key={group.title} label={group.title}>{group.items.map(([value,label])=><option key={value} value={value}>{label}</option>)}</optgroup>)}</select></label>
+      <nav className="lease-task-navigation" aria-label="Lease sections">
+        {sectionGroups.map(group => (
+          <div className="lease-task-group" key={group.title} role="group" aria-label={group.title}>
+            <p>{group.title}</p>
+            {group.items.map(([value, label]) => (
+              <button
+                key={value}
+                className="secondary"
+                aria-current={section === value ? "page" : undefined}
+                aria-controls="lease-section-content"
+                onClick={() => tab(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         ))}
       </nav>
+      <p className="lease-section-location" role="status" aria-atomic="true">{currentGroup.title}<span aria-hidden="true"> / </span><strong>{currentSection}</strong></p>
+      <div id="lease-section-content" role="region" aria-label={currentSection}>
       {section === "overview" && (
         <div className="lease-overview">
           {lease.status === "draft" && (
@@ -176,7 +199,7 @@ function LeaseWorkspace({ id }: { id: string }) {
                   billing are optional, separate actions.
                 </p>
               </div>
-              <div className="actions"><button className="text-button" onClick={()=>tab("household")}>Review household</button>{can("finance.manage")&&<Link to={source("rent")}>Review rent setup</Link>}</div>
+              <div className="actions"><button className="text-button" onClick={()=>tab("household")}>Review household</button>{hasFinance&&<Link to={source("rent")}>Review rent setup</Link>}</div>
               <button
                 className="secondary"
                 disabled={!!r.error}
@@ -261,10 +284,10 @@ function LeaseWorkspace({ id }: { id: string }) {
               </div>
             )}
             <div className="actions">
-              <button className="text-button" onClick={() => tab("terms")}>
+              {hasFinance && <button className="text-button" onClick={() => tab("terms")}>
                 View terms & changes →
-              </button>
-              {can("finance.manage") && (
+              </button>}
+              {hasFinance && (
                 <Link
                   to={statementPath(id, false, {
                     ...context,
@@ -292,10 +315,10 @@ function LeaseWorkspace({ id }: { id: string }) {
                 Review household
               </button>
             </section>
-            {can("finance.manage") && (
+            {hasFinance && (
               <>
                 <section className="panel">
-                  <h2>Rent & billing</h2>
+                  <h2>Rent & payments</h2>
                   <p className="lease-overview-value">
                     {lease.overview?.scheduleStatus === "active"
                       ? "Recurring billing active"
@@ -307,7 +330,7 @@ function LeaseWorkspace({ id }: { id: string }) {
                     Review charges, received payments and the shared lease
                     balance.
                   </p>
-                  <Link to={source("rent")}>Open rent & billing</Link>
+                  <Link to={source("rent")}>Open rent & payments</Link>
                 </section>
                 <section className="panel">
                   <h2>Security deposit</h2>
@@ -330,12 +353,12 @@ function LeaseWorkspace({ id }: { id: string }) {
       {(section === "household" || visited.includes("household")) && (
         <section className="panel" hidden={section !== "household"}>
           <LeaseHousehold leaseId={id} onChange={r.reload} />
-          <button className="secondary" onClick={() => tab("invitations")}>
+          {hasPortal && <button className="secondary" onClick={() => tab("invitations")}>
             Continue to invitations →
-          </button>
+          </button>}
         </section>
       )}
-      {(section === "invitations" || visited.includes("invitations")) && (
+      {hasPortal && (section === "invitations" || visited.includes("invitations")) && (
         <section className="panel" hidden={section !== "invitations"}>
           <LeaseInvitations leaseId={id} startsOn={lease.startsOn} />
           <button className="secondary" onClick={() => tab("overview")}>
@@ -343,13 +366,13 @@ function LeaseWorkspace({ id }: { id: string }) {
           </button>
         </section>
       )}
-      {can("finance.manage") &&
+      {hasFinance &&
         (section === "proration" || visited.includes("proration")) && (
           <div hidden={section !== "proration"}>
             <LeaseProration lease={lease} changed={r.reload} />
           </div>
         )}
-      {can("finance.manage") &&
+      {hasFinance &&
         (section === "renewal" || visited.includes("renewal")) && (
           <div hidden={section !== "renewal"}>
             <LeaseTransition leaseId={id} changed={r.reload} />
@@ -369,7 +392,7 @@ function LeaseWorkspace({ id }: { id: string }) {
             <p>
               Previous term:{" "}
               <Link
-                to={`/company/leases/${encodeURIComponent(lease.previousLeaseId)}`}
+                to={leasePath(lease.previousLeaseId, prospectContext(params))}
               >
                 Open previous lease
               </Link>
@@ -379,7 +402,7 @@ function LeaseWorkspace({ id }: { id: string }) {
             <p>
               <Link
                 className="button"
-                to={`/company/leases/${encodeURIComponent(lease.renewals[0].id)}`}
+                to={leasePath(lease.renewals[0].id, prospectContext(params))}
               >
                 Continue renewal draft
               </Link>
@@ -401,7 +424,7 @@ function LeaseWorkspace({ id }: { id: string }) {
           )}
         </section>
       )}
-      {(section === "terms" || visited.includes("terms")) && (
+      {hasFinance && (section === "terms" || visited.includes("terms")) && (
         <div hidden={section !== "terms"}>
           <LeaseTermChanges leaseId={id} changed={r.reload} />
           <button className="text-button" onClick={() => editTerms()}>
@@ -409,16 +432,17 @@ function LeaseWorkspace({ id }: { id: string }) {
           </button>
         </div>
       )}
-      {can("finance.manage") &&
+      {hasFinance &&
         (section === "settlement" || visited.includes("settlement")) && (
           <div hidden={section !== "settlement"}>
             {section==="settlement"&&params.get("inspectionId")&&<InspectionSettlementContext leaseId={id} inspectionId={params.get("inspectionId")!}/>}
             <LeaseSettlement leaseId={id} />
           </div>
         )}
-      {section === "documents" && <PrivateDocuments source="leases" sourceId={id} />}
-      {(section === "inspections" || visited.includes("inspections")) && <div hidden={section !== "inspections"}><LeaseInspections leaseId={id}/></div>}
-      {(section === "agreements" || visited.includes("agreements")) && <div hidden={section !== "agreements"}><LeaseAgreements leaseId={id}/></div>}
+      {hasDocuments && section === "documents" && <PrivateDocuments source="leases" sourceId={id} />}
+      {hasInspections && (section === "inspections" || visited.includes("inspections")) && <div hidden={section !== "inspections"}><LeaseInspections leaseId={id}/></div>}
+      {hasAgreements && (section === "agreements" || visited.includes("agreements")) && <div hidden={section !== "agreements"}><LeaseAgreements leaseId={id}/></div>}
+      </div>
       <EditorDialog
         open={editing}
         title="Review lease terms"
@@ -475,7 +499,7 @@ function LeaseWorkspace({ id }: { id: string }) {
               setRenewing(false);
               setRenewalDraft(null);
               navigate(
-                `/company/leases/${encodeURIComponent(row.id)}?onboarding=household`,
+                leasePath(row.id, { onboarding: "household", ...prospectContext(params) }),
               );
             }}
           />

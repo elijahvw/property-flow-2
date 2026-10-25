@@ -1,0 +1,139 @@
+# Feature acceptance and release handoff — October 24–25, 2026
+
+**PR #61 follow-up:** additive `202610250054_sales_demo` now follows the canonical041–053 chain below. Build/teardown/rebuild an explicitly fictional demo through platform Companies → Manage sales demos using a dedicated verified Auth0 account; validate account isolation, linked source views and old-generation replay protection. Teardown retains history, suspends its company and releases the account. Do not use a customer account. [Fixture coverage, limitations and recovery](sales-demo.md). The draft close-confirmation fix must show rejected saves immediately and preserve inputs. Follow-up local validation: demo API/browser6/6, saved-task browser13/13, adjacent admin/editor browser8/8, client14 files, safe server116 passes/nine expected DB skips, operations88/88 and power guard. The previously green CI predates this follow-up; check its new head before deployment.
+
+[Draft PR #61](https://github.com/elijahvw/property-flow-2/pull/61) consolidates the platform-owner/manual monthly billing and landlord workflow batch with the useful unique work from [PR #60](https://github.com/elijahvw/property-flow-2/pull/60). Branch: `codex/platform-controls-landlord-workflows`; base: `main` at `75d5342732ab8fc1e67deb3de9d045855eb20dc6`. Consolidated implementation is remote-verified at `33f2df6264ec8163e26f716e813b15fa0eae6cf1`. **Consolidated implementation and local validation are complete; verify the final published head/CI/reviews and migration gates before any user merge or deployment.** No merge, live migration, customer charge/provider activation or real-account acceptance is claimed.
+
+Keep PR #60 open until every useful unique item is preserved on the verified destination and final checks/reviews pass; then close it with a concise preservation link, retaining its branch and commits. [All 139 source paths and status](PR60-consolidation-inventory-2026-10-24.md) · [canonical migration/review decisions](PR60-integration-review-2026-10-24.md).
+
+## Current consolidated validation matrix
+
+These are the final reported local consolidated checks. Scoped runs overlap; counts are not summed. Publication verification and final head CI/review are separate gates, recorded in the current PR/handoff.
+
+| Check | Latest result |
+| --- | --- |
+| Server/client builds and types | Server/Prisma/TypeScript and final client/Vite/TypeScript builds pass; final client includes Auth and maintenance-journal fixes |
+| Safe server/client | Server 116 passed/eight expected DB-suite skips (32 files); client 14 files passed |
+| Dedicated database access | **51/51 pass**, including lock ordering, queued authority revocations and target-company suspension; owned PG cleanup complete |
+| Real leasing/tasks/acquisition | **66/66 pass** (136.98s), including eleven task API cases/P2 and thirteen acquisition groups; first 60/66 diagnostic retained |
+| Roadmap/document acknowledgments | **39/39 pass**, including five new receipt API cases |
+| Support/impersonation | **15/15 pass**, zero skips (4.53s), including queued legacy expiry/original-actor revocation |
+| Company billing | **15/15 pass**, no failed/skipped/cancelled cases (10.75s); owned container cleanup verified |
+| Operations/power guard | **88/88 pass** (12.5s); development-power validation passes |
+| Dependency install/generation/audits | Root npm ci passes; official Prisma Client 7.10.1 generation passes; all four root/backend production/all audits report zero findings after compatible fast-uri fixes |
+| Toolchain/preview upgrade | Actual Vite host/console-forwarding and tsx import/watch smoke pass; canonical 031–053 SQL/replay/fingerprint/foreign-schema smoke **11/11 passes**; no preserved preview touched |
+| Scoped browser checks | Experience **17/17**, tasks/guards/forms **25/25**, acquisition **28/28** pass; task peer-review **2/2** overlaps the 25-case run |
+| Full consolidated browser | First broad run 374/382; all eight findings repaired and covered by **81/81 affected +35/35 late** passes. CI at `4d532a4` passed 388/389 and exposed one denial-copy response-order race. The bounded fix plus both forced orders pass **34/34 affected checks**; fresh complete **391-test remote CI** is required on the final head. No fresh full391 local pass is claimed |
+| Full finance / maintenance / users regressions | **192/192 finance** (274.1s), **148/148 maintenance** (95.76s) and **56/56 users** (76.08s) pass; earlier diagnostic failures/corrections retained |
+| Remote CI/review | Implementation remote-verified at `33f2df6264ec8163e26f716e813b15fa0eae6cf1`; the first docs-head CI passed backend 167 with seven expected skips, utilities 52, builds and Terraform, but failed 1/389 browser checks and skipped later integrations. The denial-order follow-up passes 34/34 locally and final-head CI/reviews remain required. Earlier `b84b389` baseline CI passed; CodeRabbit draft skip is not approval |
+| Not run/accepted | Live migrations/deployment, PG 16.3 target-version acceptance, real Auth0/accounts/provider/customer workflows and manual role acceptance |
+
+No separate lint command exists; no independent lint pass is claimed. The local DB suites use PostgreSQL 17 while configured RDS is 16.3. Temporary local Node/Chromium/Prisma test accommodations are not release configuration. Exact logs, failed attempts and corrections remain in the [continuation](roadmap-continuation-2026-10-24.md) and [integration evidence](PR60-integration-review-2026-10-24.md).
+
+## Release gates and remaining limits
+
+- **Resident reply reload preservation is verified locally:** the identified gap was ported with attempted-only session recovery, company/source/authority guards, and all nine reply/five Auth cases in affected81/81 passing. The original eight real conversation groups remain covered by maintenance148/148. Final remote preservation/CI remains required before PR #60 closure.
+- Full old migration chains cannot be combined. The consolidated branch uses canonical models plus 051–053, but an existing target with PR #60's October 22 migration/schema requires reviewed reconciliation **before startup**, which automatically migrates. No foreign-chain upgrade was performed.
+- The bounded Property CREATE company pin/late-ack fix passes both focused cases. Broader non-tenant feature-control/draft-refresh gaps remain; server write gates do not imply every UI control is disabled or every draft persists.
+- Provider contact create/rename can precede a final database rejection; no new cross-system durable-intent/rollback guarantee is claimed. Identity is exact issuer/subject, with no automatic email merge or portal grant.
+- Acknowledged saved tasks persist 30 days. Interrupted TaskDraft-save recovery currently stays in page memory; final lease/business submission journals remain separate.
+
+Record actual acceptance: release SHA/environment/schema ____ · date ____ · tester/role ____ · desktop/mobile evidence ____. Unchecked items remain unaccepted; disposable fixtures/screenshots do not substitute for real-role acceptance.
+
+## Release/schema/configuration gates
+
+- [ ] **Before merge or backend start, inspect deployment guards and the target ledger/restore point.** A push/merge to `main` starts [Deploy Dev](../.github/workflows/deploy-dev.yml). Its current database-start, Terraform-apply, backend/frontend deployment and release-recording actions require `workflow_dispatch` with `plan_only` false; a main push alone does not currently roll out the backend. Recheck those guards before merging or dispatching, because backend startup automatically migrates. Feature-branch/PR pushes run CI without deployment.
+- [ ] **Before backend startup, inspect full migration names and actual schema.** Startup automatically runs migrations. If the target or preserved preview has applied any PR #60 `202610220041_maintenance_conversations` through `202610220045_rental_listing_intent` migration or corresponding schema, **stop before applying the October 24 chain**: a reviewed reconciliation is required. Ordinals 041–045 alone are ambiguous; do not combine or blindly renumber these chains. Preserve PR #60 preview/data. [PR #60 comparison and deployment gate](PR60-integration-review-2026-10-24.md).
+- [ ] Confirm the actual deployed SHA and migration history against the chosen branch. Base `75d5342` includes PR59/038–040; a target still on `1945049` without the PR #60 chain may need all pending base migrations and the current October 24 041–053 chain. Do not infer deployed state from merged main or dated screenshots.
+- [ ] Review matching server/client artifacts, PR findings and required CI. Current safe server checks report 116 passes/eight expected DB-suite skips; a dedicated current access runner separately passes 51/51. CI unskips access against PG 17 and runs the dedicated integration runners. Inspect completed checks for the exact final consolidated head; the earlier baseline CI does not validate the ports.
+- [ ] Re-scan both dependency lock trees before production. Applicable PR #60 fixes and compatible fast-uri patches are included; all four fresh root/backend production/all audits passed with zero findings. A dated clean audit does not establish future registry state.
+- [ ] Use the existing ordered rollout/Start/Stop controls and verify its pre-migration restore-point gate, backend migration/readiness and matching frontend release. No new infrastructure, provider credentials or runtime activation variable is introduced by the consolidated chain. Repository CloudFront API forwarding already uses AllViewerAndCloudFrontHeaders; live company-header forwarding still needs acceptance.
+- [ ] Review migration execution/locks. Read-only audit found no concrete blocker within the current chain on its common base, but the PR #60 combination remains blocked. Current 041/042 have no explicit transaction wrapper; 046 constraints and 050's normal index can block writes. On partial failure inspect migration status/schema/logs; never blindly resolve migration history, drop tables or rerun mutations.
+- [ ] Keep a verified restore point and compatible application artifacts. Old binaries ignore new feature/impersonation/reply/preference semantics, so binary-only rollback after activation is not automatically safe. Prefer a coordinated forward correction or reviewed restore procedure; restoration must account for writes since the snapshot. Preserve audits, imported sources, invoices and receipts; do not use destructive down-migrations as corrections. [Release/restore-point workflow](dev-release-performance.md).
+- [ ] Use a dedicated test company and actual test-role accounts. Auth0 account-first identity rules remain; no email matching/automatic portal grant. Do not activate billing collection or repurpose customer data as disposable test data. Set only explicitly chosen plan prices; no prices/plans/invoices/charges are seeded.
+
+| Scope | Migration / change |
+| --- | --- |
+| Already in base, possibly not hosted | 038 lease inspections; 039 agreement preparation; 040 in-app notifications |
+| Preserved original request | **041** support impersonation; **042** configurable monthly plans/features/usage/manual company billing |
+| Continued product work | **043** unit availability/readiness; **044** unit CSV imports; **045** manual prospect pipeline; **046** explicit leaseholder document sharing |
+| Continued product work | **047** paid-expense imports; **048** requester maintenance replies; **049** personal in-app preferences; **050** maintenance ordering index/directory support |
+| Consolidated unique ports (implemented and locally validated) | **051** acquisition/follow-up/application/listing consolidation; **052** private task drafts; **053** document acknowledgments. Canonical SQL smoke 11/11 passes; old PR #60 DDL is not copied |
+| No additional migration | Historical cash cutoff/comparison; prospect source-return and preferred-unit hint; tenant directory/independent rental history/query refinement; grouped forms and tenant access/recovery/privacy fixes |
+
+
+### Exact ordered October 24 migration names
+
+Apply only pending full names after the target-ledger/schema and restore-point gates above. Do not mix these with the October22 chain.
+
+```text
+202610240041_support_impersonation
+202610240042_company_subscriptions
+202610240043_unit_availability
+202610240044_unit_imports
+202610240045_prospect_pipeline
+202610240046_lease_document_sharing
+202610240047_expense_imports
+202610240048_resident_maintenance_replies
+202610240049_notification_preferences
+202610240050_maintenance_directory
+202610240051_acquisition_consolidation
+202610240052_task_drafts
+202610240053_document_acknowledgments
+202610250054_sales_demo
+```
+
+## Run each workflow across its boundaries
+
+For every applicable item: use an actual authorized role, then a denied role/other-company account; inspect source/history and direct links; repeat at desktop and 390px with keyboard focus. A read-only area must still reject writes server-side. Only the tenant paths have the new complete control/draft/revocation behavior; the broader form gaps above remain known. For retries use controlled test interruptions and the original submission, not a second financial/contact record. Record unexpected behavior with the exact role/path/source and retained result.
+
+### Platform owner and explicitly granted support
+
+- [ ] **041 · Impersonation:** `/platform/impersonation` → grant/revoke support → select a real owner/manager/staff/resident → required reason → visible read-only banner → exit. Verify actual target/property/lease boundaries, denied business writes, downloads/audit attribution, stale tabs, expiry and revoke/restore. Support has no platform plan/company management. Impersonation cannot validate successful customer writes. [Contract](support-impersonation.md).
+- [ ] **042 · Monthly plans/company policy:** `/platform/plans`, `/platform/companies/:companyId` → publish a chosen USD monthly revision → assign lifecycle/billing details → reasoned enabled/read-only/disabled override/expiry. Retain old revisions and version-conflict recovery; direct URLs/nested operations obey fresh role/company policy. No company feature grants a role/property/lease.
+- [ ] **042 · Usage/manual company billing:** company Usage → UTC period/current resource counts; issue one reviewed monthly invoice → record a clearly labeled manual test receipt → partial receipt/reversal/void/reissue/history. Lost response replays the original once; stale company/plan review requires explicit re-review. Use fictional evidence only in the dedicated test company; real books require actual external receipt. No tenant ledger posting, collection/email, bank settlement or metered charging is implied. An active company owner sees only their own `/company/subscription`, including allowed suspended-company billing recovery; manager/staff/resident/support cannot administer it. [Contract](company-subscriptions.md).
+
+### Company owner/manager: inventory, leasing and access
+
+- [ ] **043 · Availability:** `/company/availability` → property/unit → review actual lease dates → explicitly ready/turnover/unavailable with reason → history. Missing leases mean unconfirmed physical readiness, and later tenancy makes old confirmation stale. Check stale-version/replay and denied staff/resident access; no listing publication/reservation.
+- [ ] **044 · Inventory CSV:** `/company/imports/units` → actual property IDs and allowed headers → preview every row → review/commit or cancel → batch/source/history. Invalid rows block the whole batch; changed property/duplicates require fresh review; interrupted commit retains the original result. Maximum 500 rows/256 KiB. It imports units, not people/leases/opening money.
+- [ ] **045 · Prospects:** `/company/prospects` → inquiry/follow-up/application/review/decision/reopen → explicitly reviewed existing tenant/lease conversion. Keep source versions/history; never infer identity by email or grant portal access. Tour/follow-up is date-only, not a timed appointment.
+- [ ] **051 · Manual applications and follow-ups:** `/company/applications` and the exact prospect → record a dated tour/task follow-up → complete/cancel/correct it → record and review an application → explicitly approve and convert with reviewed account/contact/unit/lease terms. Expect retained source/history and one linked **draft** lease on exact retry, without activating rent, household portal access, screening, external messages or fees. Test stale source/version decisions, role/company loss and source/back context.
+- [ ] **051 · Owner rental-listing intent:** `/company/availability` → explicitly review listing intent → list or remove it as the current owner. Units default to **Not listed for rent**; vacancy, Ready and a future/current lease never infer a listing. Managers may see the state but cannot change it. Listing must leave readiness history/version/timestamps intact. If readiness changes before a listing review commits, expect a conflict/review; later readiness edits preserve existing listing intent. Interrupt/retry the original listing, including after archive/filter changes, without duplicating history or silently flipping newer state.
+- [ ] **052 · Private saved tasks:** start a new lease, renewal or inspection → explicitly save supported text/fields to personal tasks → `/company/drafts` → resume after refresh/sign-in → re-review current sources and finish once with the stable final submission identity. Another same-company user must not read these drafts. A renewal whose source loses its end date must show as unavailable without breaking other drafts; permitted own cleanup must work. Source/role/company changes must not silently rebase values or reveal private draft contents. Expiry is 30 days; file uploads and uncertain final business submissions retain their distinct rules.
+- [ ] **Source-return/preferred unit:** from a filtered page-two prospect open tenant/account/lease setup, save/follow source, use tabs/history/reauth, then Back to prospect with the same filters/page. A valid active same-property unit hint beyond the first 50 is advisory; manual review/drafts/uncertain payload win. Invalid/archived/wrong-property hints require manual choice, with no unrelated fallback, rent prefill or reservation.
+- [ ] **Tenant directory/history:** `/company/residents` → search/property/rental/access/archive filters → next/previous → tenant → Rental history → lease source → return. Totals/global property choices cover complete filters; preview<=3 is not full history. Exact contact/user aliases and participant roles/effective dates remain discoverable independently of financial/invitation caps. Use seeded large examples where available; do not manufacture 1,001 real leases for acceptance. Automated 1,001-lease completeness and timed history grain<=3 are separate evidence.
+- [ ] **Tenant control/privacy:** create/edit tenant, keep a draft, then change policy from another authorized session. Same-identity read-only preserves draft/version and permitted reads. Authoritative access/company/read-feature denial immediately hides private review; pending original journal survives. Restore only after fresh pinned CREATE-directory/PATCH-contact reauthorization. CSRF_INVALID/IMPERSONATION_READ_ONLY are not read-scope denial. Verify admin access-removal/generic reset exemptions, contact-specific reset's leasing gate, support actual-role views and saved-account Continue; no new administrative resident_portal gate.
+- [ ] **Tenant recovery/duplicates:** committed create/lost response → later 403 → exact receipt retry yields one result. An uncommitted create encountering a later same-name active/archived contact offers deliberate separate-person review: only explicit duplicateReviewed false→true may change, retaining UUID/company/core details. PATCH has no receipt: fresh comparison shows differences first/neutral matches/all fields, close-and-keep retains retry, and explicit acknowledgment/Use current is local discard, not proof the earlier edit saved. Changing company cannot redirect the old tenant draft into another company.
+
+### Financial/document workflows and resident experience
+
+- [ ] **Historical cash, no migration:** `/company/reports` → Historical recorded cash → business dates/recording cutoff/comparison → source/CSV/print. Later backdated entries/voids do not rewrite the earlier known state; company timezone/DST cutoff and current-label disclosure remain visible. Exact period deltas are not normalized/accrual profit/historical lease balances.
+- [ ] **047 · Paid-expense CSV:** `/company/imports/expenses` → namespace/sourceId/property/date/amount/category → per-row errors/exact totals → paid/not-recorded confirmations → commit/history/cash source/backlink. Retry once; retained duplicate namespace/source IDs remain blocked even after void. Partial invalid totals are labeled and cannot commit. No rent/deposits/opening balances or bank reconciliation imports.
+- [ ] **Daily money forms:** `/company/finances`, `/company/rent`, `/company/deposits` → cash expense/rent receipt/deposit receipt/disposition. Check required labels/paired desktop fields/mobile stack, error focus/input retention, method changes, review/source versions and sticky actions. Exact lost-response retry never duplicates money; corrections retain history. Use manual evidence only—these controls do not collect/refund provider funds.
+- [ ] **046 · Owner-granted documents:** lease Documents → explicitly share selected cleared versions with eligible leaseholder → `/resident/documents` download → expiry/revoke. Occupants/unselected households/other companies receive no inheritance; current scan/source/access gates recheck every open/download. Preserve exact-version history; this is not general public sharing/uploads.
+- [ ] **053 · Shared-file acknowledgment:** `/resident/documents` → search title/property/unit across visible results → open the exact current grant → explicitly acknowledge receipt. Expect one retained per-grant receipt and management status/history, with audited download activity. Read-only/revoked/expired/wrong-account/occupant access must not acknowledge or disclose private originals. Lost response keeps the original identity/body/company for exact retry; a new owner review/grant must not inherit the old grant's acknowledgment. Receipt is not a signature or acceptance of terms.
+- [ ] **048/050 · Maintenance:** `/company/maintenance` and `/resident/maintenance` → filters/complete counts/50-row pages → detail/source/back. Original requester adds a shared reply; team-only notes stay private and resident labels do not expose staff identities. Resolved follow-up leaves status/version unchanged. Retry retains one update/audit/event; revoke access and test direct/stale links. Legacy >1,000-array failure is explicit, never silent truncation.
+- [ ] **049 · Personal notices:** `/account/notifications` → four optional company/account areas → save/retry/history. Defaults enabled; disabling affects future deliveries only, retaining old inbox/read state. Late replay returns current settings/original receipt without restoring older choices; company-switch drafts cannot write new-company defaults. Work responsibility/role/source access remain unchanged; no external delivery/reminder activation.
+- [ ] **Resident/staff boundaries:** actual requester/leaseholder/occupant and selected-property staff sessions show only permitted home/rent/deposit/terms/statement/documents/assigned work. Residents cannot post money, edit roles/assignments/household authority or share files. Staff do not gain management/import/plan authority; check exact-source navigation and denial after role/property removal.
+
+### Existing connected platform smoke regressions
+
+- [ ] Properties/units → account-first tenant → lease draft/household → invitations/owner approvals → activation/renewal/future terms/exit retain original identity, source versions and correction history. Property company-pin and non-tenant draft/control gaps remain the explicit exceptions above.
+- [ ] Rent/deposit ledgers, allocations/credits/movements, settlement/statement and void/reversal views reconcile with their original sources; billed and cash are not conflated.
+- [ ] Maintenance delegation/vendors/preventive schedules/calendar retain due/source returns and current property assignments; inspections/unsigned agreement preparation/private library retain exact cleared versions, review/reopen/history. Preparation approval is not a signature; an inspection does not deduct a deposit.
+- [ ] Help, overview, notifications, empty/error states, mobile scroll/focus and offline reauthentication return to the intended source without creating a record or carrying private UI across an actual identity/company denial.
+- [ ] **Consolidated navigation/forms:** use property finder/search, source-linked resident rent summaries and grouped lease navigation at desktop and 390px. Try browser Back/Forward, links and programmatic next steps with unsent replies or edits; cancellation keeps input, a successful save releases only its completed form, and an unchanged/reverted editor closes quietly. Native validation must reveal/focus any invalid field inside optional details. Role/feature-disabled financial areas must not be fetched or represented as fabricated zero totals. Repeat the Property CREATE A→B stale-company and late-ack cases in disposable test conditions; an old A draft must not create or redirect success in B.
+
+
+## Evidence and work outside this consolidation
+
+[Current implementation/inventory evidence](PR60-integration-review-2026-10-24.md) · [139-path accounting](PR60-consolidation-inventory-2026-10-24.md) · [form evidence](form-layout-2026-10-24.md) · [experience screenshot provenance](acceptance-evidence/consolidated-experience-provenance.json) · [task/acquisition screenshot provenance](acceptance-evidence/consolidated-task-acquisition-provenance.json).
+
+The preserved `b68416d` baseline passed browser 320/320 and tenant privacy 56/56 before these ports; initial published `b84b389` [CI run 40142455640](https://github.com/elijahvw/property-flow-2/actions/runs/40142455640) passed. Those are historical baseline proofs, not final consolidated results. The source [archive/manifest](pr60-source-evidence/README.md) keeps twelve dated documents/five exact PNGs with provenance. Legacy-named notification images were regenerated by a local rerun, not retained as immutable October 19 captures. Failed-run chronology is retained in the linked continuation rather than relabeled as passing.
+
+Remaining unrelated roadmap scope includes broader non-tenant controls/recovery, tenant-picker/metadata scale, timed appointments, historical/accrual/opening/liability/guarantor accounting and reconciliation, wider delegation/document uploads/sharing/retention, broader conversations/reminders, subscription automation/quotas/self-service, provider-backed screening/signatures/sync/collection, durable provider/database consistency and operational/restore/telemetry acceptance. No universal capacity/SLO or production-readiness claim follows from these local checks.
+
+## Deferred separate demo tooling
+
+At October 25, 00:11 UTC, the user said: “yes make that as a separate pr start working on that after i get 61 to review and push”. Versioned/idempotent synthetic-company lifecycle tooling, a demo coverage manifest and a demo runbook are deferred to a separate PR/task phase after the #61 review/push handoff. No demo implementation, seed, workflow, AGENTS change or demo data is part of this consolidation. Finish only consolidation, checks/push/review, conditional PR #60 closure and the #61 handoff here.

@@ -1,0 +1,12 @@
+.historical-cash-builder > summary { cursor: pointer; font-weight: 650; }
+.historical-cash-report { margin-top: 1.5rem; }
+.historical-cash-report > header { margin-top: 1rem; }
+.historical-cash-print-root { display: none; }
+@media print {
+  body:has(> .historical-cash-print-root) > :not(.historical-cash-print-root) { display: none !important; }
+  .historical-cash-print-root { display: block; color: #111; background: white; }
+  .historical-cash-print-root .table-wrap { overflow: visible; }
+  .historical-cash-print-root table { width: 100%; font-size: 10pt; }
+  .historical-cash-print-root tr { break-inside: avoid; }
+  .historical-cash-print-root summary { list-style: none; font-weight: 700; }
+}

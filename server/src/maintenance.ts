@@ -10,6 +10,12 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 import { AccessError, companyScope } from "./access.js";
 import { assignmentId, serializable } from "./application.js";
 import { date, version, conflict, submission, sameSubmission, paging, page } from "./operational.js";
+import { companyFeatures, requireFeatures, routeFeatures } from "./company-features.js";
+import {
+  legacyMaintenanceLimit, maintenanceCursor, maintenanceCursorContext,
+  maintenanceDirectorySelect, maintenanceListQuery, maintenancePageSize,
+  maintenanceWhere, unavailableMaintenanceCursor,
+} from "./maintenance-directory.js";
 const statuses = ["open", "in_progress", "resolved"];
 const categories = [
   "plumbing",
@@ -40,9 +46,24 @@ const updateSelect = {
   id: true,
   content: true,
   visibility: true,
+  authorType: true,
+  createdById: true,
   createdAt: true,
   creator: { select: { name: true } },
 } as const;
+function updateDto(row: {
+  id: string; content: string; visibility: string; authorType: string;
+  createdById: string; createdAt: Date; creator?: { name: string | null };
+}, residentViewer?: string) {
+  const requester = row.authorType === "requester";
+  return {
+    id: row.id, content: row.content, visibility: row.visibility, createdAt: row.createdAt,
+    author: residentViewer
+      ? requester && row.createdById === residentViewer ? "You" : "Property team"
+      : row.creator?.name || (requester ? "Resident requester" : "Recorded team member"),
+    ...(!residentViewer ? { authorType: row.authorType } : {}),
+  };
+}
 function choice(value: unknown, values: string[], label: string) {
   if (typeof value !== "string" || !values.includes(value))
     throw new AccessError(400, "INVALID_INPUT", `Choose a valid ${label}.`);
@@ -118,6 +139,8 @@ export function registerMaintenance(
       if (!current)
         throw new AccessError(403, "ACCESS_DENIED", "Access is unavailable.");
       companyScope(current, permission, companyId);
+      request.companyFeatures = await companyFeatures(tx, companyId);
+      requireFeatures(request.companyFeatures, routeFeatures(request.routeOptions.url ?? request.url), request.method);
       await tx.$queryRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
       return run(tx, companyId);
     });
@@ -319,103 +342,78 @@ export function registerMaintenance(
           select: { ...updateSelect, creator: resident ? false : updateSelect.creator },
           orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 51,
         });
-        return page(rows.map(row => {
-          const { creator, ...safe } = row;
-          return { ...safe, author: resident ? "Property team" : creator?.name || "Recorded team member" };
-        }));
+        return page(rows.map(row => updateDto(row, resident ? request.principal!.id : undefined)));
       });
     });
-    server.get<{
-      Querystring: {
-        status?: string;
-        propertyId?: string;
-        priority?: string;
-        q?: string;
-        workStatus?: string;
-        due?: string;
-        assignee?: string;
-      };
-    }>(base, auth, async (request) => {
-      if (
-        Object.keys(request.query).some(
-          (k) => !["status", "propertyId", "priority", "q", ...(!resident ? ["workStatus", "due", "assignee"] : [])].includes(k),
-        )
-      )
-        throw new AccessError(400, "INVALID_INPUT", "Unknown filter.");
-      const status =
-        request.query.status === undefined
-          ? undefined
-          : choice(request.query.status, ["unresolved", ...statuses], "status");
-      const propertyId =
-        request.query.propertyId === undefined
-          ? undefined
-          : assignmentId(request.query.propertyId);
-      const priority =
-        request.query.priority === undefined
-          ? undefined
-          : choice(
-              request.query.priority,
-              ["low", "normal", "high"],
-              "priority",
-            );
-      const q =
-        request.query.q === undefined
-          ? undefined
-          : text(request.query.q, 200, "Search");
-      const due = request.query.due === undefined ? undefined : choice(request.query.due,["overdue","today","upcoming","unscheduled"],"target date view");
-      const assignee = request.query.assignee === undefined ? undefined : text(request.query.assignee,200,"Assignee");
-      const workStatus = request.query.workStatus === undefined ? undefined : choice(request.query.workStatus, ["unassigned", "assigned", "accepted", "pending_review", "complete"], "work status");
-      return scoped(request, resident, async (tx, companyId) => {
-        if (
-          propertyId &&
-          !(await tx.property.findFirst({
-            where: { id: propertyId, companyId },
-          }))
-        )
-          throw new AccessError(404, "NOT_FOUND", "Property not found.");
-        const company=await tx.company.findUniqueOrThrow({where:{id:companyId},select:{timezone:true}});
-        const today=new Date(companyDay(company.timezone)+"T00:00:00Z");
-        const rows=await tx.maintenanceRequest.findMany({
-          where: {
-            companyId,
-            status:
-              status === "unresolved"
-                ? { in: ["open", "in_progress"] }
-                : status,
-            propertyId,
-            priority,
-            executionStatus: workStatus,
-            ...(due?{AND:[...(due==="unscheduled"?[{targetOn:null}]:[{targetOn:due==="overdue"?{lt:today}:due==="today"?today:{gt:today}}]),{status:{not:"resolved"}}]}:{}),
-            ...(assignee?assignee==="unassigned"?{assigneeId:null}:{assignee:{is:{OR:[{name:{contains:assignee,mode:"insensitive"}},{email:{contains:assignee,mode:"insensitive"}}]}}}:{}),
-            ...(q
-              ? {
-                  OR: [
-                    { title: { contains: q, mode: "insensitive" } },
-                    { description: { contains: q, mode: "insensitive" } },
-                    {
-                      property: { name: { contains: q, mode: "insensitive" } },
-                    },
-                    { unit: { label: { contains: q, mode: "insensitive" } } },
-                  ],
-                }
-              : {}),
-            ...(resident
-              ? {
-                  requesterId: request.principal!.id,
-                  property: {
-                    assignments: {
-                      some: { companyId, userId: request.principal!.id },
-                    },
-                  },
-                }
-              : {}),
-          },
-          select: { ...select, ...(!resident ? { executionStatus: true,assigneeId:true,assignee:{select:{name:true}} } : {}) },
-          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    for (const directory of [true, false])
+      server.get<{ Querystring: Record<string, unknown> }>(directory ? `${base}/directory` : base, auth, request => {
+        const { filters, cursor, newer } = maintenanceListQuery(request.query, resident, directory);
+        return scoped(request, resident, async (tx, companyId) => {
+          if (filters.propertyId && !(await tx.property.findFirst({ where: { id: filters.propertyId, companyId }, select: { id: true } })))
+            throw new AccessError(404, "NOT_FOUND", "Property not found.");
+          const company = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { timezone: true } });
+          // Resolve the company calendar day once for filtering and page context.
+          const day = companyDay(company.timezone), today = new Date(`${day}T00:00:00Z`);
+          const where = maintenanceWhere(companyId, request.principal!.id, resident, filters, today);
+          if (!directory) {
+            const rows = await tx.maintenanceRequest.findMany({
+              where,
+              select: { ...select, ...(!resident ? { executionStatus: true, assigneeId: true, assignee: { select: { name: true } } } : {}) },
+              orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: legacyMaintenanceLimit + 1,
+            });
+            if (rows.length > legacyMaintenanceLimit)
+              throw new AccessError(409, "MAINTENANCE_DIRECTORY_LIMIT", "More than 1,000 requests match these filters. Use the paged maintenance directory or narrow the filters to load a complete list.");
+            return rows.map(row => {
+              const { assignee, ...result } = row as typeof row & { assignee?: { name: string | null } | null };
+              return { ...result, ...(!resident ? { assigneeName: assignee?.name || null } : {}) };
+            });
+          }
+          const contextDigest = maintenanceCursorContext(companyId, request.principal!.id, resident, filters, day);
+          if (cursor && cursor.contextDigest !== contextDigest) throw unavailableMaintenanceCursor();
+          const anchor = cursor ? await tx.maintenanceRequest.findFirst({
+            where: { AND: [where, { id: cursor.id }] }, select: { id: true, createdAt: true },
+          }) : null;
+          if (cursor && !anchor) throw unavailableMaintenanceCursor();
+          const seek: Prisma.MaintenanceRequestWhereInput = anchor ? {
+            // The inclusive date range lets the ordering index seek to this
+            // timestamp; the strict OR below still handles equal-time IDs.
+            createdAt: newer ? { gte: anchor.createdAt } : { lte: anchor.createdAt },
+            OR: newer
+              ? [{ createdAt: { gt: anchor.createdAt } }, { createdAt: anchor.createdAt, id: { gt: anchor.id } }]
+              : [{ createdAt: { lt: anchor.createdAt } }, { createdAt: anchor.createdAt, id: { lt: anchor.id } }],
+          } : {};
+          const order = newer ? "asc" : "desc";
+          const [rows, groups] = await Promise.all([
+            tx.maintenanceRequest.findMany({
+              where: { AND: [where, seek] },
+              select: { ...maintenanceDirectorySelect, ...(!resident ? { executionStatus: true, assignee: { select: { name: true } } } : {}) },
+              orderBy: [{ createdAt: order }, { id: order }], take: maintenancePageSize + 1,
+            }),
+            tx.maintenanceRequest.groupBy({ by: ["status"], where, _count: { _all: true } }),
+          ]);
+          // A live filter can remove every row beyond an otherwise valid anchor.
+          // Keep this distinct from the zero-match first-page state.
+          if (cursor && !rows.length) throw unavailableMaintenanceCursor();
+          const more = rows.length > maintenancePageSize, selected = rows.slice(0, maintenancePageSize);
+          if (newer) selected.reverse();
+          const statusCounts = { open: 0, in_progress: 0, resolved: 0 };
+          for (const group of groups) {
+            if (group.status === "open" || group.status === "in_progress" || group.status === "resolved")
+              statusCounts[group.status] = group._count._all;
+          }
+          const items = selected.map(row => {
+            const { assignee, ...result } = row as typeof row & { assignee?: { name: string | null } | null };
+            return { ...result, ...(!resident ? { assigneeName: assignee?.name || null } : {}) };
+          });
+          const hasOlder = newer ? !!anchor : more, hasNewer = newer ? more : !!anchor;
+          return {
+            companyId, items, total: statusCounts.open + statusCounts.in_progress + statusCounts.resolved,
+            statusCounts, pageSize: maintenancePageSize,
+            nextCursor: hasOlder && selected.length ? maintenanceCursor(selected[selected.length - 1].id, contextDigest) : null,
+            previousCursor: hasNewer && selected.length ? maintenanceCursor(selected[0].id, contextDigest) : null,
+          };
         });
-        return rows.map(row=>{const {assignee,...result}=row as typeof row & {assignee?:{name:string|null}|null};return {...result,...(!resident?{assigneeName:assignee?.name||null}:{})};});
       });
-    });
     server.get<{ Params: { requestId: string } }>(
       `${base}/:requestId`,
       auth,
@@ -525,16 +523,36 @@ export function registerMaintenance(
       const previous = await tx.maintenanceUpdate.findFirst({ where: { companyId, createdById: request.principal!.id, submissionKey: key.submissionKey }, select: { ...updateSelect, submissionHash: true } });
       if (previous) {
         sameSubmission(previous.submissionHash, key.submissionHash);
-        const { creator, submissionHash: _hash, ...safe } = previous;
-        return { ...safe, author: creator.name || "Recorded team member" };
+        return updateDto(previous);
       }
       if (visibility === "resident" && !(await residentUpdatesAvailable(tx, companyId, id)))
         throw new AccessError(409, "NO_RESIDENT_REQUESTER", "This is a management-created request. Record an internal note instead.");
-      const row = await tx.maintenanceUpdate.create({ data: { companyId, requestId: id, content, visibility, createdById: request.principal!.id, ...key }, select: updateSelect });
+      const row = await tx.maintenanceUpdate.create({ data: { companyId, requestId: id, content, visibility, authorType: "team", createdById: request.principal!.id, ...key }, select: updateSelect });
       await audit(tx, request, companyId, id, "maintenance.update.recorded", { updateId: row.id, visibility });
       if (visibility === "resident") await publish(tx, { companyId, actorId: request.principal!.id, kind: "maintenance.update", requestId: id, eventKey: row.id });
-      const { creator, ...safe } = row;
-      return { ...safe, author: creator.name || "Recorded team member" };
+      return updateDto(row);
+    });
+  });
+  server.post<{ Params: { requestId: string } }>("/api/resident/maintenance/:requestId/updates", auth, request => {
+    mutate(request);
+    const id = assignmentId(request.params.requestId), b = body(request, ["content", "submissionKey"]);
+    const content = text(b.content, 4000, "Reply"), key = submission(b.submissionKey, [id, content, "resident", "requester"]);
+    return scoped(request, true, async (tx, companyId) => {
+      await requestRecord(tx, companyId, id, request, true);
+      if (!(await residentUpdatesAvailable(tx, companyId, id)))
+        throw new AccessError(409, "NO_RESIDENT_REQUESTER", "Resident replies are unavailable for this request. Contact your property team to review the correct request.");
+      const previous = await tx.maintenanceUpdate.findFirst({ where: { companyId, createdById: request.principal!.id, submissionKey: key.submissionKey }, select: { ...updateSelect, submissionHash: true } });
+      if (previous) {
+        sameSubmission(previous.submissionHash, key.submissionHash);
+        if (previous.authorType !== "requester") throw new AccessError(409, "SUBMISSION_MISMATCH", "This submission key belongs to another update. Restore that original submission or start a new reply.");
+        return updateDto(previous, request.principal!.id);
+      }
+      const row = await tx.maintenanceUpdate.create({ data: { companyId, requestId: id, content, visibility: "resident", authorType: "requester", createdById: request.principal!.id, ...key }, select: updateSelect });
+      await audit(tx, request, companyId, id, "maintenance.reply.recorded", { updateId: row.id, visibility: "resident" });
+      await publish(tx, { companyId, actorId: request.principal!.id, kind: "maintenance.reply", requestId: id, eventKey: row.id });
+      // Replies append retained evidence; status and the request's reviewed
+      // version remain independent, including follow-ups after resolution.
+      return updateDto(row, request.principal!.id);
     });
   });
   server.patch<{ Params: { requestId: string } }>(

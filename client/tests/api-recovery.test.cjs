@@ -29,3 +29,34 @@ test('local serialization failure does not claim a request was submitted',async(
   let sent=false;const {api,ApiError}=load(async()=>{sent=true;});const body={};body.self=body;
   await assert.rejects(api('/api/fixture',{method:'POST',body}),error=>!(error instanceof ApiError));assert.equal(sent,false);
 });
+
+test('a reviewed company is sent exactly for its request without becoming a global selection',async()=>{
+  const sent=[];
+  const {api,setCsrfToken}=load(async(path,options)=>{sent.push({path,options});return {ok:true,status:200,json:async()=>({saved:true})};});
+  setCsrfToken('fixture-csrf');
+  await api('/api/company/resident-contacts',{method:'POST',expectedCompanyId:'company-reviewed-A',body:{submissionKey:'original-key'}});
+  await api('/api/company/resident-contacts/contact-source',{expectedCompanyId:'company-reviewed-A'});
+  await api('/api/company/properties');
+  assert.equal(sent[0].options.headers['X-Company-ID'],'company-reviewed-A');
+  assert.equal(sent[0].options.headers['X-CSRF-Token'],'fixture-csrf');
+  assert.deepEqual(JSON.parse(sent[0].options.body),{submissionKey:'original-key'});
+  assert.equal(sent[1].options.headers['X-Company-ID'],'company-reviewed-A');
+  assert.equal(Object.hasOwn(sent[2].options.headers,'X-Company-ID'),false);
+});
+
+test('an invalid reviewed company never sends a request or claims submission uncertainty',async()=>{
+  let sent=0;const {api,ApiError}=load(async()=>{sent++;});
+  for(const expectedCompanyId of ['', 'bad\ncompany', 'company with spaces', 'x'.repeat(201), null, 42, {}]) {
+    await assert.rejects(api('/api/company/resident-contacts',{method:'POST',expectedCompanyId,body:{name:'Fictional tenant'}}),error=>!(error instanceof ApiError));
+  }
+  assert.equal(sent,0);
+});
+
+test('a successful mutation hidden by a changed support context stays uncertain while a read does not',async()=>{
+  for(const method of ['POST','GET']) {
+    let client;
+    client=load(async()=>({ok:true,status:200,json:async()=>{client.setImpersonationContext('new-context');return {saved:true};}}));
+    client.setImpersonationContext('opening-context');
+    await assert.rejects(client.api('/api/company/resident-contacts',{method}),error=>error instanceof client.ApiError&&error.code==='IMPERSONATION_CONTEXT_CHANGED'&&error.submissionUncertain===(method==='POST'));
+  }
+});

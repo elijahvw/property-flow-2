@@ -1,11 +1,14 @@
 import { InvitationDelivery, type InvitationResult } from "./InvitationDelivery";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
 import { formatDate } from "../dates";
 import { Form } from "./Form";
 import { DateField } from "./DateField";
+import { statementPath } from "../statement";
+import { availableFeatureRoute } from "../company-features";
 
 type Invitation={version?:number;deliveryStatus?:string;id:string;email:string;participantName:string;participantRole:string;approvedAt:string|null;acceptedAt:string|null;revokedAt:string|null;expiresAt:string};
 export function LeaseInvitations({leaseId,startsOn,resident=false}:{leaseId:string;startsOn:string;resident?:boolean}){
@@ -42,5 +45,8 @@ export function ResidentLeaseInvitations(){
 }
 function ResidentLeaseSummary({lease}:{lease:ResidentLease}){
   const [expanded,setExpanded]=useState(false);
-  return <div className="editor-section"><h3>{lease.property.name} · {lease.unit.label}</h3><p>{formatDate(lease.startsOn)} through {formatDate(lease.endsOn,"Open ended")}</p><details onToggle={event=>setExpanded(event.currentTarget.open)}><summary>View invitation history · {lease.unit.label}</summary>{expanded&&<LeaseInvitations leaseId={lease.id} startsOn={lease.startsOn} resident/>}</details></div>;
+  const {data:auth}=useAuth();
+  const finance=availableFeatureRoute("/resident/rent",auth?.companyFeatures,auth?.membership?.role);
+  const context=new URLSearchParams({leaseId:lease.id});
+  return <div className="editor-section"><h3>{lease.property.name} · {lease.unit.label}</h3><p>{formatDate(lease.startsOn)} through {formatDate(lease.endsOn,"Open ended")}</p>{finance&&<nav className="actions" aria-label={`Lease records for ${lease.unit.label}`}><Link to={`/resident/rent?${context}`}>Rent & payments</Link><Link to={`/resident/deposits?${context}`}>Security deposit</Link><Link to={statementPath(lease.id,true)}>Statement</Link></nav>}<details onToggle={event=>setExpanded(event.currentTarget.open)}><summary>View invitation history · {lease.unit.label}</summary>{expanded&&<LeaseInvitations leaseId={lease.id} startsOn={lease.startsOn} resident/>}</details></div>;
 }

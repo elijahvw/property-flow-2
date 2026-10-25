@@ -6,6 +6,8 @@ import { api } from "../api";
 import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "../components/Form";
+import { PlatformCompanySubscription } from "../components/CompanySubscription";
+import { SalesDemo } from "../components/SalesDemo";
 export type CompanyProfile = {
   id: string;
   name: string;
@@ -238,6 +240,7 @@ function CompanyDirectory() {
           </p>
         </Form>
       </EditorDialog>
+      <SalesDemo onChange={r.reload} />
       <section className="panel">
         <h2>Company directory</h2>
         <div className="form-grid">
@@ -437,6 +440,7 @@ function CompanyRecord() {
           </dl>
         </>
       </section>
+      <PlatformCompanySubscription companyId={c.id}/>
       <section className="panel">
         <h2>People and owner setup</h2>
         <p>

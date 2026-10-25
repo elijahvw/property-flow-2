@@ -364,3 +364,54 @@ test("saving from the deposit directory refreshes its balances immediately", asy
 test('deposit setup chooses its lease directly and keeps property context',async({page})=>{
  const {state,lease}=await fixture(page);await page.route('**/api/company/leases?*',route=>route.fulfill({json:{items:[lease],nextCursor:null}}));await page.goto('/company/deposits?propertyId=home');await page.getByRole('button',{name:'Set up a security deposit',exact:true}).click();await expect(page.getByRole('dialog',{name:'Choose a lease for this deposit'})).toContainText('Maple House');await page.getByRole('button',{name:'Choose this lease',exact:true}).click();await expect(page).toHaveURL(new RegExp('propertyId=home&leaseId='+lease.id));await expect(page.getByRole('heading',{name:'Refundable security deposit',exact:true})).toBeVisible();expect(state.requests.some(path=>path.startsWith('/api/company/rent'))).toBe(false);
 });
+
+test('deposit receipt pairs fields, preserves method edits and replays only the reviewed receipt after response loss',async({page})=>{
+ const {lease}=await fixture(page);let response:'reject'|'lose'|'ok'='reject';const posted:any[]=[];const committed=new Map<string,unknown>();
+ await page.route('**/api/company/deposits/'+lease.id+'/receipts',async route=>{
+  const body=route.request().postDataJSON();posted.push(body);
+  if(response==='reject')return route.fulfill({status:400,json:{error:'Review this fictional deposit receipt.'}});
+  if(!committed.has(body.submissionKey))committed.set(body.submissionKey,{id:'fictional-receipt'});
+  if(response==='lose')return route.abort('failed');
+  return route.fulfill({json:committed.get(body.submissionKey)});
+ });
+ await page.goto('/company/properties/home/deposits?leaseId='+lease.id);
+ await page.getByRole('dialog',{name:'Security deposit account',exact:true}).getByRole('button',{name:'Record deposit received',exact:true}).click();
+ const editor=page.getByRole('dialog',{name:'Record security deposit received',exact:true});
+ await expect(editor.getByLabel('Deposit amount received (USD)',{exact:true})).toHaveValue('750.00');
+ await expect(editor.locator('.financial-required')).toHaveCount(3);
+ await expect(editor.getByLabel('Deposit payment method',{exact:true})).toHaveJSProperty('required',true);
+ await expect(editor.getByLabel('Deposit payment reference (optional)',{exact:true})).toHaveJSProperty('required',false);
+ await editor.getByLabel('Deposit payment method',{exact:true}).selectOption('check');
+ await editor.getByLabel('Deposit payment reference (optional)',{exact:true}).fill('Fictional check 101');
+ await editor.getByLabel('Internal deposit receipt note (optional)',{exact:true}).fill('Fictional original review note');
+ await editor.getByLabel('Deposit payment method',{exact:true}).selectOption('bank_transfer');
+ await expect(editor.getByLabel('Deposit payment reference (optional)',{exact:true})).toHaveValue('Fictional check 101');
+ await editor.getByLabel('Deposit payment method',{exact:true}).selectOption('check');
+ for(const [size,width,height] of [['desktop',1365,900],['mobile',390,844]] as const){
+  await page.setViewportSize({width,height});
+  const amount=await editor.getByLabel('Deposit amount received (USD)',{exact:true}).boundingBox(),date=await editor.getByLabel('Deposit received date',{exact:true}).boundingBox();
+  expect(amount).not.toBeNull();expect(date).not.toBeNull();
+  if(size==='desktop')expect(Math.abs(amount!.y-date!.y)).toBeLessThan(2);else expect(date!.y).toBeGreaterThan(amount!.y+amount!.height);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await expect(editor.getByRole('button',{name:'Review deposit receipt',exact:true})).toBeInViewport({ratio:1});
+  await page.screenshot({path:`/tmp/propertyflow-deposit-receipt-${size}-after.png`});
+ }
+ await editor.getByRole('button',{name:'Review deposit receipt',exact:true}).click();expect(posted).toHaveLength(0);
+ await expect(editor).toContainText('Held after receipt');await expect(editor).toContainText('$1,500.00');
+ await editor.getByRole('button',{name:'Confirm deposit received',exact:true}).click();await expect(editor.getByRole('alert')).toContainText('Review this fictional');await expect(editor.getByRole('alert')).toBeFocused();
+ for(const [size,width,height] of [['desktop',1365,900],['mobile',390,844]] as const){
+  await page.setViewportSize({width,height});await expect(editor.getByRole('alert')).toBeInViewport({ratio:1});
+  await page.screenshot({path:`/tmp/propertyflow-deposit-receipt-${size}-error-after.png`});
+ }
+ await editor.getByRole('button',{name:'Back to deposit details',exact:true}).click();
+ await expect(editor.getByLabel('Deposit amount received (USD)',{exact:true})).toHaveValue('750.00');
+ await expect(editor.getByLabel('Deposit payment method',{exact:true})).toHaveValue('check');
+ await expect(editor.getByLabel('Deposit payment reference (optional)',{exact:true})).toHaveValue('Fictional check 101');
+ await expect(editor.getByLabel('Internal deposit receipt note (optional)',{exact:true})).toHaveValue('Fictional original review note');
+ await editor.getByRole('button',{name:'Review deposit receipt',exact:true}).click();response='lose';
+ await editor.getByRole('button',{name:'Confirm deposit received',exact:true}).click();await expect(editor.getByRole('alert')).toBeVisible();
+ await expect(editor.getByRole('button',{name:'Back to deposit details',exact:true})).toHaveCount(0);
+ response='ok';await editor.getByRole('button',{name:'Retry this deposit save',exact:true}).click();await expect(editor).not.toBeVisible();
+ expect(committed.size).toBe(1);expect(posted).toHaveLength(3);expect(posted[1]).toEqual(posted[2]);
+ expect(posted[1]).toMatchObject({amount:'750.00',occurredOn:'2026-10-15',method:'check',paymentReference:'Fictional check 101',memo:'Fictional original review note',expectedVersion:1,expectedLeaseVersion:1});
+});

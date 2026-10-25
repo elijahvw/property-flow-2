@@ -23,7 +23,7 @@ type OverviewData = {
   }[];
   leases?: {
     inEffectCount: number;
-    monthlyRentCents: string;
+    monthlyRentCents?: string;
     draftCount: number;
     endingSoonCount: number;
     pastEndCount: number;

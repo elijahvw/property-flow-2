@@ -1,3 +1,5 @@
+import { prospectContext } from "./prospect-context";
+
 const keys = [
   "tenantContact",
   "tenantId",
@@ -6,6 +8,11 @@ const keys = [
   "tenantProperty",
   "tenantRental",
   "tenantRecords",
+  "tenantCursor",
+  "tenantBefore",
+  "tenantHistoryCursor",
+  "tenantHistoryBefore",
+  "tenantSection",
   "leaseListProperty",
   "leaseListStatus",
   "leaseListAttention",
@@ -18,9 +25,13 @@ const keys = [
   "unitListCursor",
 ];
 export function leaseContext(params: URLSearchParams) {
-  return Object.fromEntries(
+  const context = { ...Object.fromEntries(
     keys.filter((key) => params.get(key)).map((key) => [key, params.get(key)!]),
-  );
+  ), ...prospectContext(params) };
+  for (const key of ["tenantCursor", "tenantBefore", "tenantHistoryCursor", "tenantHistoryBefore"])
+    if (!context.tenantId || !/^[A-Za-z0-9_-]{1,512}$/.test(context[key] || "")) delete context[key];
+  if (!context.tenantId || context.tenantSection !== "rentals") delete context.tenantSection;
+  return context;
 }
 export function leasePath(id: string, context: Record<string, string> = {}) {
   const search = new URLSearchParams(context).toString();

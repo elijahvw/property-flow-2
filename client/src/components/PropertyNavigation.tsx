@@ -68,7 +68,7 @@ function PropertyTabs({ id, name }: { id: string; name?: string }) {
       propertyLink("/company/maintenance", id),
       "maintenance.manage",
     ],
-    ["Rent & balances", propertyLink("/company/rent", id), "finance.manage"],
+    ["Rent & payments", propertyLink("/company/rent", id), "finance.manage"],
     ["Deposits", propertyLink("/company/deposits", id), "finance.manage"],
     ["Cash activity", propertyLink("/company/finances", id), "finance.manage"],
     ["Reports", propertyLink("/company/reports", id), "finance.manage"],

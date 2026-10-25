@@ -9,6 +9,7 @@ import { DateField } from "../components/DateField";
 import { LeaseReturnLink } from "../components/LeaseReturnLink";
 import { usePropertySearchParams } from "../usePropertySearchParams";
 import { TenantReturnLink } from "../components/TenantReturnLink";
+import { prospectContext, withProspectContext } from "../prospect-context";
 import { DepositPanel } from "./Deposits";
 import { RecordIdentity } from "../components/RecordIdentity";
 import { RentSchedule } from "./RentSchedule";
@@ -270,7 +271,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
           {resident ? "My rental" : "Money · Rent operations"}
         </p>
         <h1>
-          {leaseId ? "Rent ledger" : resident ? "My rent" : "Rent & balances"}
+          Rent & payments
         </h1>
         <p>
           {resident
@@ -284,7 +285,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
           <PropertyScope
             value={propertyId}
             change={(value) =>
-              setParams({ ...(value ? { propertyId: value } : {}), view })
+              setParams({ ...prospectContext(params), ...(value ? { propertyId: value } : {}), view })
             }
           />
         </div>
@@ -300,6 +301,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                 to={propertyLink(
                   resident ? "/resident/rent" : "/company/rent",
                   propertyId || undefined,
+                  !resident ? prospectContext(params) : {},
                 )}
               >
                 ← All rent accounts
@@ -418,6 +420,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                         to={propertyLink(
                           "/company/leases",
                           propertyId || undefined,
+                          prospectContext(params),
                         )}
                       >
                         Manage leases →
@@ -494,7 +497,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                           to={propertyLink(
                             "/company/leases",
                             propertyId || undefined,
-                            { new: "lease" },
+                            { new: "lease", ...prospectContext(params) },
                           )}
                         >
                           Record a lease
@@ -513,6 +516,7 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                                   to={
                                     "?" +
                                     new URLSearchParams({
+                                      ...(!resident ? prospectContext(params) : {}),
                                       ...(propertyId ? { propertyId } : {}),
                                       leaseId: a.lease.id,
                                     })
@@ -574,12 +578,13 @@ function RentWorkspace({ resident }: { resident: boolean }) {
                                 to={
                                   "?" +
                                   new URLSearchParams({
+                                    ...(!resident ? prospectContext(params) : {}),
                                     ...(propertyId ? { propertyId } : {}),
                                     leaseId: a.lease.id,
                                   })
                                 }
                               >
-                                Open ledger →
+                                View rent & payments →
                               </Link>
                               <Link to={statementPath(a.lease.id, resident, { ...statementContext(params), statementFrom: "rent", ...(propertyId ? { propertyId } : {}) })}>View statement →</Link>
                             </div>
@@ -703,7 +708,7 @@ function LeaseLedger({
           )}
         </div>
         <div className="actions">
-        <Link to={resident?`/resident/leases/${encodeURIComponent(lease.id)}/terms`:`/company/leases/${encodeURIComponent(lease.id)}?section=terms`}>Lease terms & changes →</Link>
+        <Link to={resident?`/resident/leases/${encodeURIComponent(lease.id)}/terms`:withProspectContext(`/company/leases/${encodeURIComponent(lease.id)}?section=terms`,linkParams)}>Lease terms & changes →</Link>
         <Link className="button secondary" to={statementPath(lease.id, resident, { ...statementContext(linkParams), statementFrom: "rent" })}>View statement</Link>
         {!resident && (
           <div className="actions">

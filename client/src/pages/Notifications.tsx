@@ -5,6 +5,9 @@ import { useAuth } from "../context/AuthContext";
 import { useResource } from "../useResource";
 import { monitorOperation } from "../operations";
 import { formatActivityTime } from "../dates";
+import { EditorDialog } from "../components/EditorDialog";
+import { Form } from "../components/Form";
+import { DraftReset } from "../components/DraftReset";
 import "./Notifications.css";
 type Item = {
   id: string;
@@ -148,6 +151,7 @@ export function Notifications() {
       <p className="muted">
         In-app only. Refreshes on return and about every minute while visible.
       </p>
+      <NotificationPreferences key={`${scope}:${auth?.impersonation?.contextId || ""}:${auth?.companyFeatures?.notifications || ""}:${auth?.companyFeatures?.resident_portal || ""}`} />
       {failure && (
         <div role="alert" className="notice error">
           <p>{failure}</p>
@@ -293,4 +297,182 @@ export function Notifications() {
       )}
     </section>
   );
+}
+
+const preferenceAreas = [
+  { key: "maintenanceEnabled", label: "Maintenance", detail: "Eligible updates and replies on maintenance requests." },
+  { key: "workEnabled", label: "Assigned work", detail: "Eligible assignment, completion and review notices." },
+  { key: "inspectionsEnabled", label: "Inspections", detail: "Notices when an inspection needs review." },
+  { key: "agreementsEnabled", label: "Agreements", detail: "Preparation review, approval and requested-change notices." },
+] as const;
+type PreferenceSettings = Record<(typeof preferenceAreas)[number]["key"], boolean>;
+type Preferences = { companyId: string; settings: PreferenceSettings; version: number };
+type PreferenceResult = Preferences & {
+  receipt: { appliedVersion: number; appliedSettings: PreferenceSettings; changed: boolean; replayed: boolean };
+};
+type PreferenceDraft = { baseline: Preferences; settings: PreferenceSettings; key: string };
+const preferenceEndpoint = "/api/account/notifications/preferences";
+
+function NotificationPreferences() {
+  const { data: auth, refreshUser } = useAuth();
+  const readOnly = !!auth?.impersonation || auth?.companyFeatures?.notifications === "read_only" || (auth?.membership?.role === "resident" && auth?.companyFeatures?.resident_portal === "read_only");
+  const resource = useResource<Preferences>(preferenceEndpoint, true, true);
+  const [open, setOpen] = useState(false),
+    [draft, setDraft] = useState<PreferenceDraft | null>(null),
+    [confirmed, setConfirmed] = useState<Preferences | null>(null),
+    [kept, setKept] = useState<"draft" | "recovery" | null>(null),
+    [saved, setSaved] = useState(""),
+    [conflict, setConflict] = useState(false),
+    [latest, setLatest] = useState<Preferences | null>(null),
+    [loadingLatest, setLoadingLatest] = useState(false),
+    [latestError, setLatestError] = useState(""),
+    [historyOpen, setHistoryOpen] = useState(false),
+    [historyRevision, setHistoryRevision] = useState(0),
+    [formRevision, setFormRevision] = useState(0),
+    [companyChanged, setCompanyChanged] = useState(false),
+    [refreshingWorkspace, setRefreshingWorkspace] = useState(false);
+  const companyId = auth?.membership?.companyId;
+  const received = resource.data?.companyId === companyId ? resource.data : undefined;
+  const current = confirmed && confirmed.companyId === companyId && (!received || confirmed.version > received.version) ? confirmed : received;
+  const scroll = useRef(0);
+  const conflictSummary = useRef<HTMLElement>(null);
+  useEffect(() => { if (conflict) conflictSummary.current?.focus(); }, [conflict, formRevision]);
+  useEffect(() => {
+    if (resource.data && resource.data.companyId !== companyId) setCompanyChanged(true);
+  }, [resource.data, companyId]);
+  useEffect(() => {
+    if (!resource.error || resource.data) return;
+    setConfirmed(null); setDraft(null); setKept(null); setOpen(false); setConflict(false); setLatest(null); setLatestError("");
+  }, [resource.error, resource.data]);
+  const close = () => {
+    setOpen(false);
+    window.requestAnimationFrame(() => window.scrollTo({ top: scroll.current, behavior: "auto" }));
+  };
+  const discard = () => {
+    setDraft(null); setKept(null); setConflict(false); setLatest(null); setLatestError(""); close();
+  };
+  const edit = () => {
+    if (!current && !draft) return;
+    scroll.current = window.scrollY;
+    setSaved("");
+    if (!draft) setDraft({ baseline: current!, settings: { ...current!.settings }, key: crypto.randomUUID() });
+    setOpen(true);
+  };
+  const reviewLatest = async () => {
+    if (companyChanged || !draft || draft.baseline.companyId !== companyId) { setCompanyChanged(true); return; }
+    setLoadingLatest(true); setLatestError("");
+    try {
+      const value = await api<Preferences>(preferenceEndpoint);
+      if (value.companyId !== companyId || value.companyId !== draft.baseline.companyId) { setCompanyChanged(true); setLatest(null); return; }
+      setLatest(value); setConfirmed(value);
+    }
+    catch (error) { setLatestError(error instanceof Error ? error.message : "Unable to load the latest preferences."); }
+    finally { setLoadingLatest(false); }
+  };
+  const useReviewed = (keepChoices: boolean) => {
+    if (!draft || !latest || companyChanged || latest.companyId !== companyId || latest.companyId !== draft.baseline.companyId) return;
+    setDraft({ baseline: latest, settings: { ...(keepChoices ? draft.settings : latest.settings) }, key: crypto.randomUUID() });
+    setConflict(false); setLatest(null); setLatestError(""); setKept(null);
+  };
+  const choices = (disabled = false) => draft && <fieldset className="form-section" disabled={disabled}>
+    <legend>Future in-app notices</legend>
+    <p className="help">Choose the notices you want for your account in this company. All four areas start enabled. These choices apply only when you are an eligible recipient.</p>
+    <div className="notification-preference-choices">
+      {preferenceAreas.map(area => <label className="notification-preference-option" key={area.key}>
+        <input type="checkbox" name={area.key} checked={draft.settings[area.key]} onChange={event => setDraft({ ...draft, settings: { ...draft.settings, [area.key]: event.target.checked } })} />
+        <span><strong>{area.label}</strong><span className="help">{area.detail}</span></span>
+      </label>)}
+    </div>
+  </fieldset>;
+  const contextWarning = companyChanged && <section className="notice error" role="alert">
+    <p>Your company context changed. These choices have not been applied to another company. Reload your workspace to confirm your current company before editing or reviewing preferences. Any choices shown here stay with the earlier company until the workspace refresh clears this editor.</p>
+    <button className="secondary" disabled={refreshingWorkspace} onClick={async () => { setRefreshingWorkspace(true); try { await refreshUser(); } finally { setRefreshingWorkspace(false); } }}>{refreshingWorkspace ? "Reloading workspace…" : "Reload workspace"}</button>
+  </section>;
+  return <div className="notification-preferences">
+    <div className="notification-preferences-heading">
+      <button className="secondary" onClick={edit} disabled={(!current && !draft) || (companyChanged && !draft)}>Notification preferences</button>
+      {kept && <span className="help">{kept === "recovery" ? "Interrupted save kept for recovery on this page." : "Draft kept on this page."}</span>}
+      {saved && <span role="status">{saved}</span>}
+    </div>
+    {!current && !resource.error && !companyChanged && <p role="status" className="help">Loading notification preferences…</p>}
+    {resource.error && <p role="alert" className="notice error">{resource.error} <button className="secondary" onClick={resource.reload}>Retry preferences</button></p>}
+    {!open && contextWarning}
+    <EditorDialog open={open} title="Notification preferences" busy={loadingLatest} onClose={close} onDiscard={discard} onSaveDraft={recovery => { setKept(recovery ? "recovery" : "draft"); close(); }}>
+      <p className="help">Preferences affect future eligible in-app notices only. Existing notifications and read states stay in your inbox; turning an area back on does not add earlier activity. No email or text message is sent.</p>
+      <p className="help">Turning off notices does not remove assigned work or review responsibilities.</p>
+      {contextWarning}
+      {readOnly ? <>
+        <p className="notice">Notification preferences are read-only under your current access settings.</p>
+        {choices(true)}
+      </> : draft && <fieldset disabled={companyChanged} className="notification-preference-editor"><Form key={`${draft.key}:${formRevision}`} operation="notification.preferences" label="Save preferences" feedbackText="Notification preferences saved."
+        secondaryActions={<DraftReset reset={discard} />}
+        submit={async form => {
+          if (readOnly) throw new Error("Notification preferences are read-only under your current access settings.");
+          if (companyChanged || draft.baseline.companyId !== companyId) throw new Error("Reload your workspace to confirm your current company before saving preferences.");
+          if (conflict) throw new Error("Review the latest saved preferences before trying again.");
+          const settings = Object.fromEntries(preferenceAreas.map(area => [area.key, form.has(area.key)])) as PreferenceSettings;
+          try {
+            const result = await api<PreferenceResult>(preferenceEndpoint, { method: "POST", body: { ...settings, expectedCompanyId: draft.baseline.companyId, expectedVersion: draft.baseline.version, submissionKey: draft.key } });
+            if (result.companyId !== companyId || result.companyId !== draft.baseline.companyId) throw new ApiError("Your company context changed. Reload your workspace before reviewing preferences.", 409, "COMPANY_CONTEXT_CHANGED");
+            setConfirmed({ companyId: result.companyId, settings: result.settings, version: result.version });
+            setSaved(result.receipt.replayed && result.version > result.receipt.appliedVersion
+              ? "Earlier save recovered. Newer saved preferences remain in effect."
+              : "Notification preferences saved.");
+            setDraft(null); setKept(null); setConflict(false); setLatest(null); setLatestError("");
+            setHistoryRevision(value => value + 1); resource.reload(); close();
+          } catch (error) {
+            if (error instanceof ApiError && error.code === "RECORD_CHANGED") {
+              setConflict(true); setLatest(null); setLatestError(""); setFormRevision(value => value + 1);
+            }
+            if (error instanceof ApiError && error.code === "COMPANY_CONTEXT_CHANGED") { setCompanyChanged(true); setLatest(null); }
+            throw error;
+          }
+        }}>
+        {conflict && <section ref={conflictSummary} role="alert" tabIndex={-1} className="workflow-error-summary notice error" aria-label="Review changed preferences">
+          <p>This record changed. Your choices are still here. Review the latest saved settings before making a new save.</p>
+          {!latest && <button type="button" className="secondary" onClick={() => void reviewLatest()}>Review latest saved preferences</button>}
+          {latestError && <p role="alert">{latestError}</p>}
+          {latest && <>
+            <div className="notification-preference-comparison" role="region" aria-label="Saved preferences and your choices">
+              <table><thead><tr><th scope="col">Area</th><th scope="col">Saved now</th><th scope="col">Your choices</th></tr></thead>
+                <tbody>{preferenceAreas.map(area => <tr key={area.key}><th scope="row">{area.label}</th><td>{latest.settings[area.key] ? "On" : "Off"}</td><td>{draft.settings[area.key] ? "On" : "Off"}</td></tr>)}</tbody>
+              </table>
+            </div>
+            <p className="help">Choose which settings to edit against the latest saved version. Nothing changes until you save.</p>
+            <div className="actions"><button type="button" className="secondary" onClick={() => useReviewed(false)}>Use latest saved settings</button><button type="button" onClick={() => useReviewed(true)}>Keep my choices for a new save</button></div>
+          </>}
+        </section>}
+        {choices()}
+        <p className="help">Your opening version is kept while you edit. An interrupted save must be recovered with its original choices before starting another.</p>
+      </Form></fieldset>}
+      {!companyChanged && <details className="notification-preference-history" onToggle={event => setHistoryOpen(event.currentTarget.open)}>
+        <summary>Preference history</summary>
+        {historyOpen && companyId && <PreferenceHistory key={historyRevision} companyId={companyId} contextChanged={() => setCompanyChanged(true)} />}
+      </details>}
+    </EditorDialog>
+  </div>;
+}
+
+function PreferenceHistory({ companyId, contextChanged }: { companyId: string; contextChanged: () => void }) {
+  const [cursor, setCursor] = useState("");
+  const resource = useResource<{
+    companyId: string;
+    items: { id: string; createdAt: string; appliedVersion: number; settings: PreferenceSettings; changed: boolean }[];
+    nextCursor: string | null;
+  }>(`${preferenceEndpoint}/history${cursor ? `?${new URLSearchParams({ cursor })}` : ""}`, true, true);
+  useEffect(() => { if (resource.data && resource.data.companyId !== companyId) contextChanged(); }, [resource.data, companyId, contextChanged]);
+  return <div>
+    {resource.error && <p role="alert" className="notice error">{resource.error} <button className="secondary" onClick={resource.reload}>Retry preference history</button></p>}
+    {!resource.data && !resource.error && <p role="status">Loading preference history…</p>}
+    {resource.data?.companyId === companyId && <>
+      {!resource.data.items.length ? <p>No preference changes recorded yet. All areas are enabled by default.</p> : <ol className="notification-preference-history-list">
+        {resource.data.items.map(item => <li key={item.id}>
+          <time dateTime={item.createdAt}>{formatActivityTime(item.createdAt)}</time>
+          <p>Version {item.appliedVersion} · {item.changed ? "Preferences changed" : "Settings confirmed without changes"}</p>
+          <p className="help">{preferenceAreas.map(area => `${area.label}: ${item.settings[area.key] ? "On" : "Off"}`).join(" · ")}</p>
+        </li>)}
+      </ol>}
+      <div className="actions">{cursor && <button type="button" className="secondary" onClick={() => setCursor("")}>Latest preference changes</button>}{resource.data.nextCursor && <button type="button" className="secondary" onClick={() => setCursor(resource.data!.nextCursor!)}>Older preference changes</button>}</div>
+    </>}
+  </div>;
 }

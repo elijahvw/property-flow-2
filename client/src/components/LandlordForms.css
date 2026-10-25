@@ -1,0 +1,19 @@
+.lease-setup-tools { margin: 1rem 0 1.25rem; padding: .9rem 1rem; border: 1px solid #e0e7e2; border-radius: 9px; background: #f7faf8; }
+.lease-setup-tools > .help { max-width: 70ch; margin: 0; line-height: 1.5; }
+.lease-setup-tools > .actions { margin: .75rem 0 0; align-items: center; }
+.lease-setup-links { font-size: .82rem; }
+.lease-setup-links summary, .payment-policy-help summary { color: #23624c; cursor: pointer; font-weight: 600; }
+.lease-setup-links .actions { padding: .5rem 0 0; margin: 0; gap: .7rem; }
+.payment-policy-help { margin: .1rem 0 .8rem; font-size: .8rem; }
+.payment-policy-help .help { margin: .6rem 0 0; line-height: 1.5; }
+.tenant-form .required-field-key { margin: -.3rem 0 .9rem; color: #5b7067; font-size: .75rem; }
+.required-field-mark { margin-left: .2rem; color: #2f5e4b; }
+.account-provisioning > h2 { margin: .1rem 0 .6rem; }
+.account-provisioning > .help { max-width: 68ch; line-height: 1.55; }
+.account-setup-next { margin: 1.1rem 0 .3rem; padding: 1rem; border-radius: 9px; background: #f3f7f4; }
+.account-setup-next > summary { font-size: .9rem; font-weight: 650; cursor: pointer; }
+.account-setup-next > summary:focus-visible { outline: 3px solid #327ea7; outline-offset: 4px; }
+.account-setup-next ul { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; margin: .9rem 0 0; padding: 0; list-style: none; }
+.account-setup-next li { display: grid; gap: .35rem; font-size: .8rem; line-height: 1.5; }
+.account-setup-next li > span { color: #536b60; }
+@media (max-width: 700px) { .lease-setup-tools { padding: .8rem; }.lease-setup-tools > .actions { align-items: stretch; }.lease-setup-links { width: 100%; }.account-setup-next ul { grid-template-columns: 1fr; gap: .85rem; } }

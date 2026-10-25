@@ -1,0 +1,49 @@
+{
+  "scope": "Scoped experience port17/17 browser cases,41.9s; not final combined/real-account acceptance",
+  "run_directory_identifier": "/tmp/propertyflow-experience-port-20261025",
+  "directory_name_is_not_capture_date": true,
+  "root_reported_checkpoint_utc": "2026-10-24 23:54 UTC",
+  "viewports": {
+    "desktop": "1440x960",
+    "mobile": "390x844"
+  },
+  "runtime": "Owned loopback Vite8.3.4 +system Chromium; fixture accounts/data; finally cleanup reported",
+  "records": [
+    {
+      "source": "/tmp/propertyflow-experience-port-20261025/results/navigation-audit-property--c4a5e-supports-keyboard-selection/property-finder-desktop.png",
+      "repository_copy": "docs/acceptance-evidence/2026-10-24-consolidated-property-finder-desktop.png",
+      "sha256": "eef487637a826e1092b0b98b5af8060a398a2150d2742ce108a6ca2cf46670d9",
+      "source_file_mtime_utc": "2026-10-24T23:53:23.497741+00:00"
+    },
+    {
+      "source": "/tmp/propertyflow-experience-port-20261025/results/navigation-audit-the-prope-0325f-ithout-horizontal-scrolling/property-finder-mobile.png",
+      "repository_copy": "docs/acceptance-evidence/2026-10-24-consolidated-property-finder-mobile.png",
+      "sha256": "05b71805ccbe0d05a053ef48ae371564c0a2ff571553a87b2e8b0b8f0af2d23d",
+      "source_file_mtime_utc": "2026-10-24T23:53:30.985638+00:00"
+    },
+    {
+      "source": "/tmp/propertyflow-experience-port-20261025/results/lease-wayfinding-lease-sec-f3e8a-eyboard-navigation-and-back/lease-navigation-desktop.png",
+      "repository_copy": "docs/acceptance-evidence/2026-10-24-consolidated-lease-navigation-desktop.png",
+      "sha256": "50dfacc014980c28da7261458f4dd229cdd6740e16d7a712d3f2ff49170bf1fd",
+      "source_file_mtime_utc": "2026-10-24T23:53:19.265798+00:00"
+    },
+    {
+      "source": "/tmp/propertyflow-experience-port-20261025/results/lease-wayfinding-mobile-le-00f77-respects-finance-permission/lease-navigation-mobile.png",
+      "repository_copy": "docs/acceptance-evidence/2026-10-24-consolidated-lease-navigation-mobile.png",
+      "sha256": "f4637d05149ee59fa4cacae873c9aed8ba900a31d4203b5e72b0bda1198e33d7",
+      "source_file_mtime_utc": "2026-10-24T23:53:21.821764+00:00"
+    },
+    {
+      "source": "/tmp/propertyflow-experience-port-20261025/results/resident-home-audit-reside-0a9bd--original-financial-records/resident-home-desktop.png",
+      "repository_copy": "docs/acceptance-evidence/2026-10-24-consolidated-resident-home-desktop.png",
+      "sha256": "5f76ad12488d05cf01f6925df7ac38a11501ca8f0e59ab8f4b2db6dc457c86aa",
+      "source_file_mtime_utc": "2026-10-24T23:53:48.125412+00:00"
+    },
+    {
+      "source": "/tmp/propertyflow-experience-port-20261025/results/resident-home-audit-reside-0a9bd--original-financial-records/resident-home-mobile.png",
+      "repository_copy": "docs/acceptance-evidence/2026-10-24-consolidated-resident-home-mobile.png",
+      "sha256": "3c7116216fb7921713789859eb9b0bfb10a8a9e1e7379abf4f4432b22dafb704",
+      "source_file_mtime_utc": "2026-10-24T23:53:48.245411+00:00"
+    }
+  ]
+}

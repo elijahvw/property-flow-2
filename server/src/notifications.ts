@@ -3,11 +3,17 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { AccessError } from "./access.js";
 import { assignmentId } from "./application.js";
 import {
+  defaultNotificationSettings, lockPreferenceSave, notificationSettings,
+  preferenceFields, type NotificationSettings,
+} from "./notification-preferences.js";
+import {
   audit,
   choice,
   conflict,
   input,
   mutation,
+  page,
+  paging,
   sameSubmission,
   scoped,
   submission,
@@ -19,6 +25,7 @@ const templates: Record<string, string> = {
   "maintenance.created": "New maintenance request",
   "maintenance.status": "Maintenance status changed",
   "maintenance.update": "New maintenance update",
+  "maintenance.reply": "Resident replied to maintenance request",
   "work.assigned": "Work assigned to you",
   "work.reopened": "Your assigned work was reopened",
   "work.approved": "Your completed work was approved",
@@ -163,6 +170,68 @@ export function registerNotifications(
 ) {
   const auth = { preValidation: authenticate },
     base = "/api/account/notifications";
+  const ownPreferences = async (tx: Tx, companyId: string, userId: string) => {
+    await tx.$queryRaw`SELECT set_config('app.notification_user_id', ${userId}, true)`;
+    const row = await tx.notificationPreference.findUnique({ where: { companyId_userId: { companyId, userId } } });
+    return { companyId, settings: row ? notificationSettings(row) : { ...defaultNotificationSettings }, version: row?.version ?? 0 };
+  };
+  server.get<{ Querystring: Record<string, unknown> }>(base + "/preferences", auth, request => {
+    if (Object.keys(request.query).length)
+      throw new AccessError(400, "INVALID_INPUT", "Unknown preference filter.");
+    return scoped(db, request, "notification.read", (tx, companyId) => ownPreferences(tx, companyId, request.principal!.id));
+  });
+  server.get<{ Querystring: { cursor?: string } }>(base + "/preferences/history", auth, request => {
+    const cursor = paging(request.query);
+    return scoped(db, request, "notification.read", async (tx, companyId) => {
+      const userId = request.principal!.id;
+      await tx.$queryRaw`SELECT set_config('app.notification_user_id', ${userId}, true)`;
+      const where = { companyId, userId };
+      const boundary = cursor ? await tx.notificationPreferenceAction.findFirst({ where: { ...where, id: cursor }, select: { id: true, createdAt: true } }) : null;
+      if (cursor && !boundary) throw new AccessError(404, "NOT_FOUND", "Preference history is unavailable.");
+      const rows = await tx.notificationPreferenceAction.findMany({
+        where: { ...where, ...(boundary ? { OR: [{ createdAt: { lt: boundary.createdAt } }, { createdAt: boundary.createdAt, id: { lt: boundary.id } }] } : {}) },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 51,
+      });
+      return { companyId, ...page(rows.map(row => ({ id: row.id, createdAt: row.createdAt, appliedVersion: row.appliedVersion, settings: notificationSettings(row), changed: row.changed }))) };
+    });
+  });
+  server.post(base + "/preferences", auth, request => {
+    mutation(request, origin);
+    const b = input(request, [...preferenceFields, "expectedVersion", "expectedCompanyId", "submissionKey"]);
+    if (preferenceFields.some(field => typeof b[field] !== "boolean"))
+      throw new AccessError(400, "INVALID_INPUT", "Choose whether to receive notices for each of the four areas.");
+    if (!Number.isSafeInteger(b.expectedVersion) || Number(b.expectedVersion) < 0)
+      throw new AccessError(400, "INVALID_INPUT", "The opening preference version is required.");
+    const expectedVersion = Number(b.expectedVersion), expectedCompanyId = assignmentId(b.expectedCompanyId), settings = notificationSettings(b as NotificationSettings);
+    const key = submission(b.submissionKey, [expectedCompanyId, settings, expectedVersion]);
+    return scoped(db, request, "notification.read", async (tx, companyId) => {
+      if (companyId !== expectedCompanyId)
+        throw new AccessError(409, "COMPANY_CONTEXT_CHANGED", "Your company workspace changed. Reload the workspace before editing notification preferences.");
+      const userId = request.principal!.id;
+      await tx.$queryRaw`SELECT set_config('app.notification_user_id', ${userId}, true)`;
+      const previous = await tx.notificationPreferenceAction.findFirst({ where: { companyId, userId, submissionKey: key.submissionKey } });
+      if (previous) {
+        sameSubmission(previous.submissionHash, key.submissionHash);
+        return { ...await ownPreferences(tx, companyId, userId), receipt: { appliedVersion: previous.appliedVersion, appliedSettings: notificationSettings(previous), changed: previous.changed, replayed: true } };
+      }
+      await lockPreferenceSave(tx, companyId);
+      const current = await ownPreferences(tx, companyId, userId);
+      if (current.version !== expectedVersion) throw conflict();
+      const changed = preferenceFields.some(field => current.settings[field] !== settings[field]);
+      let appliedVersion = current.version;
+      if (current.version === 0) {
+        await tx.notificationPreference.create({ data: { companyId, userId, ...settings } });
+        appliedVersion = 1;
+      } else if (changed) {
+        const updated = await tx.notificationPreference.updateMany({ where: { companyId, userId, version: expectedVersion }, data: { ...settings, version: { increment: 1 } } });
+        if (updated.count !== 1) throw conflict();
+        appliedVersion += 1;
+      }
+      const action = await tx.notificationPreferenceAction.create({ data: { companyId, userId, ...key, ...settings, appliedVersion, changed } });
+      await audit(tx, request, companyId, action.id, "notification.preferences.saved", { changed, version: appliedVersion });
+      return { companyId, settings, version: appliedVersion, receipt: { appliedVersion, appliedSettings: settings, changed, replayed: false } };
+    });
+  });
   server.get(base + "/summary", auth, (request) =>
     scoped(db, request, "notification.read", async (tx, companyId) => {
       const where = await visible(tx, companyId, request.principal!.id);

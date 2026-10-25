@@ -10,7 +10,7 @@ import { EditorDialog } from "./EditorDialog";
 type Guide = { eligible: boolean; guideKey: string; status: string; step: string; version: number; steps: { id: string; title: string; description: string; path: string; action: string; help: string }[] };
 export function WorkspaceGuide() {
   const { data, user } = useAuth(), location = useLocation();
-  const eligible = !!user?.emailVerified && user.status === "active" && !!data?.permissions.length;
+  const eligible = !data?.impersonation && !!user?.emailVerified && user.status === "active" && !!data?.permissions.length && (data.permissions.some(p => p !== "platform.impersonate"));
   const scope = location.pathname.startsWith("/platform/") && data?.permissions.includes("platform.manage") ? "platform" : data?.permissions.includes("property.read") ? "company" : data?.permissions.includes("resident.self") ? "resident" : "platform";
   return eligible && location.pathname !== "/invite" ? <GuidePanel key={`${user.id}:${data?.membership?.companyId}:${scope}:${data?.permissions.join(",")}`} scope={scope} auto={!location.pathname.startsWith("/help") && location.pathname !== "/account"}/> : null;
 }

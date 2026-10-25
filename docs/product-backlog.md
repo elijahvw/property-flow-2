@@ -1,5 +1,13 @@
 # Property Flow implementation backlog
 
+### PF-30 · Repeatable sales demo — PR #61 follow-up
+
+Platform owner selects an active verified Auth0 account without existing company access/platform authority. Build a clearly fictional isolated portfolio from linked source records through current business handlers, atomically with audit and retry protection. Include current properties/units, readiness/listing, tenants/leases, finances/deposits, renewal/future billing, maintenance/vendor/cost/work history, calendar/notices, inspections/agreements/private documents, prospects/applications/follow-ups and private saved tasks. Normal company/property and personal notification/task boundaries apply. Never copy customer data, change live identities for fictional people, fabricate provider success or seed real pricing.
+
+Teardown must target a marked generation, suspend its company, revoke sessions and release its presenter account while retaining immutable history. Repeat teardown/create responses safely; a stale generation must never affect a later one. Fixture versions and `AGENTS.md` keep future feature/schema changes represented. Dependencies: existing Auth0 presenter, migrations041–053 plus054, normal scanner for actual file clearance. Local/PR validation remains distinct from release and actual-role acceptance. Next complete workflow is build → sign in/present source links → teardown → rebuild. [Contract, coverage and recovery](sales-demo.md).
+
+Consolidation authorization, October 24, 23:16 UTC: the user requested that all useful unique PR #60 work be incorporated into [draft PR #61](https://github.com/elijahvw/property-flow-2/pull/61). **Consolidation is in progress**, including collision-safe migrations, the saved-renewal P2 fix, ports, tests and documentation. The `b68416d` 320/320 browser and 56/56 privacy results validate the pre-consolidation baseline, not the combined result. Keep PR #60 open until every unique item is preserved on the verified remote destination and combined checks/reviews are complete; only then close it with a preservation link, retaining its branch/commits. Unrelated feature development remains paused; no merge, deployment or live migration is authorized. [Consolidation inventory and prior comparison](PR60-integration-review-2026-10-24.md).
+
 Status reconciled October 20, 2026 against main/deployed `1945049` and this feature batch. The [roadmap](product-roadmap.md) and [platform status](mvp-status.md) separate implemented, merged, deployed and accepted scope. Acceptance bullets below include the full target capability and must not be read as completed unless explicitly evidenced. PF-16 management inspections, PF-17 unsigned preparation and PF-19 in-app notifications are implemented in this unmerged batch; signatures/external delivery remain future. PF IDs are stable references; Jira updates are disabled.
 
 Each item is an epic to split into bounded PRs. Dependencies are prerequisites, not reasons to delay unrelated work. P1 completes core operating jobs; P2 broadens coverage; P3 commercializes/connects providers. PF-23/PF-24 accompany every increment. Use the roadmap's build sequence rather than sorting solely by priority.
@@ -152,6 +160,8 @@ Acceptance:
 
 Current delivery: Implemented on main: intake, work assignment/review, vendor contacts and paid-expense links; external dispatch, estimates/payables and full acceptance remain open.
 
+Local 048 validated continuation: requester-authored replies in the existing shared maintenance timeline, with immutable `authorType` (`team`/`requester`), current requester/property/source-history authority, exact replay and fixed `maintenance.reply` management in-app notices. The server fixes the resident-visible audience; the database rejects requester-authored internal notes. Resolved follow-ups leave request status/version unchanged. Management internal/shared updates already exist and remain unchanged. Server/Prisma/client builds, safe units/all 11 client files, roadmap 34/34, maintenance 131/131 and focused browser 14/14 pass, with one overlapping 390px viewport recheck. The complete 260 browser pass remains the 047 baseline. See the [selected bounded contract](roadmap-continuation-2026-10-24.md#checkpoint-4--requester-maintenance-replies-048-locally-validated).
+
 Audience: owner/manager, assigned authorized staff and tenant requester. Dependencies: PF-12; attachments require PF-15.
 
 Acceptance:
@@ -177,7 +187,7 @@ Acceptance:
 
 ### PF-15 · Private documents and attachments — P1 foundation
 
-Current delivery: Merged/deployed: private PostgreSQL originals, immutable versions, ClamAV quarantine/scan, management library and source download. Larger private object storage, explicit sharing/resident uploads and retention operations remain future.
+Current delivery: Merged/deployed: private PostgreSQL originals, immutable versions, ClamAV quarantine/scan, management library and source download. Local 046 adds explicit owner-granted access to a selected cleared lease-document version for an eligible leaseholder, with retained grant/revoke history, expiry and fresh recipient/source checks. The combined 34-check roadmap API suite and two focused sharing browser cases pass within the full 260-case browser run. Release/real-role acceptance, wider staff sharing, resident uploads, larger private object storage and retention operations remain future. [Current sharing contract and evidence](roadmap-continuation-2026-10-24.md).
 
 Audience: management and explicitly authorized tenant/staff. Dependencies: reviewed private-storage scope; PF-12 delegated authority.
 
@@ -221,7 +231,11 @@ Acceptance:
 
 ### PF-19 · Messages, notifications and controlled reminders — P2
 
-Current delivery: This PR implements atomic in-app source events, fixed recipients, own inbox/unread state, safe read/open replay and current source access. Conversations, scheduled reminders, preferences and external provider delivery remain future. External delivery must use a separately reviewed outbox; the current synchronous in-app event transaction is not an external delivery queue. See [contract](in-app-notifications.md).
+Current delivery: This PR implements atomic in-app source events, fixed recipients, own inbox/unread state, safe read/open replay and current source access. General conversations, scheduled reminders and external provider delivery remain future; locally validated personal preferences are recorded below. External delivery must use a separately reviewed outbox; the current synchronous in-app event transaction is not an external delivery queue. See [contract](in-app-notifications.md).
+
+Local 048 source-event continuation validated: a resident's reply to their own maintenance request uses fixed `maintenance.reply` to notify eligible management through the retained source/inbox machinery, without arbitrary recipients, free-text notification copies or external delivery. Business replay never republishes or resets read state; disabled/read-only notifications do not block an authorized source reply. This is bounded request conversation scope; general messaging and reminder/provider work remain separate. Maintenance131/131, roadmap 34/34 and focused browser 14/14 pass, plus an overlapping mobile check; full 047 browser evidence remains separate. [Contract and scoped evidence](roadmap-continuation-2026-10-24.md#checkpoint-4--requester-maintenance-replies-048-locally-validated).
+
+Personal in-app preferences 049 are locally validated: company + exact account scope, four default-enabled optional source areas including assigned work with a duty explanation, existing feature gates and future recipients only. Immutable events/deliveries/read state stay retained; no hide/backfill/access grant. Own versioned settings, immutable receipts/history and the separate company generation/shared publication fence retain exact current replay and save/publication ordering. Opening expectedCompanyId and all DTO company metadata are checked against current scope; a stale company A0→B0 editor cannot write new-company defaults. Both builds, 139 maintenance/preferences API checks,34 roadmap,15 billing/14 impersonation, safe units/client 11/ops 88/power guard, focused preference browser 10/10 and full frozen browser 273/273 pass. Release/real-role acceptance remain pending; no external channel or provider is added. [Contract and evidence](roadmap-continuation-2026-10-24.md#checkpoint-5--personal-in-app-notice-preferences).
 
 Audience: management, scoped staff and tenant. Dependencies: PF-12/source events; attachments require PF-15.
 
@@ -237,6 +251,8 @@ Acceptance:
 
 Audience: owner/authorized manager; tenant only their statement. Dependencies: PF-05/PF-06/PF-08 event history and PF-12 scope.
 
+Local validated continuation: historical recorded cash plus same-cutoff period comparisons use immutable `LedgerEntry` amount/source, creation and void evidence, separately from business dates. Native company-timezone day boundaries include DST; current labels are explicit. Complete CSV/source totals reject oversized reports. No migration or financial posting is added. The combined 34-check roadmap API suite and two historical-cash browser cases pass within the full 260-case browser run; legacy finance regression passes 177/177. Historical lease/allocation state and broader accounting/reconciliation remain unfinished. [Contract and evidence](roadmap-continuation-2026-10-24.md).
+
 Acceptance:
 - Rent roll, deposit movements/liability, aging, occupancy, maintenance cost and property cash reports drill down to complete authorized sources.
 - Label cash versus billed and current versus historical/as-of. Define effective/posted/received/reversed/generated dates with opening balances.
@@ -247,6 +263,14 @@ Acceptance:
 
 Audience: management, scoped leasing staff and applicant. Dependencies: PF-03/PF-11; private files use PF-15.
 
+Local validated continuation: owner/manager availability and turnover board from actual units/leases plus explicit readiness/block state, versioned reasoned changes, durable retries and immutable history (migration 043). Company staff/residents/platform-only authority gain no management access. A missing lease remains unconfirmed physical readiness; a later tenancy makes an old confirmation stale. The 045 management prospect pipeline adds reviewed links to existing eligible tenant/lease records. The combined 34-check roadmap API suite, three availability and four prospect browser cases pass within the full 260-case browser run; the existing leasing integration runner passes 30/30 through 047. Public applicant/provider work and release/real-role acceptance remain separate. [Contract and evidence](roadmap-continuation-2026-10-24.md).
+
+
+PF-21/PF-23 source-return loop is locally complete: closed prospect/pipeline context survives tenant/account/lease setup, saves/tabs/current/history/reauth and returns to the same source. Both builds, safe 108/eight expected skips, all 12 client files/helper 8, nav 12, lease 31, real 35/35 and full 290/290 pass; review is clear and dated fixture/import attempts remain retained. There is no schema/domain body/identity/access/conversion behavior change. [Completed contract](roadmap-continuation-2026-10-24.md#checkpoint-8--pf-21pf-23-prospect-source-return-loop-locally-validated).
+
+The confirmed preferred-unit hint fix is complete locally: the hint already exists on setup links but LeaseCreate previously ignored it. Fresh existing lease-directory metadata with status/version offers only the exact active same-property unit, even beyond the first 50 choices. Manual edits, reviews and journal/key/payload take precedence; invalid hints offer manual recovery without unrelated fallback. Property/auth/refresh guards apply. No endpoint/schema/rent/readiness/reservation/grant/active-slot/review-policy expansion is included; source is frozen, both builds/safe server 108/eight expected skips/client 12 pass, and review is clear after retaining review through archived options and enforcing version-monotonic metadata. Focused browser 17/17 plus existing 25/25 and real leasing/API 40/40 pass, including original payload/key recovery after all units archive. The complete browser run passes 307/307 (6.1m, exit 0) on the same source; fixture diagnoses remain retained. No new migration is introduced; release/real-role acceptance remains pending. [Completed hint contract](roadmap-continuation-2026-10-24.md#checkpoint-9--preferred-unit-setup-hint-locally-validated). Timed tours remain unselected.
+
+Read-only remaining-work audit: the existing tour stage/date-only follow-up queue is delivered; it is not a timed appointment/host workflow. The maintenance calendar and current four notification areas do not include prospects. Internal source-linked timed-tour coordination is an unselected candidate requiring timezone/DST, host/current-access, versioned reschedule/cancel/history and notification-scope decisions; no applicant messaging, new account or portal grant is implied. [Actual state and bounded candidate](roadmap-continuation-2026-10-24.md#read-only-pf-21-tourstasks-audit).
 Acceptance:
 - Availability distinguishes vacant/occupied/future occupancy/unavailable/turnover using lease dates plus explicit operational exceptions.
 - Inquiry → tour/task → application → review decision → approved contact/lease conversion preserves source identity; retries never duplicate people/leases.
@@ -254,9 +278,11 @@ Acceptance:
 - Manual applications/availability first. Listings/syndication/screening require separate consent/provider scope.
 - Optional insurance/utility responsibilities become lease-linked evidence/tasks after private documents. A checkbox never implies provider verification.
 
-### PF-22 · Company plans, usage and subscription lifecycle — P3
+### PF-22 · Company plans, usage and subscription lifecycle — P1, local
 
-Audience: platform owner administers; company owner sees/manages their plan; manager/staff/tenant have no default subscription authority. Dependencies: implemented capabilities and defined usage measures.
+Audience: platform owner administers; company owner sees their own plan, usage and billing; manager/staff/tenant/support have no default subscription authority. Dependencies: implemented capabilities, fresh company/role/property authority and defined usage measures. The user selected monthly plans on October 24, 2026.
+
+Local increment: configurable immutable USD monthly plan revisions, reasoned/versioned company lifecycle and expiring feature overrides, current effective feature modes, feature-area UTC request analytics and separately defined current resource aggregates. The platform company detail reuses existing profile/settings authority. Manual calendar-month SaaS invoices retain company/plan/price snapshots; actual off-platform receipts, reversals, void/reissue, complete outstanding totals and source history remain separate from tenant money. Company owners have their own plan/usage/invoice projection and suspended-company billing recovery. Fresh direct-API/transaction/background checks combine features with existing roles/property/lease scope; disabled mixed summaries omit unavailable financial projections. No plans/prices, automatic collection or production usage are invented.
 
 Acceptance:
 - Versioned plans/entitlements, trial dates, trial/active/expired/suspended/cancelled states and reasoned expiring overrides. Manual grants work before payment collection.
@@ -265,9 +291,13 @@ Acceptance:
 - Server enforcement covers resource creation/background work and combines entitlements with role/property authority.
 - Downgrade-over-limit never deletes operating history. Expiry/cancellation, company suspension and deletion are distinct with a reviewed retention/export policy.
 - Explicitly decide effects on recurring posting, tenant access and notifications. Never silently keep money collection running behind an inaccessible owner workspace.
-- Cover date boundaries/timezones, overrides, concurrent limit use and platform revocation. Prices/charge automation remain undecided.
+- Cover date boundaries/timezones, overrides, concurrent limit use and platform revocation. Monthly prices are configured explicitly; automatic collection, metered charging and quotas remain separate scope.
+
+Delivery state: implemented and validated locally; review/release and real-company acceptance remain pending. Both builds and the subsequent server TypeScript check pass. Safe server units report 94 passes and seven intended database-suite skips (101 total); all 11 client unit test files pass. Dedicated billing checks pass 15/15 through fresh migration 042 with the restricted runtime role, and impersonation regression passes 14/14. All six focused browser scenarios pass, including draft/retry/correction, private print scope, mobile usage/invoices, stale-charge review and disabled-feature projections. Two review findings were corrected and narrowly re-reviewed without residual findings. First-issue review shows exact price/recipient and fences both subscription/company versions; a committed original payload stays replayable after source changes. Additive migration 042 follows 041 and introduces metadata, daily counters and separate SaaS billing/history tables with immutable runtime grants. It adds no provider configuration, environment variable, cloud resource or always-on job. Next complete workflow: review/release and real-company plan assignment → access/usage → monthly invoice → receipt/correction → company-owned history and recovery. Taxes, proration, quotas, automated renewal/invoice generation, self-service plan changes and provider collection remain outstanding. No merged, deployed or accepted status is claimed. [Workflow, measures, runbook and evidence](company-subscriptions.md).
 
 ### PF-23 · UI/UX acceptance in every increment — P1 continuous
+
+Tenant leasing controls/form recovery/privacy are locally validated: strengthened real users 56/56, final client build/client 13 (six API header/uncertainty checks), independent review and final browser 320/320 (5.4m, exit 0) pass. Authoritative denials hide private UI immediately; pinned fresh CREATE/PATCH reads restore only permitted access, retaining exact journals. Read-only/CSRF/impersonation-read-only, administrative access-removal/reset exemptions, support actual-role views and saved-account Continue remain intact. Compact comparison/explicit duplicate consent preserve UUID/company/core details; create receipts and PATCH explicit no-write Use current remain distinct. The first 319 verification-fixture failure and corrected 10-repeat/11-affected history are retained. Unrelated feature development is paused; authorized PR #60 consolidation is in progress, and all combined port/check/review evidence remains pending in the [inventory](PR60-integration-review-2026-10-24.md), without merge/deploy/live migration or provider activation. Provider create/rename before final DB gating retains its existing external-consistency limit. [Completed contract and validation](roadmap-continuation-2026-10-24.md#checkpoint-11--tenant-leasing-write-controls-and-form-recovery-locally-validated).
 
 Acceptance:
 - Directory → exact detail → action → confirmation → return works for each source; copied URLs/browser back preserve meaningful context/filters.
@@ -279,7 +309,9 @@ Acceptance:
 
 ### PF-24 · Capacity and responsiveness — P1 continuous
 
-Baseline: resident/maintenance directories fetch all matches; financial/report aggregates have explicit completeness bounds. Shared property context may load through multiple components; no performance gain has been measured here.
+Local 050 is consolidated: both builds, 147/147 API cases with 100 identical timestamps, corrected 282/282 browser cases, finance 177/177, roadmap 34/34, safe 108/eight expected database skips, client 11, ops 88/power guard and final 270/270 quiet paged samples pass. Exact count/privacy/deep+reverse/source invariants and zero idle transactions are recorded on the finished fingerprints. Original real/API/browser failures, pre-range artifacts and the native BitmapOr harness-assertion diagnosis remain retained, not replaced. Complete counts/search scans and all-same-time filtering remain costs; description-search p95 is1,005.44ms locally. This is no universal/constant-work/production-capacity/SLO or live acceptance claim.
+
+Tenant directory/independent rental history is locally validated: exact aliases/roles/effective dates, complete filtered totals/global properties, bounded three-rental previews/50-row history/hash cursors and unchanged legacy/write/invitation/financial/picker caps. Current refined server build/safe 109+eight skips/SQL 7/finance 192 and unchanged client build/client 13/browser 320 pass. Final refined matrix passes 511/511 reads/24 scenarios/2,001 people with source/privacy/count/fingerprint/cleanup invariants. At 2k, default is 262.10 ms median/43,003 bytes versus first paged 684.11 ms; former 224.49 versus 1,963.93 ms. The old eager all-record API remains faster at 144.03 ms and larger at 1,535,493 bytes, with different populations. Portal-pending loops/repeated graphs/previews/global metadata remain costs; timed history grain<=3 is separate from the functional 1,001-lease API cap proof. No universal speed/constant-work/deployed SLO/live acceptance is claimed. Preserve the protected baseline, first regression, both diagnostics and original fixture findings. [Final evidence and tradeoffs](roadmap-continuation-2026-10-24.md#checkpoint-10--pf-24-tenant-directory-and-rental-history-locally-validated).
 
 Acceptance:
 - Measure authenticated latency/query count/response size and browser time on agreed portfolio sizes. Record a baseline/target before claiming improvement.
@@ -292,6 +324,8 @@ Acceptance:
 ### PF-25 · Imports, reconciliation and integration contracts — P2/P3
 
 Audience: owner/authorized manager; scoped platform provider configuration. Dependencies: stable source/event identities and PF-15 for private import files.
+
+Local validated continuation: reviewed unit-inventory CSV imports are bounded to 500 rows/256 KiB and use actual property IDs plus existing unit validation. Complete per-row preview, immutable source/fingerprint, property-version/duplicate revalidation, atomic commit/cancel, durable replay and result/source history use migration 044. Paid operating-expense imports 047 retain stable company/source-namespace/source-ID uniqueness, exact original cash linkage and explicit paid/not-previously-recorded review before atomic commit. Voiding an expense never permits reposting its retained source ID; malformed Unicode IDs are rejected before storage. The combined 34-check roadmap API suite, two unit-import and three expense-import browser cases pass within the complete 260-case browser run; legacy finance regression passes 177/177. Account/contact/lease identities, opening balances, other tenant-money imports and broader reconciliation remain separate work. [Contract and evidence](roadmap-continuation-2026-10-24.md).
 
 Acceptance:
 - Import preview, validation, property/unit/contact mapping, source identity, opening-balance meaning, commit summary and reconciliation. Retry never duplicates money.
@@ -322,6 +356,22 @@ Acceptance:
 - Add reviewed infrastructure/synthetic/runtime/backup coverage in bounded increments. Explicitly verify failure and recovery; a configured integration or retained snapshot alone is insufficient evidence.
 - Track ingestion/cardinality/retention and current allowance/cost. Do not enable paid streams, high-volume logs or credentials/providers merely to populate empty dashboards.
 - Release checks cover safe additive migration, verified restore point, immutable release identity and post-release role/workflow acceptance. User authorization governs deployment and cloud changes.
+
+### PF-29 · Support impersonation — P1, local
+
+Audience: platform owners and explicitly authorized support accounts. Company staff authority alone grants no impersonation access. Sources/dependencies: existing Auth0-backed application accounts, current company membership, staff property grants, resident/lease participation, cookie/CSRF sessions, immutable audit history and additive migration 041. [Workflow and runbook](support-impersonation.md).
+
+Acceptance:
+- A platform owner grants/revokes support access to an existing active, verified sign-in account through a versioned review. Support authority permits impersonation only; it grants no platform company/user administration or support delegation.
+- Search and page actual active, verified company members by person/company and role. Select a real company owner, manager, staff member or resident, enter a brief reason and start a read-only session. Platform accounts cannot be targets; nested impersonation is denied.
+- Navigation and API access use the target's current company, role, selected-property scope and resident/lease participation. Forged company/record IDs remain denied. Support authority never merges with target grants.
+- Show the selected user, role/company, expiry and a persistent return control. Centrally reject business mutations while viewing; telemetry, explicit exit and logout remain available. Testing write success requires a separately authorized test-account workflow.
+- Retain the original signed-in actor. Start/stop, support grants/revocations and document-download history identify the real actor and relevant target; reasons stay out of telemetry. Changes commit atomically with their audit events.
+- End access after 30 minutes or an earlier session deadline. Fresh actor/target status and authority checks, pinned company/membership version and stale-tab request context prevent silent identity/scope changes. Expired/revoked/unavailable views retain the exit banner; support regrant cannot revive an expired view.
+- Failed or ambiguous starts/stops offer reload/recovery without silently claiming completion. Identity transitions reload the workspace, clearing prior mounted data and unsubmitted drafts. Concurrent requests produce one transition and consistent history.
+- Validate support delegation boundaries, actual role/company/property/resident access, business-write denial, CSRF, expiry/revocation/access changes, stale tabs, concurrent transitions and audit attribution in disposable tests and browser fixtures. Complete real-account/mobile/keyboard acceptance after authorized release.
+
+Delivery state: implemented and validated locally; review/release and real-account acceptance remain pending. Both builds, all 10 client unit test files, safe server suites across the combined verification runs and 14 dedicated disposable integration checks pass. Fresh migrations, restricted runtime/RLS and non-ASCII identity context headers are covered; the dedicated runner is wired into CI. Three focused browser checks pass for grant/start/stop and retry, support administration denial, mobile layout, walkthrough suppression and cross-tab reload. No new runtime variable, Auth0 configuration or cloud resource is required. Migration 041 extends session context and widens the existing platform-role constraint to owner/support/null. Matching migration/API/client release remains pending; no deployed/user-accepted claim is made.
 
 ## Definition of ready for the next PR
 

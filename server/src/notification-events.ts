@@ -1,11 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { AccessError } from "./access.js";
 import type { Tx } from "./operational.js";
+import { companyFeatures } from "./company-features.js";
+import { optedInRecipients } from "./notification-preferences.js";
 
 type RequestKind =
   | "maintenance.created"
   | "maintenance.status"
   | "maintenance.update"
+  | "maintenance.reply"
   | "work.assigned"
   | "work.reopened"
   | "work.approved"
@@ -32,6 +35,9 @@ export type NotificationPublisher = (
 // determined here; callers cannot supply arbitrary inbox content or recipients.
 export const publishNotification: NotificationPublisher = async (tx, input) => {
   const { companyId, actorId, kind } = input;
+  // Notification delivery is independently optional. An unavailable inbox must
+  // not roll back an otherwise authorized source change.
+  if ((await companyFeatures(tx, companyId)).notifications !== "enabled") return;
   const eventKey = `${kind}:${input.eventKey}`;
   let propertyId: string,
     requestId: string | null = null,
@@ -62,14 +68,15 @@ export const publishNotification: NotificationPublisher = async (tx, input) => {
     if (["maintenance.status", "maintenance.update"].includes(kind)) {
       audience = "requester";
       recipientId = row.requesterId;
-      // Management-created work has no resident requester delivery contract.
+      // Retained resident creation audits predate the intake source field.
+      // Explicit management intake has no resident requester delivery contract.
       const creation = await tx.auditEvent.findFirst({
         where: { companyId, targetId: row.id, action: "maintenance.created" },
         select: { detail: true },
       });
       if (
         !creation ||
-        (creation.detail as { source?: string } | null)?.source !== "resident"
+        (creation.detail as { source?: string } | null)?.source === "management"
       )
         return;
     } else if (
@@ -167,12 +174,14 @@ export const publishNotification: NotificationPublisher = async (tx, input) => {
     skipDuplicates: true,
   });
   if (!added.count || !candidates.length) return;
+  const recipients = await optedInRecipients(tx, companyId, candidates.map(candidate => candidate.userId), sourceType);
+  if (!recipients.length) return;
   await tx.inboxNotification.createMany({
-    data: candidates.map((c) => ({
+    data: recipients.map((userId) => ({
       id: randomUUID(),
       companyId,
       eventId: id,
-      userId: c.userId,
+      userId,
       audience,
     })),
     skipDuplicates: true,

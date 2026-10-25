@@ -6,9 +6,11 @@ A property management application for connected portfolio records, leasing, main
 
 [Platform status](docs/mvp-status.md) is the current summary of implemented features, latest verified deployment, stopped development environment, this PR and remaining acceptance. [Roadmap](docs/product-roadmap.md) tracks stable feature IDs; [backlog](docs/product-backlog.md) retains detailed target acceptance. Jira updates are disabled.
 
-Main/deployed baseline `1945049` includes vendor contacts, preventive maintenance, the source-linked work calendar and private document library. The October 20 [PR59](https://github.com/elijahvw/property-flow-2/pull/59) batch adds management inspections, unsigned agreement preparation and personal in-app notifications with migrations038–040. Those new features await review, merge and deployment. Tests, merged source, deployment and real-account acceptance are distinct.
+Merged main `75d5342` includes PR59 inspections, unsigned agreement preparation and personal in-app notifications (migrations 038–040). The last documented hosted release remains `1945049`; current cloud state was not inspected here. [Draft PR #61](https://github.com/elijahvw/property-flow-2/pull/61) contains the locally validated platform-owner/manual monthly billing and landlord workflow baseline and is consolidating useful unique work from [PR #60](https://github.com/elijahvw/property-flow-2/pull/60). Ports, canonical migrations and combined checks are in progress; baseline tests do not establish the consolidated result. Review the [preservation inventory](docs/PR60-integration-review-2026-10-24.md) and [role-based acceptance/release checklist](docs/feature-acceptance-checklist-2026-10-24.md). Neither PR is merged or deployed, and PR #60 remains open until verified preservation/closure gates pass. Tests, merged source, deployment and real-account acceptance are distinct.
 
 ## Workflow contracts
+
+- [Sales demo setup, teardown, rebuild and fixture maintenance](docs/sales-demo.md).
 
 - [Lease and household workspace](docs/lease-workflow.md), [tenant workspace](docs/tenant-workspace.md), [account/portal boundaries](docs/resident-contacts.md).
 - [Rent and allocations](docs/rent-workflow.md), [deposits](docs/security-deposits.md), [settlement](docs/move-out-settlements.md), [terms/proration/renewal](docs/proration-renewal-transitions.md).

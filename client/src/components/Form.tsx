@@ -4,6 +4,7 @@ import { useFeedback } from "./Feedback";
 import { useEditorBusy } from "./EditorDialog";
 import { monitorOperation } from "../operations";
 import type { OperationName } from "../operation-lifecycle";
+import "./FormLayout.css";
 
 export function Form({
   children,
@@ -15,6 +16,8 @@ export function Form({
   secondaryActions,
   reviewOnly = false,
   recovering = false,
+  taskValues = false,
+  locked = false,
 }: {
   children: React.ReactNode;
   submit: (data: FormData) => Promise<void>;
@@ -25,6 +28,8 @@ export function Form({
   secondaryActions?: React.ReactNode;
   reviewOnly?: boolean;
   recovering?: boolean;
+  taskValues?: boolean;
+  locked?: boolean;
 }) {
   const notify = useFeedback();
   const editor = useEditorBusy(),
@@ -36,6 +41,12 @@ export function Form({
   // unsubmitted draft. After a lost response, freeze exactly the attempted data.
   const [uncertain, setUncertain] = useState(recovering);
   const retryData = useRef<FormData | null>(null);
+  const errorSummary = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!error) return;
+    errorSummary.current?.focus({ preventScroll: true });
+    errorSummary.current?.scrollIntoView({ block: "nearest" });
+  }, [error]);
   useEffect(() => {
     editor.recovery(formId, uncertain);
     return () => editor.recovery(formId, false);
@@ -47,9 +58,17 @@ export function Form({
   return (
     <form
       className="workflow-form"
+      data-task-values={taskValues || undefined}
+      onInvalidCapture={event => {
+        let section = event.target instanceof HTMLElement ? event.target.closest("details") : null;
+        while (section) {
+          section.open = true;
+          section = section.parentElement?.closest("details") || null;
+        }
+      }}
       onSubmit={async (event) => {
         event.preventDefault();
-        if (busy || editor.busy) return;
+        if (busy || editor.busy || locked) return;
         const form = event.currentTarget;
         const data = retryData.current || new FormData(form);
         setBusy(true);
@@ -57,7 +76,7 @@ export function Form({
         setSaved(false);
         notify("");
         try {
-          await monitorOperation(operation, () => submit(data), operation.startsWith("document.") ? 60000 : undefined);
+          await monitorOperation(operation, () => submit(data), operation === "sales_demo.create" ? 65000 : operation.startsWith("document.") ? 60000 : undefined);
           if (!reviewOnly) editor.completed(form);
           retryData.current = null;
           setUncertain(false);
@@ -105,8 +124,13 @@ export function Form({
         }
       }}
     >
-      <fieldset disabled={busy || editor.busy}>
-        <fieldset disabled={uncertain && !!retryData.current}>{children}</fieldset>
+      {error && <div ref={errorSummary} className="workflow-error-summary notice error" role="alert" tabIndex={-1} aria-labelledby={`${formId}-error-title`}>
+        <strong id={`${formId}-error-title`}>We couldn’t complete this request</strong>
+        <p>{error}</p>
+        {uncertain && <p>This request may already be saved. Retry with the original details before starting another record.</p>}
+      </div>}
+      <fieldset disabled={busy || editor.busy || locked}>
+        <fieldset className="workflow-fields" disabled={uncertain && !!retryData.current}>{children}</fieldset>
         <div className="actions form-actions">
           <fieldset disabled={uncertain}>{secondaryActions}</fieldset>
           <span className="action-spacer" />
@@ -114,12 +138,7 @@ export function Form({
           {saved && <span role="status">{successText}</span>}
         </div>
       </fieldset>
-      {uncertain && <p className="notice">This request may already be saved. Retry with the original details before starting another record.</p>}
-      {error && (
-        <p className="notice error" role="alert">
-          {error}
-        </p>
-      )}
+      {uncertain && !error && <p className="notice">This request may already be saved. Retry with the original details before starting another record.</p>}
     </form>
   );
 }

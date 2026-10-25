@@ -1,3 +1,9 @@
+import { prospectContext } from "./prospect-context";
+
+function cursor(value: string | null) {
+  return value && /^[A-Za-z0-9_-]{1,512}$/.test(value) ? value : null;
+}
+
 export function tenantDirectorySearch(params: URLSearchParams) {
   const next = new URLSearchParams();
   const query = params.get("q")?.slice(0, 200);
@@ -17,10 +23,24 @@ export function tenantDirectorySearch(params: URLSearchParams) {
     )
   )
     next.set("rental", params.get("rental")!);
+  for (const key of ["cursor", "before"]) {
+    const value = cursor(params.get(key));
+    if (value) next.set(key, value);
+  }
+  for (const [key, value] of Object.entries(prospectContext(params))) next.set(key, value);
+  return next.toString();
+}
+function tenantDetailSearch(params: URLSearchParams) {
+  const next = new URLSearchParams(tenantDirectorySearch(params));
+  if (params.get("section") === "rentals") next.set("section", "rentals");
+  for (const key of ["rentalCursor", "rentalBefore"]) {
+    const value = cursor(params.get(key));
+    if (value) next.set(key, value);
+  }
   return next.toString();
 }
 export function tenantPath(id: string, params = new URLSearchParams()) {
-  const search = tenantDirectorySearch(params);
+  const search = tenantDetailSearch(params);
   return (
     `/company/residents/${encodeURIComponent(id)}` +
     (search ? `?${search}` : "")
@@ -31,7 +51,9 @@ export function tenantLedgerContext(
   params: URLSearchParams,
   contact = false,
 ) {
+  const directory = new URLSearchParams(tenantDirectorySearch(params));
   return {
+    ...prospectContext(params),
     ...(contact ? { tenantContact: "true" } : {}),
     tenantId: id,
     ...(params.get("q") ? { tenantQ: params.get("q")! } : {}),
@@ -43,11 +65,16 @@ export function tenantLedgerContext(
     ...(params.get("records") === "archived"
       ? { tenantRecords: "archived" }
       : {}),
+    ...(directory.get("cursor") ? { tenantCursor: directory.get("cursor")! } : {}),
+    ...(directory.get("before") ? { tenantBefore: directory.get("before")! } : {}),
+    ...(params.get("section") === "rentals" ? { tenantSection: "rentals" } : {}),
+    ...(cursor(params.get("rentalCursor")) ? { tenantHistoryCursor: params.get("rentalCursor")! } : {}),
+    ...(cursor(params.get("rentalBefore")) ? { tenantHistoryBefore: params.get("rentalBefore")! } : {}),
   };
 }
 
 export function contactPath(id: string, params = new URLSearchParams()) {
-  const search = tenantDirectorySearch(params);
+  const search = tenantDetailSearch(params);
   return (
     `/company/tenants/${encodeURIComponent(id)}` + (search ? `?${search}` : "")
   );

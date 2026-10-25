@@ -1,6 +1,7 @@
 import { useResource } from "../useResource";
 import type { Capability } from "../navigation";
 const capabilities: [Capability, string][] = [
+  ["subscription.read", "Company plan, usage and subscription invoices"],
   ["company.manage", "Company details and preferences"],
   ["members.manage", "Team access, households and resident approvals"],
   ["property.write", "Properties and units"],
@@ -18,7 +19,7 @@ export function RoleGuide() {
       <p className="account-hint">
         Company roles apply to this workspace. A platform owner administers
         companies and users; platform access alone does not grant access to
-        company operations.
+        company operations. The company plan and feature controls can further restrict available areas.
       </p>
       {r.error ? (
         <p className="notice error" role="alert">

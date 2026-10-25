@@ -2,17 +2,13 @@ import { DraftReset } from "./DraftReset";
 import { useState } from "react";
 import { api } from "../api";
 import { Form } from "./Form";
+import "./LandlordForms.css";
 export function UserProvisioning({ saved }: { saved: (id?: string) => void }) {
   const [key, setKey] = useState(() => crypto.randomUUID());
   return (
-    <section className="panel">
+    <section className="account-provisioning">
       <h2>Create a sign-in account</h2>
-      <p>
-        Create or reuse the Auth0 account for this person, then assign its company and role
-        below. Use Send password reset email from its profile so the user
-        chooses their password. Creating an account does not send email
-        automatically.
-      </p>
+      <p className="help">Create or reuse this person’s Auth0 account. Company access and email setup are reviewed separately.</p>
       <Form
         key={key}
         operation="user.provision"
@@ -36,18 +32,19 @@ export function UserProvisioning({ saved }: { saved: (id?: string) => void }) {
           setKey(crypto.randomUUID());
         }}
       >
-        <label>
+        <fieldset><legend>Account details</legend><div className="form-grid"><label>
           New user name
-          <input name="name" required maxLength={200} />
+          <input name="name" required maxLength={200} autoComplete="name" />
         </label>
         <label>
           New user email
-          <input name="email" type="email" required maxLength={254} />
+          <input name="email" type="email" required maxLength={254} autoComplete="email" />
         </label>
-        <p className="help">
-          Existing Auth0 accounts are reused. Company access is
-          assigned separately.
-        </p>
+        </div><p className="help">Both fields are required. An existing exact sign-in account is reused. No email is sent automatically.</p></fieldset>
+        <details className="account-setup-next"><summary>After creating the account</summary><ul>
+          <li><strong>Review company access</strong><span>Choose the company and role from the selected profile.</span></li>
+          <li><strong>Complete email setup</strong><span>Send a password reset or verification email from the profile when needed. Creating the account sends no email automatically.</span></li>
+        </ul></details>
       </Form>
     </section>
   );

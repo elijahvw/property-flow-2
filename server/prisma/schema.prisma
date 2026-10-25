@@ -13,6 +13,29 @@ datasource db {
 }
 
 model Company {
+  taskDrafts TaskDraft[]
+  notificationPreferences NotificationPreference[]
+  notificationPreferenceActions NotificationPreferenceAction[]
+  notificationPreferenceFence NotificationPreferenceFence?
+  expenseImports ExpenseImportBatch[]
+  expenseImportActions ExpenseImportAction[]
+  importedExpenseSources ImportedExpenseSource[]
+  leaseDocumentShares LeaseDocumentShare[]
+  leaseDocumentShareActions LeaseDocumentShareAction[]
+  prospects Prospect[]
+  prospectActions ProspectAction[]
+  unitAvailability UnitAvailability[]
+  unitAvailabilityRevisions UnitAvailabilityRevision[]
+  unitImports UnitImportBatch[]
+  unitImportActions UnitImportAction[]
+  subscription CompanySubscription?
+  subscriptionRevisions CompanySubscriptionRevision[]
+  featureUsage CompanyFeatureUsage[]
+  saasInvoices SaaSInvoice[]
+  saasPayments SaaSPayment[]
+  saasPaymentReversals SaaSPaymentReversal[]
+  saasInvoiceEvents SaaSInvoiceEvent[]
+  salesDemo SalesDemo?
   preventivePlans PreventivePlan[]
   preventiveActions PreventiveAction[]
   preventiveOccurrences PreventiveOccurrence[]
@@ -53,7 +76,153 @@ model Company {
   @@unique([createdById, submissionKey])
 }
 
+// SaaS billing is company metadata; it never posts to a tenant rent/cash ledger.
+model PlatformPlan {
+  id String @id @default(cuid())
+  name String
+  version Int @default(1)
+  currency String @default("USD")
+  monthlyPriceCents Int
+  features Json
+  archivedAt DateTime?
+  createdById String
+  createdAt DateTime @default(now())
+  submissionKey String
+  submissionHash String
+  subscriptions CompanySubscription[]
+  @@unique([name, version])
+  @@unique([createdById, submissionKey])
+}
+
+model CompanySubscription {
+  companyId String @id
+  company Company @relation(fields: [companyId], references: [id])
+  version Int @default(1)
+  planId String?
+  plan PlatformPlan? @relation(fields: [planId], references: [id])
+  status String @default("active")
+  trialEndsAt DateTime?
+  currentPeriodStart DateTime? @db.Date
+  currentPeriodEnd DateTime? @db.Date
+  billingEmail String?
+  featureOverrides Json @default("{}")
+  overrideReason String?
+  overrideExpiresAt DateTime?
+  updatedById String
+  updatedAt DateTime @updatedAt
+}
+
+model CompanySubscriptionRevision {
+  id String @id @default(cuid())
+  companyId String
+  company Company @relation(fields: [companyId], references: [id])
+  version Int
+  snapshot Json
+  reason String
+  actorId String
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  @@unique([companyId, version])
+  @@unique([companyId, submissionKey])
+}
+
+model CompanyFeatureUsage {
+  companyId String
+  company Company @relation(fields: [companyId], references: [id])
+  area String
+  day DateTime @db.Date
+  successfulReads Int @default(0)
+  successfulWrites Int @default(0)
+  @@id([companyId, area, day])
+  @@index([companyId, day])
+}
+
+model SaaSInvoice {
+  id String @id @default(cuid())
+  companyId String
+  company Company @relation(fields: [companyId], references: [id])
+  number Int @unique @default(autoincrement())
+  billingName String
+  billingEmail String?
+  billingAddress Json
+  planName String
+  planVersion Int
+  currency String @default("USD")
+  monthlyPriceCents Int
+  periodStart DateTime @db.Date
+  periodEnd DateTime @db.Date
+  issuedAt DateTime @default(now())
+  dueOn DateTime @db.Date
+  status String @default("issued")
+  version Int @default(1)
+  submissionKey String
+  submissionHash String
+  createdById String
+  payments SaaSPayment[]
+  events SaaSInvoiceEvent[]
+  @@unique([companyId, submissionKey])
+  @@unique([companyId, id])
+  @@index([companyId, issuedAt, id])
+}
+
+model SaaSPayment {
+  id String @id @default(cuid())
+  companyId String
+  company Company @relation(fields: [companyId], references: [id])
+  invoiceId String
+  invoice SaaSInvoice @relation(fields: [companyId, invoiceId], references: [companyId, id])
+  amountCents Int
+  receivedOn DateTime @db.Date
+  paymentReference String
+  submissionKey String
+  submissionHash String
+  createdById String
+  createdAt DateTime @default(now())
+  reversal SaaSPaymentReversal?
+  @@unique([companyId, submissionKey])
+  @@unique([companyId, id])
+  @@index([companyId, invoiceId])
+}
+
+model SaaSPaymentReversal {
+  id String @id @default(cuid())
+  companyId String
+  company Company @relation(fields: [companyId], references: [id])
+  paymentId String @unique
+  payment SaaSPayment @relation(fields: [companyId, paymentId], references: [companyId, id])
+  reason String
+  createdById String
+  createdAt DateTime @default(now())
+  submissionKey String
+  submissionHash String
+  @@unique([companyId, submissionKey])
+  @@unique([companyId, paymentId])
+}
+
+model SaaSInvoiceEvent {
+  id String @id @default(cuid())
+  companyId String
+  company Company @relation(fields: [companyId], references: [id])
+  invoiceId String
+  invoice SaaSInvoice @relation(fields: [companyId, invoiceId], references: [companyId, id])
+  action String
+  detail Json
+  createdById String
+  createdAt DateTime @default(now())
+  submissionKey String?
+  submissionHash String?
+  @@unique([companyId, submissionKey])
+  @@index([companyId, invoiceId, createdAt])
+}
+
 model User {
+  taskDrafts TaskDraft[]
+  notificationPreferences NotificationPreference[]
+  notificationPreferenceActions NotificationPreferenceAction[]
+  receivedDocumentShares LeaseDocumentShare[] @relation("SharedDocumentRecipient")
+  salesDemos SalesDemo[] @relation("SalesDemoOwner")
+  createdSalesDemos SalesDemo[] @relation("SalesDemoCreator")
   notificationEvents NotificationEvent[]
   inboxNotifications InboxNotification[]
   notificationActions NotificationAction[]
@@ -98,13 +267,34 @@ model User {
   workOrderActions WorkOrderAction[]
   assignedMaintenance MaintenanceRequest[] @relation("MaintenanceAssignee")
   membership CompanyMembership?
-  sessions Session[]
+  sessions Session[] @relation("SessionActor")
+  impersonatedSessions Session[] @relation("SessionTarget")
   companyId  String?
   company    Company? @relation(fields: [companyId], references: [id])
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   @@index([companyId])
+}
+
+model SalesDemo {
+  id String @id @default(cuid())
+  companyId String @unique
+  ownerId String
+  createdById String
+  submissionKey String
+  submissionHash String
+  seedVersion Int
+  status String @default("ready")
+  version Int @default(1)
+  manifest Json
+  createdAt DateTime @default(now())
+  retiredAt DateTime?
+  company Company @relation(fields:[companyId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  owner User @relation("SalesDemoOwner",fields:[ownerId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  creator User @relation("SalesDemoCreator",fields:[createdById],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  @@unique([createdById,submissionKey])
+  @@index([ownerId,status])
 }
 
 model Identity {
@@ -187,11 +377,18 @@ model Session {
   tokenHash String @id
   csrfToken String
   userId String
-  user User @relation(fields: [userId], references: [id])
+  user User @relation("SessionActor", fields: [userId], references: [id])
+  impersonatedUserId String?
+  impersonatedUser User? @relation("SessionTarget", fields: [impersonatedUserId], references: [id], onDelete: Restrict)
+  impersonationExpiresAt DateTime?
+  impersonationReason String?
+  impersonationCompanyId String?
+  impersonationMembershipVersion Int?
   expiresAt DateTime
   idleExpiresAt DateTime
   createdAt DateTime @default(now())
   @@index([userId])
+  @@index([impersonatedUserId])
   @@index([expiresAt])
 }
 
@@ -220,6 +417,8 @@ model AuditEvent {
 }
 
 model Property {
+  taskDrafts TaskDraft[]
+  prospects Prospect[]
   notificationEvents NotificationEvent[]
   preventivePlans PreventivePlan[]
   staffAccess StaffPropertyAccess[]
@@ -276,6 +475,7 @@ model ResidentPropertyAssignment {
 
 // Partial calendar_request_targets index is managed by migration037 (unresolved dated requests).
 model MaintenanceRequest {
+  @@index([companyId, createdAt(sort: Desc), id(sort: Desc)], map: "maintenance_directory_order")
   notificationEvents NotificationEvent[]
   preventiveOccurrence PreventiveOccurrence?
   vendorId String?
@@ -390,6 +590,7 @@ model MaintenanceUpdate {
   requestId String
   content String
   visibility String @default("internal")
+  authorType String @default("team")
   createdById String
   submissionKey String
   submissionHash String
@@ -401,6 +602,9 @@ model MaintenanceUpdate {
 }
 
 model Unit {
+  prospects Prospect[]
+  availability UnitAvailability?
+  availabilityRevisions UnitAvailabilityRevision[]
   preventivePlans PreventivePlan[]
   bedrooms Int?
   bathroomsHundredths Int?
@@ -429,7 +633,83 @@ model Unit {
   @@unique([companyId, propertyId, label])
   @@index([companyId, propertyId, id])
 }
+
+model UnitAvailability {
+  unitId String @id
+  companyId String
+  propertyId String
+  company Company @relation(fields: [companyId], references: [id])
+  unit Unit @relation(fields: [unitId, propertyId, companyId], references: [id, propertyId, companyId])
+  version Int @default(1)
+  condition String
+  availableOn DateTime? @db.Date
+  reason String
+  updatedById String
+  updatedAt DateTime @updatedAt
+  @@unique([unitId, propertyId, companyId])
+  @@index([companyId, propertyId])
+}
+
+model UnitAvailabilityRevision {
+  id String @id @default(cuid())
+  companyId String
+  unitId String
+  propertyId String
+  company Company @relation(fields: [companyId], references: [id])
+  unit Unit @relation(fields: [unitId, propertyId, companyId], references: [id, propertyId, companyId])
+  version Int
+  snapshot Json
+  reason String
+  actorId String
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  @@unique([unitId, version])
+  @@unique([companyId, submissionKey])
+  @@index([companyId, unitId, createdAt])
+}
+
+model UnitImportBatch {
+  id String @id @default(cuid())
+  companyId String
+  company Company @relation(fields: [companyId], references: [id])
+  status String @default("preview")
+  version Int @default(1)
+  fileName String
+  sourceHash String
+  sourceRows Json
+  preview Json
+  createdById String
+  submissionKey String
+  submissionHash String
+  committedAt DateTime?
+  cancelledAt DateTime?
+  result Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  actions UnitImportAction[]
+  @@unique([companyId, submissionKey])
+  @@unique([companyId, id])
+  @@index([companyId, createdAt, id])
+}
+
+model UnitImportAction {
+  id String @id @default(cuid())
+  companyId String
+  batchId String
+  company Company @relation(fields: [companyId], references: [id])
+  batch UnitImportBatch @relation(fields: [companyId, batchId], references: [companyId, id])
+  action String
+  detail Json
+  createdById String
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  @@unique([companyId, submissionKey])
+  @@index([companyId, batchId, createdAt])
+}
 model ResidentContact {
+  prospects Prospect[]
   status String @default("active")
   preferredName String?
   alternatePhone String?
@@ -470,6 +750,8 @@ model ResidentContact {
 }
 
 model Lease {
+  documentShares LeaseDocumentShare[]
+  prospects Prospect[]
   notificationEvents NotificationEvent[]
   agreements LeaseAgreement[]
   inspections LeaseInspection[]
@@ -525,6 +807,57 @@ model Lease {
   @@index([companyId, unitId])
 }
 
+model Prospect {
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  unitId String?
+  company Company @relation(fields: [companyId], references: [id])
+  property Property @relation(fields: [propertyId, companyId], references: [id, companyId])
+  unit Unit? @relation(fields: [unitId, propertyId, companyId], references: [id, propertyId, companyId])
+  name String
+  email String?
+  phone String?
+  source String
+  desiredMoveIn DateTime? @db.Date
+  followUpOn DateTime? @db.Date
+  notes String?
+  stage String @default("inquiry")
+  version Int @default(1)
+  contactId String?
+  contact ResidentContact? @relation(fields: [contactId, companyId], references: [id, companyId])
+  leaseId String?
+  lease Lease? @relation(fields: [leaseId, propertyId, companyId], references: [id, propertyId, companyId])
+  createdById String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  actions ProspectAction[]
+  @@unique([id, companyId])
+  @@unique([id, propertyId, companyId])
+  @@unique([companyId, leaseId])
+  @@index([companyId, propertyId, stage, id])
+  @@index([companyId, followUpOn, id])
+}
+
+model ProspectAction {
+  id String @id @default(cuid())
+  companyId String
+  prospectId String
+  company Company @relation(fields: [companyId], references: [id])
+  prospect Prospect @relation(fields: [prospectId, companyId], references: [id, companyId])
+  version Int
+  action String
+  snapshot Json
+  reason String
+  actorId String
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  @@unique([companyId, submissionKey])
+  @@unique([prospectId, version])
+  @@index([companyId, prospectId, createdAt])
+}
+
 model LeaseParticipant {
   contactId String?
   contact ResidentContact? @relation(fields: [contactId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Restrict)
@@ -558,6 +891,7 @@ model LeaseParticipant {
 }
 
 model LedgerEntry {
+ importedExpense ImportedExpenseSource?
  maintenanceCosts MaintenanceCost[]
  @@unique([id, propertyId, companyId])
  movementId String? @unique
@@ -592,6 +926,68 @@ model LedgerEntry {
  creator User @relation(fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
  @@unique([companyId, createdById, submissionKey])
  @@index([companyId, propertyId, occurredOn, id])
+}
+
+model ExpenseImportBatch {
+  id String @id @default(cuid())
+  companyId String
+  company Company @relation(fields: [companyId], references: [id])
+  sourceNamespace String
+  status String @default("preview")
+  version Int @default(1)
+  fileName String
+  sourceHash String
+  sourceRows Json
+  preview Json
+  createdById String
+  submissionKey String
+  submissionHash String
+  committedAt DateTime?
+  cancelledAt DateTime?
+  result Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  actions ExpenseImportAction[]
+  sources ImportedExpenseSource[]
+  @@unique([companyId, submissionKey])
+  @@unique([companyId, id])
+  @@index([companyId, createdAt, id])
+}
+
+model ExpenseImportAction {
+  id String @id @default(cuid())
+  companyId String
+  batchId String
+  company Company @relation(fields: [companyId], references: [id])
+  batch ExpenseImportBatch @relation(fields: [companyId, batchId], references: [companyId, id])
+  action String
+  detail Json
+  createdById String
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  @@unique([companyId, submissionKey])
+  @@index([companyId, batchId, createdAt])
+}
+
+model ImportedExpenseSource {
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  sourceNamespace String
+  sourceId String
+  sourceHash String
+  ledgerEntryId String @unique
+  batchId String
+  sourceRow Int
+  createdAt DateTime @default(now())
+  company Company @relation(fields: [companyId], references: [id])
+  ledgerEntry LedgerEntry @relation(fields: [ledgerEntryId, propertyId, companyId], references: [id, propertyId, companyId])
+  batch ExpenseImportBatch @relation(fields: [companyId, batchId], references: [companyId, id])
+  @@unique([companyId, sourceNamespace, sourceId])
+  @@unique([ledgerEntryId, propertyId, companyId])
+  @@unique([companyId, id])
+  @@index([companyId, batchId, sourceRow])
 }
 
 model UserProvision {
@@ -1008,6 +1404,7 @@ model LeaseTransition {
 }
 
 model PrivateDocument {
+  shares LeaseDocumentShare[]
   lease Lease? @relation(fields:[leaseId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
   request MaintenanceRequest? @relation(fields:[requestId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
   id String @id @default(cuid())
@@ -1020,9 +1417,11 @@ model PrivateDocument {
   createdAt DateTime @default(now())
   versions DocumentVersion[]
   @@unique([id, companyId])
+  @@unique([id, leaseId, companyId])
   @@index([companyId, leaseId, requestId])
 }
 model DocumentVersion {
+  shares LeaseDocumentShare[]
   agreementFiles AgreementFile[]
   inspectionEvidence InspectionEvidence[]
   @@unique([id,companyId])
@@ -1044,8 +1443,52 @@ model DocumentVersion {
   createdAt DateTime @default(now())
   document PrivateDocument @relation(fields:[documentId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
   @@unique([documentId,number])
+  @@unique([id, documentId, companyId])
   @@unique([companyId,createdById,submissionKey])
   @@index([companyId,documentId])
+}
+
+model LeaseDocumentShare {
+  id String @id @default(cuid())
+  companyId String
+  leaseId String
+  documentId String
+  documentVersionId String
+  userId String
+  company Company @relation(fields: [companyId], references: [id])
+  lease Lease @relation(fields: [leaseId, companyId], references: [id, companyId])
+  document PrivateDocument @relation(fields: [documentId, leaseId, companyId], references: [id, leaseId, companyId])
+  documentVersion DocumentVersion @relation(fields: [documentVersionId, documentId, companyId], references: [id, documentId, companyId])
+  recipient User @relation("SharedDocumentRecipient", fields: [userId], references: [id])
+  version Int @default(1)
+  expiresOn DateTime @db.Date
+  reason String
+  receivedAt DateTime?
+  revokedAt DateTime?
+  createdById String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  actions LeaseDocumentShareAction[]
+  @@unique([companyId, documentVersionId, userId])
+  @@unique([id, companyId])
+  @@index([companyId, userId, id])
+  @@index([companyId, documentId, revokedAt])
+}
+
+model LeaseDocumentShareAction {
+  id String @id @default(cuid())
+  companyId String
+  shareId String
+  company Company @relation(fields: [companyId], references: [id])
+  share LeaseDocumentShare @relation(fields: [shareId, companyId], references: [id, companyId])
+  action String
+  detail Json
+  createdById String
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  @@unique([companyId, submissionKey])
+  @@index([companyId, shareId, createdAt])
 }
 
 model LeaseInspection {
@@ -1229,6 +1672,45 @@ model PreventiveAction {
 }
 
 
+model NotificationPreferenceFence {
+ companyId String @id
+ generation BigInt @default(0)
+ company Company @relation(fields:[companyId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+}
+model NotificationPreference {
+ companyId String
+ userId String
+ maintenanceEnabled Boolean @default(true)
+ workEnabled Boolean @default(true)
+ inspectionsEnabled Boolean @default(true)
+ agreementsEnabled Boolean @default(true)
+ version Int @default(1)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ company Company @relation(fields:[companyId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+ user User @relation(fields:[userId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+ actions NotificationPreferenceAction[]
+ @@id([companyId,userId])
+}
+model NotificationPreferenceAction {
+ id String @id @default(cuid())
+ companyId String
+ userId String
+ submissionKey String
+ submissionHash String
+ maintenanceEnabled Boolean
+ workEnabled Boolean
+ inspectionsEnabled Boolean
+ agreementsEnabled Boolean
+ appliedVersion Int
+ changed Boolean
+ createdAt DateTime @default(now())
+ preference NotificationPreference @relation(fields:[companyId,userId],references:[companyId,userId],onDelete:Restrict,onUpdate:Restrict)
+ company Company @relation(fields:[companyId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+ user User @relation(fields:[userId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+ @@unique([companyId,userId,submissionKey])
+ @@index([companyId,userId,createdAt,id])
+}
 model NotificationEvent {
  id String @id @default(cuid())
  companyId String
@@ -1283,4 +1765,106 @@ model NotificationAction {
  notification InboxNotification @relation(fields:[notificationId,companyId,userId],references:[id,companyId,userId],onDelete:Restrict,onUpdate:Restrict)
  user User @relation(fields:[userId],references:[id],onDelete:Restrict,onUpdate:Restrict)
  @@unique([companyId,userId,submissionKey])
+}
+
+
+model TaskDraft {
+  id String @id @default(cuid())
+  companyId String
+  userId String
+  propertyId String
+  kind String
+  sourceId String?
+  sourceVersions Json
+  values Json
+  context Json
+  title String
+  actionKey String
+  version Int @default(1)
+  submissionKey String
+  submissionHash String
+  lastMutationKey String?
+  lastMutationHash String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime
+  company Company @relation(fields:[companyId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  user User @relation(fields:[userId],references:[id],onDelete:Restrict,onUpdate:Restrict)
+  property Property @relation(fields:[propertyId,companyId],references:[id,companyId],onDelete:Restrict,onUpdate:Restrict)
+  @@unique([companyId,userId,submissionKey])
+  @@index([companyId,userId,expiresAt,updatedAt,id])
+}
+
+
+model ProspectFollowUp {
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  prospectId String
+  kind String
+  title String
+  dueOn DateTime @db.Date
+  notes String @default("")
+  status String @default("open")
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([companyId,prospectId,dueOn,id])
+}
+
+
+model RentalApplication {
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  unitId String
+  prospectId String
+  notes String @default("")
+  status String @default("draft")
+  version Int @default(1)
+  contactId String?
+  leaseId String? @unique
+  createdById String
+  submissionKey String
+  submissionHash String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([id,propertyId,companyId])
+  @@unique([companyId,createdById,submissionKey])
+  @@index([companyId,propertyId,status,createdAt,id])
+  @@index([companyId,prospectId])
+}
+
+
+model AdmissionsEvent {
+  id String @id @default(cuid())
+  companyId String
+  propertyId String
+  entityType String
+  entityId String
+  action String
+  actorId String
+  version Int
+  submissionKey String
+  submissionHash String
+  snapshot Json
+  createdAt DateTime @default(now())
+  @@unique([companyId,actorId,submissionKey])
+  @@index([companyId,entityType,entityId,createdAt,id])
+}
+
+// Listing intent is independent of operational readiness; no existing unit is
+// advertised by vacancy, a ready condition, or the addition of this model.
+model UnitRentalListing {
+  unitId String @id
+  companyId String
+  propertyId String
+  forRent Boolean @default(false)
+  listedAt DateTime?
+  version Int @default(1)
+  updatedById String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([unitId, propertyId, companyId])
+  @@index([companyId, propertyId, forRent])
 }

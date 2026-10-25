@@ -4,6 +4,7 @@ import {leaseLifecycleCases} from "./lease-lifecycle-cases.mjs";
 import {leaseTermCases} from "./lease-term-cases.mjs";
 import {leaseSettlementCases} from "./lease-settlement-cases.mjs";
 import {profileCases} from "./profile-cases.mjs";
+import {tenantDirectoryCases} from "./tenant-directory-cases.mjs";
 import {leaseMovementCases} from "./lease-movement-cases.mjs";
 import {offlineTenantCases} from "./offline-tenant-cases.mjs";
 import {statementCases} from "./statement-cases.mjs";
@@ -125,6 +126,11 @@ test('manual finance isolation, replay, corrections and totals',{skip:!url},asyn
   await admin.query(`UPDATE "CompanyMembership" SET status='disabled' WHERE "userId"='owner'`);assert.equal((await call('owner','POST',path,payload)).statusCode,403);await admin.query(`UPDATE "CompanyMembership" SET status='active' WHERE "userId"='owner'`);
  });
  await t.test('real browser committed response loss retries one transaction and one audit',{skip:!process.env.TEST_FINANCES_BROWSER_URL},async()=>{
+  // This case owns transaction recovery. Settle the optional walkthrough through
+  // its real personal API before an editor can race it in the native modal stack.
+  // Dedicated guidance cases own first-login presentation and progress.
+  const guideResponse=await call('owner','GET','/api/account/guide');assert.equal(guideResponse.statusCode,200,guideResponse.body);const guide=guideResponse.json();
+  const dismissed=await call('owner','PUT','/api/account/guide',{guideKey:guide.guideKey,expectedVersion:guide.version,status:'dismissed',step:guide.steps[0].id});assert.equal(dismissed.statusCode,200,dismissed.body);
   const browser=await chromium.launch({headless:true});try{const page=await newFixturePage(browser);let lose=true;const keys=[];
    await page.route('**/api/**',async route=>{const req=route.request(),u=new URL(req.url());const response=await app.inject({method:req.method(),url:u.pathname+u.search,headers:{...req.headers(),origin:'https://app.test',cookie:'__Host-pf-session=token-owner'},...(req.postData()?{payload:req.postData()}:{})});if(req.method()==='POST'&&u.pathname===path){keys.push(req.postDataJSON().submissionKey);assert.equal(response.statusCode,200,response.body);if(lose){lose=false;return route.abort('failed');}}await route.fulfill({status:response.statusCode,contentType:'application/json',body:response.body});});
    await page.goto(process.env.TEST_FINANCES_BROWSER_URL+'/company/finances');await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await page.getByLabel('Date received or paid').fill('2026-10-14');await page.getByLabel('Amount (USD)').fill('99.99');await page.getByLabel('Memo (optional)').fill('Browser receipt');await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:/^(Save draft & close|Close & keep recovery)$/,exact:true}).click();await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await expect(page.getByLabel('Amount (USD)')).toHaveValue('99.99');await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();assert.equal(keys[0],keys[1]);const rows=(await admin.query(`SELECT id,"amountCents" FROM "LedgerEntry" WHERE memo='Browser receipt'`)).rows;assert.equal(rows.length,1);assert.equal(rows[0].amountCents,9999);assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE "targetId"=$1`,[rows[0].id])).rows[0].n,1);
@@ -152,5 +158,7 @@ test('manual finance isolation, replay, corrections and totals',{skip:!url},asyn
  await t.test("reviewed future lease terms",async termTest=>leaseTermCases(termTest,admin,call,app,db));
 
  await t.test("reviewed proration and renewal handoffs",async lifecycleTest=>leaseLifecycleCases(lifecycleTest,admin,call,app,db));
+
+ await t.test("canonical tenant paging and independent rental history",async directoryTest=>tenantDirectoryCases(directoryTest,admin,call,app,db,providerCalls));
 
 });

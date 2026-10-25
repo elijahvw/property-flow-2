@@ -60,6 +60,7 @@ async function fixture(page:Page,role='manager'){
         items: [],
         groups: [],
       });
+  if(p==='/api/company/maintenance/directory')return json({companyId:state.company,items:[],total:0,statusCounts:{open:0,in_progress:0,resolved:0},pageSize:50,nextCursor:null,previousCursor:null});
   if(p==='/api/company/maintenance')return json([]);
   return json([]);
  });return state;
@@ -86,10 +87,56 @@ test('mobile property sections retain the selected property across operating wor
  expect(state.requests.some(url=>url.startsWith('/api/company/leases?')&&url.includes('propertyId=home'))).toBe(true);
 });
 test('saving is primary; draft discard is quiet and confirmed, and property switching retains ambiguous saves',async({page})=>{
- const state=await fixture(page);state.lose=true;await page.goto('/company/leases?propertyId=home&new=lease');await page.getByLabel('New lease start date').fill('2026-10-01');await page.getByLabel('New lease monthly rent (USD)').fill('1200.00');
- const save=page.getByRole('button',{name:'Review lease',exact:true}),reset=page.getByRole('button',{name:'Clear draft',exact:true});await expect(save).toBeInViewport({ratio:1});const a=await save.boundingBox(),b=await reset.boundingBox();expect(b!.width).toBeLessThan(a!.width);expect(Math.abs(b!.y-a!.y)).toBeLessThan(12);await page.screenshot({path:'/tmp/pf-connected-lease-desktop.png',fullPage:true});
- await save.click();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByLabel('Property for new lease').selectOption('second');await page.locator('.lease-property-draft:not([hidden])').getByLabel('New lease monthly rent (USD)').fill('1350');await page.getByLabel('Property for new lease').selectOption('home');await expect(page.locator('.lease-property-draft:not([hidden])').getByLabel('New lease monthly rent (USD)')).toHaveValue('1200.00');await page.locator('.lease-property-draft:not([hidden])').getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();expect(state.keys[0]).toBe(state.keys[1]);expect(state.leases).toHaveLength(1);
- await expect(page).toHaveURL(/\/company\/leases\/lease-0\?onboarding=household/);await page.getByRole('link',{name:'← All leases',exact:true}).click();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await page.locator('.lease-property-draft:not([hidden])').getByLabel('New lease monthly rent (USD)').fill('777');await page.locator('.lease-property-draft:not([hidden])').getByRole('button',{name:'Clear draft',exact:true}).click();await page.getByRole('button',{name:'Keep editing'}).click();await expect(page.locator('.lease-property-draft:not([hidden])').getByLabel('New lease monthly rent (USD)')).toHaveValue('777');await page.locator('.lease-property-draft:not([hidden])').getByRole('button',{name:'Clear draft',exact:true}).click();await page.getByRole('button',{name:'Discard draft',exact:true}).click();await expect(page.locator('.lease-property-draft:not([hidden])').getByLabel('New lease monthly rent (USD)')).toHaveValue('');await page.setViewportSize({width:390,height:844});await page.screenshot({path:'/tmp/pf-connected-lease-mobile.png',fullPage:true});await expect(save).toBeInViewport({ratio:1});
+ const state=await fixture(page);state.lose=true;
+ const editor=page.getByRole('region',{name:'Record a lease',exact:true});
+ const active=page.locator('.lease-property-draft:not([hidden])');
+ await page.goto('/company/leases?propertyId=home&new=lease');
+ await active.getByLabel('New lease start date').fill('2026-10-01');
+ await active.getByLabel('New lease monthly rent (USD)').fill('1200.00');
+ const save=active.getByRole('button',{name:'Review lease',exact:true}),reset=active.getByRole('button',{name:'Clear draft',exact:true});
+ // Page intake scrolls with the document. Its primary action and quieter
+ // discard action must remain reachable together at the end of the form.
+ await save.scrollIntoViewIfNeeded();
+ await expect(save).toBeInViewport({ratio:1});await expect(reset).toBeInViewport({ratio:1});
+ const a=await save.boundingBox(),b=await reset.boundingBox();
+ expect(b!.width).toBeLessThan(a!.width);expect(Math.abs(b!.y-a!.y)).toBeLessThan(12);
+ await expect(reset).toHaveClass(/text-button/);await expect(save).toHaveAttribute('type','submit');
+ await page.screenshot({path:'/tmp/pf-connected-lease-desktop.png',fullPage:true});
+ await save.click();await active.getByRole('button',{name:'Create lease record',exact:true}).click();
+ await expect(active.getByRole('alert')).toBeVisible();
+ await page.getByLabel('Property for new lease').selectOption('second');
+ await active.getByLabel('New lease monthly rent (USD)').fill('1350');
+ await page.getByLabel('Property for new lease').selectOption('home');
+ await expect(active.getByLabel('New lease monthly rent (USD)')).toHaveValue('1200.00');
+ await active.getByRole('button',{name:'Create lease record',exact:true}).click();
+ const recorded=active.getByRole('link',{name:'Open the recorded lease workspace',exact:true});
+ await expect(recorded).toBeVisible();await expect(editor).toBeVisible();
+ expect(state.keys[0]).toBe(state.keys[1]);expect(state.leases).toHaveLength(1);
+ expect(state.leases[0].propertyId).toBe('home');expect(state.leases[0].monthlyRent).toBe('1200.00');
+ await page.getByLabel('Property for new lease').selectOption('second');
+ await expect(active.getByLabel('New lease monthly rent (USD)')).toHaveValue('1350');
+ await page.getByLabel('Property for new lease').selectOption('home');
+ page.once('dialog',async dialog=>{expect(dialog.type()).toBe('confirm');expect(dialog.message()).toContain('discard its unsaved changes');await dialog.dismiss();});
+ await recorded.click();await expect(editor).toBeVisible();
+ await page.getByLabel('Property for new lease').selectOption('second');
+ await expect(active.getByLabel('New lease monthly rent (USD)')).toHaveValue('1350');
+ await page.getByLabel('Property for new lease').selectOption('home');
+ page.once('dialog',dialog=>dialog.accept());await recorded.click();
+ await expect(page).toHaveURL(/\/company\/leases\/lease-0\?onboarding=household/);
+ await expect(editor).not.toBeVisible();expect(state.leases).toHaveLength(1);
+ await page.getByRole('link',{name:'← All leases',exact:true}).click();
+ await page.getByRole('button',{name:'Record a lease',exact:true}).click();
+ await page.getByLabel('Property for new lease').selectOption('home');
+ await active.getByLabel('New lease monthly rent (USD)').fill('777');
+ await reset.click();await page.getByRole('button',{name:'Keep editing',exact:true}).click();
+ await expect(active.getByLabel('New lease monthly rent (USD)')).toHaveValue('777');
+ await reset.click();await page.getByRole('button',{name:'Discard draft',exact:true}).click();
+ await expect(active.getByLabel('New lease monthly rent (USD)')).toHaveValue('');
+ await page.setViewportSize({width:390,height:844});
+ await save.scrollIntoViewIfNeeded();await expect(save).toBeInViewport({ratio:1});await expect(reset).toBeInViewport({ratio:1});
+ await expect(reset).toHaveClass(/text-button/);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+ await page.screenshot({path:'/tmp/pf-connected-lease-mobile.png',fullPage:true});
 });
 test('attention links select matching views; staff never gets management data, and property search works by keyboard',async({page})=>{
  await fixture(page);await page.goto('/company/overview');await page.getByRole('link',{name:/Finish draft leases/}).click();await expect(page.getByLabel('Lease view')).toHaveValue('draft');await page.keyboard.press('Control+k');await expect(page.getByRole('dialog',{name:'Find a property'})).toBeVisible();await page.getByLabel('Search properties').fill('Garden');await page.getByRole('link',{name:/Garden Apartments/}).click();await expect(page).toHaveURL(/\/company\/properties\/second$/);
@@ -103,7 +150,7 @@ test('company leases identify properties with the same unit label and property d
 
 for (const [module, title, endpoint] of [
   ["maintenance", "Maintenance", "maintenance"],
-  ["rent", "Rent & balances", "rent"],
+  ["rent", "Rent & payments", "rent"],
   ["finances", "Cash activity", "finances"],
   ["reports", "Reports", "reports/context"],
   ["deposits", "Deposits", "deposits"],

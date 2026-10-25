@@ -1,3 +1,4 @@
+import { activityLabel } from "../activity-label";
 import { InvitationDelivery } from "../components/InvitationDelivery";
 import { Address } from "../components/Address";
 import {
@@ -7,7 +8,7 @@ import {
 import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import { useEditorSelection } from "../useEditorSelection";
 import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
@@ -17,6 +18,9 @@ import { ResidentEditor } from "./ResidentProfiles";
 import { Form } from "../components/Form";
 import { tenantDirectorySearch } from "../tenant-links";
 import { formatDate } from "../dates";
+import { withProspectContext } from "../prospect-context";
+import { TenantRentalHistory } from "../components/TenantRentalHistory";
+import { hasTenantSaveRecovery, tenantEditorScope, tenantLeasingWriteBlock, useTenantAttemptContext, useTenantEditorRecord } from "../tenant-write-access";
 type Contact = TenantContact & {
   user?: {id:string;email:string;emailVerified:boolean;firstSignedInAt:string|null}|null;
   canArchive?: boolean;
@@ -34,31 +38,34 @@ export function ContactDetail() {
     { data } = useAuth();
   return (
     <ContactWorkspace
-      key={`${contactId}:${data?.user.id}:${data?.membership?.companyId}:${data?.membership?.version}`}
+      key={`${contactId}:${tenantEditorScope(data)}`}
       id={contactId}
     />
   );
 }
 function ContactWorkspace({ id }: { id: string }) {
-  const { can } = useAuth(),
+  const { can, data: auth } = useAuth(),
     [params] = useSearchParams(),
     r = useResource<Contact>(
       `/api/company/resident-contacts/${encodeURIComponent(id)}`,
       true,
       true,
     );
+  const context = useTenantAttemptContext(auth);
   const [invite, setInvite] = useState(false),[delivery,setDelivery]=useState<ContactInvitationState|null>(null);
   const [editing, setEditing] = useState(false),
     [access, setAccess, accessOpen, saveAccessDraft] = useEditorSelection(false),
     [archive, setArchive] = useState(false);
-  const [draft, setDraft] = useState<Contact | null>(null),
-    person = r.data;
+  const [draft, setDraft] = useState<Contact | null>(null);
+  const [archiveDraft, setArchiveDraft] = useState<Contact | null>(null);
+  const person = useTenantEditorRecord(r, `${id}:${tenantEditorScope(auth)}`);
+  const writeBlock = tenantLeasingWriteBlock(auth?.companyFeatures);
   const directory =
     "/company/residents" +
     (tenantDirectorySearch(params) ? `?${tenantDirectorySearch(params)}` : "");
   if (!person)
     return (
-      <section className="panel">
+      <><section className="panel">
         <Link to={directory}>← All tenants</Link>
         {r.error ? (
           <>
@@ -69,7 +76,7 @@ function ContactWorkspace({ id }: { id: string }) {
         ) : (
           <p role="status">Loading tenant…</p>
         )}
-      </section>
+      </section><TenantRentalHistory id={id} contact/></>
     );
   const pending = person.invitations?.find(
     (i) =>
@@ -111,15 +118,17 @@ function ContactWorkspace({ id }: { id: string }) {
         </span>
         <button
           className="secondary"
-          disabled={!!r.error}
+          disabled={!!r.error || !!writeBlock}
           onClick={() => {
-            setDraft(person);
+            setDraft(current => current || person);
             setEditing(true);
           }}
         >
           Edit tenant details
         </button>
       </header>
+      {writeBlock && <p className="notice" role="status">{writeBlock}</p>}
+      {writeBlock && (draft || hasTenantSaveRecovery(auth, id)) && !editing && <button className="secondary" onClick={() => { setDraft(current => current || person); setEditing(true); }}>Resume tenant details</button>}
 
       {r.error && (
         <p role="alert" className="notice error">
@@ -128,6 +137,7 @@ function ContactWorkspace({ id }: { id: string }) {
       )}
       <div className="tenant-content-grid">
         <div className="tenant-primary">
+          <TenantRentalHistory id={id} contact/>
           {can("finance.manage") && can("lease.manage") ? <TenantFinancials id={id} contact setup={{ name: person.preferredName || person.name, active: person.status === "active" }} /> : <section className="panel"><h2>Lease and financial information</h2><p>Your current permissions do not include this information.</p></section>}
           <section className="panel">
             <h2>Recent activity</h2>
@@ -135,7 +145,7 @@ function ContactWorkspace({ id }: { id: string }) {
               <ol className="tenant-timeline">
                 {person.activity.map((e) => (
                   <li key={e.id}>
-                    <strong>{e.action.replace(/\./g, " ")}</strong>
+                    <strong>{activityLabel(e.action)}</strong>
                     <time dateTime={e.createdAt}>
                       {formatDate(e.createdAt)}
                     </time>
@@ -198,7 +208,7 @@ function ContactWorkspace({ id }: { id: string }) {
           <section className="panel">
             <h2>Account & portal access</h2>
             {person.user&&<p>Sign-in account ready · {person.user.email} · {person.user.firstSignedInAt?"Has signed in":"No sign-in recorded"}. Email {person.user.emailVerified?"verified":"not yet verified"}.</p>}
-            {can("members.manage") && person.userId && <Form label="Send password reset email" operation="account.verification" submit={async()=>{await api(`/api/company/resident-contacts/${encodeURIComponent(id)}/password-reset`,{method:"POST",body:{}});}} feedbackText="Password reset email requested for the existing account."><p className="help">Your sign-in provider sends the reset link. This uses the same account and does not change company or lease access.</p></Form>}
+            {can("members.manage") && person.userId && <fieldset disabled={!!writeBlock} className="editor-contents"><Form label="Send password reset email" operation="account.verification" submit={async()=>{if(!context.current())throw new Error("Reload the workspace before requesting account recovery.");if(writeBlock)throw new Error(writeBlock);await api(`/api/company/resident-contacts/${encodeURIComponent(id)}/password-reset`,{method:"POST",body:{},expectedCompanyId:context.companyId});if(!context.current())throw new ApiError("Your account or company changed before the recovery request was acknowledged.",409,"TENANT_CONTEXT_CHANGED",true);}} feedbackText="Password reset email requested for the existing account."><p className="help">Your sign-in provider sends the reset link. This uses the same account and does not change company or lease access.</p></Form></fieldset>}
             {!person.portal ? (
               <>
                 <p>
@@ -206,8 +216,8 @@ function ContactWorkspace({ id }: { id: string }) {
                     ? "An invitation is pending. This tenant keeps the same profile when they verify their email and accept."
                     : "Their sign-in account is ready. Invite them when you want to offer portal access."}
                 </p>
-                {pending?.leaseId&&!pending.approvedAt?<p><Link to={`/company/leases/${encodeURIComponent(pending.leaseId)}?section=invitations`}>Review household invitation approval</Link></p>:can("members.manage") && person.status === "active" && (
-                  <button className="secondary" onClick={() => pending?setDelivery(pending):setInvite(true)}>
+                {pending?.leaseId&&!pending.approvedAt?<p><Link to={withProspectContext(`/company/leases/${encodeURIComponent(pending.leaseId)}?section=invitations`,params)}>Review household invitation approval</Link></p>:can("members.manage") && person.status === "active" && (
+                  <button className="secondary" disabled={!pending && !!writeBlock} onClick={() => pending?setDelivery(pending):setInvite(true)}>
                     {pending ? "Send or replace invitation" : "Invite to portal"}
                   </button>
                 )}
@@ -262,9 +272,9 @@ function ContactWorkspace({ id }: { id: string }) {
             </p>
             <button
               className="text-button"
-              disabled={!!r.error || (person.status !== "archived" && person.canArchive === false)}
+              disabled={!!r.error || !!writeBlock || (person.status !== "archived" && person.canArchive === false)}
               onClick={() => {
-                setDraft(person);
+                setArchiveDraft(person);
                 setArchive(true);
               }}
             >
@@ -316,26 +326,30 @@ function ContactWorkspace({ id }: { id: string }) {
       <EditorDialog
         open={archive}
         title={
-          person.status === "archived" ? "Restore tenant" : "Archive tenant"
+          (archiveDraft || person).status === "archived" ? "Restore tenant" : "Archive tenant"
         }
         onClose={() => setArchive(false)}
       >
-        {draft && (
-          <Form
+        {archiveDraft && (
+          <>
+          {writeBlock && <p className="notice" role="status">{writeBlock}</p>}
+          <fieldset disabled={!!writeBlock} className="editor-contents"><Form
             label={
-              draft.status === "archived"
+              archiveDraft.status === "archived"
                 ? "Confirm restore"
                 : "Confirm archive"
             }
             operation="membership.update"
             submit={async () => {
+              if (!context.current()) throw new Error("Reload the workspace before changing this tenant record.");
+              if (writeBlock) throw new Error(writeBlock);
               const {
                 id: _id,
                 userId: _user,
                 version: expectedVersion,
                 status,
                 ...rest
-              } = draft;
+              } = archiveDraft;
               const keys = [
                 "name",
                 "preferredName",
@@ -358,6 +372,7 @@ function ContactWorkspace({ id }: { id: string }) {
                 `/api/company/resident-contacts/${encodeURIComponent(id)}`,
                 {
                   method: "PATCH",
+                  expectedCompanyId: context.companyId,
                   body: {
                     ...Object.fromEntries(
                       Object.entries(rest).filter(([key]) =>
@@ -369,17 +384,19 @@ function ContactWorkspace({ id }: { id: string }) {
                   },
                 },
               );
+              if (!context.current()) throw new ApiError("Your company or account changed before the tenant change was acknowledged.", 409, "TENANT_CONTEXT_CHANGED", true);
               setArchive(false);
-              setDraft(null);
+              setArchiveDraft(null);
               r.reload();
             }}
           >
             <p>
-              {draft.status === "archived"
+              {archiveDraft.status === "archived"
                 ? "Restore this tenant so they can be selected for a lease again?"
                 : "Archive this tenant? Active/draft leases must be reviewed first. Their rental, financial and audit history will remain."}
             </p>
-          </Form>
+          </Form></fieldset>
+          </>
         )}
       </EditorDialog>
       {delivery&&<EditorDialog open draftable={false} title={`Invitation for ${person.name}`} onClose={()=>{setDelivery(null);r.reload();}}><InvitationDelivery key={delivery.id} initial={delivery} changed={r.reload} done={()=>{setDelivery(null);r.reload();}} reviewAccess={!delivery.leaseId?()=>{setDelivery(null);setInvite(true);}:undefined}/></EditorDialog>}

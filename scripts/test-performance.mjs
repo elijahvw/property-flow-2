@@ -34,7 +34,7 @@ try {
     ['lease','/company/leases/perf-lease-1','/api/company/leases/perf-lease-1','Test Property 01 · Unit 1'],
     ['rent','/company/rent','/api/company/rent','Rent & charges'],
     ['deposits','/company/deposits','/api/company/deposits','Security deposits'],
-    ['maintenance','/company/maintenance','/api/company/maintenance','Maintenance requests'],
+    ['maintenance','/company/maintenance','/api/company/maintenance/directory','Maintenance requests'],
   ];
   const ui=[];
   for(const [name,path,endpoint,heading] of journeys) {

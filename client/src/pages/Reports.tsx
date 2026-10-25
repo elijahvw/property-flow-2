@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { formatDate } from "../dates";
 import { DateField } from "../components/DateField";
+import { HistoricalCashReports } from "../components/HistoricalCashReports";
 import { usePropertySearchParams } from "../usePropertySearchParams";
 
 import { propertyLink, PropertyNavigation } from "../components/PropertyNavigation";
@@ -257,6 +258,7 @@ function Builder({ today }: { today: string }) {
           then download the same snapshot.
         </p>
       </header>
+      <HistoricalCashReports today={today} properties={properties.data || []} propertyId={pathPropertyId || undefined}/>
       <section className="panel">
         <h2>Build a report</h2>
         <Form
@@ -278,7 +280,13 @@ function Builder({ today }: { today: string }) {
                     : String(form.get(key) || "");
                 if (value) q.set(key, value);
               }
-              setParams({ ...Object.fromEntries(q), kind });
+              setParams(previous => {
+                const next = new URLSearchParams(previous);
+                for (const key of ["propertyId", "dateFrom", "dateTo", "status", "kind"]) next.delete(key);
+                for (const [key, value] of q) next.set(key, value);
+                next.set("kind", kind);
+                return next;
+              });
               setReport(await api<Report>(`/api/company/reports/${kind}?${q}`));
             } finally {
               setRunning(false);

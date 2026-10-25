@@ -536,11 +536,20 @@ export async function inspectionCases(t, admin, db, call, app) {
     "real browser inspection saves recover a committed response loss and complete reviewed comparison",
     { skip: !process.env.TEST_MAINTENANCE_BROWSER_URL },
     async () => {
+      const lease = await ok("manager", "GET", "/api/company/leases/inspection-lease");
+      assert.equal(lease.id, "inspection-lease");
+      const bootstrap = await ok("manager", "GET", "/api/bootstrap");
+      assert.equal(bootstrap.membership.companyId, "a");
+      assert.ok(bootstrap.permissions.includes("lease.manage"));
+      assert.equal(bootstrap.companyFeatures.leasing, "enabled");
+      assert.equal(bootstrap.companyFeatures.inspections, "enabled");
       const browser = await chromium.launch({ headless: true });
       try {
         const page = await newFixturePage(browser);
         let lose = true;
-        const keys = [];
+        let revokedBootstrapGate;
+        const keys = [], openingReads = [], pageErrors = [];
+        page.on("pageerror", error => pageErrors.push(error.message));
         await page.context().route("**/api/**", async (route) => {
           const req = route.request(),
             u = new URL(req.url());
@@ -554,6 +563,10 @@ export async function inspectionCases(t, admin, db, call, app) {
             },
             ...(req.postData() ? { payload: req.postData() } : {}),
           });
+          if (req.method() === "GET" && ["/api/bootstrap", "/api/company/leases/inspection-lease", base].includes(u.pathname)) {
+            const body = response.json();
+            openingReads.push({ path: u.pathname, status: response.statusCode, code: body.code, error: body.error });
+          }
           if (req.method() === "POST" && u.pathname === base) {
             keys.push(req.postDataJSON().submissionKey);
             assert.equal(response.statusCode, 200, response.body);
@@ -562,6 +575,8 @@ export async function inspectionCases(t, admin, db, call, app) {
               return route.abort("failed");
             }
           }
+          if (req.method() === "GET" && u.pathname === "/api/bootstrap" && revokedBootstrapGate)
+            await revokedBootstrapGate;
           await route.fulfill({
             status: response.statusCode,
             contentType: "application/json",
@@ -572,9 +587,17 @@ export async function inspectionCases(t, admin, db, call, app) {
           process.env.TEST_MAINTENANCE_BROWSER_URL +
             "/company/leases/inspection-lease?section=inspections",
         );
-        await page
-          .getByRole("button", { name: "Record inspection", exact: true })
-          .click();
+        try {
+          await page
+            .getByRole("button", { name: "Record inspection", exact: true })
+            .click();
+        } catch (error) {
+          console.error("Inspection first-view diagnostics:", JSON.stringify({
+            url: page.url(), openingReads, pageErrors,
+            main: await page.locator("main").innerText().catch(() => "Main content unavailable"),
+          }));
+          throw error;
+        }
         await page
           .getByRole("button", { name: "Add condition item", exact: true })
           .click();
@@ -758,6 +781,14 @@ export async function inspectionCases(t, admin, db, call, app) {
         await page
           .getByLabel("Observation notes 1", { exact: true })
           .fill("Unsaved fictional correction");
+        const deniedInspectionId = new URL(page.url()).searchParams.get("inspectionId");
+        const inspectionState = async () => (await admin.query(
+          `SELECT version, (SELECT count(*)::int FROM "InspectionRevision" WHERE "inspectionId"=$1) revisions FROM "LeaseInspection" WHERE id=$1`,
+          [deniedInspectionId],
+        )).rows[0];
+        const beforeDenied = await inspectionState();
+        let releaseRevokedBootstrap;
+        revokedBootstrapGate = new Promise(resolve => { releaseRevokedBootstrap = resolve; });
         await admin.query(
           `UPDATE "CompanyMembership" SET status='disabled' WHERE "userId"='manager'`,
         );
@@ -765,14 +796,23 @@ export async function inspectionCases(t, admin, db, call, app) {
           await page
             .getByRole("button", { name: "Save observations", exact: true })
             .click();
-          await expect(page.getByRole("alert")).toContainText(
-            "Inspection access is unavailable.",
-          );
+          // The task adapter hides private fields before account refresh
+          // completes; the refreshed permission boundary then removes its dialog.
+          await expect(page.getByRole("alert").getByText(
+            "Task access is unavailable. Its private details are hidden; an interrupted request is kept on this page for recovery.",
+            { exact: true },
+          )).toBeVisible();
+          await expect(page.getByLabel("Observation notes 1", { exact: true })).toHaveCount(0);
+          await expect(page.getByLabel("Area 1", { exact: true })).toHaveCount(0);
+          releaseRevokedBootstrap();
+          await expect(page.getByRole("heading", { name: "Access unavailable", exact: true })).toBeVisible();
           await expect(page.getByRole("dialog")).toHaveCount(0);
           await expect(
             page.getByText("Fictional browser chip", { exact: true }),
           ).toHaveCount(0);
+          assert.deepEqual(await inspectionState(), beforeDenied, "revoked save cannot change the inspection or its revisions");
         } finally {
+          releaseRevokedBootstrap();
           await admin.query(
             `UPDATE "CompanyMembership" SET status='active' WHERE "userId"='manager'`,
           );

@@ -9,13 +9,16 @@ export function useResource<T>(
   refreshWhenVisible = false,
 ) {
   const { data: auth } = useAuth();
-  const scope = `${auth?.user.id}:${auth?.user.status}:${auth?.user.emailVerified}:${auth?.membership?.companyId}:${auth?.membership?.version}:${auth?.permissions.join(",")}`;
+  const scope = `${auth?.user.id}:${auth?.user.status}:${auth?.user.emailVerified}:${auth?.membership?.companyId}:${auth?.membership?.version}:${auth?.permissions.join(",")}:${auth?.impersonation?.contextId || ""}:${JSON.stringify(auth?.companyFeatures || null)}`;
   const key = `${scope}:${url}`;
   const [result, setResult] = useState<{
     key: string;
+    loading: boolean;
     data?: T;
     error?: string;
-  }>({ key });
+    errorStatus?: number;
+    errorCode?: string;
+  }>({ key, loading: true });
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     if (!refreshWhenVisible) return;
@@ -42,6 +45,7 @@ export function useResource<T>(
     const controller = new AbortController();
     setResult((previous) => ({
       key,
+      loading: true,
       ...(keepPreviousData && previous.key === key
         ? { data: previous.data }
         : {}),
@@ -57,7 +61,7 @@ export function useResource<T>(
       .then((data) => {
         if (!controller.signal.aborted) {
           operation.succeed();
-          setResult({ key, data });
+          setResult({ key, data, loading: false });
         }
       })
       .catch((error) => {
@@ -65,6 +69,7 @@ export function useResource<T>(
           operation.fail(error);
           setResult((previous) => ({
             key,
+            loading: false,
             ...(keepPreviousData &&
             previous.key === key &&
             !(
@@ -77,6 +82,7 @@ export function useResource<T>(
               error instanceof Error
                 ? error.message
                 : "Unable to load this page.",
+            ...(error instanceof ApiError ? { errorStatus: error.status, errorCode: error.code } : {}),
           }));
         }
       });
@@ -88,6 +94,12 @@ export function useResource<T>(
   return {
     data: result.key === key ? result.data : undefined,
     error: result.key === key ? result.error : undefined,
-    reload: () => setRevision((v) => v + 1),
+    errorStatus: result.key === key ? result.errorStatus : undefined,
+    errorCode: result.key === key ? result.errorCode : undefined,
+    loading: result.key !== key || result.loading,
+    reload: () => {
+      setResult(previous => previous.key === key ? { ...previous, loading: true } : previous);
+      setRevision((v) => v + 1);
+    },
   };
 }

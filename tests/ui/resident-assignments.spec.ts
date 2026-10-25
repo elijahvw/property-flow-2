@@ -9,6 +9,7 @@ async function fixture(page: Page, role='manager', residentId='resident') {
   if(path==='/api/company/residents')return json([{userId:residentId,user:{name:'Accepted Resident',email:'resident@test.invalid'}}]);
   if(path.endsWith(`/residents/${encodeURIComponent(residentId)}`)) { expect(route.request().headers()['x-csrf-token']).toBe('fixture'); if(state.fail)return json({error:'Access changed. Refresh and try again.'},409); state.assigned=method==='PUT';return json({success:true}); }
   if(path.endsWith('/residents')){state.loads++;return json(state.assigned?[{userId:residentId,membership:{user:{name:'Accepted Resident',email:'resident@test.invalid'}}}]:[]);}
+  if(path==='/api/resident/rent')return json({businessDate:'2026-10-25',accounts:[]});
   if(path==='/api/resident/properties')return state.fail?json({error:'Temporarily unavailable'},503):json(state.assigned?[{id:'home',name:'Home',address:'1 Main'}]:[]);
   return json([]);
  });return state;

@@ -310,18 +310,18 @@ test("dashboard collections drilldown, account filters, charge grace statuses an
   await page.getByRole("link", { name: /Follow up rent past grace/ }).click();
   await expect(page).toHaveURL(/view=after_grace/);
   await expect(page.getByLabel("Balance view")).toHaveValue("after_grace");
-  await expect(page.getByRole("link", { name: "Open ledger →" })).toHaveCount(
+  await expect(page.getByRole("link", { name: "View rent & payments →" })).toHaveCount(
     1,
   );
   await expect(
     page.getByRole("region", { name: "Past-due aging" }),
   ).toContainText("$1,000.00");
   await page.getByLabel("Balance view").selectOption("within_grace");
-  await expect(page.getByRole("link", { name: "Open ledger →" })).toHaveCount(
+  await expect(page.getByRole("link", { name: "View rent & payments →" })).toHaveCount(
     2,
   );
   await page.getByLabel("Past-due age").selectOption("age31To60Cents");
-  await expect(page.getByRole("link", { name: "Open ledger →" })).toHaveCount(
+  await expect(page.getByRole("link", { name: "View rent & payments →" })).toHaveCount(
     1,
   );
   const downloading = page.waitForEvent("download");
@@ -332,7 +332,7 @@ test("dashboard collections drilldown, account filters, charge grace statuses an
   expect(csv).toContain("Past grace USD");
   expect(csv).toContain("Age 31–60 USD");
   expect(csv).toContain("1000.00");
-  await page.getByRole("link", { name: "Open ledger →" }).click();
+  await page.getByRole("link", { name: "View rent & payments →" }).click();
   await expect(page.getByText("within grace", { exact: true })).toBeVisible();
   await expect(page.getByText("past grace", { exact: true })).toBeVisible();
   await expect(page.getByText(/through October 15, 2026/)).toBeVisible();

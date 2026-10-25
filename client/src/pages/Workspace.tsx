@@ -9,6 +9,7 @@ import { ContactInvitationReview } from "../components/ContactInvitation";
 import { Address, PropertyAddressFields } from "../components/Address";
 import { RecordIdentity } from "../components/RecordIdentity";
 import { ResidentLeaseInvitations } from "../components/LeaseInvitations";
+import { ResidentRentSummary } from "../components/ResidentRentSummary";
 import { LeaseInvitationReview } from "../components/LeaseInvitationReview";
 import {
   UserProvisioning,
@@ -17,8 +18,9 @@ import {
 import { DraftReset } from "../components/DraftReset";
 import { PropertyFields } from "../components/PropertyFields";
 import { EditorDialog } from "../components/EditorDialog";
+import "./WorkspaceExperience.css";
 import { UserActivity, ActivityLog } from "../components/UserActivity";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useUserDirectory } from "../useUserDirectory";
 import {
   Link,
@@ -29,6 +31,7 @@ import {
 } from "react-router-dom";
 import { api, ApiError } from "../api";
 import { useAuth } from "../context/AuthContext";
+import { availableFeatureRoute } from "../company-features";
 import { monitorOperation } from "../operations";
 import { useResource } from "../useResource";
 import { formatActivityTime } from "../dates";
@@ -596,7 +599,16 @@ type PropertyActivity = {
 function PropertyDirectory() {
   const [propertyKey, setPropertyKey] = useState(() => crypto.randomUUID());
   const [propertySuccess, setPropertySuccess] = useState("");
-  const { can } = useAuth();
+  const { can, data: auth } = useAuth();
+  const authority = JSON.stringify([auth?.user.id, auth?.user.email, auth?.user.status, auth?.user.emailVerified,
+    auth?.membership?.companyId, auth?.membership?.version, auth?.membership?.role, auth?.membership?.status,
+    auth?.membership?.company.status, auth?.permissions, auth?.impersonation?.contextId]);
+  const original = useRef({ authority, companyId: auth?.membership?.companyId });
+  const latestAuthority = useRef(authority);
+  latestAuthority.current = authority;
+  const mounted = useRef(true);
+  useLayoutEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const currentAttempt = () => mounted.current && !!original.current.companyId && original.current.authority === latestAuthority.current;
   const [params, setParams] = useSearchParams();
   const r = useResource<PropertyDirectoryRow[]>(
     "/api/company/properties",
@@ -693,13 +705,16 @@ function PropertyDirectory() {
             }
             label="Create property"
             submit={async (data) => {
+              if (!currentAttempt()) throw new ApiError("Your company or account changed. Reopen the property workspace before continuing.", 409, "PROPERTY_CONTEXT_CHANGED");
               await api("/api/company/properties", {
                 method: "POST",
+                expectedCompanyId: original.current.companyId,
                 body: {
                   ...Object.fromEntries(data),
                   submissionKey: propertyKey,
                 },
               });
+              if (!currentAttempt()) throw new ApiError("Your company or account changed before the result was acknowledged. Review the original company before starting another property.", 409, "PROPERTY_CONTEXT_CHANGED", true);
               setPropertyKey(crypto.randomUUID());
               setPropertySuccess(
                 "Property created. Open it to add units and assign residents.",
@@ -719,17 +734,9 @@ function PropertyDirectory() {
           {propertySuccess}
         </p>
       )}
-      <section
-        className="panel directory-panel"
-        aria-label="Property directory"
-      >
-        <div className="section-heading">
-          <h2>Property directory</h2>
-          <span className="badge">
-            {r.data
-              ? `${r.data.length} ${r.data.length === 1 ? "property" : "properties"}`
-              : "Loading…"}
-          </span>
+      <section className="panel property-filter-panel" aria-labelledby="property-filter-heading">
+        <div className="section-heading"><div><h2 id="property-filter-heading">Find a property</h2><p className="help">Search your portfolio or choose the work you need to review.</p></div>
+          {(query || view !== "all") && <button className="text-button" onClick={() => { const next = new URLSearchParams(params); next.delete("q"); next.delete("view"); setParams(next, {replace:true}); }}>Clear filters</button>}
         </div>
         <div className="directory-toolbar">
           <label className="directory-search">
@@ -761,8 +768,13 @@ function PropertyDirectory() {
               )}
             </select>
           </label>
-          <span className="directory-count" role="status">
-            {rows ? `${rows.length} shown` : "Loading properties…"}
+        </div>
+      </section>
+      <section className="panel directory-panel property-results-panel" aria-label="Property directory">
+        <div className="section-heading">
+          <h2>{query || view !== "all" ? "Matching properties" : "Property directory"}</h2>
+          <span className="directory-count" role="status" aria-live="polite">
+            {rows && r.data ? `${rows.length} of ${r.data.length} ${r.data.length === 1 ? "property" : "properties"}` : "Loading properties…"}
           </span>
         </div>
         {r.error && <LoadState error={r.error} retry={r.reload} />}
@@ -786,11 +798,6 @@ function PropertyDirectory() {
                 ? "Try a different search or property view."
                 : "Add a property to begin organizing its units, people and work."}
             </p>
-            {(query || view !== "all") && (
-              <button className="secondary" onClick={() => setParams({})}>
-                Clear filters
-              </button>
-            )}
           </div>
         ) : (
           <div className="table-wrap">
@@ -1255,22 +1262,26 @@ export function ManageResidents({
   );
 }
 export function Resident() {
+  const { data: auth } = useAuth();
+  const available = (path: string) => availableFeatureRoute(path, auth?.companyFeatures, auth?.membership?.role);
   const r = useResource<{ id: string; name: string; address: string }[]>(
     "/api/resident/properties",
   );
   return (
     <>
-      <header className="page-heading">
+      <header className="page-heading resident-home-heading">
         <p className="eyebrow">Resident</p>
         <h1>My rental</h1>
         <p>View your rental records and updates from your property team.</p>
-        <nav className="actions" aria-label="Resident services">
-          <Link className="button secondary" to="/resident/rent">View rent & payments</Link>
-          <Link className="button secondary" to="/resident/deposits">View security deposit</Link>
-          <Link className="button secondary" to="/resident/maintenance">Maintenance requests</Link>
-          <Link className="button secondary" to="/account">My profile</Link>
-        </nav>
       </header>
+      <ResidentRentSummary />
+      <nav className="resident-service-grid" aria-label="Resident services">
+        {available("/resident/rent") && <div><Link to="/resident/rent">View rent & payments</Link><p>Check charges, recorded payments and your balance. Find your payment instructions.</p></div>}
+        {available("/resident/maintenance") && <div><Link to="/resident/maintenance">Maintenance requests</Link><p>Report a problem and follow updates from your property team.</p></div>}
+        {available("/resident/documents") && <div><Link to="/resident/documents">Shared documents</Link><p>Read files your property team has shared with you and confirm receipt.</p></div>}
+        {available("/resident/deposits") && <div><Link to="/resident/deposits">View security deposit</Link><p>Review your deposit requirement, receipts and any recorded returns.</p></div>}
+        <div><Link to="/account">My profile</Link><p>Keep your contact details and emergency contact up to date.</p></div>
+      </nav>
       {!r.data ? (
         <LoadState error={r.error} retry={r.reload} />
       ) : r.data.length ? (
@@ -1289,12 +1300,7 @@ export function Resident() {
           </p>
         </section>
       )}
-      <p className="help">
-        Use My requests for maintenance and{" "}
-        <Link to="/resident/rent">My rent</Link> for your charges, payments, and
-        balance.
-      </p>
-      <ResidentLeaseInvitations />
+      {available("/resident/leases") && <ResidentLeaseInvitations />}
     </>
   );
 }

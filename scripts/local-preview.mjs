@@ -16,6 +16,7 @@ import { registerApplication } from "../server/dist/application.js";
 import { registerSessions, digest } from "../server/dist/sessions.js";
 import { AccessError } from "../server/dist/access.js";
 import { companyDay } from "../server/dist/reports.js";
+import { assertCanonicalLocalPreview, upgradeLocalPreview } from "./local-preview-upgrades.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const origin = "http://127.0.0.1:5090";
@@ -211,6 +212,7 @@ try {
       ],
       { input: readFileSync(restoreFile), stdio: ["pipe", "pipe", "pipe"] },
     );
+    await assertCanonicalLocalPreview(admin);
   } else {
     for (const name of readdirSync(root + "server/prisma/migrations")
       .filter((n) => /^\d/.test(n))
@@ -338,6 +340,9 @@ try {
   if (restoreFile && !(await admin.query(`SELECT 1 FROM information_schema.columns WHERE table_name='Invitation' AND column_name='accountId'`)).rowCount) {
     await admin.query(readFileSync(root + "server/prisma/migrations/202610170030_resident_identity_accounts/migration.sql", "utf8"));
   }
+  // Existing backups stay untouched. Foreign/partial schemas are rejected before
+  // applying the canonical missing batches to this owned disposable clone.
+  if (restoreFile) await upgradeLocalPreview(admin);
   const runtimePassword = randomUUID();
   const statement = (
     await admin.query(

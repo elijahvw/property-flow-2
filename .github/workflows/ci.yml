@@ -107,6 +107,18 @@ jobs:
       - name: Test pre-login user setup on disposable PostgreSQL
         run: node scripts/test-users.mjs
 
+      - name: Test support impersonation on disposable PostgreSQL
+        run: node scripts/test-impersonation.mjs
+
+      - name: Test company subscriptions, feature controls, usage and billing
+        run: node scripts/test-company-billing.mjs
+
+      - name: Test historical cash, availability and reviewed unit imports
+        run: node scripts/test-roadmap.mjs
+
+      - name: Test sales demo setup, source links, recovery and teardown
+        run: node scripts/test-sales-demo.mjs
+
       - name: Keep test reports in GitHub
         if: always()
         uses: actions/upload-artifact@v4

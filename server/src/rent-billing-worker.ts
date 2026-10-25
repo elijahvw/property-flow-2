@@ -4,6 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 import { serializable } from "./application.js";
 import { AccessError } from "./access.js";
 import { generateRentOccurrence } from "./rent-schedules.js";
+import { companyFeatures } from "./company-features.js";
 export type BillingCursor = { companyId?: string; scheduleId?: string };
 // Each process may run this worker. Lease write fences and durable occurrences
 // coordinate replicas and crashes. No elevated database credential or RLS bypass.
@@ -35,6 +36,8 @@ export async function billingSweep(
     if (company.id !== companyId) scheduleId = undefined;
     companyId = company.id;
     const schedules = await db.$transaction(async (tx) => {
+      const policy = await companyFeatures(tx, company.id, options.now);
+      if (policy.finances !== "enabled" || policy.leasing !== "enabled") return [];
       await tx.$queryRaw`SELECT set_config('app.company_id',${company.id},true)`;
       return tx.rentSchedule.findMany({
         where: {
@@ -52,6 +55,10 @@ export async function billingSweep(
       try {
         await serializable(db, async (tx) => {
           await tx.$queryRaw`SELECT id FROM "Company" WHERE id=${company.id} FOR SHARE`;
+          // Recheck under the same company fence used by subscription edits.
+          // Pause without generating a failure or touching schedule history.
+          const policy = await companyFeatures(tx, company.id, options.now);
+          if (policy.finances !== "enabled" || policy.leasing !== "enabled") return;
           await tx.$queryRaw`SELECT set_config('app.company_id',${company.id},true)`;
           return generateRentOccurrence(
             tx,

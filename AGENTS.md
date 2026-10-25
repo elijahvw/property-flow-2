@@ -21,6 +21,12 @@ Applies to this repository. Read relevant implementation and product documentati
 - A feature is complete when authorized users can finish its real job, follow sources and return with context, correct/reopen where appropriate, and understand the resulting state. Include owner/manager/resident projections and staff boundaries that apply; keep the UI clean and reveal richer details when useful.
 - Keep release notes and the feature register current in each PR. Record migrations, activation variables/provider setup and remaining acceptance work; the user handles merge/deployment unless explicitly delegated.
 
+## Sales demo maintenance
+
+- Keep the sales demo current whenever an implemented feature, schema, validation, source link or workflow changes. Update `server/src/sales-demo-seed.ts`, bump `SALES_DEMO_SEED_VERSION`, update the coverage/runbook in `docs/sales-demo.md`, and extend the lifecycle regression when relationships or behavior change. Existing demos show their fixture version; refresh through teardown followed by a new setup, never by rewriting posted history.
+- Fictional data is permitted only in explicitly labeled, dedicated sales-demo companies and isolated preview/tests. Demo setup must use connected source records and existing business handlers, company context/RLS, atomic audit history and durable retry identity. Never copy customer data, reassign an occupied account, seed production plan prices, send external messages, move money or invoke real identity providers for fictional people.
+- The presenter uses an existing verified Auth0 account with no company assignment or platform authority. Fictional supporting identities use only the non-login `https://sales-demo.invalid/` issuer; never register it as an OIDC issuer or let those records authenticate. Teardown suspends only its marked demo company, revokes sessions and releases its owner; immutable sources/history remain retained. Test teardown/rebuild, rollback, duplicate recovery and customer isolation with `node scripts/test-sales-demo.mjs` on a fresh disposable database.
+
 ## Product and interface
 
 - Properties, units, tenants, leases and maintenance form connected workflows. Preserve context and offer clear next actions from actual record state.

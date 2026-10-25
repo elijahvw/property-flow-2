@@ -82,6 +82,71 @@
   justify-content: space-between;
   margin: 1.5rem 0;
 }
+.notification-preferences {
+  margin: 1rem 0;
+}
+.notification-preferences-heading {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+.notification-preference-choices {
+  display: grid;
+  gap: .75rem;
+  margin-bottom: .75rem;
+}
+.notification-preference-editor {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.notification-preference-option {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: .75rem;
+  margin: 0;
+  line-height: 1.4;
+}
+.notification-preference-option input[type="checkbox"] {
+  flex-shrink: 0;
+  width: 1.1rem;
+  min-height: 1.1rem;
+  height: 1.1rem;
+  margin: .2rem 0 0;
+}
+.notification-preference-option > span {
+  display: grid;
+  gap: .2rem;
+}
+.notification-preference-option .help {
+  margin: 0;
+  font-weight: 400;
+}
+.notification-preference-comparison {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.notification-preference-comparison table {
+  font-size: .85rem;
+}
+.notification-preference-history {
+  margin-top: 1.25rem;
+}
+.notification-preference-history > summary {
+  cursor: pointer;
+}
+.notification-preference-history-list {
+  padding-left: 1.25rem;
+}
+.notification-preference-history-list li {
+  margin: 1rem 0;
+}
+.notification-preference-history-list p {
+  margin: .3rem 0;
+}
 @media (max-width: 1100px) {
   .notification-bell-label {
     display: none;
