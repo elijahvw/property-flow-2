@@ -1,6 +1,6 @@
 # Agreement preparation — PF-17
 
-The management preparation/version-review foundation is merged. Current local PR64/68 reconciliation adopts the shared available-file policy after scanner retirement057; combined validation and deployment remain pending. October 20 implementation/regression statements below retain their earlier checkpoint meaning. Electronic signature sending/signing/decline/expiry/webhooks and signed originals remain unimplemented. A reviewed package is always unsigned. [Current reconciliation](pr64-pr68-reconciliation-2026-10-25.md).
+The management preparation/version-review foundation is merged. User-merged PR64/68 source adopts the shared available-file policy after scanner retirement 057; the final 459/459 browser and 149 maintenance checks pass, while deployment and real-role acceptance remain pending. October 20 implementation/regression statements below retain their earlier checkpoint meaning. Electronic signature sending/signing/decline/expiry/webhooks and signed originals remain unimplemented. A reviewed package is always unsigned. [Current reconciliation](pr64-pr68-reconciliation-2026-10-25.md).
 
 ## Preparing and reviewing a package
 

@@ -56,7 +56,7 @@ Normal client builds measured 22.630s and 23.358s. Focused 41-case navigation fe
 
 The [reconciliation record](pr63-reconciliation-2026-10-25.md) supersedes the earlier checkpoint for the repaired source. Provider 25, safe server 130 plus nine expected database skips, client 69, fresh demo 22/22, leasing 66/66 and users 56/56 pass. The five new handoff fixtures pass, including phone-sized delayed return and denied recovery. The final 459/459 production suite passes in 8.4m, with zero retries and no source/build drift; its551-file source fingerprint is recorded there. Keep the four PR review order65 →66 →63 →67 and obtain actual remote HEAD before transfer. No EC2 host action is performed.
 
-PR64/68 remain separate source:64 adds scheduled3a.m.Eastern development shutdown;68 retires scanning and has separate migration/fixture/docs/CI reconciliation. Neither is silently included in this tested checkout.
+At that earlier PR63 checkpoint, PR64/68 were separate source and were not included in those test results. Both are now user-merged; the current follow-up validation and transfer guidance appear above.
 
 ## Outstanding gates
 

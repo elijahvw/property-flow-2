@@ -1,6 +1,6 @@
 # Lease inspections — PF-16
 
-The management inspection foundation is merged. The current local PR64/68 reconciliation applies the shared available-file policy after scanner retirement057; combined validation and deployment remain pending. The October 20 implementation/migration038 and regression statements below describe that earlier checkpoint. [Current reconciliation](pr64-pr68-reconciliation-2026-10-25.md).
+The management inspection foundation is merged. User-merged PR64/68 source applies the shared available-file policy after scanner retirement 057; the final 459/459 browser and 149 maintenance checks pass, while deployment and real-role acceptance remain pending. The October 20 implementation/migration038 and regression statements below describe that earlier checkpoint. [Current reconciliation](pr64-pr68-reconciliation-2026-10-25.md).
 
 Owners and managers open a lease → Inspections to record move-in or move-out condition. Each report has an inspection date and 1–100 named area/item observations with Good, Fair, Damaged, Not applicable or Not checked condition, bounded notes and up to 10 exact evidence versions per item. Area/item pairs are unique after whitespace and case normalization, which makes comparison unambiguous. Observations are separate from charges and deposit decisions.
 
