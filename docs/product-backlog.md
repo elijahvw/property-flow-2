@@ -1,10 +1,12 @@
 # Property Flow implementation backlog
 
-Updated October 25, 2026 against merged source `47badac` (PR59/61/62). This document holds target acceptance and unfinished scope; a bullet is not proof of delivery. [Current source/deployment status](mvp-status.md) · [feature register](product-roadmap.md) · [current platform audit](platform-audit-2026-10-25.md) · [experience contract](platform-experience.md). Historical result paragraphs below retain their original checkpoint evidence; their old local/unmerged/pause wording is superseded by the current source summary. Deployment and actual-role/provider acceptance remain unverified unless separately recorded.
+Updated October 26, 2026 against merged main `de72a22` (including PR71). This document holds target acceptance and unfinished scope; a bullet is not proof of delivery. [Current source/deployment status](mvp-status.md) · [feature register](product-roadmap.md) · [current platform audit](platform-audit-2026-10-25.md) · [experience contract](platform-experience.md). Historical result paragraphs below retain their original checkpoint evidence; their old local/unmerged/pause wording is superseded by the current source summary. Deployment and actual-role/provider acceptance remain unverified unless separately recorded.
 
-### PF-30 · Repeatable isolated sales demos — local fixture7 refinement
+Local account-control refinement: actionable demo ownership diagnostics; platform-owner any-account read-only views (PF-29); scoped owner manual password setting and recoverable administrative attempts (PF-03). Contracts and release evidence define the implemented boundaries; actual hosted role/provider acceptance remains pending. [Manual passwords](manual-passwords.md) · [Support views](support-impersonation.md) · [Demo recovery](sales-demo.md).
 
-Current local refinement: two properties with three units each (four occupied, one ready/listed, one turnover), an imported and archived/restored unit, familiar name-based emails, co-leaseholders and retained former/offline/pending tenant examples. Existing generations retain their addresses/history; reviewed rebuild applies the new fixture. Live Auth0 provisioning and actual-role acceptance remain separate.
+### PF-30 · Repeatable isolated sales demos — merged fixture7; local recovery refinement
+
+Merged PR71 fixture: two properties with three units each (four occupied, one ready/listed, one turnover), an imported and archived/restored unit, familiar name-based emails, co-leaseholders and retained former/offline/pending tenant examples. Existing generations retain their addresses/history; reviewed rebuild applies the new fixture. Live Auth0 provisioning and actual-role acceptance remain separate.
 
 Build a fictional dedicated company with automatically provisioned owner/manager/staff/resident/occupant accounts, exact Auth0 generation ownership, demo-only verified-email creation, encrypted credentials and freshly authorized audited reveal. No manual presenter selection is needed. Prepared offline/pending/former tenants remain without issued credentials or portal access. Teardown disables only owned local/Auth0 accounts, revokes sessions and retains business/audit history; legacy v1 presenters remain protected. Merged migrations054–055/fixture3 establish the baseline. The local [demo overhaul](demo-overhaul-2026-10-25.md) adds migration056/fixture5, read-only blueprint/plans, exact reviewed environment/source/version hashes and a durable linked rebuild. The [current runbook](sales-demo.md) defines recovery, version/coverage maintenance and customer isolation. The [PR63 reconciliation](pr63-reconciliation-2026-10-25.md) records issuer/ownership and future-plan recovery, the combined fixture and final validation; [the overhaul matrix](platform-overhaul-2026-10-25.md) preserves the earlier stages.
 
@@ -357,7 +359,7 @@ Acceptance:
 - Track ingestion/cardinality/retention and current allowance/cost. Do not enable paid streams, high-volume logs or credentials/providers merely to populate empty dashboards.
 - Release checks cover safe additive migration, verified restore point, immutable release identity and post-release role/workflow acceptance. User authorization governs deployment and cloud changes.
 
-### PF-29 · Support impersonation — P1, local
+### PF-29 · Support impersonation — P1, foundation merged; owner-targeting refinement local
 
 Audience: platform owners and explicitly authorized support accounts. Company staff authority alone grants no impersonation access. Sources/dependencies: existing Auth0-backed application accounts, current company membership, staff property grants, resident/lease participation, cookie/CSRF sessions, immutable audit history and additive migration 041. [Workflow and runbook](support-impersonation.md).
 

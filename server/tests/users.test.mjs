@@ -1,3 +1,4 @@
+import {manualPasswordCases} from './manual-password-cases.mjs';
 import { newFixturePage } from "./browser-fixture.mjs";
 import {workspaceGuideCases} from "./workspace-guide-cases.mjs";
 import {invitationWorkflowCases} from "./invitation-workflow-cases.mjs";
@@ -176,7 +177,7 @@ test(
       secure: true,
     });
     const invitationDeliveries=[];let invitationSendHook=async()=>{};
-    registerApplication(app, db, auth, "https://app.test", provider, {invitationMailer:async message=>{await invitationSendHook(message);invitationDeliveries.push(message);}});
+    registerApplication(app, db, auth, "https://app.test", provider, {salesDemoCredentialSecret:"isolated-manual-password-test-secret",invitationMailer:async message=>{await invitationSendHook(message);invitationDeliveries.push(message);}});
     const call = async (user, method, path, payload, extra = {}) => {
       if (
         payload &&
@@ -1407,5 +1408,6 @@ test(
     });
     await t.test("resident identity lifecycle", sub=>residentAccountCases(sub,db,admin,call,provider,remote,()=>({create:createCalls,setup:setupCalls,verification:verificationCalls})));
     await t.test("tenant leasing controls and interrupted form recovery", {skip:!process.env.TEST_USERS_BROWSER_URL}, sub=>tenantFormRecoveryCases(sub, {admin,db,call,app,provider,remote,counts:()=>({create:createCalls,setup:setupCalls,verification:verificationCalls}),invitationDeliveries}));
+    await t.test("manual administrative password controls", sub=>manualPasswordCases(sub,{db,admin,app,provider,remote}));
   },
 );

@@ -2,6 +2,7 @@ import { DraftReset } from "./DraftReset";
 import { useState } from "react";
 import { api } from "../api";
 import { Form } from "./Form";
+import { ManualPassword } from "./ManualPassword";
 import "./LandlordForms.css";
 export function UserProvisioning({ saved }: { saved: (id?: string) => void }) {
   const [key, setKey] = useState(() => crypto.randomUUID());
@@ -53,10 +54,12 @@ export function UserVerificationControls({
   id,
   verified,
   saved,
+  active = true,
 }: {
   id: string;
   verified?: boolean;
   saved: () => void;
+  active?: boolean;
 }) {
   const [message, setMessage] = useState("");
   return (
@@ -111,6 +114,7 @@ export function UserVerificationControls({
           <span />
         </Form>
       )}
+      <ManualPassword id={id} platform active={active}/>
       {message && <p role="status">{message}</p>}
     </div>
   );

@@ -1,17 +1,23 @@
+import { canViewTarget, sameImpersonationMembership } from "./impersonation-access.js";
 import { createHash } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { AccessError, companyScope, permissions, type Permission, type Principal } from "./access.js";
+import { AccessError, companyScope, type Permission, type Principal } from "./access.js";
 import { assignmentId, serializable } from "./application.js";
 import { companyFeatures, memberRouteFeatures, requireFeatures } from "./company-features.js";
 export type Tx = Prisma.TransactionClient;
 export async function revalidateImpersonation(tx: Tx, request: FastifyRequest, current: Principal & { membership: (Principal["membership"] & { version: number }) | null }, companyId: string) {
   if (!request.impersonation) return;
+  // The effective-user fence may have queued this transaction with an older
+  // Serializable snapshot. Lock the real actor and persisted context as well:
+  // concurrent revocation/expiry must force a retry, not remain snapshot-visible.
+  await tx.$queryRaw`SELECT id FROM "User" WHERE id=${request.sessionActor!.id} FOR SHARE`;
+  await tx.$queryRaw`SELECT "tokenHash" FROM "Session" WHERE "tokenHash"=${request.appSession!.tokenHash} FOR SHARE`;
   const session = await tx.session.findUnique({ where: { tokenHash: request.appSession!.tokenHash } });
   const actor = await tx.user.findUnique({ where: { id: request.sessionActor!.id }, include: { membership: { include: { company: true } } } });
-  if (!session || !actor || !permissions(actor).includes("platform.impersonate") || current.platformRole ||
-      session.impersonatedUserId !== current.id || session.impersonationCompanyId !== companyId ||
-      session.impersonationMembershipVersion !== current.membership?.version ||
+  if (!session || !actor || !canViewTarget(actor, current) ||
+      session.impersonatedUserId !== current.id || !sameImpersonationMembership(current, session.impersonationCompanyId, session.impersonationMembershipVersion) ||
+      (current.membership?.companyId ?? "") !== companyId ||
       !session.impersonationExpiresAt || session.impersonationExpiresAt.getTime() <= Date.now() ||
       `${encodeURIComponent(current.id)}:${session.impersonationExpiresAt.toISOString()}` !== request.impersonation.contextId)
     throw new AccessError(403, "IMPERSONATION_UNAVAILABLE", "This impersonation expired or access changed. Return to your account to continue.");

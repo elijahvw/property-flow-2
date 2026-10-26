@@ -1,3 +1,4 @@
+import { revalidateImpersonation } from "./operational.js";
 import type {
   FastifyInstance,
   FastifyRequest,
@@ -123,6 +124,7 @@ export function registerCompanyAdministration(
       if (!actor)
         throw new AccessError(403, "ACCESS_DENIED", "Access is unavailable.");
       requirePermission(actor, "platform.manage");
+      await revalidateImpersonation(tx, request, actor, actor.membership?.companyId ?? "");
       return run(tx);
     });
   }
@@ -138,7 +140,8 @@ export function registerCompanyAdministration(
   ) =>
     tx.auditEvent.create({
       data: {
-        actorId: request.principal!.id,
+        actorId: request.sessionActor?.id ?? request.principal!.id,
+        ...(request.impersonation ? { detail: { impersonatedUserId: request.principal!.id, impersonationContext: request.impersonation.contextId } } : {}),
         companyId,
         targetId: companyId,
         action,
@@ -166,6 +169,7 @@ export function registerCompanyAdministration(
         const row = await tx.company.findUnique({
           where: { id: assignmentId(request.params.companyId) },
           include: {
+            salesDemo: { select: { id: true, status: true, setup: { select: { status: true } } } },
             memberships: {
               select: {
                 ...membershipAccessSelect,
@@ -176,6 +180,7 @@ export function registerCompanyAdministration(
                     name: true,
                     status: true,
                     emailVerified: true,
+                    platformRole: true,
                   },
                 },
               },

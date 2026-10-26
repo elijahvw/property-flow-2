@@ -3,14 +3,16 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { AccessError, COMPANY_ROLES, defaultDestination, requirePermission } from "./access.js";
 import { assignmentId, opaqueUserId, serializable } from "./application.js";
 import { boundedText, input, mutation, page, type Tx } from "./operational.js";
+import { canViewTarget } from "./impersonation-access.js";
+import { revalidateImpersonation } from "./operational.js";
 import { validSession } from "./sessions.js";
 import { assertDemoIdentityAvailable } from "./demo-identity-guard.js";
 
 export const IMPERSONATION_MS = 30 * 60 * 1000;
 const includeAccess = { membership: { include: { company: true } } } as const;
 const directorySelect = {
-  id: true, name: true, email: true,
-  membership: { select: { companyId: true, role: true, company: { select: { id: true, name: true } } } },
+  id: true, name: true, email: true, status: true, emailVerified: true, platformRole: true,
+  membership: { select: { companyId: true, role: true, status: true, company: { select: { id: true, name: true, status: true } } } },
 } as const;
 const supportSelect = {
   id: true, name: true, email: true, status: true, emailVerified: true,
@@ -20,7 +22,7 @@ const clearImpersonation = {
   impersonatedUserId: null, impersonationExpiresAt: null, impersonationReason: null,
   impersonationCompanyId: null, impersonationMembershipVersion: null,
 } as const;
-const unavailable = () => new AccessError(403, "IMPERSONATION_UNAVAILABLE", "This user is unavailable for impersonation. Choose an active, verified company member.");
+const unavailable = () => new AccessError(403, "IMPERSONATION_UNAVAILABLE", "This user is unavailable for your impersonation access. Refresh the directory and choose a permitted account.");
 const contextChanged = () => new AccessError(409, "IMPERSONATION_CONTEXT_CHANGED", "Your session changed in another tab. Reload before continuing.");
 const actorId = (request: FastifyRequest) => request.sessionActor?.id ?? request.principal!.id;
 
@@ -62,30 +64,50 @@ export function registerImpersonation(
   authenticate: preValidationHookHandler,
 ) {
   const auth = { preValidation: authenticate };
+  async function readDirectory<T>(request: FastifyRequest, permission: "platform.manage" | "platform.impersonate", run: (tx: Tx, actor: Prisma.UserGetPayload<{ include: typeof includeAccess }>) => Promise<T>) {
+    return serializable(db, async tx => {
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id=${request.principal!.id} FOR SHARE`;
+      const actor = await tx.user.findUnique({ where: { id: request.principal!.id }, include: includeAccess });
+      if (!actor) throw new AccessError(403, "ACCESS_DENIED", "Access is unavailable.");
+      requirePermission(actor, permission);
+      await revalidateImpersonation(tx, request, actor, actor.membership?.companyId ?? "");
+      return run(tx, actor);
+    });
+  }
+
   server.get("/api/impersonation/users", auth, async request => {
     requirePermission(request.principal!, "platform.impersonate");
     const { query, q, cursor } = queryOf(request, ["q", "role", "companyId", "cursor"]);
     if (query.role !== undefined && !COMPANY_ROLES.includes(query.role as any))
       throw new AccessError(400, "INVALID_ROLE", "Choose a company role.");
     const companyId = query.companyId === undefined ? undefined : assignmentId(query.companyId);
-    return page(await db.user.findMany({
-      where: {
-        status: "active", emailVerified: true, platformRole: null,
-        ...(cursor ? { id: { gt: cursor } } : {}), ...search(q),
-        membership: { status: "active", role: (query.role as string | undefined) ?? { in: [...COMPANY_ROLES] }, companyId, company: { status: "active" } },
-      },
-      select: directorySelect, orderBy: { id: "asc" }, take: 51,
-    }));
+    return readDirectory(request, "platform.impersonate", async (tx, actor) => {
+      const owner = actor.platformRole === "owner";
+      return page(await tx.user.findMany({
+        where: {
+          ...(owner ? {} : { status: "active", emailVerified: true, platformRole: null }),
+          ...(cursor ? { id: { gt: cursor } } : {}), ...search(q),
+          ...(!owner || query.role || companyId ? { membership: {
+            ...(owner ? {} : { status: "active", company: { status: "active" } }),
+            ...(query.role ? { role: query.role as string } : owner ? {} : { role: { in: [...COMPANY_ROLES] } }), companyId,
+          } } : {}),
+        },
+        select: directorySelect, orderBy: { id: "asc" }, take: 51,
+      }));
+    });
   });
 
   server.get("/api/platform/support-access", auth, async request => {
     requirePermission(request.principal!, "platform.manage");
-    const { q, cursor } = queryOf(request, ["q", "cursor"]);
-    const rows = await db.user.findMany({
-      where: { ...(cursor ? { id: { gt: cursor } } : {}), ...search(q) },
-      select: supportSelect, orderBy: { id: "asc" }, take: 51,
+    const { query, q, cursor } = queryOf(request, ["q", "cursor", "userId"]);
+    const userId = query.userId === undefined ? undefined : opaqueUserId(query.userId);
+    return readDirectory(request, "platform.manage", async tx => {
+      const rows = await tx.user.findMany({
+        where: { ...(cursor ? { id: { gt: cursor } } : {}), ...search(q), ...(userId ? { id: userId } : {}) },
+        select: supportSelect, orderBy: { id: "asc" }, take: 51,
+      });
+      return page(rows.map(supportRow));
     });
-    return page(rows.map(supportRow));
   });
 
   server.patch<{ Params: { userId: string } }>("/api/platform/users/:userId/support-access", auth, async request => {
@@ -150,21 +172,19 @@ export function registerImpersonation(
       if (!actor) throw new AccessError(403, "ACCESS_DENIED", "Access is unavailable.");
       requirePermission(actor, "platform.impersonate");
       const target = await tx.user.findUnique({ where: { id: targetId }, include: includeAccess });
-      if (!target || target.id === actor.id || target.platformRole || target.status !== "active" || !target.emailVerified ||
-          !target.membership || target.membership.status !== "active" || target.membership.company.status !== "active" ||
-          !COMPANY_ROLES.includes(target.membership.role as any)) throw unavailable();
+      if (!target || !canViewTarget(actor, target)) throw unavailable();
       // Freeze the selected company and grant version. A transfer or access edit
       // ends this support view rather than following the person to another scope.
-      await tx.$queryRaw`SELECT id FROM "Company" WHERE id=${target.membership.companyId} FOR SHARE`;
+      if (target.membership) await tx.$queryRaw`SELECT id FROM "Company" WHERE id=${target.membership.companyId} FOR SHARE`;
       const expiresAt = new Date(Math.min(Date.now() + IMPERSONATION_MS, session.expiresAt.getTime(), session.idleExpiresAt.getTime()));
       await tx.session.update({ where: { tokenHash: session.tokenHash }, data: {
         impersonatedUserId: target.id, impersonationExpiresAt: expiresAt, impersonationReason: reason,
-        impersonationCompanyId: target.membership.companyId, impersonationMembershipVersion: target.membership.version,
+        impersonationCompanyId: target.membership?.companyId ?? null, impersonationMembershipVersion: target.membership?.version ?? null,
       } });
       await tx.auditEvent.create({ data: {
-        actorId: actor.id, targetId: target.id, companyId: target.membership.companyId,
+        actorId: actor.id, targetId: target.id, companyId: target.membership?.companyId,
         action: "impersonation.started", requestId: request.id,
-        detail: { reason, role: target.membership.role, expiresAt: expiresAt.toISOString(), readOnly: true },
+        detail: { reason, role: target.membership?.role ?? null, platformRole: target.platformRole, expiresAt: expiresAt.toISOString(), readOnly: true },
       } });
       return { destination: defaultDestination(target) };
     });

@@ -8,7 +8,7 @@ type SyncPage = {
   limited: boolean;
 };
 
-export function useUserDirectory(reload: () => void) {
+export function useUserDirectory(reload: () => void, enabled = true) {
   const onSynced = useRef(reload);
   onSynced.current = reload;
   const run = useRef<(email?: string) => void>(() => {});
@@ -19,6 +19,7 @@ export function useUserDirectory(reload: () => void) {
     conflicts: [] as Conflict[],
   });
   useEffect(() => {
+    if (!enabled) { run.current = () => {}; setState({syncing:false,error:"",limited:false,conflicts:[]}); return; }
     let disposed = false,
       busy = false,
       controller: AbortController | undefined;
@@ -85,6 +86,6 @@ export function useUserDirectory(reload: () => void) {
       document.removeEventListener("visibilitychange", focus);
       window.clearInterval(timer);
     };
-  }, []);
+  }, [enabled]);
   return { ...state, refresh: (email?: string) => run.current(email) };
 }

@@ -24,7 +24,7 @@ export type OperationName =
   | 'page.data.load'
   | 'auth.session.restore' | 'auth.profile.load'
   | 'admin.users.load' | 'admin.companies.load'
-  | 'account.update' | 'account.status' | 'invitation.create' | 'invitation.accept' | 'invitation.send' | 'onboarding.update' | 'membership.update' | 'ownership.transfer' | 'property.create' | 'property.update'
+  | 'account.password.set' | 'account.update' | 'account.status' | 'invitation.create' | 'invitation.accept' | 'invitation.send' | 'onboarding.update' | 'membership.update' | 'ownership.transfer' | 'property.create' | 'property.update'
   | 'company.delete' | 'company.create' | 'company.details.load' | 'company.update' | 'company.user.assign';
 type Options = { operationKey: string; context?: Record<string, string | number> };
 export interface OperationSink {

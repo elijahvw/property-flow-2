@@ -1,4 +1,10 @@
 const activityLabels: Record<string, string> = {
+  "user.password_change.requested": "Administrative password change requested",
+  "user.password_change.dispatched": "Administrative password change sent to provider",
+  "user.password_change.applied": "Administrative password change confirmed",
+  "user.password_change.rejected": "Administrative password change rejected",
+  "user.password_change.uncertain": "Administrative password result unconfirmed",
+  "user.password_change.released": "Unconfirmed password attempt released after review",
   "availability.reviewed": "Unit readiness reviewed",
   "prospect.created": "Prospect recorded",
   "prospect.updated": "Prospect details updated",

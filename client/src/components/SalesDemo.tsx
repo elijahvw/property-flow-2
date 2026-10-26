@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api";
 import { useResource } from "../useResource";
 import { useAuth } from "../context/AuthContext";
@@ -11,9 +11,11 @@ type Demo = { id: string; companyId: string; ownerId: string; status: string; ve
 type Setup = { id: string; status: string; createdAt: string; accountsPrepared: number; sourceDemoId?: string | null };
 type LoginSheet = { id: string; credentials: { role: string; name: string; email: string; password: string }[] };
 type Blueprint = { seedVersion: number; anchorOn: string; planHash: string; environment: { name: string; provisioningAllowed: boolean }; effects: { dedicatedCompanies: number; preparedAccounts: number; issuedLogins: number }; roles: { key: string; role: string; login: boolean }[]; coverage: { key: string; label: string }[] };
-type LifecyclePlan = { id: string; planHash: string; expectedVersion: number; seedVersion: number | null; latestSeedVersion: number; anchorOn?: string | null; automatic: boolean; canRebuild: boolean; companyMembers: number; blockers: string[]; replacement: { id: string; status: string } | null; coverage: { key: string; complete: boolean }[]; stops: { title: string; role: string; state: string; path: string }[] };
+type OwnershipAccount = { userId: string; name: string | null; email: string; role?: string; status?: string; platformRole: string | null; accountKey?: string | null; expectedEmail?: string | null; reasons?: string[]; reviewPath: string; supportPath: string | null };
+type LifecyclePlan = { ownershipReview?: { foreignMembers: OwnershipAccount[]; changedAccounts: OwnershipAccount[] }; id: string; planHash: string; expectedVersion: number; seedVersion: number | null; latestSeedVersion: number; anchorOn?: string | null; automatic: boolean; canRebuild: boolean; companyMembers: number; blockers: string[]; replacement: { id: string; status: string } | null; coverage: { key: string; complete: boolean }[]; stops: { title: string; role: string; state: string; path: string }[] };
 export function SalesDemo({ onChange }: { onChange: () => void }) {
-  const [open, setOpen] = useState(false);
+  const [params] = useSearchParams();
+  const [open, setOpen] = useState(!!params.get("demoId"));
   return <section className="panel sales-demo" aria-labelledby="sales-demo-title">
     <h2 id="sales-demo-title">Sales demo</h2>
     <p>Review, present and safely rebuild an isolated fictional portfolio.</p>
@@ -27,7 +29,8 @@ function SalesDemoControls({ onChange }: { onChange: () => void }) {
   const { data: auth } = useAuth();
   const scope = JSON.stringify([auth?.user.id, auth?.user.status, auth?.user.emailVerified, auth?.membership?.companyId, auth?.membership?.version, auth?.permissions, auth?.impersonation?.contextId]);
   const [key, setKey] = useState(() => crypto.randomUUID());
-  const [retiring, setRetiring] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const [retiring, setRetiring] = useState<string | null>(params.get("demoId"));
   const [rebuilding, setRebuilding] = useState<string | null>(null), [guide, setGuide] = useState<string | null>(null);
   const [logins, setLogins] = useState<(LoginSheet & { scope: string }) | null>(null);
   const [showPasswords, setShowPasswords] = useState(false);
@@ -98,7 +101,7 @@ function ReadFailure({ error, retry }: { error: string; retry: () => void }) {
   return <div className="notice error" role="alert"><p>{error}</p><button className="secondary" type="button" onClick={retry}>Try again</button></div>;
 }
 function DemoWalkthrough({ id }: { id: string }) {
-  const plan = useResource<LifecyclePlan>(`/api/platform/sales-demos/${id}/plan?intent=inspect`);
+  const plan = useResource<LifecyclePlan>(`/api/platform/sales-demos/${encodeURIComponent(id)}/plan?intent=inspect`);
   return <section className="demo-review" aria-label="Demo presentation walkthrough"><h4>Present the connected workflows</h4>
     {plan.error && <ReadFailure error={plan.error} retry={plan.reload} />}
     {!plan.data ? !plan.error && <p role="status">Loading source links…</p> : <>
@@ -109,9 +112,9 @@ function DemoWalkthrough({ id }: { id: string }) {
   </section>;
 }
 function DemoLifecycleReview({ id, intent, cancel, saved, changed }: { id: string; intent: "retire" | "rebuild"; cancel: () => void; saved: (sheet?: LoginSheet) => void; changed: () => void }) {
-  const resource = useResource<LifecyclePlan>(`/api/platform/sales-demos/${id}/plan?intent=${intent}`);
   const [key, setKey] = useState(() => crypto.randomUUID());
   const [submitting, setSubmitting] = useState(false), [uncertain, setUncertain] = useState(false);
+  const resource = useResource<LifecyclePlan>(`/api/platform/sales-demos/${encodeURIComponent(id)}/plan?intent=${intent}`, false, !submitting && !uncertain);
   const plan = resource.data, rebuilding = intent === "rebuild";
   return <section className="demo-review" aria-label={rebuilding ? "Demo rebuild review" : "Demo teardown review"}>
     <h4>{rebuilding ? "Review a fresh replacement" : "Review demo teardown"}</h4>
@@ -120,17 +123,49 @@ function DemoLifecycleReview({ id, intent, cancel, saved, changed }: { id: strin
       <p>{rebuilding ? "Retire this generation, then build one fresh fictional company with new role logins and the current fixture. Existing posted records are not rewritten." : plan.automatic ? "Suspend this demo company, disable its generated accounts and revoke sessions. No source records or audit history are deleted." : "Retire this older demo and release its pre-existing presenter. The presenter's account is preserved."}</p>
       <dl className="demo-plan-facts"><div><dt>Reviewed generation</dt><dd>{plan.id.slice(0, 8)}</dd></div><div><dt>Company members</dt><dd>{plan.companyMembers}</dd></div><div><dt>Current fixture</dt><dd>{plan.seedVersion ?? "Not built"}</dd></div>{rebuilding && <div><dt>Replacement fixture</dt><dd>{plan.latestSeedVersion}</dd></div>}</dl>
       {plan.blockers.map(blocker => <p className="notice error" role="alert" key={blocker}>{blocker}</p>)}
+      <DemoOwnershipReview review={plan.ownershipReview} />
       {plan.replacement && <p className="notice">This generation already has a replacement reserved. Refresh the list and resume it rather than starting another.</p>}
       <Form key={`${key}:${plan.planHash}`} label={rebuilding ? "Build replacement demo" : "Confirm teardown"} operation={rebuilding ? "sales_demo.create" : "sales_demo.teardown"} timeoutMs={rebuilding ? 360000 : undefined} locked={!!resource.error || !!plan.blockers.length || rebuilding && !plan.canRebuild} successText={rebuilding ? "Replacement built." : "Demo torn down."} submit={async () => {
         setSubmitting(true);
         try {
-          if (rebuilding) saved(await api<LoginSheet>(`/api/platform/sales-demos/${id}/rebuild`, { method: "POST", body: { submissionKey: key, expectedVersion: plan.expectedVersion, planHash: plan.planHash, confirmed: true }, timeoutMs: 360000 }));
-          else { await api(`/api/platform/sales-demos/${id}/teardown`, { method: "POST", body: { expectedVersion: plan.expectedVersion, planHash: plan.planHash }, timeoutMs: 180000 }); saved(); }
+          if (rebuilding) saved(await api<LoginSheet>(`/api/platform/sales-demos/${encodeURIComponent(id)}/rebuild`, { method: "POST", body: { submissionKey: key, expectedVersion: plan.expectedVersion, planHash: plan.planHash, confirmed: true }, timeoutMs: 360000 }));
+          else { await api(`/api/platform/sales-demos/${encodeURIComponent(id)}/teardown`, { method: "POST", body: { expectedVersion: plan.expectedVersion, planHash: plan.planHash }, timeoutMs: 180000 }); saved(); }
         } catch (error) { setUncertain(error instanceof ApiError && error.submissionUncertain); throw error; }
         finally { setSubmitting(false); changed(); }
       }}><label className="demo-confirm"><input type="checkbox" required />{rebuilding ? "I reviewed the replacement and understand that the old history is retained." : "I reviewed this demo and the accounts affected by teardown."}</label></Form>
       <div className="demo-actions"><button type="button" className="secondary" disabled={submitting || uncertain} onClick={() => { setKey(crypto.randomUUID()); resource.reload(); }}>Refresh action plan</button><button type="button" className="text-button" disabled={submitting || uncertain} onClick={cancel}>Cancel</button></div>
       {uncertain && <p className="help">Keep this original request and retry it, or resume the reserved setup from the list. Refreshing the review is unavailable while its result is unknown.</p>}
     </>}
+  </section>;
+}
+
+
+function DemoOwnershipReview({ review }: { review: LifecyclePlan["ownershipReview"] }) {
+  if (!review || !review.foreignMembers.length && !review.changedAccounts.length) return null;
+  const reasons: Record<string, string> = {
+    password_change_pending: "An administrative password attempt is unfinished or unconfirmed. Open this account’s password controls, check its status and explicitly release an expired uncertain attempt before cleanup.",
+    platform_authority: "Separate platform authority was granted to this generated account. Company ownership or residency alone does not grant platform access.",
+    legacy_company_assignment: "An older company assignment remains on this account. Review its company access before cleanup.",
+    email_changed: "The account email no longer matches its saved demo identity. Review the exact sign-in identity; matching an email does not establish ownership.",
+    other_company_membership: "This generated account is now assigned to another company. Review that assignment before retiring it.",
+    identity_mapping_changed: "The saved issuer and subject no longer match the local sign-in identity. Reconcile the exact account before cleanup.",
+  };
+  return <section aria-label="Accounts blocking demo cleanup">
+    <h5>Review the affected accounts</h5>
+    <p>These checks protect accounts whose access changed. Review each existing account, then return and refresh this action plan. This review changes no access.</p>
+    {!!review.foreignMembers.length && <><h6>Additional company members</h6><ul>{review.foreignMembers.map(account => <li key={account.userId}>
+      <strong>{account.name || account.email}</strong><p>{account.email} · {account.role} · {account.status}</p>
+      <p>This sign-in account was added separately. If its company access is no longer needed, remove only its membership through Company access → No company access. Its sign-in account and business history are retained.</p>
+      {account.platformRole && <p>Separate platform authority: {account.platformRole === "owner" ? "Platform owner" : "Platform Support"}. Removing a company membership does not revoke this separate grant.</p>}
+      {account.supportPath && <p><Link to={account.supportPath} target="_blank" rel="noreferrer">Review platform Support grant for {account.name || account.email}</Link></p>}
+      <Link to={account.reviewPath} target="_blank" rel="noreferrer">Review company access for {account.name || account.email}</Link>
+    </li>)}</ul></>}
+    {!!review.changedAccounts.length && <><h6>Changed generated accounts</h6><ul>{review.changedAccounts.map(account => <li key={account.userId}>
+      <strong>{account.name || account.email}</strong><p>{account.email}{account.accountKey ? ` · ${account.accountKey}` : ""}</p>
+      <ul>{account.reasons?.map(reason => <li key={reason}>{reasons[reason] || "Review this account's current access."}</li>)}</ul>
+      {account.reasons?.includes("email_changed") && <p>Saved demo email: {account.expectedEmail || "Unavailable"}</p>}
+      {account.supportPath && <p><Link to={account.supportPath} target="_blank" rel="noreferrer">Review platform Support grant for {account.name || account.email}</Link></p>}
+      <Link to={account.reviewPath} target="_blank" rel="noreferrer">Review account for {account.name || account.email}</Link>
+    </li>)}</ul></>}
   </section>;
 }
