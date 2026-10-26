@@ -5,8 +5,9 @@ import { isIP } from "node:net";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
 import * as oidc from "openid-client";
+import { canViewTarget, sameImpersonationMembership } from "./impersonation-access.js";
 import { synchronizeIdentity } from "./identity-sync.js";
-import { AccessError, COMPANY_ROLES, permissions, safeReturnTo } from "./access.js";
+import { AccessError, permissions, safeReturnTo } from "./access.js";
 import { companyFeatures, memberRouteFeatures, requireFeatures } from "./company-features.js";
 
 export const digest = (value: string) =>
@@ -198,20 +199,16 @@ export async function registerSessions(
       throw new AccessError(409, "IMPERSONATION_CONTEXT_CHANGED", "Your viewing account changed. Reload to continue.");
     if (session.impersonatedUserId) {
       const target = session.impersonatedUser;
-      const membership = target?.membership;
-      const unavailable = !permissions(session.user).includes("platform.impersonate") ||
+      const unavailable = !canViewTarget(session.user, target) ||
         !session.impersonationExpiresAt || session.impersonationExpiresAt.getTime() <= Date.now() ||
-        !target || target.status !== "active" || !target.emailVerified || !!target.platformRole ||
-        membership?.status !== "active" || membership.company.status !== "active" ||
-        !COMPANY_ROLES.includes(membership.role as typeof COMPANY_ROLES[number]) ||
-        membership.companyId !== session.impersonationCompanyId || membership.version !== session.impersonationMembershipVersion;
+        !target || !sameImpersonationMembership(target, session.impersonationCompanyId, session.impersonationMembershipVersion);
       request.impersonation = {
         actor: { id: session.user.id, name: session.user.name, email: session.user.email },
         expiresAt: session.impersonationExpiresAt!, contextId, readOnly: true, unavailable,
       };
       // Exit always uses the signed-in actor, even after target/actor revocation.
       // Bootstrap retains a disabled target projection so its exit banner works.
-      if (!exiting && target) request.principal = { ...target, platformRole: null };
+      if (!exiting && target) request.principal = session.user.platformRole === "owner" ? target : { ...target, platformRole: null };
       if (!exiting && pathname !== "/api/bootstrap") {
         if (unavailable)
           throw new AccessError(403, "IMPERSONATION_UNAVAILABLE", "This impersonation expired or access changed. Return to your account to continue.");

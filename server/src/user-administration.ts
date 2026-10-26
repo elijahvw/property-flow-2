@@ -1,3 +1,4 @@
+import { revalidateImpersonation } from "./operational.js";
 import type {
   FastifyInstance,
   FastifyRequest,
@@ -64,6 +65,7 @@ export function registerUserAdministration(
             "Verify your email first.",
           );
       }
+      await revalidateImpersonation(tx, request, actor, actor.membership?.companyId ?? "");
       return run(tx);
     });
   }
@@ -75,7 +77,8 @@ export function registerUserAdministration(
   ) {
     await tx.auditEvent.create({
       data: {
-        actorId: request.principal!.id,
+        actorId: request.sessionActor?.id ?? request.principal!.id,
+        ...(request.impersonation ? { detail: { impersonatedUserId: request.principal!.id, impersonationContext: request.impersonation.contextId } } : {}),
         action,
         targetId,
         requestId: request.id,

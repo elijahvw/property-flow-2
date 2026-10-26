@@ -1,5 +1,23 @@
 # Feature release notes
 
+## October 26, 2026 — demo recovery and account administration (PR72)
+
+Published [PR72](https://github.com/elijahvw/property-flow-2/pull/72), based on merged PR71/main `de72a22`; code commit `b659b1d`. Demo teardown now names separately added members and changed generated identities/grants, links the exact account/company-access or Support review, and hashes exact reviewed source snapshots. A demo company record opens its own teardown plan before deletion. The repair uses existing versioned controls; it never adopts by email, disables unrelated accounts or silently revokes a platform grant. Company ownership alone grants no support authority; company/account reviews now distinguish explicit platform authority.
+
+Platform owners can choose any recorded account for an audited, expiring read-only view, including unassigned, unverified, disabled and platform accounts. Actual target permissions/status remain authoritative; nested viewing and writes stay denied. Delegated Support retains its prior active verified nonplatform company-member boundary. Fresh actor/session locks prevent queued requests using a revoked grant or expired context.
+
+Platform owners and company owners (only active nonplatform members of their current active company) can set the password of an exact existing configured Auth0 database identity. A dedicated transient form clears secrets; durable HMAC-protected receipts, atomic dispatch/session revocation and explicit uncertain-attempt status/release prevent blind replay. Late worker outcomes cannot overwrite a released/terminal receipt or newer attempt. Historical recovery remains available to platform owners for disabled/provider-unavailable targets. Pending attempts block demo retirement; dispatch invalidates obsolete generated login sheets. No hosted password, membership, grant or demo lifecycle mutation was performed.
+
+Activation: additive migrations `202610260059_manual_passwords` → `202610260060_owner_impersonation`, then matching API/client. Reuse the existing application secret and Auth0 database connection/management `update:users` capability. Validate actual tenant policy/Actions and real-role sign-in separately. Fixture7 and its source graph are unchanged: these controls review existing accounts without automatically granting Support or changing credentials. [Password contract](manual-passwords.md) · [Support views](support-impersonation.md) · [Demo runbook](sales-demo.md) · [Monitoring](monitoring-coverage.md).
+
+Validation on the integrated source:
+- Normal `DATABASE_URL=postgresql://build:build@127.0.0.1:1/propertyflow_access_test npm run build --workspace=server` (Prisma generation + TypeScript) and `npm run build --workspace=@property-flow/client` passed; both build receipts verify.
+- `node --test server/tests/*.test.mjs`:134 passed,9 intentional DB-gated skips. `node --test client/tests/*.test.cjs`:70 passed. `python3 -m unittest discover -s tests/operations -p 'test_*.py'`:100 passed. `python3 scripts/validate-dev-power.py`:passed.
+- Fresh sequential `node scripts/test-<area>.mjs`:users73,impersonation18,sales-demo26,company-billing15,leasing68,finances192,maintenance149,roadmap40; observability exits0 with real PostgreSQL/native server spans and all three OTLP signals/redaction. Disposable resources cleaned. The impersonation queued-revocation regression also fails as expected with only its new compiled row fences removed; the artifact was restored and normally rebuilt before final validation.
+- Focused UI:36/37 first passed; one new demo fixture lacked the unrelated subscription-unavailable response. Corrected demo cases5/5. Complete fixed build first passed471/472; retained trace shows the existing stale-draft fixture edited before UI save acknowledgment. Added explicit saved-state readiness, retaining all assertions. The sandbox-only launch then stopped before tests because loopback bind was denied; the authorized complete run passes **472/472 in2.0m**, two workers/zero retries, no retained final failure traces and matching client/server build fingerprints. No sleeps, retries or weakened assertions. Phone screenshots for named blockers and manual passwords inspected.
+
+Hosted CI/review, merge, migration deployment and live provider/role acceptance remain separate gates. Prior dated results below retain their original source provenance.
+
 ## October 25, 2026 — company deletion, smaller demo and unit occupancy (local)
 
 Based on fetched main `e8b87c7`, branch `codex/company-delete-simple-demo`. The prior dirty active worktree is preserved intact at `../prelogin-users-preserved-20261025`; older checkouts remain unchanged.

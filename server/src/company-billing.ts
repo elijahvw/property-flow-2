@@ -1,3 +1,4 @@
+import { revalidateImpersonation } from "./operational.js";
 import type { FastifyInstance, FastifyRequest, preValidationHookHandler } from "fastify";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { AccessError, companyScope, requirePermission } from "./access.js";
@@ -81,6 +82,7 @@ export function registerCompanyBilling(server: FastifyInstance, db: PrismaClient
       if (!actor) throw new AccessError(403, "ACCESS_DENIED", "Access is unavailable.");
       if (platformOnly) requirePermission(actor, "platform.manage");
       else companyScope(actor, "subscription.read", companyId);
+      await revalidateImpersonation(tx, request, actor, actor.membership?.companyId ?? "");
       if (companyId) {
         if (write) await tx.$queryRaw`UPDATE "Company" SET "updatedAt"="updatedAt" WHERE id=${companyId} RETURNING id`;
         else await tx.$queryRaw`SELECT id FROM "Company" WHERE id=${companyId} FOR SHARE`;

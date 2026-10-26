@@ -42,6 +42,7 @@ export interface IdentityProvider {
   verify(id: string): Promise<void>;
   setup(email: string): Promise<void>;
   rename(id: string, name: string): Promise<ProviderUser>;
+  setPassword?(id: string, password: string, options?: { deadline?: number }): Promise<void>;
 }
 export function identityProvider(
   env = process.env,
@@ -320,6 +321,16 @@ export function identityProvider(
       const result=user(await api("users/"+encodeURIComponent(id), {name}, "PATCH"));
       if(result.user_id !== id || result.name !== name) throw new AccessError(409,"IDENTITY_PROFILE_CONFLICT","The identity provider did not accept the account name. Refresh the account and retry.");
       return result;
+    },
+    async setPassword(id, password, options) {
+      try {
+        const result = user(await api("users/" + encodeURIComponent(id), { password, connection }, "PATCH", Math.min(options?.deadline ?? Infinity, now() + 20000)));
+        if (result.user_id !== id) throw new AccessError(503, "PASSWORD_RESULT_UNCERTAIN", "The password change could not be confirmed. Review this attempt before another change.");
+      } catch (error) {
+        if (error instanceof IdentityProviderError && error.failure === "rejected" && error.upstreamStatus === 400)
+          throw new AccessError(400, "PASSWORD_POLICY_REJECTED", "The sign-in provider rejected this password. Choose a different password that meets its password policy.");
+        throw error;
+      }
     },
     async verify(id) {
       await api("jobs/verification-email", {

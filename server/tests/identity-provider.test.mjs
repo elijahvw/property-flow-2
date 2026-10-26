@@ -287,3 +287,15 @@ test('one deadline covers lookup, creation and block after the ownership callbac
  existing=true;
  await assert.rejects(p.salesDemo.block(account,profile.user_id,async()=>{clock+=5000;},{deadline:clock+3000}),error=>error.failure==='deadline');assert.equal(patches,0,'expired ownership callback must not be followed by a provider write');
 });
+
+
+test('manual password PATCH targets the exact subject and never grants access or verification',async()=>{
+ const seen=[];const password='Fictional-Password-Only-42!';
+ const p=identityProvider(env,async(url,options)=>{seen.push({url,method:options.method,body:options.body});return Response.json(url.endsWith('/oauth/token')?{access_token:'test-token',expires_in:3600}:profile);});
+ await p.setPassword(profile.user_id,password);
+ const update=seen.find(call=>call.method==='PATCH');assert.ok(update.url.endsWith('/users/auth0%7Cabc%2B1'));assert.deepEqual(JSON.parse(update.body),{password,connection:'Username-Password-Authentication'});assert.equal(seen.length,2);
+ const bad=identityProvider(env,async url=>url.endsWith('/oauth/token')?Response.json({access_token:'test-token',expires_in:3600}):new Response('PRIVATE weak password detail',{status:400}));
+ await assert.rejects(bad.setPassword(profile.user_id,password),error=>error.statusCode===400&&error.code==='PASSWORD_POLICY_REJECTED'&&!error.message.includes('PRIVATE'));
+ const mismatch=identityProvider(env,async url=>Response.json(url.endsWith('/oauth/token')?{access_token:'test-token',expires_in:3600}:{...profile,user_id:'auth0|wrong'}));
+ await assert.rejects(mismatch.setPassword(profile.user_id,password),error=>error.code==='PASSWORD_RESULT_UNCERTAIN');
+});

@@ -83,7 +83,12 @@ test('a rejected close-confirmation draft save explains the failure and preserve
 
 test('a stale close-confirmation draft save remains visible until the user returns to the editor',async({page})=>{
  const state=await fixture(page);await enterLease(page);
- await page.getByRole('button',{name:'Save task draft',exact:true}).click();await expect.poll(()=>state.drafts.size).toBe(1);
+ await page.getByRole('button',{name:'Save task draft',exact:true}).click();
+ // Fixture persistence precedes the UI acknowledging the saved dirty baseline.
+ // Finish that save before introducing the peer version and a new local edit.
+ await expect(page.getByRole('region',{name:'Saved task draft'})).toContainText('Saved October');
+ await expect(page.getByRole('button',{name:'Save task draft',exact:true})).toBeEnabled();
+ expect(state.drafts.size).toBe(1);
  const row=[...state.drafts.values()][0];row.version++;
  await page.getByLabel('New lease monthly rent (USD)').fill('1650.00');
  await page.getByRole('button',{name:'Back to leases',exact:true}).click();

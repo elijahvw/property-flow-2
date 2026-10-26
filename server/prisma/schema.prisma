@@ -248,6 +248,7 @@ model User {
   emailVerified Boolean @default(false)
   verificationSentAt DateTime?
   passwordSetupSentAt DateTime?
+  credentialChangedAt DateTime?
   firstSignedInAt DateTime?
   provisions UserProvision[]
   identities Identity[]
@@ -280,6 +281,27 @@ model User {
   updatedAt  DateTime @updatedAt
 
   @@index([companyId])
+}
+
+// Passwords are never retained: this receipt contains only a keyed request
+// fingerprint and the exact pre-authorized account/context and outcome.
+model ManualPasswordOperation {
+  id String @id @default(cuid())
+  actorId String
+  userId String
+  companyId String?
+  issuer String
+  subject String
+  submissionKey String
+  submissionHash String
+  contextHash String
+  status String @default("pending")
+  leaseUntil DateTime
+  startedAt DateTime?
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([actorId, submissionKey])
+  @@index([userId, status])
 }
 
 model SalesDemo {

@@ -23,6 +23,7 @@ import { DirectoryPagination, useDirectoryPage } from "../components/DirectoryPa
 import { UserActivity, ActivityLog } from "../components/UserActivity";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useUserDirectory } from "../useUserDirectory";
+import { ManualPassword } from "../components/ManualPassword";
 import {
   Link,
   Navigate,
@@ -53,7 +54,7 @@ type Member = {
   status: string;
   version?: number;
   createdAt?:string;
-  user: { name: string | null; email: string; status: string };
+  user: { name: string | null; email: string; status: string; passwordManageable?: boolean };
 };
 type Person = {
   emailVerified?: boolean;
@@ -234,10 +235,12 @@ export function InvitationForm({
 export function People() {
   const { data } = useAuth();
   return (
-    <PeopleWorkspace key={`${data?.user.id}:${data?.permissions.join(",")}`} />
+    <PeopleWorkspace key={`${data?.user.id}:${data?.permissions.join(",")}:${data?.impersonation?.contextId || ""}`} />
   );
 }
 function PeopleWorkspace() {
+  const { data: authority } = useAuth();
+  const readOnly = !!authority?.impersonation;
   const r = useResource<Person[]>("/api/platform/users", true),
     companies = useResource<Company[]>("/api/platform/companies", true, true);
   const [params,setParams] = useSearchParams();
@@ -246,7 +249,7 @@ function PeopleWorkspace() {
   const [companyFilter, setCompanyFilter] = useState("");
   const [accountFilter, setAccountFilter] = useState("");
   const [creating, setCreating] = useState(false);
-  const directory = useUserDirectory(r.reload);
+  const directory = useUserDirectory(r.reload, !readOnly);
   const [draft, setDraft] = useState<Person | null>(null);
   const currentPerson = r.data?.find((p) => p.id === selected);
   const person =
@@ -282,7 +285,7 @@ function PeopleWorkspace() {
           <h1>Users</h1>
           <p>Find a sign-in account, check its access, and open the right next action.</p>
         </div>
-        <button onClick={() => setCreating(true)}>Add user</button>
+        <button disabled={readOnly} onClick={() => setCreating(true)}>Add user</button>
       </header>
       <EditorDialog
         open={creating}
@@ -309,7 +312,7 @@ function PeopleWorkspace() {
             . The person signs in when accepting; no separate first login is
             needed.
           </p>
-          <InvitationForm companyId={params.get("companyId")!} owner />
+          <fieldset disabled={readOnly} className="editor-contents"><InvitationForm companyId={params.get("companyId")!} owner /></fieldset>
         </section>
       )}
       <section className="panel admin-directory directory-workbench" aria-label="User directory">
@@ -405,6 +408,7 @@ function PeopleWorkspace() {
                   <th>Sign-in account</th>
                   <th>Company &amp; role</th>
                   <th>Company access</th>
+                  <th>Platform authority</th>
                   <th>
                     <span className="sr-only">Actions</span>
                   </th>
@@ -437,6 +441,7 @@ function PeopleWorkspace() {
                         {p.platformRole === "owner" && p.membership && <span className="cell-detail">Company role: {p.membership.role}</span>}
                       </td>
                       <td data-label="Company access"><span className={`admin-status ${companyAccess(p) === "Active company access" ? "is-active" : "is-pending"}`}>{companyAccess(p)}</span></td>
+                      <td data-label="Platform authority"><span className="cell-detail">{p.platformRole === "owner" ? "Platform owner" : p.platformRole === "support" ? "Platform support" : "None"}</span>{p.platformRole === "support" && <Link to={`/platform/impersonation?supportUserId=${encodeURIComponent(p.id)}`}>Review platform support access</Link>}</td>
                       <td className="admin-record-actions">
                         <button
                           className="secondary"
@@ -476,6 +481,7 @@ function PeopleWorkspace() {
           }}
           description="Manage the application profile, company membership, sign-in assistance and account status in one place."
         >
+          <fieldset disabled={readOnly} className="editor-contents">
           <div className="profile-summary">
             <span className="avatar">
               {(person.name || person.email).slice(0, 1).toUpperCase()}
@@ -486,6 +492,8 @@ function PeopleWorkspace() {
             </div>
             <Badge>{person.status}</Badge>
           </div>
+          <p><strong>Platform authority:</strong> {person.platformRole === "owner" ? "Platform owner" : person.platformRole === "support" ? "Platform support" : "None"}. Company ownership does not grant platform support or impersonation.</p>
+          {person.platformRole === "support" && <p><Link to={`/platform/impersonation?supportUserId=${encodeURIComponent(person.id)}`}>Review platform support access for this account</Link></p>}
           <nav className="account-section-nav" aria-label="Account management sections">
             {[["profile", "Profile"], ["access", "Company access"], ["signin", "Sign-in & status"], ["activity", "Activity"]].map(([section, label]) => <button key={section} type="button" className="secondary" onClick={() => {
               const target = document.getElementById(`manage-user-${section}`);
@@ -582,10 +590,11 @@ function PeopleWorkspace() {
             id={person.id}
             verified={person.emailVerified}
             saved={r.reload}
+            active={selectedOpen && !readOnly}
           />
           {person.platformRole !== "owner" && (
             <div className="divider">
-              <h3>Platform account</h3>
+              <h3>Account status</h3>
               <Form
                 operation="account.status"
                 label="Update account status"
@@ -605,9 +614,10 @@ function PeopleWorkspace() {
           <section id="manage-user-activity" tabIndex={-1} className="account-workspace-section" aria-label="Account activity">
             <UserActivity id={person.id} revision={`${person.name}:${person.membership?.version}:${person.status}:${person.emailVerified}`} />
           </section>
+          </fieldset>
         </EditorDialog>
       )}
-      <Invitations platform />
+      <fieldset disabled={readOnly} className="editor-contents"><Invitations platform /></fieldset>
     </>
   );
 }
@@ -1015,6 +1025,7 @@ function TeamDirectory() {
   const [propertyMember, setPropertyMember, propertyMemberOpen, savePropertyDraft] = useEditorSelection("");
   const [teamQuery, setTeamQuery] = useState(""), [teamStatus, setTeamStatus] = useState(""), [teamRole, setTeamRole] = useState(""), [teamPage, setTeamPage] = useState(0);
   const [invitationRevision, setInvitationRevision] = useState(0);
+  const [passwordMember, setPasswordMember] = useState<Member | null>(null);
   const team = r.data?.filter((m) => m.role !== "resident");
   const denied = r.errorStatus !== undefined && [401, 403, 404].includes(r.errorStatus);
   const currentMember = team?.find(m => m.userId === selected);
@@ -1055,6 +1066,7 @@ function TeamDirectory() {
                 </div>
                 <div className="team-record-status"><Badge>{m.role}</Badge><span className={`admin-status ${m.user.status === "active" && m.status === "active" ? "is-active" : "is-blocked"}`}>{m.user.status !== "active" ? "Account disabled" : m.status === "active" ? "Active access" : "Membership disabled"}</span></div>
                 <div className="team-record-actions">
+                {m.user.status === "active" && m.status === "active" && m.user.passwordManageable !== false && m.userId.startsWith("auth0|") && !data?.impersonation && <button className="secondary" onClick={() => setPasswordMember(m)}>Manage password</button>}
                 {m.role === "staff" && <button className="secondary" onClick={() => setPropertyMember(m.userId)}>Staff access</button>}
                 {m.role !== "owner" && (
                   <button
@@ -1072,6 +1084,7 @@ function TeamDirectory() {
         {r.data && !filteredTeam?.length && <p>No team members match these filters.</p>}
         {(filteredTeam?.length || 0) > 25 && <nav className="admin-directory-pagination directory-pagination" aria-label="Team pages"><p>Showing {teamPage * 25 + 1}–{Math.min((teamPage + 1) * 25, filteredTeam!.length)} of {filteredTeam!.length} matching members</p><div className="actions"><button className="secondary" disabled={!teamPage} onClick={()=>setTeamPage(p=>p-1)}>Previous team members</button><span>Page {teamPage+1}</span><button className="secondary" disabled={(teamPage+1)*25>=filteredTeam!.length} onClick={()=>setTeamPage(p=>p+1)}>Next team members</button></div></nav>}
       </section>
+      {passwordMember && <EditorDialog open title={`Password for ${passwordMember.user.name || passwordMember.user.email}`} draftable={false} onClose={() => setPasswordMember(null)}><ManualPassword id={passwordMember.userId}/></EditorDialog>}
       {team?.find(m => m.userId === propertyMember) && <EditorDialog key={propertyMember} open={propertyMemberOpen} onSaveDraft={savePropertyDraft} title={`Staff access for ${team.find(m => m.userId === propertyMember)!.user.name || team.find(m => m.userId === propertyMember)!.user.email}`} onClose={() => setPropertyMember("")}>
         <StaffPropertyEditor key={propertyMember} member={team.find(m => m.userId === propertyMember)!} saved={() => { setPropertyMember(""); r.reload(); }} />
       </EditorDialog>}

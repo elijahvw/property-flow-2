@@ -17,6 +17,7 @@ export type CompanyProfile = {
   status: string;
   version: number;
   deletedAt?: string | null;
+  salesDemo?: { id: string; status: string; setup: { status: string } | null } | null;
   legalName?: string | null;
   contactName?: string | null;
   contactEmail?: string | null;
@@ -39,6 +40,7 @@ export type CompanyProfile = {
       name: string | null;
       email: string;
       emailVerified: boolean;
+      platformRole?: string | null;
       status: string;
     };
   }[];
@@ -359,6 +361,7 @@ function CompanyRecord() {
         m.status === "active" &&
         m.user.status === "active",
     );
+  const needsDemoTeardown = !!c.salesDemo && (c.salesDemo.status !== "retired" || !!c.salesDemo.setup && c.salesDemo.setup.status !== "retired");
   if (c.status === "deleted") return <>
     <Link to="/platform/companies">← Companies</Link>
     <header className="page-heading"><h1>{c.name}</h1><p>Deleted company — company access is blocked.</p></header>
@@ -506,6 +509,7 @@ function CompanyRecord() {
                     ? "Email verified"
                     : "Email not verified"}
                 </p>
+                {m.user.platformRole && <p>Separate platform authority: {m.user.platformRole === "owner" ? "Platform owner" : "Platform support"}. This is independent of the company role.</p>}
                 <Link
                   to={`/platform/users?companyId=${c.id}&userId=${encodeURIComponent(m.userId)}`}
                 >
@@ -519,7 +523,8 @@ function CompanyRecord() {
       <section className="panel" aria-labelledby="delete-company-title">
         <h2 id="delete-company-title">Delete company</h2>
         <p>Remove this company from the directory and block all company access. People keep their sign-in accounts; company memberships and pending invitations are disabled. Financial records, leases, documents and audit history are retained.</p>
-        <button className="secondary" disabled={editing} onClick={() => { setDeleting(previous => previous || { company: c, key: crypto.randomUUID() }); setDeleteOpen(true); }}>{deleting ? "Resume company deletion" : "Delete company"}</button>
+        {needsDemoTeardown && c.salesDemo && <p className="notice">Complete the demo teardown first so its generated sign-in accounts are disabled. <Link to={`/platform/companies?demoId=${encodeURIComponent(c.salesDemo.id)}`}>Review this demo's teardown and account blockers</Link></p>}
+        <button className="secondary" disabled={editing || needsDemoTeardown} onClick={() => { setDeleting(previous => previous || { company: c, key: crypto.randomUUID() }); setDeleteOpen(true); }}>{deleting ? "Resume company deletion" : "Delete company"}</button>
       </section>
       <EditorDialog open={deleteOpen} title="Delete company" onClose={() => setDeleteOpen(false)} onDiscard={() => { setDeleting(null); setDeleteOpen(false); }}>
         {deleting && <Form operation="company.delete" intent="write" label="Confirm company deletion" submit={async form => {

@@ -1,3 +1,4 @@
+import { ManualPassword } from "../components/ManualPassword";
 import { activityLabel } from "../activity-label";
 import { InvitationDelivery } from "../components/InvitationDelivery";
 import { Address } from "../components/Address";
@@ -209,6 +210,7 @@ function ContactWorkspace({ id }: { id: string }) {
             <h2>Account & portal access</h2>
             {person.user&&<p>Sign-in account ready · {person.user.email} · {person.user.firstSignedInAt?"Has signed in":"No sign-in recorded"}. Email {person.user.emailVerified?"verified":"not yet verified"}.</p>}
             {can("members.manage") && person.userId && <fieldset disabled={!!writeBlock} className="editor-contents"><Form label="Send password reset email" operation="account.verification" submit={async()=>{if(!context.current())throw new Error("Reload the workspace before requesting account recovery.");if(writeBlock)throw new Error(writeBlock);await api(`/api/company/resident-contacts/${encodeURIComponent(id)}/password-reset`,{method:"POST",body:{},expectedCompanyId:context.companyId});if(!context.current())throw new ApiError("Your account or company changed before the recovery request was acknowledged.",409,"TENANT_CONTEXT_CHANGED",true);}} feedbackText="Password reset email requested for the existing account."><p className="help">Your sign-in provider sends the reset link. This uses the same account and does not change company or lease access.</p></Form></fieldset>}
+            {can("members.manage") && person.userId && person.portal?.manageable && <ManualPassword id={person.userId}/>}
             {!person.portal ? (
               <>
                 <p>

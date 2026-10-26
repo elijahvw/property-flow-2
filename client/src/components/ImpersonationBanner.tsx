@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { formatActivityTime } from "../dates";
-import { openSupportSession, roleLabel } from "../impersonation";
+import { openSupportSession, impersonationRole } from "../impersonation";
 import { monitorOperation } from "../operations";
 
 export function ImpersonationBanner() {
@@ -30,7 +30,7 @@ export function ImpersonationBanner() {
   }
   return <section className="impersonation-banner" aria-label="Impersonation session">
     <div><strong>{expired ? "Impersonation session expired" : unavailable ? "Impersonation is no longer available" : "Read-only impersonation"}</strong>
-      <p>Viewing <strong>{data.user.name || data.user.email}</strong> · {roleLabel(data.membership?.role || "")} · {data.membership?.company.name || "Company access unavailable"}</p>
+      <p>Viewing <strong>{data.user.name || data.user.email}</strong> · {impersonationRole({ ...data.user, membership: data.membership })} · {data.membership?.company.name || "No company assigned"}</p>
       <p className="help">Signed in as {data.impersonation.actor.name || data.impersonation.actor.email}. Changes are disabled. {unavailable ? "Return to your account to continue." : `Expires ${formatActivityTime(data.impersonation.expiresAt)}.`}</p>
       {error && <p role="alert">{error}</p>}
     </div>

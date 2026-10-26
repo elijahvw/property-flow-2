@@ -21,7 +21,7 @@ export const browserOperations = [
   "rent.payment",
   "rent.void",
   "user.provision",
-  "account.verification",
+  "account.verification", "account.password.set",
   "finance.create",
   "finance.void",
   "unit.create",

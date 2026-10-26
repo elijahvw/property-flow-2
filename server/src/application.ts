@@ -14,6 +14,7 @@ import { companyFeatures, requireFeatures, routeFeatures, type CompanyFeatures }
 import type { NotificationPublisher } from "./notification-events.js";
 import { registerWorkspaceGuide } from "./workspace-guide.js";
 import { registerAccountPasswords } from "./account-passwords.js";
+import { registerManualPasswords } from "./manual-passwords.js";
 import { registerInvitations } from "./invitations.js";
 import { teamInvitationAuthority, replayTeamAcceptance } from "./invitation-access.js";
 import type { InvitationMailer } from "./invitation-email.js";
@@ -289,6 +290,7 @@ export function registerApplication(
   registerAgreements(server, db, authenticate, origin, options.notificationPublisher);
   registerWorkOrders(server, db, authenticate, origin, options.notificationPublisher);
   registerAccountPasswords(server, db, authenticate, origin, identityProvider);
+  registerManualPasswords(server, db, authenticate, origin, identityProvider, options.salesDemoCredentialSecret);
   registerMaintenance(server, db, authenticate, origin, options.notificationPublisher);
   registerVendors(server, db, authenticate, origin);
   registerPreventive(server, db, authenticate, origin, options.notificationPublisher);
@@ -574,13 +576,13 @@ export function registerApplication(
 
   registerCompanyProfile(server,db,authenticate,origin);
   server.get("/api/company/members", auth, async (request) => {
-    return scoped(db, request, "members.manage", (tx, companyId) => tx.companyMembership.findMany({
+    return scoped(db, request, "members.manage", async (tx, companyId) => (await tx.companyMembership.findMany({
       where: { companyId },
       select: {
-        ...membershipAccessSelect, user: { select: { id: true, name: true, email: true, status: true } },
+        ...membershipAccessSelect, user: { select: { id: true, name: true, email: true, status: true, platformRole: true } },
       },
       orderBy: { createdAt: "asc" },
-    }));
+    })).map(({ user, ...member }) => { const { platformRole, ...profile } = user; return { ...member, user: { ...profile, passwordManageable: !platformRole && user.status === "active" && member.status === "active" } }; }));
   });
   server.patch<{ Params: { userId: string } }>(
     "/api/company/members/:userId",

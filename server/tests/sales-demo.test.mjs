@@ -225,6 +225,56 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
       assert.equal((await db.company.findUniqueOrThrow({where:{id:demo.companyId}})).status,'active');
     }finally{await admin.query('DELETE FROM "CompanyMembership" WHERE "userId"=\'unrelated-demo-member\'');}
   });
+  await t.test('blocked lifecycle names the added owner and generated support grant, then refreshes after existing access controls repair them',async()=>{
+    const accounts=(await db.salesDemoSetup.findUniqueOrThrow({where:{id:sheet.id}})).accounts,changedId=accounts.resident3.user_id,extraId='additional-existing-owner';
+    await db.user.create({data:{id:extraId,email:'existing-owner@test.invalid',name:'Existing owner',emailVerified:true,membership:{create:{companyId:demo.companyId,role:'owner'}}}});
+    const changed=await db.user.findUniqueOrThrow({where:{id:changedId}});
+    await ok('platform','PATCH',`/api/platform/users/${encodeURIComponent(changedId)}/support-access`,{enabled:true,updatedAt:changed.updatedAt.toISOString()});
+    const callsBefore={created,blockCalls,ensureCalls};
+    try{
+      const plan=await ok('platform','GET',`${base}/${sheet.id}/plan?intent=retire`);
+      assert.equal(plan.companyMembers,9);assert.equal(plan.blockers.length,2);
+      assert.equal(plan.ownershipReview.foreignMembers.length,1);assert.equal(plan.ownershipReview.foreignMembers[0].userId,extraId);
+      const issue=plan.ownershipReview.changedAccounts.find(a=>a.userId===changedId);assert.deepEqual(issue.reasons,['platform_authority']);assert.equal(issue.platformRole,'support');
+      assert.equal(issue.supportPath,`/platform/impersonation?supportUserId=${encodeURIComponent(changedId)}`);assert.ok(!issue.reviewPath.includes('companyId'));
+      assert.equal((await call('customer','GET',`${base}/${sheet.id}/plan?intent=retire`)).statusCode,403);
+      assert.equal((await call('platform','POST',`${base}/${sheet.id}/teardown`,{expectedVersion:demo.version,planHash:plan.planHash})).statusCode,409);
+      assert.deepEqual({created,blockCalls,ensureCalls},callsBefore);
+      const membership=await db.companyMembership.findUniqueOrThrow({where:{userId:extraId}});
+      await ok('platform','DELETE',`/api/platform/users/${extraId}/membership`,{expectedVersion:membership.version,expectedCompanyId:membership.companyId,expectedCreatedAt:membership.createdAt.toISOString()});
+      const current=await db.user.findUniqueOrThrow({where:{id:changedId}});
+      await ok('platform','PATCH',`/api/platform/users/${encodeURIComponent(changedId)}/support-access`,{enabled:false,updatedAt:current.updatedAt.toISOString()});
+      const reviewed=await ok('platform','GET',`${base}/${sheet.id}/plan?intent=retire`);assert.deepEqual(reviewed.blockers,[]);assert.deepEqual(reviewed.ownershipReview,{foreignMembers:[],changedAccounts:[]});
+      assert.notEqual(reviewed.planHash,plan.planHash);assert.equal((await db.user.findUniqueOrThrow({where:{id:extraId}})).status,'active');
+      const stale=await call('platform','POST',`${base}/${sheet.id}/teardown`,{expectedVersion:demo.version,planHash:plan.planHash});assert.equal(stale.statusCode,409);assert.equal(stale.json().code,'DEMO_PLAN_CHANGED');
+      assert.deepEqual({created,blockCalls,ensureCalls},callsBefore);
+    }finally{
+      await db.user.update({where:{id:changedId},data:{platformRole:null}});await db.companyMembership.deleteMany({where:{userId:extraId}});
+    }
+  });
+  await t.test('manual demo passwords invalidate the original login sheet and uncertain attempts remain reviewable before cleanup',async()=>{
+    const get=provider.get,setPassword=provider.setPassword;
+    try{
+      for(const uncertain of [false,true]){
+        const built=await ok('platform','POST',base,{submissionKey:randomUUID()}),accounts=(await db.salesDemoSetup.findUniqueOrThrow({where:{id:built.id}})).accounts,userId=accounts.owner.user_id;
+        provider.get=async id=>({...remote.get(Object.values(accounts).find(a=>a.user_id===id).email),identities:[{provider:'auth0',connection:provider.databaseConnection}]});
+        provider.setPassword=async(id,password)=>{passwords.set(Object.values(accounts).find(a=>a.user_id===id).email,password);if(uncertain)throw Error('Lost fictional provider response');};
+        const path=`/api/platform/users/${encodeURIComponent(userId)}/password`,review=await ok('platform','GET',path),password='Fictional-administrator-password-123!';
+        const result=await call('platform','POST',path,{password,confirmation:password,reviewHash:review.reviewHash,submissionKey:randomUUID()});assert.equal(result.statusCode,uncertain?503:200,result.body);
+        assert.ok((await db.user.findUniqueOrThrow({where:{id:userId}})).credentialChangedAt);
+        const stale=await call('platform','POST',`${base}/${built.id}/credentials`,{});assert.equal(stale.statusCode,409);assert.equal(stale.json().code,'DEMO_PASSWORD_CHANGED');
+        if(uncertain){
+          const plan=await ok('platform','GET',`${base}/${built.id}/plan?intent=retire`);assert.ok(plan.ownershipReview.changedAccounts.some(a=>a.userId===userId&&a.reasons.includes('password_change_pending')));
+          const stopped=await call('platform','POST',`${base}/${built.id}/teardown`,{expectedVersion:1,planHash:plan.planHash});assert.equal(stopped.statusCode,409);
+          const attempt=(await ok('platform','GET',path)).operation;assert.equal(attempt.status,'uncertain');
+          await db.manualPasswordOperation.update({where:{id:attempt.id},data:{leaseUntil:new Date(Date.now()-1000)}});
+          await ok('platform','POST',path+'/release',{operationId:attempt.id,confirmed:true});
+        }
+        const plan=await ok('platform','GET',`${base}/${built.id}/plan?intent=retire`);assert.deepEqual(plan.blockers,[]);
+        await ok('platform','POST',`${base}/${built.id}/teardown`,{expectedVersion:1,planHash:plan.planHash});assert.equal(remote.get(accounts.owner.email).blocked,true);
+      }
+    }finally{provider.get=get;provider.setPassword=setPassword;}
+  });
   await t.test('legacy hashless create and teardown retain auth, environment, stale-version and non-demo boundaries',async()=>{
     const saved=await db.salesDemoSetup.findUniqueOrThrow({where:{id:sheet.id}});
     assert.equal(saved.blueprint.seedVersion,SALES_DEMO_SEED_VERSION);assert.equal(saved.blueprint.anchorOn,demo.manifest.today);

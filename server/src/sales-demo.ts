@@ -1,10 +1,12 @@
+import { assertPasswordOperationAvailable } from "./manual-password-guard.js";
+import { demoOwnershipReview } from "./sales-demo-ownership.js";
 import { demoEmail, isDemoEmail } from "./sales-demo-email.js";
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyRequest, preValidationHookHandler } from "fastify";
 import type { PrismaClient, SalesDemoSetup } from "@prisma/client";
 import { AccessError, requirePermission } from "./access.js";
 import { assignmentId, serializable } from "./application.js";
-import { input, mutation, submission, sameSubmission, version, type Tx } from "./operational.js";
+import { input, mutation, submission, sameSubmission, version, revalidateImpersonation, type Tx } from "./operational.js";
 import type { IdentityProvider, ProviderUser } from "./identity-provider.js";
 import { seedSalesDemo, SALES_DEMO_SEED_VERSION } from "./sales-demo-seed.js";
 import { DEMO_PEOPLE, newDemoCredentials, openDemoCredentials, sealDemoCredentials } from "./sales-demo-credentials.js";
@@ -28,6 +30,7 @@ export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, aut
       const actor = await tx.user.findUnique({ where: { id: request.principal!.id }, include: { membership: { include: { company: true } } } });
       if (!actor) throw new AccessError(403, "ACCESS_DENIED", "Access is unavailable.");
       requirePermission(actor, "platform.manage");
+      await revalidateImpersonation(tx, request, actor, actor.membership?.companyId ?? "");
       return run(tx);
     }, { timeout: 60000, maxWait: 5000 });
   }
@@ -64,17 +67,28 @@ export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, aut
     if (setup?.salesDemoId && setup.salesDemoId !== id || setup && demo && setup.salesDemoId !== demo.id) throw new AccessError(409, "DEMO_OWNERSHIP_CHANGED", "This setup no longer matches its marked demo company. No existing account or company was changed.");
     const accounts = setup ? ownedAccounts(setup) : null;
     const allowed = accounts ? Object.values(accounts).map(a => a.user_id) : [demo!.ownerId, ...["residents", "managerId", "staffId", "occupantId"].flatMap(key => { const value = manifestValue(demo!.manifest, key); return Array.isArray(value) ? value.filter(v => typeof v === "string") : typeof value === "string" ? [value] : []; })];
-    const members = demo ? await tx.companyMembership.findMany({ where: { companyId: demo.companyId }, select: { userId: true, status: true, version: true } , orderBy: { userId: "asc" } }) : [];
-    const foreignMembers = members.filter(m => !allowed.includes(m.userId)).length;
+    const members = demo ? await tx.companyMembership.findMany({ where: { companyId: demo.companyId }, select: { userId: true, role: true, status: true, version: true, user: { select: { name: true, email: true, platformRole: true } } } , orderBy: { userId: "asc" } }) : [];
     const users = accounts ? await tx.user.findMany({ where: { id: { in: allowed } }, include: { membership: true, identities: true }, orderBy: { id: "asc" } }) : [];
     const ownershipIssuer = setup && readDemoBlueprint(setup.blueprint)?.environment.identityIssuer || provider?.issuer;
-    const changedAccounts = users.filter(u => u.platformRole || u.companyId || !Object.values(accounts!).some(a => a.user_id === u.id && a.email === u.email) || u.membership && u.membership.companyId !== demo?.companyId || ownershipIssuer && !u.identities.some(identity => identity.issuer === ownershipIssuer && identity.subject === u.id)).length;
-    const blockers = [foreignMembers ? "This company contains an account not owned by this demo. Review it before retiring or rebuilding." : "", changedAccounts ? "A generated account's identity or assignment changed. Review it before proceeding." : ""].filter(Boolean);
+    const ownership = demoOwnershipReview(accounts, allowed, members, users, demo?.companyId ?? null, ownershipIssuer);
+    const foreignMembers = ownership.foreignMembers.length, changedAccounts = ownership.changedAccounts.length;
+    const passwordOperations = accounts ? await tx.manualPasswordOperation.findMany({ where: { userId: { in: allowed }, status: { in: ["pending", "uncertain"] } }, select: { id: true, userId: true, status: true, leaseUntil: true }, orderBy: { id: "asc" } }) : [];
+    for (const operation of passwordOperations) {
+      const existing = ownership.changedAccounts.find(account => account.userId === operation.userId);
+      if (existing) existing.reasons.push("password_change_pending");
+      else {
+        const user = users.find(user => user.id === operation.userId), entry = Object.entries(accounts!).find(([, account]) => account.user_id === operation.userId);
+        if (user) ownership.changedAccounts.push({ userId: user.id, name: user.name, email: user.email, accountKey: entry?.[0] ?? null,
+          expectedEmail: entry?.[1].email ?? null, platformRole: user.platformRole, reasons: ["password_change_pending"],
+          reviewPath: `/platform/users?userId=${encodeURIComponent(user.id)}`, supportPath: null });
+      }
+    }
+    const blockers = [foreignMembers ? "This company contains an account not owned by this demo. Review it before retiring or rebuilding." : "", changedAccounts ? "A generated account's identity or assignment changed. Review it before proceeding." : "", passwordOperations.length ? "A generated account has an unfinished password change. Review that attempt before demo cleanup." : ""].filter(Boolean);
     const replacement = demo?.replacementSetups[0] || null, currentBlueprint = blueprint();
     const anchorOn = demo ? manifestValue(demo.manifest, "today") : null;
-    const snapshot = { intent, id, fixture: demo?.seedVersion ?? null, version: demo?.version ?? 1, companyId: demo?.companyId ?? null, companyVersion: demo?.company.version ?? null, companyStatus: demo?.company.status ?? null, status: demo?.status ?? setup?.status, setupStatus: setup?.status ?? null, members, accounts: Object.entries(accounts || {}).sort(([a],[b])=>a.localeCompare(b)).map(([key,a])=>[key,a.user_id,a.email]), changedAccounts, replacement, blueprint: currentBlueprint };
+    const snapshot = { intent, id, fixture: demo?.seedVersion ?? null, version: demo?.version ?? 1, companyId: demo?.companyId ?? null, companyVersion: demo?.company.version ?? null, companyStatus: demo?.company.status ?? null, status: demo?.status ?? setup?.status, setupStatus: setup?.status ?? null, members, accounts: Object.entries(accounts || {}).sort(([a],[b])=>a.localeCompare(b)).map(([key,a])=>[key,a.user_id,a.email]), ownership: ownership.snapshot, passwordOperations, changedAccounts, replacement, blueprint: currentBlueprint };
     return { id, intent, planHash: demoPlanHash(snapshot), expectedVersion: demo?.version ?? 1, seedVersion: demo?.seedVersion ?? null, latestSeedVersion: SALES_DEMO_SEED_VERSION, anchorOn: typeof anchorOn === "string" ? anchorOn : null, status: demo?.status ?? setup!.status, company: demo ? { id: demo.companyId, name: demo.company.name, status: demo.company.status } : null,
-      automatic: !!setup, environment: currentBlueprint.environment, generatedAccounts: allowed.length, companyMembers: members.length, blockers, replacement,
+      automatic: !!setup, environment: currentBlueprint.environment, generatedAccounts: allowed.length, companyMembers: members.length, blockers, replacement, ownershipReview: { foreignMembers: ownership.foreignMembers, changedAccounts: ownership.changedAccounts },
       canRebuild: !!demo && !replacement && !blockers.length && currentBlueprint.environment.provisioningAllowed,
       effects: { retiresCurrentCompany: !!demo, disablesGeneratedAccounts: !!setup, preservesExistingPresenter: !setup, preservesPostedAndAuditHistory: true, deletesSourceRecords: false, createsFreshCompanyOnRebuild: true, rewritesPostedHistory: false },
       coverage: demo ? Object.entries(DEMO_FEATURE_COVERAGE).map(([key, paths]) => ({ key, complete: paths.every(path => { const value = manifestValue(demo.manifest, path); return Array.isArray(value) ? value.length > 0 : typeof value === "string" && value.length > 0; }) })) : [],
@@ -94,6 +108,7 @@ export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, aut
       const credentials = openDemoCredentials(id, setup.credentialsCipher, credentialSecret);
       const accounts = setup.accounts as Record<string, ProviderUser>;
       const users = await tx.user.findMany({ where: { id: { in: Object.values(accounts).map(a => a.user_id) } }, include: { membership: true, identities: true } });
+      if (users.some(user => user.credentialChangedAt)) throw new AccessError(409, "DEMO_PASSWORD_CHANGED", "An administrator changed a generated password. The original login sheet is no longer current. Use the reviewed rebuild workflow for a fresh set of demo credentials.");
       if (credentials.some(c => {
         const user = users.find(u => u.id === accounts[c.accountKey]?.user_id);
         return !user || user.status !== "active" || !user.emailVerified || user.email !== c.email || user.platformRole || user.companyId || c.login && !user.membership || user.membership && (user.membership.companyId !== setup.demo!.companyId || user.membership.status !== "active") || !user.identities.some(i => i.issuer === provider?.issuer && i.subject === user.id);
@@ -185,7 +200,10 @@ export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, aut
       if (demo && demo.id !== row.id) throw new AccessError(409, "DEMO_OWNERSHIP_CHANGED", "This setup no longer matches its marked demo company. No account was disabled.");
       if (demo && demo.status !== "retired" && demo.version !== expectedVersion) throw new AccessError(409, "RECORD_CHANGED", "Reload the demo before tearing it down.");
       const accounts = ownedAccounts(row), ids = Object.values(accounts).map(a => a.user_id).sort();
-      for (const userId of ids) await tx.$queryRaw`UPDATE "User" SET "updatedAt"="updatedAt" WHERE id=${userId} RETURNING id`;
+      for (const userId of ids) {
+        await tx.$queryRaw`UPDATE "User" SET "updatedAt"="updatedAt" WHERE id=${userId} RETURNING id`;
+        await assertPasswordOperationAvailable(tx, userId);
+      }
       const users = await tx.user.findMany({ where: { id: { in: ids } }, include: { membership: true, identities: true } });
       if (users.some(u => u.platformRole || u.companyId || u.membership && u.membership.companyId !== demo?.companyId || !Object.values(accounts).some(a => a.user_id === u.id && a.email === u.email) || !u.identities.some(i => i.issuer === provider?.issuer && i.subject === u.id))) throw new AccessError(409, "DEMO_ACCOUNT_ASSIGNED", "A generated account's identity or access changed. Review that assignment before teardown; no account was disabled.");
       const sessionIds = [...ids];
@@ -223,6 +241,7 @@ export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, aut
             const current = await currentRun(tx, id, token, "retiring");
             const demo = current.salesDemoId ? await tx.salesDemo.findUniqueOrThrow({ where: { id: current.salesDemoId } }) : null;
             await tx.$queryRaw`UPDATE "User" SET "updatedAt"="updatedAt" WHERE id=${remote.user_id} RETURNING id`;
+            await assertPasswordOperationAvailable(tx, remote.user_id);
             const user = await tx.user.findUnique({ where: { id: remote.user_id }, include: { membership: true } });
             if (user && (user.platformRole || user.companyId || user.membership && user.membership.companyId !== demo?.companyId)) throw new AccessError(409, "DEMO_ACCOUNT_ASSIGNED", "A generated account was assigned elsewhere. Review that assignment before finishing teardown; its Auth0 login was not disabled.");
             if (user) await tx.user.update({ where: { id: user.id }, data: { status: "disabled" } });

@@ -3,23 +3,23 @@ import { test, expect, BrowserContext, type Page } from '@playwright/test';
 const company = { id: 'fictional-company', name: 'Fictional company', status: 'active' };
 const target = { id: 'fictional-staff', name: 'Fictional staff', email: 'staff@test.invalid', membership: { companyId: company.id, role: 'staff', company } };
 const expiresAt = '2099-01-01T12:30:00.000Z';
-async function setup(context: BrowserContext, platformRole = 'owner') {
+async function setup(context: BrowserContext, platformRole: string | null = 'owner') {
   const actor = { id: 'fictional-support', name: 'Fictional support', email: 'support@test.invalid', platformRole, status: 'active', emailVerified: true };
-  const state = { acting: false, starts: [] as any[], stops: 0, support: [] as any[], guideRequests: 0, failStop: false, contextHeaders: [] as string[], queries: [] as URLSearchParams[] };
+  const state = { acting: false, starts: [] as any[], stops: 0, support: [] as any[], guideRequests: 0, failStop: false, contextHeaders: [] as string[], queries: [] as URLSearchParams[], targets: [target] as any[], selected: target as any };
   await context.route('**/api/**', async route => {
     const request = route.request(), url = new URL(request.url()), path = url.pathname;
     const json = (value: unknown, status = 200) => route.fulfill({ json: value, status });
     state.contextHeaders.push(request.headers()['x-impersonation-id'] || '');
     if (path === '/api/bootstrap') return json(state.acting ? {
-      user: { ...target, emailVerified: true, platformRole: null, status: 'active' }, membership: { ...target.membership, status: 'active', version: 1 }, permissions: ['property.read'], csrfToken: 'fixture', destination: '/company/properties',
-      impersonation: { actor, expiresAt, readOnly: true, contextId: `${target.id}:${expiresAt}` },
+      user: { ...state.selected, emailVerified: state.selected.emailVerified ?? true, platformRole: state.selected.platformRole ?? null, status: state.selected.status ?? 'active' }, membership: state.selected.membership ? { ...state.selected.membership, status: 'active', version: 1 } : null, permissions: state.selected.platformRole === 'owner' ? ['platform.manage','platform.impersonate'] : state.selected.membership ? ['property.read'] : [], csrfToken: 'fixture', destination: state.selected.platformRole === 'owner' ? '/platform/companies' : state.selected.membership ? '/company/properties' : '/access',
+      impersonation: { actor, expiresAt, readOnly: true, contextId: `${state.selected.id}:${expiresAt}` },
     } : { user: actor, membership: null, permissions: platformRole === 'owner' ? ['platform.manage', 'platform.impersonate'] : platformRole === 'support' ? ['platform.impersonate'] : ['property.read'], csrfToken: 'fixture', destination: '/platform/impersonation', impersonation: null });
     if (path === '/api/account/guide') { state.guideRequests++; return json({ eligible: false, steps: [] }); }
     if (path === '/api/impersonation/users') {
       state.queries.push(url.searchParams);
-      return json({ items: [target], nextCursor: url.searchParams.has('cursor') ? null : 'fixture-cursor' });
+      return json({ items: state.targets, nextCursor: url.searchParams.has('cursor') ? null : 'fixture-cursor' });
     }
-    if (path === '/api/impersonation' && request.method() === 'POST') { state.starts.push(request.postDataJSON()); state.acting = true; return json({ destination: '/company/properties' }); }
+    if (path === '/api/impersonation' && request.method() === 'POST') { state.starts.push(request.postDataJSON()); state.selected = state.targets.find(p=>p.id===request.postDataJSON().userId); state.acting = true; return json({ destination: state.selected.platformRole === 'owner' ? '/platform/companies' : state.selected.membership ? '/company/properties' : '/access' }); }
     if (path === '/api/impersonation' && request.method() === 'DELETE') { state.stops++; if (state.failStop) return json({ error: 'Temporary failure. Retry ending the session.' }, 503); state.acting = false; return json({ destination: '/platform/impersonation' }); }
     if (path === '/api/platform/support-access') return json({ items: [{ ...actor, id: 'fictional-colleague', name: 'Fictional colleague', platformRole: state.support.length ? 'support' : null, hasIdentity: true, updatedAt: '2026-10-24T12:00:00.000Z' }], nextCursor: null });
     if (path.endsWith('/support-access') && request.method() === 'PATCH') { state.support.push(request.postDataJSON()); return json({ success: true }); }
@@ -165,4 +165,43 @@ test('a cross-tab support change hides private work before cancelled reload and 
   expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem('context-unload-proof')!))).toEqual({ privateVisible: false, replyVisible: false, journal });
   expect(state.posts).toHaveLength(1);
   await other.close();
+});
+
+
+test('platform owner target directory shows platform and no-company accounts without enabling nested support actions', async ({page,context})=>{
+ const state=await setup(context);
+ state.targets=[{id:'unassigned',name:'Unassigned account',email:'unassigned@test.invalid',status:'disabled',emailVerified:false,platformRole:null,membership:null},{id:'second-owner',name:'Other platform owner',email:'owner@test.invalid',status:'active',emailVerified:true,platformRole:'owner',membership:null}];
+ await page.goto('/platform/impersonation');
+ await expect(page.getByText('Platform owners can inspect any recorded account',{exact:false})).toBeVisible();
+ const unassigned=page.getByRole('row').filter({hasText:'Unassigned account'});await expect(unassigned).toContainText('Disabled account');await expect(unassigned).toContainText('No company assigned');await expect(unassigned).toContainText('Email not verified');
+ await page.getByRole('button',{name:'View as Other platform owner',exact:true}).click();
+ const dialog=page.getByRole('dialog',{name:'Start impersonation',exact:true});await expect(dialog).toContainText('Platform owner');
+ await dialog.getByLabel('Support case or testing reason',{exact:true}).fill('Inspect recorded platform role');await dialog.getByRole('button',{name:'Start read-only session',exact:true}).click();
+ await expect(page).toHaveURL(/platform\/companies$/);await expect(page.getByRole('region',{name:'Impersonation session'})).toContainText('Platform owner');
+ await page.goto('/platform/impersonation');
+ await expect(page.getByRole('button',{name:'View as Unassigned account',exact:true})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'Grant support access for Fictional colleague',exact:true})).toBeDisabled();
+ expect(state.starts).toHaveLength(1);expect(state.support).toHaveLength(0);
+});
+
+test('company ownership alone exposes no platform support or impersonation controls',async({page,context})=>{
+ let platformRequests=0;
+ await context.route('**/api/**',route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path==='/api/bootstrap')return route.fulfill({json:{user:{id:'company-owner',email:'company-owner@test.invalid',name:'Company owner',status:'active',emailVerified:true,platformRole:null},membership:{companyId:company.id,role:'owner',status:'active',version:1,company},permissions:['property.read','company.manage','members.manage'],csrfToken:'fixture',destination:'/company/overview'}});
+  if(path.startsWith('/api/impersonation')||path.startsWith('/api/platform/support-access'))platformRequests++;
+  return route.fulfill({json:[]});
+ });
+ await page.goto('/platform/impersonation');await expect(page.getByText('Your account does not currently have access to this page.')).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Support access',exact:true})).toHaveCount(0);expect(platformRequests).toBe(0);
+ await expect(page.getByRole('link',{name:'Impersonation',exact:true})).toHaveCount(0);
+});
+
+test('a linked separate support grant review retains the exact target filter',async({page,context})=>{
+ await setup(context);const queries:string[]=[];
+ await context.route('**/api/platform/support-access?**',route=>{queries.push(new URL(route.request().url()).searchParams.get('userId')||'');return route.fulfill({json:{items:[{id:'linked-support',name:'Linked support user',email:'linked@test.invalid',status:'active',emailVerified:true,platformRole:'support',hasIdentity:true,updatedAt:'2026-10-24T12:00:00.000Z'}],nextCursor:null}});});
+ await page.goto('/platform/impersonation?supportUserId=linked-support');
+ await expect(page.getByText('Reviewing the linked account’s separate platform support grant.',{exact:false})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Revoke support access for Linked support user',exact:true})).toBeVisible();expect(queries).toContain('linked-support');
+ await page.getByRole('button',{name:'Show all support accounts',exact:true}).click();await expect(page).not.toHaveURL(/supportUserId=/);await expect.poll(()=>queries.at(-1)).toBe('');
 });

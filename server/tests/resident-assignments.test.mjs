@@ -13,6 +13,7 @@ async function fixture(t, actor = person('owner','owner')) {
     user: {findUnique:async({where})=>users.get(where.id), update:async({where,data})=>Object.assign(users.get(where.id),data)},
     company: {findUnique:async({where})=>({id:where.id,status:'active'})},
     companySubscription: {findUnique:async()=>null},
+    manualPasswordOperation: {findFirst:async()=>null},
     residentContact: {
       findUnique:async({where})=>contacts.find(c=>c.companyId===where.companyId_userId.companyId&&c.userId===where.companyId_userId.userId),
       create:async({data})=>{assert.equal(company,data.companyId);const row={id:'contact-'+contacts.length,...data};contacts.push(row);return row;},

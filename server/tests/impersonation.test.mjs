@@ -11,7 +11,7 @@ import { registerSessions, digest } from '../dist/sessions.js';
 import { registerBrowserTelemetry } from '../dist/browser-telemetry.js';
 
 const url = process.env.TEST_IMPERSONATION_DATABASE_URL;
-test('impersonation preserves identity, company and read-only support boundaries', { skip: !url }, async t => {
+test('impersonation preserves identity, company and read-only owner/support boundaries', { skip: !url }, async t => {
   const target = new URL(url);
   assert.equal(target.hostname, '127.0.0.1');
   assert.equal(target.pathname, '/propertyflow_impersonation_test');
@@ -75,7 +75,13 @@ test('impersonation preserves identity, company and read-only support boundaries
 
   await t.test('only platform owner/support can select active verified company users', async () => {
     assert.equal((await call(null, 'GET', '/api/impersonation/users')).statusCode, 401);
-    for (const role of ['owner', 'manager', 'staff', 'resident']) assert.equal((await call(role, 'GET', '/api/impersonation/users')).statusCode, 403);
+    for (const role of ['owner', 'manager', 'staff', 'resident']) {
+      assert.equal((await call(role, 'GET', '/api/impersonation/users')).statusCode, 403);
+      assert.equal((await call(role, 'GET', '/api/platform/support-access')).statusCode, 403);
+      assert.equal((await call(role, 'POST', '/api/impersonation', { userId:'manager',reason:'Company role grants no platform authority' })).statusCode,403);
+    }
+    assert.equal((await call('owner','GET','/api/platform/support-access?userId=support')).statusCode,403);
+    assert.deepEqual(ok(await call('platform','GET','/api/platform/support-access?userId=support')).items.map(u=>u.id),['support']);
     const directory = ok(await call('support', 'GET', '/api/impersonation/users'));
     assert.deepEqual(directory.items.map(u => u.id).sort(), ['foreign', 'manager', 'other-resident', 'owner', 'resident', 'staff']);
     assert.equal(JSON.stringify(directory).includes('managementNotes'), false);
@@ -87,6 +93,7 @@ test('impersonation preserves identity, company and read-only support boundaries
   await t.test('owner delegates support without company or owner authority, version checks and atomic audits', async () => {
     const updatedAt = await supportVersion('candidate');
     const payload = { enabled: true, updatedAt };
+    assert.equal((await call('owner','PATCH','/api/platform/users/candidate/support-access',payload)).statusCode,403);
     assert.equal((await call('support', 'PATCH', '/api/platform/users/candidate/support-access', payload)).statusCode, 403);
     for (const extra of [{ origin: 'https://evil.test' }, { 'x-csrf-token': 'bad' }]) assert.equal((await call('platform', 'PATCH', '/api/platform/users/candidate/support-access', payload, extra)).statusCode, 403);
     assert.equal((await call('platform', 'PATCH', '/api/platform/users/platform/support-access', { enabled: false, updatedAt: await supportVersion('platform') })).statusCode, 403);
@@ -105,14 +112,60 @@ test('impersonation preserves identity, company and read-only support boundaries
     assert.equal((await db.user.findUniqueOrThrow({ where: { id: 'candidate' } })).platformRole, 'support');
   });
 
-  await t.test('target restrictions, CSRF and malformed input cannot create an impersonation', async () => {
+  await t.test('delegated support target restrictions, CSRF and malformed input cannot create an impersonation', async () => {
     for (const userId of ['platform', 'support', 'candidate', 'unverified', 'disabled', 'suspended-member', 'noidentity', 'missing']) {
-      const result = await call('platform', 'POST', '/api/impersonation', { userId, reason: 'Support test' });
+      const result = await call('support', 'POST', '/api/impersonation', { userId, reason: 'Support test' });
       assert.equal(result.statusCode, 403, `${userId}: ${result.body}`);
     }
     for (const extra of [{ origin: 'https://evil.test' }, { 'x-csrf-token': 'bad' }]) assert.equal((await call('platform', 'POST', '/api/impersonation', { userId: 'manager', reason: 'Support test' }, extra)).statusCode, 403);
     for (const payload of [{ userId: 'manager', reason: '' }, { userId: 'manager', reason: 'x'.repeat(201) }, { userId: 'manager', reason: 'Support test', role: 'owner' }]) assert.equal((await call('platform', 'POST', '/api/impersonation', payload)).statusCode, 400);
     assert.equal((await db.session.findUniqueOrThrow({ where: { tokenHash: digest('token-platform') } })).impersonatedUserId, null);
+  });
+
+  await t.test('platform owner can view every recorded account without activating or granting target access', async () => {
+    await db.company.create({ data: { id:'deleted-company',name:'Deleted context fixture',status:'deleted',deletedAt:new Date(),deletedById:'platform',deletionSubmissionKey:'fixture',deletionSubmissionHash:'fixture' } });
+    await db.user.create({ data: { id:'deleted-company-member',email:'deleted-company-member@test.invalid',emailVerified:true,membership:{create:{companyId:'deleted-company',role:'manager'}} } });
+    await db.user.create({ data: { id:'disabled-membership',email:'disabled-membership@test.invalid',emailVerified:true,membership:{create:{companyId:'a',role:'manager',status:'disabled'}} } });
+    const all = ok(await call('platform', 'GET', '/api/impersonation/users')).items;
+    for (const id of ['platform', 'support', 'candidate', 'unverified', 'disabled', 'suspended-member', 'noidentity', 'deleted-company-member', 'disabled-membership']) assert.ok(all.some(user => user.id === id), id);
+    assert.equal((await call('platform', 'POST', '/api/impersonation', { userId: 'missing', reason: 'Unknown target' })).statusCode, 403);
+    for (const id of ['platform', 'support', 'candidate', 'unverified', 'disabled', 'suspended-member', 'noidentity', 'deleted-company-member', 'disabled-membership']) {
+      const before = await db.user.findUniqueOrThrow({ where: { id } });
+      const b = await start('platform', id);
+      assert.equal(b.user.id, id);assert.equal(b.impersonation.unavailable, false);
+      assert.equal(b.user.status, before.status);assert.equal(b.user.emailVerified, before.emailVerified);assert.equal(b.user.platformRole, before.platformRole);
+      if (['unverified', 'disabled', 'noidentity', 'deleted-company-member', 'disabled-membership'].includes(id)) assert.deepEqual(b.permissions, []);
+      if (id === 'platform') {
+        assert.ok(b.permissions.includes('platform.manage'));
+        assert.equal((await call('platform', 'GET', '/api/platform/companies')).statusCode, 200);
+        assert.equal((await call('platform', 'GET', '/api/platform/companies/a')).statusCode, 200);
+        const view = await db.auditEvent.findFirstOrThrow({ where: { action: 'platform.company.viewed', companyId: 'a' }, orderBy: { createdAt: 'desc' } });
+        assert.equal(view.actorId, 'platform');assert.equal(view.detail.impersonatedUserId, id);
+      }
+      for (const [method,path] of [['POST','/api/impersonation'], ['POST','/api/account/verification'], ['PATCH','/api/platform/users/manager/support-access']])
+        assert.equal((await call('platform', method, path, {})).json().code, 'IMPERSONATION_READ_ONLY');
+      await stop('platform');
+      // Starting/stopping an owner view changes only the actor's session/audit.
+      assert.deepEqual(await db.user.findUniqueOrThrow({ where: { id } }), before);
+    }
+    await db.user.create({ data: { id: 'another-platform-owner', email: 'other-platform@test.invalid', emailVerified: true, platformRole: 'owner' } });
+    const b = await start('platform', 'another-platform-owner');assert.ok(b.permissions.includes('platform.manage'));
+    ok(await call('platform', 'GET', '/api/platform/companies/a'));
+    const viewed = await db.auditEvent.findFirstOrThrow({ where: { action: 'platform.company.viewed', companyId: 'a' }, orderBy: { createdAt: 'desc' } });
+    assert.equal(viewed.actorId, 'platform');assert.equal(viewed.detail.impersonatedUserId, 'another-platform-owner');
+    await stop('platform');
+  });
+
+  await t.test('unassigned owner view pins the absence of company access and owner downgrade cannot retain broad targets', async () => {
+    await start('platform', 'noidentity');
+    await db.companyMembership.create({ data: { userId: 'noidentity', companyId: 'b', role: 'staff' } });
+    assert.equal((await bootstrap('platform')).impersonation.unavailable, true);
+    await stop('platform');await db.companyMembership.delete({ where: { userId: 'noidentity' } });
+    await start('platform', 'another-platform-owner');
+    await admin.query('UPDATE "User" SET "platformRole"=\'support\' WHERE id=\'platform\'');
+    const denied = await bootstrap('platform');assert.equal(denied.impersonation.unavailable, true);assert.deepEqual(denied.permissions, []);
+    assert.equal((await call('platform', 'GET', '/api/platform/companies')).statusCode, 403);
+    await stop('platform');await admin.query('UPDATE "User" SET "platformRole"=\'owner\' WHERE id=\'platform\'');
   });
 
   await t.test('staff sees its real property grants and cannot inherit original platform access', async () => {
@@ -285,6 +338,34 @@ test('impersonation preserves identity, company and read-only support boundaries
         if (pending) await pending;
         await admin.query('UPDATE "User" SET "platformRole"=\'support\' WHERE id=\'support\'');
         await stop('support');
+      }
+    }
+  });
+
+  await t.test('queued platform-target reads recheck separately committed owner revocation and context expiry', async () => {
+    for (const change of ['owner-revoked','context-expired']) {
+      await start('platform', 'another-platform-owner');
+      const beforeAudit=await db.auditEvent.count({where:{action:'platform.company.viewed',companyId:'a'}});
+      const leader = await admin.connect();let pending;
+      try {
+        await leader.query('BEGIN');const pid = (await leader.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+        // A pure row lock changes no target tuple. It cannot itself force the
+        // reader's Serializable snapshot to refresh after actor/session changes.
+        await leader.query('SELECT id FROM "User" WHERE id=\'another-platform-owner\' FOR UPDATE');
+        pending = call('platform', 'GET', '/api/platform/companies/a');
+        let blocked = false;
+        for (let i=0;i<150;i++) { blocked=(await admin.query('SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))) blocked',[pid])).rows[0].blocked;if(blocked)break;await new Promise(r=>setTimeout(r,10)); }
+        assert.equal(blocked,true,'platform read must queue at the effective target fence');
+        // Commit revocation on another connection only after authentication and
+        // the read transaction's target lock are observably in flight.
+        if(change==='owner-revoked') await admin.query('UPDATE "User" SET "platformRole"=NULL WHERE id=\'platform\'');
+        else await admin.query('UPDATE "Session" SET "impersonationExpiresAt"=NOW()-interval \'1 second\' WHERE "userId"=\'platform\'');
+        await leader.query('COMMIT');const result=await pending;
+        assert.equal(result.statusCode,403,`${change}: ${result.body}`);assert.equal(result.json().code,'IMPERSONATION_UNAVAILABLE');
+        assert.equal(await db.auditEvent.count({where:{action:'platform.company.viewed',companyId:'a'}}),beforeAudit);
+      } finally {
+        await leader.query('ROLLBACK');leader.release();if(pending)await pending;
+        await admin.query('UPDATE "User" SET "platformRole"=\'owner\' WHERE id=\'platform\'');await stop('platform');
       }
     }
   });
