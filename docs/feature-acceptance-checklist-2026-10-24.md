@@ -44,6 +44,8 @@ Record actual acceptance: release SHA/environment/schema ____ · date ____ · te
 
 ## Release/schema/configuration gates
 
+For the combined October25 PR batch, use the [current deployment prerequisites and Actions UI inputs](deploy-october-25-batch.md). PR68 adds migration057 and replaces the earlier scanner prerequisite with explicit unscanned status; retain demo migration056 unchanged. Older validation counts below describe their dated snapshots.
+
 - [ ] **Before merge or backend start, inspect deployment guards and the target ledger/restore point.** A push/merge to `main` starts [Deploy Dev](../.github/workflows/deploy-dev.yml). Its current database-start, Terraform-apply, backend/frontend deployment and release-recording actions require `workflow_dispatch` with `plan_only` false; a main push alone does not currently roll out the backend. Recheck those guards before merging or dispatching, because backend startup automatically migrates. Feature-branch/PR pushes run CI without deployment.
 - [ ] **Before backend startup, inspect full migration names and actual schema.** Startup automatically runs migrations. If the target or preserved preview has applied any PR #60 `202610220041_maintenance_conversations` through `202610220045_rental_listing_intent` migration or corresponding schema, **stop before applying the October 24 chain**: a reviewed reconciliation is required. Ordinals 041–045 alone are ambiguous; do not combine or blindly renumber these chains. Preserve PR #60 preview/data. [PR #60 comparison and deployment gate](PR60-integration-review-2026-10-24.md).
 - [ ] Confirm the actual deployed SHA and migration history against the chosen branch. Base `75d5342` includes PR59/038–040; a target still on `1945049` without the PR #60 chain may need all pending base migrations and the current October 24 041–053 chain. Do not infer deployed state from merged main or dated screenshots.
@@ -84,6 +86,8 @@ Apply only pending full names after the target-ledger/schema and restore-point g
 202610240053_document_acknowledgments
 202610250054_sales_demo
 202610250055_automatic_demo_accounts
+202610250056_demo_rebuild_plans
+202610250057_retire_document_scanning
 ```
 
 ## Run each workflow across its boundaries

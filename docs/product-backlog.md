@@ -181,6 +181,8 @@ Acceptance:
 
 ### PF-15 · Private documents and attachments — P1 foundation
 
+October 25 local retirement: explicit user authorization removes scanning, adds immutable unscanned uploads, preserves recorded rejection/history and updates management, leaseholder, inspection/agreement and demo flows together. Migration 057 follows immutable demo migration 056 and precedes deployment; acceptance includes private upload/retry/download, exact grants, rejected-file denial and smaller task lifecycle. [Release contract](scanner-retirement.md).
+
 Current delivery: Merged/deployed: private PostgreSQL originals, immutable versions, ClamAV quarantine/scan, management library and source download. Local 046 adds explicit owner-granted access to a selected cleared lease-document version for an eligible leaseholder, with retained grant/revoke history, expiry and fresh recipient/source checks. The combined 34-check roadmap API suite and two focused sharing browser cases pass within the full 260-case browser run. Release/real-role acceptance, wider staff sharing, resident uploads, larger private object storage and retention operations remain future. [Current sharing contract and evidence](roadmap-continuation-2026-10-24.md).
 
 Audience: management and explicitly authorized tenant/staff. Dependencies: reviewed private-storage scope; PF-12 delegated authority.
@@ -340,7 +342,7 @@ Acceptance:
 
 ### PF-27 · Monitoring, recovery and release operations — P1, partial
 
-October 25 local increment: Alloy shares the existing power-controlled ECS task; guarded runtime credentials, collector readiness and a daily 3 a.m. Eastern GitHub stop schedule with manual starts is prepared. Acceptance requires an approved rollout, actual Fleet/series verification, Start/Stop proof and measured per-container scanner pressure before any memory reduction. PostgreSQL login/secret provisioning and query-level collection remain separate. [Runbook and evidence](alloy-collector.md).
+October 25 local increment: Alloy shares the existing power-controlled ECS task; guarded runtime credentials, collector readiness and a daily 3 a.m. Eastern GitHub stop schedule with manual starts is prepared. Acceptance requires an approved rollout, actual Fleet/series verification, Start/Stop proof and reduced-task capacity checks after the separately requested scanner removal. PostgreSQL login/secret provisioning and query-level collection remain separate. [Runbook and evidence](alloy-collector.md).
 
 Audience: platform operator and product team. Dependencies: the app's real workflows and separately reviewed infrastructure/provider activation.
 

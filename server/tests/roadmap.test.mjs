@@ -521,13 +521,13 @@ test('roadmap workflows preserve recorded history, property scope and retry inte
   const residentDocuments = '/api/resident/documents';
   const sharedFirst = Buffer.from('First explicitly shared fictional original.');
   const sharedLatest = Buffer.from('Later fictional original, requiring a separate reviewed share.');
-  const shareVersion = async (id, number, content, scanStatus = 'clean', documentId = 'share-document') => admin.query(
-    'INSERT INTO "DocumentVersion"(id,"companyId","documentId",number,filename,"mediaType","byteLength",sha256,content,"createdById","submissionKey","submissionHash","scanStatus","scannedAt") VALUES($1,\'a\',$2,$3,$4,\'text/plain\',$5,$6,$7,\'owner\',$1,\'fictional-fixture\',$8,NOW())',
+  const shareVersion = async (id, number, content, scanStatus = 'unscanned', documentId = 'share-document') => admin.query(
+    'INSERT INTO "DocumentVersion"(id,"companyId","documentId",number,filename,"mediaType","byteLength",sha256,content,"createdById","submissionKey","submissionHash","scanStatus","scannedAt") VALUES($1,\'a\',$2,$3,$4,\'text/plain\',$5,$6,$7,\'owner\',$1,\'fictional-fixture\',$8,CASE WHEN $8 IN (\'clean\',\'rejected\') THEN NOW() ELSE NULL END)',
     [id, documentId, number, `${id}.txt`, content.length, createHash('sha256').update(content).digest('hex'), content, scanStatus]);
   const sharePayload = (extra = {}) => ({ documentVersionId: 'share-version-1', userId: 'resident', expiresOn: shift(7), reason: 'Owner explicitly reviewed this original for the named leaseholder', expectedVersion: null, expectedDocumentVersion: 3, submissionKey: randomUUID(), ...extra });
   let primaryShare, secondaryShare, originalGrantPayload;
 
-  await t.test('lease document sharing requires owner approval, exact clean originals and current approved leaseholder authority', async () => {
+  await t.test('lease document sharing requires owner approval, exact available originals and current approved leaseholder authority', async () => {
     for (const [id, verified] of [['share-occupant', true], ['share-outsider', true], ['share-unapproved', true], ['share-removed', true], ['share-unverified', false]]) {
       await admin.query('INSERT INTO "User"(id,email,name,"emailVerified","updatedAt") VALUES($1,$2,$1,$3,NOW())', [id, `${id}@test.invalid`, verified]);
       await admin.query('INSERT INTO "CompanyMembership"("userId","companyId",role,"updatedAt") VALUES($1,\'a\',\'resident\',NOW())', [id]);
@@ -549,7 +549,7 @@ test('roadmap workflows preserve recorded history, property scope and retry inte
       await admin.query('INSERT INTO "LeaseParticipant"(id,"companyId","propertyId","leaseId","userId",name,email,role,"startsOn","portalApproved","removedAt","createdById","submissionKey","submissionHash","updatedAt") VALUES($1,\'a\',\'home\',\'share-lease\',$2,$2,$3,$4,$5,$6,$7,\'owner\',$1,\'fictional-fixture\',NOW())', [`share-participant-${userId}`, userId, `${userId}@test.invalid`, role, shift(-20), approved, removed ? new Date() : null]);
     await admin.query('INSERT INTO "PrivateDocument"(id,"companyId","leaseId",title,version) VALUES(\'share-document\',\'a\',\'share-lease\',\'Fictional explicitly shared notice\',3),(\'share-other-document\',\'a\',\'share-lease\',\'A separate private original\',1)');
     await shareVersion('share-version-1', 1, sharedFirst);
-    await shareVersion('share-version-2', 2, Buffer.from('Quarantined fictional original.'), 'pending');
+    await shareVersion('share-version-2', 2, Buffer.from('Rejected fictional historical original.'), 'rejected');
     await shareVersion('share-version-3', 3, sharedLatest);
     await shareVersion('share-other-version', 1, Buffer.from('Separate original.'), 'clean', 'share-other-document');
     const managerView = ok(await call('manager', 'GET', sharingBase));

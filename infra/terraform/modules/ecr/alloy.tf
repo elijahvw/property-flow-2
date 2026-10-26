@@ -29,8 +29,8 @@ variable "alloy_fleet_id" {
 }
 
 locals {
-  task_cpu    = var.alloy_enabled ? 1024 : 512
-  task_memory = var.alloy_enabled ? 5120 : 4096
+  task_cpu    = 512
+  task_memory = var.alloy_enabled ? 2048 : 1024
   alloy_config = templatefile("${path.module}/alloy/config.alloy.tftpl", {
     fleet_url           = var.alloy_fleet_url
     fleet_id            = var.alloy_fleet_id

@@ -1,3 +1,4 @@
+import { documentStatusLabel } from "../document-status";
 import { Link, useSearchParams } from "react-router-dom";
 import { useResource } from "../useResource";
 import { useDebouncedValue } from "../useDebouncedValue";
@@ -49,11 +50,11 @@ export function DocumentLibrary() {
         <h1>Private document library</h1>
         <p>
           Find retained files across leases and maintenance, then open their
-          source to review versions, scan, or download.
+          source to review versions or download.
         </p>
       </header>
       <p className="help">
-        Management only. Scan filters describe the latest uploaded version.
+        Management only. Files are not scanned for malware. File status describes the latest uploaded version.
         Earlier originals and scan results remain on the source record.
       </p>
       <div className="directory-toolbar">
@@ -93,16 +94,17 @@ export function DocumentLibrary() {
           </select>
         </label>
         <label>
-          Latest scan result
+          Latest file status
           <select
-            aria-label="Latest scan result"
+            aria-label="Latest file status"
             value={params.get("scan") || "all"}
             onChange={(e) => change("scan", e.target.value)}
           >
-            <option value="all">All scan results</option>
-            <option value="pending">Quarantined</option>
-            <option value="rejected">Rejected</option>
-            <option value="clean">Cleared</option>
+            <option value="all">All file statuses</option>
+            <option value="unscanned">Not scanned</option>
+            <option value="pending">Not scanned · legacy pending</option>
+            <option value="rejected">Previously rejected</option>
+            <option value="clean">Previously cleared</option>
           </select>
         </label>
         <label>
@@ -160,7 +162,7 @@ export function DocumentLibrary() {
                   <th>Document</th>
                   <th>Source</th>
                   <th>Latest version</th>
-                  <th>Scan result</th>
+                  <th>File status</th>
                 </tr>
               </thead>
               <tbody>
@@ -192,12 +194,8 @@ export function DocumentLibrary() {
                         {formatActivityDate(doc.uploadedAt)}
                       </span>
                     </td>
-                    <td data-label="Scan result">
-                      {doc.scanStatus === "clean"
-                        ? "Cleared by scanning"
-                        : doc.scanStatus === "rejected"
-                          ? "Rejected · download blocked"
-                          : "Quarantined · download blocked"}
+                    <td data-label="File status">
+                      {documentStatusLabel(doc.scanStatus)}
                       <span className="cell-detail">
                         Open the source to review retained versions.
                       </span>

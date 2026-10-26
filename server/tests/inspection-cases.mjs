@@ -1,3 +1,4 @@
+import {historicalDocument} from './historical-document-fixture.mjs';
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { chromium, expect } from "@playwright/test";
@@ -58,9 +59,10 @@ export async function inspectionCases(t, admin, db, call, app) {
     ),
     submissionKey: randomUUID(),
   });
+  const rejected = await historicalDocument(admin,{sourceId:'inspection-lease',lease:true,status:'rejected'});
   let moveIn, moveOut, baselineId;
   await t.test(
-    "inspection sources, roles, CSRF, fields and quarantined evidence are enforced",
+    "inspection sources, roles, CSRF, fields and rejected evidence are enforced",
     async () => {
       for (const role of ["staff", "resident", "other"]) {
         assert.equal((await call(role, "GET", base)).statusCode, 403);
@@ -96,7 +98,7 @@ export async function inspectionCases(t, admin, db, call, app) {
         [],
         [item(), item()],
         [item({ condition: "excellent" })],
-        [item({ evidenceVersionIds: [upload.versionId] })],
+        [item({ evidenceVersionIds: [rejected.versionId] })],
       ])
         assert.equal(
           (await call("manager", "POST", base, make({ items }))).statusCode,
@@ -117,12 +119,6 @@ export async function inspectionCases(t, admin, db, call, app) {
         (await call("manager", "GET", base + "?unknown=true")).statusCode,
         400,
       );
-      await ok(
-        "manager",
-        "POST",
-        `${docs}/${upload.documentId}/versions/${upload.versionId}/scan`,
-        {},
-      );
       const wrongSource = await ok(
         "manager",
         "POST",
@@ -134,12 +130,6 @@ export async function inspectionCases(t, admin, db, call, app) {
           contentBase64: Buffer.from("Other source").toString("base64"),
           submissionKey: randomUUID(),
         },
-      );
-      await ok(
-        "manager",
-        "POST",
-        `/api/company/leases/document-lease/documents/${wrongSource.documentId}/versions/${wrongSource.versionId}/scan`,
-        {},
       );
       assert.equal(
         (
@@ -724,7 +714,7 @@ export async function inspectionCases(t, admin, db, call, app) {
             name: "Download version 2",
             exact: true,
           }),
-        ).toHaveCount(0);
+        ).toBeVisible();
         await original.close();
         await page.screenshot({
           path: "/tmp/pf-inspections-desktop.png",

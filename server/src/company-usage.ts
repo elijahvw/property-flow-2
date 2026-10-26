@@ -56,7 +56,7 @@ async function usage(tx: Tx, companyId: string, range: ReturnType<typeof usageRa
       activeUnits: "Units currently marked active; archived units are excluded.",
       activeLeases: "Leases currently marked active; drafts and ended leases are excluded.",
       activeMembers: "Active company memberships with active accounts, across all company roles.",
-      documentVersions: "Every retained document version, including quarantined versions and versions of archived documents.",
+      documentVersions: "Every retained document version, including unscanned or historically rejected versions and versions of archived documents.",
       documentBytes: "Stored bytes across all retained document versions.",
     },
     trackingStartedAt: first?.day.toISOString() ?? null,

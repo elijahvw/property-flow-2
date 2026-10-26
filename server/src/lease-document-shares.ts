@@ -6,6 +6,7 @@ import { assignmentId, opaqueUserId } from "./application.js";
 import { audit, boundedText, conflict, date, input, mutation, sameSubmission, scoped, submission, version, type Tx } from "./operational.js";
 import { sharedLeaseAccess } from "./lease-participants.js";
 import { companyDay } from "./reports.js";
+import { availableDocumentStatuses, documentAvailable } from "./document-status.js";
 
 const grantSelect = { id: true, companyId: true, leaseId: true, documentId: true, documentVersionId: true, userId: true, version: true, expiresOn: true, reason: true, revokedAt: true, receivedAt: true, createdAt: true } as const;
 type Grant = Prisma.LeaseDocumentShareGetPayload<{ select: typeof grantSelect }>;
@@ -52,7 +53,7 @@ async function grantDto(tx: Tx, companyId: string, row: Grant, day: Date) {
     eligibleLease(tx, companyId, row.leaseId, row.userId, day),
   ]);
   const live = access && await eligibleResident(tx, companyId, row.userId);
-  const status = row.revokedAt ? "revoked" : row.expiresOn < day ? "expired" : !document || document.archivedAt || versionRow?.scanStatus !== "clean" || !live ? "unavailable" : "active";
+  const status = row.revokedAt ? "revoked" : row.expiresOn < day ? "expired" : !document || document.archivedAt || !versionRow || !documentAvailable(versionRow.scanStatus) || !live ? "unavailable" : "active";
   return { ...row, expiresOn: row.expiresOn.toISOString().slice(0, 10), recipient, versionNumber: versionRow?.number ?? null, filename: versionRow?.filename ?? null, status };
 }
 
@@ -102,7 +103,7 @@ export function registerLeaseDocumentShares(server: FastifyInstance, db: PrismaC
       if (!await eligibleResident(tx, companyId, payload.userId) || !await eligibleLease(tx, companyId, leaseId, payload.userId, day)) throw new AccessError(409, "RECIPIENT_UNAVAILABLE", "Choose a currently approved leaseholder with verified account and property access on this active or upcoming lease.");
       const original = await tx.documentVersion.findFirst({ where: { id: payload.documentVersionId, companyId, documentId }, select: { id: true, scanStatus: true } });
       if (!original) throw missing();
-      if (original.scanStatus !== "clean") throw new AccessError(409, "FILE_QUARANTINED", "Only this exact original cleared by scanning can be shared.");
+      if (!documentAvailable(original.scanStatus)) throw new AccessError(409, "FILE_QUARANTINED", "An original with a recorded rejection or unavailable file status cannot be shared.");
       const current = await tx.leaseDocumentShare.findUnique({ where: { companyId_documentVersionId_userId: { companyId, documentVersionId: payload.documentVersionId, userId: payload.userId } }, select: grantSelect });
       if ((current?.version ?? null) !== payload.expectedVersion) throw conflict();
       const row = current ? await tx.leaseDocumentShare.update({ where: { id: current.id, companyId }, data: { expiresOn: payload.expiresOn, reason: payload.reason, revokedAt: null, receivedAt: null, version: { increment: 1 } }, select: grantSelect }) : await tx.leaseDocumentShare.create({ data: { companyId, leaseId, documentId, documentVersionId: payload.documentVersionId, userId: payload.userId, expiresOn: payload.expiresOn, reason: payload.reason, createdById: request.principal!.id }, select: grantSelect });
@@ -138,10 +139,10 @@ export function registerLeaseDocumentShares(server: FastifyInstance, db: PrismaC
     });
   });
   function visible(companyId: string, userId: string, day: Date): Prisma.LeaseDocumentShareWhereInput {
-    return { companyId, userId, revokedAt: null, expiresOn: { gte: day }, document: { companyId, archivedAt: null }, documentVersion: { companyId, scanStatus: "clean" }, lease: { companyId, status: "active", AND: [sharedLeaseAccess(companyId, userId, day), { OR: [{ endsOn: null }, { endsOn: { gte: day } }] }] } };
+    return { companyId, userId, revokedAt: null, expiresOn: { gte: day }, document: { companyId, archivedAt: null }, documentVersion: { companyId, scanStatus: { in: availableDocumentStatuses } }, lease: { companyId, status: "active", AND: [sharedLeaseAccess(companyId, userId, day), { OR: [{ endsOn: null }, { endsOn: { gte: day } }] }] } };
   }
-  const residentSelect = { id: true, version: true, receivedAt: true, createdAt: true, expiresOn: true, document: { select: { title: true } }, documentVersion: { select: { number: true, filename: true, mediaType: true, byteLength: true } }, lease: { select: { id: true, property: { select: { name: true } }, unit: { select: { label: true } } } } } as const;
-  const residentDto = (row: Prisma.LeaseDocumentShareGetPayload<{ select: typeof residentSelect }>) => ({ id: row.id, version: row.version, receivedAt: row.receivedAt, sharedAt: row.createdAt, title: row.document.title, versionNumber: row.documentVersion.number, filename: row.documentVersion.filename, mediaType: row.documentVersion.mediaType, byteLength: row.documentVersion.byteLength, expiresOn: row.expiresOn.toISOString().slice(0, 10), lease: row.lease });
+  const residentSelect = { id: true, version: true, receivedAt: true, createdAt: true, expiresOn: true, document: { select: { title: true } }, documentVersion: { select: { number: true, filename: true, mediaType: true, byteLength: true, scanStatus: true } }, lease: { select: { id: true, property: { select: { name: true } }, unit: { select: { label: true } } } } } as const;
+  const residentDto = (row: Prisma.LeaseDocumentShareGetPayload<{ select: typeof residentSelect }>) => ({ id: row.id, version: row.version, receivedAt: row.receivedAt, sharedAt: row.createdAt, title: row.document.title, versionNumber: row.documentVersion.number, filename: row.documentVersion.filename, mediaType: row.documentVersion.mediaType, byteLength: row.documentVersion.byteLength, scanStatus: row.documentVersion.scanStatus, expiresOn: row.expiresOn.toISOString().slice(0, 10), lease: row.lease });
   server.get("/api/resident/documents", auth, request => {
     const cursor = after(request, ["q"]), query = request.query as { q?: unknown };
     if (query.q !== undefined && (typeof query.q !== "string" || query.q.length > 160 || /[\u0000-\u001f\u007f]/.test(query.q))) throw new AccessError(400, "INVALID_INPUT", "Search shared documents with up to 160 characters.");

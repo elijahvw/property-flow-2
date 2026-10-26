@@ -1,3 +1,4 @@
+import {historicalDocument} from './historical-document-fixture.mjs';
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { chromium, expect } from "@playwright/test";
@@ -147,7 +148,7 @@ export async function agreementCases(t, admin, db, call, app) {
     },
   );
   await t.test(
-    "preparation validates source fields, retains quarantine and requires deliberate review",
+    "preparation validates source fields, retains historical rejections and requires deliberate review",
     async () => {
       for (const patch of [
         { status: "signed" },
@@ -184,11 +185,11 @@ export async function agreementCases(t, admin, db, call, app) {
         "manager",
         "POST",
         base,
-        make({ title: "Quarantined draft" }),
+        make({ title: "Rejected historical original", documentVersionIds: [(await historicalDocument(admin,{sourceId:"agreement-lease",lease:true,status:"rejected"})).versionId] }),
       );
       let d = await detail(pending.agreementId);
       assert.equal(d.agreement.status, "preparing");
-      assert.ok(d.blockers.some((b) => b.includes("scanning")));
+      assert.ok(d.blockers.some((b) => b.includes("recorded rejection")));
       assert.equal(d.signature.signed, false);
       assert.equal(
         (
@@ -213,15 +214,9 @@ export async function agreementCases(t, admin, db, call, app) {
         }),
       );
       assert.equal((await detail(incomplete.agreementId)).blockers.length, 3);
-      await ok(
-        "manager",
-        "POST",
-        `${docs}/${file.documentId}/versions/${file.versionId}/scan`,
-        {},
-      );
       d = await detail(pending.agreementId);
-      assert.equal(d.sourceChanged, true);
-      assert.equal(d.blockers.length, 0);
+      assert.equal(d.sourceChanged, false);
+      assert.ok(d.blockers.some(b => b.includes("recorded rejection")));
     },
   );
   await t.test(
@@ -503,16 +498,10 @@ export async function agreementCases(t, admin, db, call, app) {
       assert.equal(d.sourceChanged, false);
       assert.equal(d.blockers.length, 0);
       assert.equal(d.agreement.source.files[0].id, file.versionId);
-      assert.equal(d.agreement.source.files[0].latest.scanStatus, "pending");
+      assert.equal(d.agreement.source.files[0].latest.scanStatus, "unscanned");
       await act(id, "submit");
       await act(id, "approve");
-      await ok(
-        "manager",
-        "POST",
-        `${docs}/${file.documentId}/versions/${secondFile.versionId}/scan`,
-        {},
-      );
-      assert.equal((await detail(id)).sourceChanged, true);
+      assert.equal((await detail(id)).sourceChanged, false);
       assert.equal(
         (
           await call(
@@ -841,10 +830,10 @@ export async function agreementCases(t, admin, db, call, app) {
     async () => {
       const newFile = await ok("manager", "POST", docs, {
         title: "Agreement original",
-        filename: "newer-quarantined.txt",
+        filename: "newer-unscanned.txt",
         mediaType: "text/plain",
         contentBase64: Buffer.from(
-          "Newer fictional quarantined original",
+          "Newer fictional unscanned original",
         ).toString("base64"),
         documentId: file.documentId,
         expectedVersion: 4,
@@ -1026,7 +1015,7 @@ export async function agreementCases(t, admin, db, call, app) {
             name: "Download version 3",
             exact: true,
           }),
-        ).toHaveCount(0);
+        ).toBeVisible();
         await original
           .getByRole("button", { name: "Agreements", exact: true })
           .click();

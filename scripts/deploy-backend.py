@@ -32,22 +32,15 @@ def candidate(definition, image, endpoint, alloy_enabled=None):
         raise ValueError("Unexpected task family.")
     containers = definition["containerDefinitions"]
     names = [container["name"] for container in containers]
-    if names not in (["app"], ["app", "document-scanner"], ["app", "document-scanner", "alloy"]):
+    if names not in (["app"], ["app", "alloy"]):
         raise ValueError(
             "Apply the reviewed infrastructure before deploying the backend."
         )
     app = containers[0]
     if alloy_enabled is not None and ("alloy" in names) != alloy_enabled:
         raise ValueError("Apply the reviewed Alloy infrastructure setting before deploying the backend.")
-    if len(containers) >= 2:
-        scanner = containers[1]
-        if not re.fullmatch(r"clamav/clamav@sha256:[a-f0-9]{64}", scanner.get("image", "")) or scanner.get("portMappings"):
-            raise ValueError("The private scanner must use a pinned official image without exposed ports.")
-        scanner_env = {row["name"]: row["value"] for row in scanner.get("environment", [])}
-        if scanner_env.get("CLAMD_CONF_TCPAddr") != "127.0.0.1":
-            raise ValueError("The scanner must listen only on task loopback.")
     if "alloy" in names:
-        alloy = containers[2]
+        alloy = containers[1]
         if (alloy.get("image") != "grafana/alloy:v1.21.1" or alloy.get("essential") is not False
                 or alloy.get("portMappings") or not alloy.get("healthCheck")):
             raise ValueError("Alloy must use the reviewed image, private readiness check and nonessential lifecycle.")

@@ -1,5 +1,7 @@
 # Development Alloy collector and scanner review
 
+The separate [scanner-retirement follow-up](scanner-retirement.md) removes ClamAV at the user’s request and supersedes the sizing below: 0.5 vCPU/1 GiB for the app, or 0.5 vCPU/2 GiB with Alloy. Its unscanned-file workflow and migration must ship together. The original sizing/review evidence below describes the preceding proposal.
+
 Prepared locally on October 25, 2026. No infrastructure apply, live schedule activation,
 collector connection or scanner resource reduction is claimed. This refines
 PF-27 monitoring and reviews PF-15 scanner operations.

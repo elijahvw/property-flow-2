@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-export async function privateDocumentCases(t,admin,db,call,id,scanControl){
+import {historicalDocument} from './historical-document-fixture.mjs';
+export async function privateDocumentCases(t,admin,db,call,id){
  const base=`/api/company/maintenance/${id}/documents`, payload=()=>({title:'Repair report',filename:'repair.txt',mediaType:'text/plain',contentBase64:Buffer.from('Fictional isolated repair report.').toString('base64'),submissionKey:randomUUID()});
  let documentId,versionId;
  await t.test('private uploads validate content, scope, roles, size and request integrity',async()=>{
@@ -13,19 +14,27 @@ export async function privateDocumentCases(t,admin,db,call,id,scanControl){
   for(const result of attempts)assert.equal(result.statusCode,200,result.body);
   assert.equal(new Set(attempts.map(r=>r.json().versionId)).size,1);({documentId,versionId}=attempts[0].json());
   assert.equal((await call('manager','POST',base,{...first,title:'Changed'})).statusCode,409);
-  const list=(await call('manager','GET',base)).json();assert.equal(list.items.length,1);assert.equal(list.items[0].versions[0].scanStatus,'pending');assert.ok(!JSON.stringify(list).includes('contentBase64'));assert.ok(!JSON.stringify(list).includes('submission'));
-  assert.equal((await call('manager','GET',`${base}/${documentId}/versions/${versionId}/download`)).statusCode,409);
+  const list=(await call('manager','GET',base)).json();assert.equal(list.items.length,1);assert.equal(list.items[0].versions[0].scanStatus,'unscanned');assert.ok(!JSON.stringify(list).includes('contentBase64'));assert.ok(!JSON.stringify(list).includes('submission'));
+  assert.equal((await call('manager','GET',`${base}/${documentId}/versions/${versionId}/download`)).statusCode,200);
   assert.equal((await admin.query('SELECT count(*)::int n FROM "AuditEvent" WHERE action=\'document.uploaded\' AND "targetId"=$1',[documentId])).rows[0].n,1);
  });
- await t.test('scan outages remain quarantined; only cleared originals download and are audited',async()=>{
-  scanControl.fail=true;assert.equal((await call('manager','POST',`${base}/${documentId}/versions/${versionId}/scan`,{})).statusCode,503);scanControl.fail=false;
-  assert.equal((await call('manager','GET',`${base}/${documentId}/versions/${versionId}/download`)).statusCode,409);
-  for(let i=0;i<2;i++)assert.equal((await call('manager','POST',`${base}/${documentId}/versions/${versionId}/scan`,{})).json().scanStatus,'clean');
-  const download=await call('manager','GET',`${base}/${documentId}/versions/${versionId}/download`);assert.equal(download.statusCode,200);assert.equal(Buffer.from(download.json().contentBase64,'base64').toString(),'Fictional isolated repair report.');assert.match(download.headers['cache-control'],/no-store/);
-  assert.equal((await admin.query('SELECT count(*)::int n FROM "AuditEvent" WHERE action=\'document.scanned\' AND "targetId"=$1',[documentId])).rows[0].n,1);
-  const bad=await call('manager','POST',base,{...payload(),title:'Malware fixture',contentBase64:Buffer.from('EICAR fixture only').toString('base64')});assert.equal(bad.statusCode,200,bad.body);const rejected=bad.json();
-  assert.equal((await call('owner','POST',`${base}/${rejected.documentId}/versions/${rejected.versionId}/scan`,{})).json().scanStatus,'rejected');
-  assert.equal((await call('owner','GET',`${base}/${rejected.documentId}/versions/${rejected.versionId}/download`)).statusCode,409);
+ await t.test('uploads are honestly unscanned, downloadable and audited without a scanner',async()=>{
+  const download=await call('manager','GET',`${base}/${documentId}/versions/${versionId}/download`);
+  assert.equal(download.statusCode,200);assert.equal(Buffer.from(download.json().contentBase64,'base64').toString(),'Fictional isolated repair report.');assert.match(download.headers['cache-control'],/no-store/);assert.equal(download.headers['x-content-type-options'],'nosniff');
+  assert.equal((await call('manager','POST',`${base}/${documentId}/versions/${versionId}/scan`,{})).statusCode,404);
+  const stored=(await admin.query('SELECT "scanStatus","scannedAt" FROM "DocumentVersion" WHERE id=$1',[versionId])).rows[0];
+  assert.deepEqual(stored,{scanStatus:'unscanned',scannedAt:null});
+  assert.equal((await admin.query('SELECT count(*)::int n FROM "AuditEvent" WHERE action=\'document.scanned\' AND "targetId"=$1',[documentId])).rows[0].n,0);
+  for(const actor of ['staff','other'])assert.equal((await call(actor,'GET',`${base}/${documentId}/versions/${versionId}/download`)).statusCode,403);
+  assert.equal((await call('manager','POST',base,{...payload(),scanStatus:'clean'})).statusCode,400);
+  await assert.rejects(admin.query('UPDATE "DocumentVersion" SET "scanStatus"=\'clean\',"scannedAt"=NOW() WHERE id=$1',[versionId]),/immutable/);
+ });
+ await t.test('historical verdicts stay unchanged; known rejected originals remain blocked',async()=>{
+  for(const status of ['pending','clean','rejected']){
+   const file=await historicalDocument(admin,{sourceId:id,status});
+   assert.equal((await call('owner','GET',`${base}/${file.documentId}/versions/${file.versionId}/download`)).statusCode,status==='rejected'?409:200);
+   assert.equal((await admin.query('SELECT "scanStatus" FROM "DocumentVersion" WHERE id=$1',[file.versionId])).rows[0].scanStatus,status);
+  }
  });
  await t.test('versions, archive and originals survive retries, conflicts and direct mutation attempts',async()=>{
   const newer={...payload(),documentId,expectedVersion:1,contentBase64:Buffer.from('Version two isolated report').toString('base64')};
@@ -50,13 +59,6 @@ export async function privateDocumentCases(t,admin,db,call,id,scanControl){
   await admin.query(`UPDATE "CompanyMembership" SET status='disabled' WHERE "userId"='manager'`);
   assert.equal((await call('manager','GET',`${base}/${documentId}/versions/${versionId}/download`)).statusCode,403);
   await admin.query(`UPDATE "CompanyMembership" SET status='active' WHERE "userId"='manager'`);
- });
- await t.test('scan publication rechecks access after provider work without holding locks',async()=>{
-  const uploaded=(await call('manager','POST',base,payload())).json();
-  let release,reached;const ready=new Promise(r=>reached=r),gate=new Promise(r=>release=r);scanControl.gate=async()=>{reached();await gate;};
-  const pending=Promise.resolve(call('manager','POST',`${base}/${uploaded.documentId}/versions/${uploaded.versionId}/scan`,{}));
-  try{await ready;await admin.query(`UPDATE "CompanyMembership" SET status='disabled' WHERE "userId"='manager'`);release();assert.equal((await pending).statusCode,403);assert.equal((await admin.query('SELECT "scanStatus" FROM "DocumentVersion" WHERE id=$1',[uploaded.versionId])).rows[0].scanStatus,'pending');}
-  finally{release();delete scanControl.gate;await admin.query(`UPDATE "CompanyMembership" SET status='active' WHERE "userId"='manager'`);}
  });
  await t.test('lease documents remain source-bound and residents never inherit sharing from upload',async()=>{
   await admin.query(`INSERT INTO "Lease" (id,"companyId","propertyId","unitId","createdById","residentId","startsOn","rentCents","submissionKey","submissionHash","updatedAt") VALUES ('document-lease','a','home','unit-a','owner','other','2026-10-01',100000,'document-lease','fixture',NOW())`);

@@ -167,7 +167,7 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
     assert.equal(facts.plannedMoveOut.kind,'plan_end');assert.equal(facts.plannedMoveOut.leaseId,s.offlineLeaseId);assert.equal(facts.offlineLease.status,'active');assert.ok(facts.offlineLease.endsOn.toISOString().slice(0,10)>demo.manifest.today);
     assert.equal(facts.baseline.status,'completed');assert.equal(facts.moveOut.status,'awaiting_review');assert.ok(facts.moveOut.baselineRevisionId);
     assert.equal(facts.agreement.status,'reviewed');assert.ok(facts.shared.receivedAt);assert.equal(facts.shared.userId,users.resident.user_id);
-    assert.ok(facts.files.some(f=>f.scanStatus==='pending'));assert.ok(facts.files.filter(f=>f.scanStatus==='clean').every(f=>Buffer.from(f.content).equals(Buffer.from(DEMO_BUNDLED_TEXT))));
+    assert.ok(facts.files.length>0);assert.ok(facts.files.every(f=>f.scanStatus==='unscanned'&&f.scannedAt==null));
     assert.ok(facts.archivedDoc.archivedAt);assert.equal(facts.archivedUnit.status,'archived');assert.ok(facts.voided.voidedAt);assert.equal(facts.schedule.status,'paused');
     assert.equal(facts.imports.find(b=>b.id===s.unitImportId).status,'committed');assert.ok(facts.imports.find(b=>b.id===s.invalidUnitImportId).preview.errorCount>0);
     assert.equal(facts.expenses.find(b=>b.id===s.expenseImportId).status,'committed');assert.ok(facts.expenses.find(b=>b.id===s.duplicateExpenseImportId).preview.errorCount>0);

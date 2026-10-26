@@ -67,7 +67,6 @@ export async function notificationPreferenceCases(t, admin, db, call) {
     ok(await call('pref-owner', 'POST', inspectionPath, inspectionPayload));
     if (!document) {
       document = ok(await call('pref-owner', 'POST', leaseBase + '/documents', { title: 'Fictional preference original', filename: 'preference.txt', mediaType: 'text/plain', contentBase64: Buffer.from('Fictional unsigned original').toString('base64'), submissionKey: randomUUID() }));
-      ok(await call('pref-owner', 'POST', `${leaseBase}/documents/${document.documentId}/versions/${document.versionId}/scan`, {}));
     }
     const context = ok(await call('pref-owner', 'GET', leaseBase + '/agreements/context'));
     const agreement = ok(await call('pref-owner', 'POST', leaseBase + '/agreements', {

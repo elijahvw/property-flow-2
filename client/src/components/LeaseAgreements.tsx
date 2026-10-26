@@ -1,3 +1,4 @@
+import { documentStatusLabel } from "../document-status";
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api";
@@ -141,12 +142,7 @@ const actions: Record<string, string> = {
   reopen: "Preparation reopened",
   cancel: "Preparation cancelled",
 };
-const scanLabel = (status: string) =>
-  status === "clean"
-    ? "Cleared by scanning"
-    : status === "rejected"
-      ? "Rejected by scanning"
-      : "Waiting for scan";
+const scanLabel = documentStatusLabel;
 function docLink(params: URLSearchParams, id?: string) {
   const next = new URLSearchParams(params);
   next.set("section", "documents");
@@ -899,8 +895,8 @@ function PackageEditor({
         <legend>Agreement document versions</legend>
         <p className="help">
           Upload the prepared agreement in this lease’s Documents section first.
-          Quarantined or archived versions can be retained during preparation;
-          review requires active, cleared originals. Choosing another version of
+          Historically rejected or archived versions can be retained during preparation;
+          review requires active, available originals. Files are not scanned for malware. Choosing another version of
           a document replaces its selection in this package.
         </p>
         <div className="form-grid">

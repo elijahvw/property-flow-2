@@ -71,7 +71,6 @@ import { registerPrivateDocuments } from "./private-documents.js";
 import { registerInspections } from "./inspections.js";
 import { registerAgreements } from "./agreements.js";
 import { registerWorkOrders } from "./work-orders.js";
-import type { DocumentScanner } from "./document-scanner.js";
 import { registerMaintenanceCosts } from "./maintenance-costs.js";
 import { digest } from "./sessions.js";
 import { propertySelect, propertyData, propertyKeys } from "./property-fields.js";
@@ -268,7 +267,7 @@ export function registerApplication(
   authenticate: preValidationHookHandler,
   origin: string,
   identityProvider?: IdentityProvider,
-  options: { documentScanner?: DocumentScanner; invitationMailer?: InvitationMailer; notificationPublisher?: NotificationPublisher; salesDemo?: boolean; salesDemoCredentialSecret?: string } = {},
+  options: { invitationMailer?: InvitationMailer; notificationPublisher?: NotificationPublisher; salesDemo?: boolean; salesDemoCredentialSecret?: string } = {},
 ) {
   registerImpersonation(server, db, origin, authenticate);
   registerCompanyBilling(server, db, authenticate, origin);
@@ -285,7 +284,7 @@ export function registerApplication(
   registerNotifications(server, db, authenticate, origin);
   registerWorkspaceGuide(server, db, authenticate, origin);
   registerInvitations(server, db, authenticate, origin, identityProvider, options.invitationMailer);
-  registerPrivateDocuments(server, db, authenticate, origin, options.documentScanner);
+  registerPrivateDocuments(server, db, authenticate, origin);
   registerInspections(server, db, authenticate, origin, options.notificationPublisher);
   registerAgreements(server, db, authenticate, origin, options.notificationPublisher);
   registerWorkOrders(server, db, authenticate, origin, options.notificationPublisher);

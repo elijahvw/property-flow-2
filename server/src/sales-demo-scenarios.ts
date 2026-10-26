@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { Tx } from "./operational.js";
 import type { DemoSeedAccounts } from "./sales-demo-seed.js";
 
-// Fixed inert UTF-8 content only. The fixture validator can clear these exact
-// bytes, never arbitrary uploads. This is not evidence of a live ClamAV run.
+// Fixed fictional UTF-8 content, uploaded through ordinary validation and
+// explicitly recorded as unscanned. No malware clearance is fabricated.
 export const DEMO_BUNDLED_TEXT = "BUNDLED FICTIONAL DEMO ORIGINAL. Plain UTF-8 text only. Unsigned sample; no legal effect or active content.\n";
 // Every shipped company feature must retain representative connected sources.
 // New catalog entries require this map, fixture and walkthrough to be reviewed.
@@ -11,7 +11,7 @@ export const DEMO_FEATURE_COVERAGE = {
   properties: ["properties", "units", "scenarios.archivedUnitId", "presentation.anchorOn"],
   leasing: ["leases", "scenarios.offlineLeaseId", "scenarios.plannedMoveOutId", "scenarios.invitationId", "scenarios.endedLeaseId", "scenarios.approvedApplicationId", "scenarios.rejectedApplicationId", "savedTaskId"],
   maintenance: ["requests", "vendorId", "scenarios.privateUpdateId", "scenarios.pausedPreventivePlanId"],
-  documents: ["documentId", "scenarios.receivedShareId", "scenarios.archivedDocumentId"],
+  documents: ["documentVersionId", "documentId", "scenarios.receivedShareId", "scenarios.archivedDocumentId"],
   finances: ["scenarios.endedLeaseId", "scenarios.offlineLeaseId", "scenarios.reversedCreditId", "scenarios.voidedExpenseId"],
   reports: ["scenarios.expenseImportId", "leases"],
   inspections: ["inspectionId", "scenarios.baselineInspectionId", "scenarios.moveOutInspectionId"],
@@ -88,7 +88,6 @@ export async function seedDemoScenarios(c: { call: Call; tx: Tx; companyId: stri
 
   const documentRoot = `/api/company/leases/${leases[0]}/documents`;
   const original = await call("POST", documentRoot, { title: "Bundled sample lease original · DEMO", filename: "bundled-demo.txt", mediaType: "text/plain", contentBase64: Buffer.from(DEMO_BUNDLED_TEXT).toString("base64") });
-  await call("POST", `${documentRoot}/${original.documentId}/versions/${original.versionId}/scan`, {});
   const shareRoot = `${documentRoot}/${original.documentId}/shares`, shared = await call("POST", shareRoot, { documentVersionId: original.versionId, userId: accounts.users.resident.user_id, expiresOn: offset(3), reason: "DEMO owner explicitly shares the bundled fictional original.", expectedVersion: null, expectedDocumentVersion: 1 });
   asActor(accounts.users.resident.user_id);
   await call("POST", `/api/resident/documents/${shared.share.id}/received`, { expectedVersion: shared.share.version });

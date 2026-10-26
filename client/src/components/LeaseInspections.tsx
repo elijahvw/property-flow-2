@@ -1,3 +1,4 @@
+import { documentAvailable } from "../document-status";
 import {TaskDraftPanel,TaskDraftAccessNotice,TaskSourceUnavailable,useTaskDraft,type TaskDraft} from "./TaskDraft";
 import { useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -680,7 +681,7 @@ function InspectionEditor({
   const options =
     documents.data?.items.flatMap((doc) =>
       doc.versions
-        .filter((v) => v.scanStatus === "clean")
+        .filter((v) => documentAvailable(v.scanStatus))
         .map((v) => ({
           id: v.id,
           label: `${doc.title} · version ${v.number} · ${v.filename}${doc.archivedAt ? " (archived)" : ""}`,
@@ -791,8 +792,8 @@ function InspectionEditor({
         </label>
       )}
       <p className="help">
-        Upload originals in this lease’s Documents section and clear scanning
-        before linking them. Saving observations keeps them in progress until
+        Upload originals in this lease’s Documents section
+        before linking them. Files are not scanned for malware. Saving observations keeps them in progress until
         submitted and reviewed.
       </p>
       {documents.error && (
@@ -858,7 +859,7 @@ function InspectionEditor({
             <summary>Link exact evidence versions</summary>
             <div className="inspection-evidence-options">
               {options.length === 0 && (
-                <p className="help">No cleared document versions available.</p>
+                <p className="help">No available document versions. Upload a supported original in Documents.</p>
               )}
               {[
                 ...options,
