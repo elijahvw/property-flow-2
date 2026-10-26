@@ -211,7 +211,7 @@
     "sourceFiles": 608,
     "command": "PF_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium node node_modules/@playwright/test/cli.js test -c playwright.production.config.ts --reporter=line --output=/tmp/pf-pr68-final-ui-results"
   },
-  "currentMain": "186ea7dca31374c7cfe1c01e5f29dff0cec2530a",
+  "currentMain": "e8b87c78841b6602b405d58bad5a07ae736c92bc",
   "localIntegrationHead": "cd3818f09597b6efa4125316411b638467693dde",
   "concurrentRemoteHeadPreserved": "59af21e555e6931ce2d9dc6258afdd69fa29a869",
   "priorClientBuild": {
@@ -235,6 +235,7 @@
     "base": "e8b87c78841b6602b405d58bad5a07ae736c92bc",
     "branch": "codex/pr64-pr68-verification-followup",
     "scope": "Only regression coverage, startup-readiness gating, current workflow/status documentation and restoration of historical notification screenshots; application/schema/infra/workflow source matches merged main.",
-    "state": "Separate authorized review branch; publication/head/CI are recorded in the pull request."
+    "state": "Separate authorized review branch; publication/head/CI are recorded in the pull request.",
+    "url": "https://github.com/elijahvw/property-flow-2/pull/70"
   }
 }
