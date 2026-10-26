@@ -1,22 +1,26 @@
-# Development Alloy collector and scanner review
+# Development Alloy collector and scanner-retirement integration
 
-The separate [scanner-retirement follow-up](scanner-retirement.md) removes ClamAV at the user’s request and supersedes the sizing below: 0.5 vCPU/1 GiB for the app, or 0.5 vCPU/2 GiB with Alloy. Its unscanned-file workflow and migration must ship together. The original sizing/review evidence below describes the preceding proposal.
+PR64 was merged by the user at 23:47 UTC on October 25 into main `186ea7d`. Optional Alloy/manual-start controls are merged source; the daily 3 a.m. America/New_York Stop definition is now effective unless `DEV_AUTO_STOP=false`. User-merged PR68/main `e8b87c7` preserves that work and prepares scanner-free 0.5vCPU/1GiB app or 0.5vCPU/2GiB app+Alloy configuration with 057/fixture6. No agent cloud Start/Stop, apply, secret change, collector activation or realized saving is claimed; actual scheduled execution/hosted acceptance is unverified.
 
-Prepared locally on October 25, 2026. No infrastructure apply, live schedule activation,
-collector connection or scanner resource reduction is claimed. This refines
-PF-27 monitoring and reviews PF-15 scanner operations.
+Earlier pre-merge preparation note, October 25: no infrastructure apply or live schedule activation,
+collector connection or scanner retirement is claimed. This refines
+PF-27 monitoring and integrates the authorized PF-15 retirement source.
 
 ## Design and lifecycle
 
 The user selected Alloy inside the existing `propertyflow-dev` Fargate task.
 Start brings RDS up before starting the service; Stop verifies zero running and
-pending service tasks before stopping RDS. App, scanner and Alloy share these
+pending service tasks before stopping RDS. App and enabled Alloy share these
 controls. No separate EC2 instance, ECS service, NAT gateway or log group is added.
 
-Enablement defaults off until credentials are configured. Disabled preserves the
-current 0.5-vCPU/4-GiB task. Enabled uses a valid 1-vCPU/5-GiB task: app 1,024 MiB,
-scanner 3,072 MiB, Alloy 512 MiB, with 512 MiB task headroom. Existing scanner
-image, loopback isolation, updates, concurrency limits and quarantine remain intact.
+Enablement defaults off until credentials are configured. Reconciled retirement
+source uses a 0.5-vCPU/1-GiB app-only task, or 0.5-vCPU/2-GiB with Alloy: app 1,024 MiB,
+Alloy 512 MiB and 512 MiB task headroom. The API container ceiling is unchanged.
+The earlier PR64-only proposal retained a 0.5-vCPU/4-GiB scanner-bearing task when
+disabled, or 1-vCPU/5-GiB when enabled, including scanner 3,072 MiB. That preceding
+proposal is superseded by the separately authorized retirement, not a measured
+reduction in scanner working set. Current app/Alloy capacity acceptance remains
+separate from Terraform source validation.
 
 The published `grafana/alloy:v1.21.1` standard image has a private readiness
 endpoint, nonessential lifecycle, restart policy, 512-MiB hard limit, bounded
@@ -71,7 +75,11 @@ Those remain separate setup/privacy acceptance. Existing AWS CloudWatch
 collection covers managed-service metrics independently. No public RDS access is
 needed because Alloy shares the existing app task's network path.
 
-## Scanner sizing findings
+## Historical scanner sizing findings before retirement
+
+These observations explain the earlier scanner-bearing proposal. They are not
+current scanner setup/retry instructions or a requirement to retain a removed
+service. No new live observation is made by conflict reconciliation.
 
 Read-only live inspection found revision 26, release `47badac`, running one
 0.5-vCPU/4-GiB task, with app/scanner hard limits of 1,024/3,072 MiB. The scanner
@@ -85,15 +93,16 @@ capacity during signature updates and concurrent uploads.
 
 ClamAV's published Docker guidance recommends at least 3 GiB. Signature engines
 and FreshClam load testing consume substantial RAM. Concurrent database reload
-is already disabled; do not count that as a new saving. Dropping to 1–2 GiB could
-kill the scanner and leave files quarantined. Do not disable signature testing
-or detection databases to reduce the apparent footprint.
+was already disabled and was not a new saving. Lowering that retained scanner to
+1–2GiB risked process termination and quarantine; weakening its signature tests
+would not have been a valid resource optimization.
 
-Before lowering the cap, measure per-container CPU/memory, working set versus
-cache, restarts and app latency through cold start, signature updates, clean/EICAR
-acceptance and two concurrent maximum-size uploads. The optional metadata receiver
-supports this gate. Retaining the current cap does not prove it is the smallest
-possible allocation; this increment makes no unmeasured saving claim.
+The earlier proposal therefore required per-container CPU/memory, working-set,
+restart and latency measurements through cold start, signature updates and
+concurrent scans before lowering its cap. The user's later instruction removes
+the scanner rather than tuning that process. Keep this dated rationale; assess
+the scanner-free app/Alloy startup, contention and headroom separately. No
+unmeasured whole-account saving or hosted-capacity claim follows.
 
 ## Costs and GitHub schedules
 
@@ -106,8 +115,7 @@ $30. No new paid monitoring plan is enabled.
 
 Schedules are workflow YAML and can be edited through GitHub's web editor.
 **Run workflow** still runs immediately. The user selected manual starts only and an automatic stop every day at 3 a.m.
-Eastern. There is no scheduled start. The stop schedule is active after the
-workflow reaches `main`; setting repository variable `DEV_AUTO_STOP=false`
+Eastern. There is no scheduled start. PR64 is now on main, so the Stop definition is effective; setting repository variable `DEV_AUTO_STOP=false`
 suspends automatic stops while preserving the manual Stop button. Unset or
 `true` keeps scheduled stops enabled. The `America/New_York` timezone handles
 DST. Workflows retain the deployment concurrency group. GitHub
@@ -119,22 +127,23 @@ do not inspect active Codex jobs. Change clock times by reviewing a YAML edit.
 Run the operations suite and power inventory, Terraform format/validate, ECR
 mocked-provider tests, and `python3 scripts/test-alloy-config.py`. That script
 renders the actual template and validates stable/experimental modes with pinned
-Alloy. Local verification passed: 97 operations tests, four mocked Terraform runs,
+Alloy. The prior PR64 checkpoint passed 97 operations tests, four mocked Terraform runs,
 both rendered Alloy modes validated with v1.21.1, root Terraform validation,
 recursive formatting, actionlint v1.7.12 and the development power inventory.
 These checks do not start AWS resources, access real databases or prove hosted
-collection. Actual rollout, token scopes, Fleet connection, database
-provisioning and scanner capacity acceptance remain unverified until exercised.
+collection and do not validate the later combined source. Current PR64/68 checks
+are recorded separately. Actual rollout, token scopes, Fleet connection, database
+provisioning and scanner-free app/Alloy capacity remain release acceptance.
 
 References: [Fleet registration](https://grafana.com/docs/grafana-cloud/send-data/fleet-management/set-up/onboard-collectors/standalone-alloy/),
 [ECS telemetry](https://grafana.com/docs/alloy/latest/collect/ecs-opentelemetry-data/),
 [ClamAV memory guidance](https://docs.clamav.net/manual/Installing/Docker.html#memory-ram-requirements),
 [GitHub schedules](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
 
-## Main integration — October25, 2026
+## Main integration — October 25, 2026
 
 This branch now includes merged main `44747bd` (PR65/66/63/67). The roadmap conflict preserves the platform/demo recovery work and the RDS/ECR protections. Application source and schema are unchanged from that main; its459-case browser evidence remains valid for those unchanged paths.
 
-The combined infrastructure source passes103 operations checks, the development power inventory, recursive Terraform formatting, backend-free root validation, four mocked ECR/Alloy Terraform tests, and rendered stable/experimental Alloy configuration validation using v1.21.1. Workflow/validation-recipe source is unchanged from the prior green CI/actionlint checkpoint. No account-backed plan, Terraform apply, credential read, collector activation, Start/Stop or schedule activation occurred here. Final published-head CI/review remain required.
+The combined infrastructure source passes 103 operations checks, the development power inventory, recursive Terraform formatting, backend-free root validation, four mocked ECR/Alloy Terraform tests, and rendered stable/experimental Alloy configuration validation using v1.21.1. Workflow/validation-recipe source is unchanged from the prior green CI/actionlint checkpoint. No account-backed plan, Terraform apply, credential read, collector activation, Start/Stop or schedule activation occurred here. Final published-head CI/review remain required.
 
-PR68 remains a separate dependent change. Its scanner retirement uses057 after the immutable056 demo migration and combines document examples with fixture6. Merge64 into main first, then update68's target to main and recheck before merging. Merging64 activates the documented3a.m.Eastern shutdown; Alloy remains disabled until separately configured.
+PR64 and PR68 are both merged in main `e8b87c7`. Scanner retirement uses 057 after immutable 056 and combines document examples with fixture6. The separate verification follow-up preserves extra regression checks and corrected current documentation. The daily 3 a.m. Eastern Stop definition is effective unless opted out; Alloy remains disabled until separately configured. See [current reconciliation](pr64-pr68-reconciliation-2026-10-25.md) for final 459/459 validation and the separate rollout gates.

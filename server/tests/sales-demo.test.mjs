@@ -140,6 +140,8 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
     await ok('platform','POST',`${base}/${pending.id}/teardown`,{expectedVersion:1});
   });
   await t.test('feature examples retain real sources, no-login tenants and honest workflow states',async()=>{
+    assert.equal(demo.manifest.fixtureVersion,SALES_DEMO_SEED_VERSION);
+    assert.deepEqual(demo.manifest.presentation,{anchorOn:demo.manifest.today,fictional:true,retainedHistory:true});
     assert.deepEqual(Object.keys(DEMO_FEATURE_COVERAGE).sort(),FEATURE_CATALOG.map(f=>f.key).sort());
     for(const paths of Object.values(DEMO_FEATURE_COVERAGE))for(const path of paths){const value=path.split('.').reduce((object,key)=>object?.[key],demo.manifest);assert.ok(Array.isArray(value)?value.length>0:typeof value==='string'&&value.length>0,`Missing demo coverage source: ${path}`);}
     const s=demo.manifest.scenarios,users=(await db.salesDemoSetup.findUniqueOrThrow({where:{id:sheet.id}})).accounts;
@@ -155,7 +157,7 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
         settlement:await tx.leaseSettlement.findFirstOrThrow({where:{leaseId:s.endedLeaseId}}),refund:await tx.leaseMovement.findFirstOrThrow({where:{leaseId:s.endedLeaseId,kind:'deposit_refund'},include:{cashEntries:true}}),
         baseline:await tx.leaseInspection.findUniqueOrThrow({where:{id:s.baselineInspectionId}}),moveOut:await tx.leaseInspection.findUniqueOrThrow({where:{id:s.moveOutInspectionId}}),
         agreement:await tx.leaseAgreement.findUniqueOrThrow({where:{id:s.reviewedAgreementId}}),shared:await tx.leaseDocumentShare.findUniqueOrThrow({where:{id:s.receivedShareId}}),
-        files:await tx.documentVersion.findMany(),archivedDoc:await tx.privateDocument.findUniqueOrThrow({where:{id:s.archivedDocumentId}}),archivedUnit:await tx.unit.findUniqueOrThrow({where:{id:s.archivedUnitId}}),
+        files:await tx.documentVersion.findMany(),scanAudits:await tx.auditEvent.count({where:{companyId:demo.companyId,action:'document.scanned'}}),archivedDoc:await tx.privateDocument.findUniqueOrThrow({where:{id:s.archivedDocumentId}}),archivedUnit:await tx.unit.findUniqueOrThrow({where:{id:s.archivedUnitId}}),
         voided:await tx.ledgerEntry.findUniqueOrThrow({where:{id:s.voidedExpenseId}}),schedule:await tx.rentSchedule.findUniqueOrThrow({where:{id:s.pausedScheduleId}}),
         imports:await tx.unitImportBatch.findMany(),expenses:await tx.expenseImportBatch.findMany(),applications:await tx.rentalApplication.findMany(),
       };
@@ -168,6 +170,11 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
     assert.equal(facts.baseline.status,'completed');assert.equal(facts.moveOut.status,'awaiting_review');assert.ok(facts.moveOut.baselineRevisionId);
     assert.equal(facts.agreement.status,'reviewed');assert.ok(facts.shared.receivedAt);assert.equal(facts.shared.userId,users.resident.user_id);
     assert.ok(facts.files.length>0);assert.ok(facts.files.every(f=>f.scanStatus==='unscanned'&&f.scannedAt==null));
+    assert.equal(facts.scanAudits,0);assert.equal(facts.files.find(file=>file.id===facts.shared.documentVersionId).scanStatus,'unscanned');
+    const source=`/api/company/leases/${demo.manifest.leases[0]}/documents/${facts.shared.documentId}/versions/${facts.shared.documentVersionId}`;
+    assert.equal((await call(users.owner.user_id,'GET',source+'/download')).statusCode,200);
+    assert.equal((await call(users.owner.user_id,'POST',source+'/scan',{})).statusCode,404);
+    const residentOriginal=await call(users.resident.user_id,'GET',`/api/resident/documents/${facts.shared.id}/download`);assert.equal(residentOriginal.statusCode,200,residentOriginal.body);assert.equal(Buffer.from(residentOriginal.json().contentBase64,'base64').toString(),DEMO_BUNDLED_TEXT);
     assert.ok(facts.archivedDoc.archivedAt);assert.equal(facts.archivedUnit.status,'archived');assert.ok(facts.voided.voidedAt);assert.equal(facts.schedule.status,'paused');
     assert.equal(facts.imports.find(b=>b.id===s.unitImportId).status,'committed');assert.ok(facts.imports.find(b=>b.id===s.invalidUnitImportId).preview.errorCount>0);
     assert.equal(facts.expenses.find(b=>b.id===s.expenseImportId).status,'committed');assert.ok(facts.expenses.find(b=>b.id===s.duplicateExpenseImportId).preview.errorCount>0);

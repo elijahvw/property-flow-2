@@ -36,6 +36,14 @@ export async function privateDocumentCases(t,admin,db,call,id){
    assert.equal((await admin.query('SELECT "scanStatus" FROM "DocumentVersion" WHERE id=$1',[file.versionId])).rows[0].scanStatus,status);
   }
  });
+ await t.test('the reconciled schema defaults originals to unscanned and rejects a fabricated scan timestamp',async()=>{
+  const defaultDocumentId=randomUUID(),defaultVersionId=randomUUID();
+  await admin.query('INSERT INTO "PrivateDocument" (id,"companyId","requestId",title) VALUES($1,\'a\',$2,\'Isolated default-status original\')',[defaultDocumentId,id]);
+  const created=await admin.query('INSERT INTO "DocumentVersion" (id,"companyId","documentId",number,filename,"mediaType","byteLength",sha256,content,"createdById","submissionKey","submissionHash") SELECT $1,"companyId",$2,1,filename,"mediaType","byteLength",sha256,content,"createdById",$1,\'isolated-default-status\' FROM "DocumentVersion" WHERE id=$3 RETURNING "scanStatus","scannedAt"',[defaultVersionId,defaultDocumentId,versionId]);
+  assert.deepEqual(created.rows,[{scanStatus:'unscanned',scannedAt:null}]);
+  await assert.rejects(admin.query('INSERT INTO "DocumentVersion" (id,"companyId","documentId",number,filename,"mediaType","byteLength",sha256,content,"createdById","submissionKey","submissionHash","scanStatus","scannedAt") SELECT $1,"companyId","documentId",2,filename,"mediaType","byteLength",sha256,content,"createdById",$1,\'isolated-invalid-timestamp\',\'unscanned\',NOW() FROM "DocumentVersion" WHERE id=$2',[randomUUID(),defaultVersionId]),error=>error.code==='23514'&&error.constraint==='DocumentVersion_unscanned_timestamp_check');
+  assert.equal((await call('manager','GET',`${base}/${defaultDocumentId}/versions/${defaultVersionId}/download`)).statusCode,200);
+ });
  await t.test('versions, archive and originals survive retries, conflicts and direct mutation attempts',async()=>{
   const newer={...payload(),documentId,expectedVersion:1,contentBase64:Buffer.from('Version two isolated report').toString('base64')};
   const attempts=await Promise.all([call('manager','POST',base,newer),call('owner','POST',base,{...newer,submissionKey:randomUUID()})]);assert.deepEqual(attempts.map(r=>r.statusCode).sort(),[200,409]);

@@ -687,5 +687,17 @@ test('roadmap workflows preserve recorded history, property scope and retry inte
     assert.equal((await admin.query('SELECT count(*)::int n FROM "LeaseDocumentShareAction" WHERE action=\'source_archived\'')).rows[0].n, 2);
   });
   await documentAcknowledgmentCases(t, { admin, db, call, sharingBase, residentDocuments, sharePayload, policy, today, shift });
+  await t.test('historical pending originals remain pending through owner grant, resident download and receipt',async()=>{
+    const documentId=randomUUID(),versionId=randomUUID(),content=Buffer.from('Fictional retained original with no historical scan verdict.');
+    await admin.query('INSERT INTO "PrivateDocument" (id,"companyId","leaseId",title) VALUES($1,\'a\',\'share-lease\',\'Retained no-verdict original\')',[documentId]);
+    await shareVersion(versionId,1,content,'pending',documentId);
+    const before=(await admin.query('SELECT "scanStatus","scannedAt" FROM "DocumentVersion" WHERE id=$1',[versionId])).rows[0];assert.deepEqual(before,{scanStatus:'pending',scannedAt:null});
+    const base=`/api/company/leases/share-lease/documents/${documentId}/shares`,grant=ok(await call('owner','POST',base,sharePayload({documentVersionId:versionId,expectedDocumentVersion:1,reason:'Owner reviewed this retained original without inventing a scan verdict'}))).share;
+    const visible=ok(await call('resident','GET',`${residentDocuments}/${grant.id}`));assert.equal(visible.document.scanStatus,'pending');
+    const original=ok(await call('resident','GET',`${residentDocuments}/${grant.id}/download`));assert.deepEqual(Buffer.from(original.contentBase64,'base64'),content);
+    assert.equal((await call('resident','POST',`${residentDocuments}/${grant.id}/received`,{expectedVersion:grant.version,submissionKey:randomUUID()})).statusCode,200);
+    assert.deepEqual((await admin.query('SELECT "scanStatus","scannedAt" FROM "DocumentVersion" WHERE id=$1',[versionId])).rows[0],before);
+    assert.equal((await admin.query('SELECT count(*)::int n FROM "AuditEvent" WHERE "targetId"=$1 AND action=\'document.scanned\'',[documentId])).rows[0].n,0);
+  });
   await expenseImportCases(t, admin, call, app, db, pool);
 });
