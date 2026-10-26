@@ -1,3 +1,4 @@
+import { isDemoEmail } from "./sales-demo-email.js";
 import { randomBytes } from "node:crypto";
 import { AccessError } from "./access.js";
 type ProviderOperation = "token" | "lookup" | "directory" | "create" | "update" | "verification" | "password_setup";
@@ -211,7 +212,7 @@ export function identityProvider(
     return result;
   }
   async function findDemo(account: Pick<DemoIdentity, "demoId" | "accountKey" | "email">, deadline?: number) {
-    if (!/^[0-9a-f-]{36}$/.test(account.demoId) || !/^[a-z0-9]+$/.test(account.accountKey) || account.email !== `${account.accountKey}.${account.demoId}@sales-demo.invalid`)
+    if (!/^[0-9a-f-]{36}$/.test(account.demoId) || !/^[a-z0-9]+$/.test(account.accountKey) || !isDemoEmail(account.demoId, account.accountKey, account.email))
       throw new AccessError(400, "INVALID_DEMO_IDENTITY", "Invalid generated demo identity.");
     const rows = await api("users-by-email?" + new URLSearchParams({ email: account.email }), undefined, undefined, deadline);
     if (!Array.isArray(rows) || rows.length > 1) throw new AccessError(409, "DEMO_IDENTITY_CONFLICT", "Demo identity requires review. No existing account was changed.");

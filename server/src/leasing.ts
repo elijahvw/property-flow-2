@@ -81,7 +81,17 @@ export function registerLeasing(server: FastifyInstance, db: PrismaClient, authe
     return scoped(db, request, "property.read", async (tx, companyId, propertyIds) => {
       if (propertyIds && !propertyIds.includes(propertyId)) throw new AccessError(404, "NOT_FOUND", "Property not found.");
       await property(tx, companyId, propertyId);
-      return page(await tx.unit.findMany({ where: { companyId, propertyId, status, ...(search ? { OR: [{ label: { contains: search, mode: "insensitive" } }, { floor: { contains: search, mode: "insensitive" } }] } : {}), ...(cursor ? { id: { lt: cursor } } : {}) }, select: unitSelect, take: 51, orderBy: { id: "desc" } }));
+      const result = page(await tx.unit.findMany({ where: { companyId, propertyId, status, ...(search ? { OR: [{ label: { contains: search, mode: "insensitive" } }, { floor: { contains: search, mode: "insensitive" } }] } : {}), ...(cursor ? { id: { lt: cursor } } : {}) }, select: unitSelect, take: 51, orderBy: { id: "desc" } }));
+      const company = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { timezone: true } });
+      const occupancyAsOf = companyDay(company.timezone), today = date(occupancyAsOf, "company business date");
+      // Expose only occupancy, never household or financial details, to property readers.
+      // A future, draft or ended lease must not make today's unit appear occupied.
+      const current = result.items.length ? await tx.lease.findMany({
+        where: { companyId, propertyId, unitId: { in: result.items.map(unit => unit.id) }, status: "active", startsOn: { lte: today }, OR: [{ endsOn: null }, { endsOn: { gte: today } }] },
+        select: { unitId: true },
+      }) : [];
+      const occupied = new Set(current.map(lease => lease.unitId));
+      return { ...result, occupancyAsOf, items: result.items.map(unit => ({ ...unit, occupancy: occupied.has(unit.id) ? "occupied" : "not_occupied" })) };
     });
   });
   server.post<{ Params: { propertyId: string } }>("/api/company/properties/:propertyId/units", auth, request => {

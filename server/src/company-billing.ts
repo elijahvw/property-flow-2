@@ -84,7 +84,9 @@ export function registerCompanyBilling(server: FastifyInstance, db: PrismaClient
       if (companyId) {
         if (write) await tx.$queryRaw`UPDATE "Company" SET "updatedAt"="updatedAt" WHERE id=${companyId} RETURNING id`;
         else await tx.$queryRaw`SELECT id FROM "Company" WHERE id=${companyId} FOR SHARE`;
-        if (!await tx.company.findUnique({ where: { id: companyId }, select: { id: true } })) throw new AccessError(404, "NOT_FOUND", "Company not found.");
+        const company = await tx.company.findUnique({ where: { id: companyId }, select: { id: true, status: true } });
+        if (!company) throw new AccessError(404, "NOT_FOUND", "Company not found.");
+        if (write && company.status === "deleted") throw new AccessError(409, "COMPANY_DELETED", "This company was deleted. Billing history is read-only.");
         await tx.$queryRaw`SELECT set_config('app.company_id',${companyId},true)`;
       }
       return run(tx);

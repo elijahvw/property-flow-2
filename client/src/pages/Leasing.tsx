@@ -31,6 +31,7 @@ type Unit = UnitExtras & {
   label: string;
   status: string;
   version: number;
+  occupancy?: "occupied" | "not_occupied";
 };
 export type Lease = {
   hasTermHistory?:boolean;
@@ -159,7 +160,7 @@ function UnitList({
     `/api/company/properties/${encodeURIComponent(propertyId)}`,
   );
   const property = { ...propertyResource, data: useTenantEditorRecord(propertyResource, tenantEditorScope(auth)) };
-  const r = useResource<Records<Unit>>(
+  const r = useResource<Records<Unit> & { occupancyAsOf?: string }>(
     `/api/company/properties/${encodeURIComponent(propertyId)}/units?${new URLSearchParams(Object.entries({ cursor, q: search, status }).filter(([, value]) => value))}`,
     true,
     true,
@@ -279,9 +280,12 @@ function UnitList({
                     <p>{query || status || cursor ? "Try a different search or unit view." : "Add a unit for each apartment, or one unit for a single-family property."}</p>
                   </div>
                 ) : (
+                  <>
+                  <p className="help">Recorded occupancy{r.data.occupancyAsOf ? ` as of ${formatDate(r.data.occupancyAsOf)}` : ""} follows current active lease dates. Not occupied does not confirm physical vacancy or readiness.</p>
                   <div className="table-wrap">
                   <table className="core-table unit-directory">
-                    <thead><tr><th>Unit</th><th>Space</th><th>Market rent</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead>
+                    <caption className="sr-only">Unit details, recorded occupancy and inventory status</caption>
+                    <thead><tr><th>Unit</th><th>Space</th><th>Market rent</th><th>Occupancy</th><th>Inventory status</th><th><span className="sr-only">Actions</span></th></tr></thead>
                     <tbody>
                     {r.data.items.map((unit) => (
                       <tr key={unit.id}>
@@ -305,7 +309,8 @@ function UnitList({
                           </span>
                         </td>
                         <td data-label="Market rent">{unit.marketRentCents == null ? "Not recorded" : <><strong>{usd(unit.marketRentCents)}</strong><span className="cell-detail">Asking amount / month</span></>}</td>
-                        <td data-label="Status"><span className={`status-pill ${unit.status}`}>{unit.status === "active" ? "Active" : "Archived"}</span></td>
+                        <td data-label="Occupancy"><strong>{unit.occupancy === "occupied" ? "Occupied" : unit.occupancy === "not_occupied" ? "Not occupied" : "Occupancy unavailable"}</strong><span className="cell-detail">{unit.occupancy === "occupied" ? "Current recorded lease" : unit.occupancy === "not_occupied" ? "No current recorded lease" : "Refresh to check current leases"}</span></td>
+                        <td data-label="Inventory status"><span className={`status-pill ${unit.status}`}>{unit.status === "active" ? "Active" : "Archived"}</span></td>
                         <td><div className="row-actions">
                         {can("lease.manage") && <Link aria-label={`View leases for ${unit.label}`} to={`/company/properties/${encodeURIComponent(propertyId)}/leases?${new URLSearchParams(Object.entries({ unitId: unit.id, unitListQ: query, unitListStatus: status, unitListCursor: cursor }).filter(([, value]) => value))}`}>View leases →</Link>}
                         {editable && (
@@ -324,6 +329,7 @@ function UnitList({
                     </tbody>
                   </table>
                   </div>
+                  </>
                 )}
                 <Pager
                   label="Unit directory pages"

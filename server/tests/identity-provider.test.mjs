@@ -160,7 +160,8 @@ test("case-insensitive duplicates cannot be hidden by a single exact email resul
 });
 
 test('automatic demo creates verified role logins and recovers an ambiguous provider success by exact marker',async()=>{
- const demoId=randomUUID(),account={demoId,accountKey:'owner',email:`owner.${demoId}@sales-demo.invalid`,name:'Fictional demo owner',password:'isolated-test-password-aA1!'};
+ const { demoEmail }=await import('../dist/sales-demo-email.js');
+ const demoId=randomUUID(),account={demoId,accountKey:'owner',email:demoEmail(demoId,'owner'),name:'Fictional demo owner',password:'isolated-test-password-aA1!'};
  let stored=null,writes=0;
  const p=identityProvider(env,async(url,options)=>{
   if(url.endsWith('/oauth/token'))return Response.json({access_token:'token',expires_in:3600});

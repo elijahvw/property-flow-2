@@ -47,6 +47,7 @@ export function assertDemoBuildPlan(blueprint: DemoBlueprint | null, current: De
 }
 export function demoBlueprintPlan(blueprint: DemoBlueprint) {
   return { ...blueprint, planHash: demoPlanHash(blueprint),
+    inventory: { properties: 2, unitsPerProperty: 3, occupiedUnits: 4, notOccupiedUnits: 2, readyUnits: 1, turnoverUnits: 1 },
     roles: DEMO_PEOPLE.map(([key, role, name]) => ({ key, role, name, login: !["offline", "pending", "former"].includes(key) })),
     coverage: FEATURE_CATALOG.map(feature => ({ key: feature.key, label: feature.label, sources: DEMO_FEATURE_COVERAGE[feature.key] })),
     effects: { dedicatedCompanies: 1, preparedAccounts: DEMO_PEOPLE.length, issuedLogins: DEMO_PEOPLE.filter(([key]) => !["offline", "pending", "former"].includes(key)).length,

@@ -73,6 +73,7 @@ const activityLabels: Record<string, string> = {
   "invitation.email.requested": "Invitation email requested",
   "property.created": "Property added",
   "property.updated": "Property details updated",
+  "company.deleted": "Company deleted",
   "company.created": "Company added",
   "company.updated": "Company details updated",
   "company.status.changed": "Company access updated",

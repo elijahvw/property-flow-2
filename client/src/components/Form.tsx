@@ -160,6 +160,7 @@ export function Form({
                   "maintenance.status": "Request status updated.",
                   "invitation.create":
                     "Invitation created. Copy its link to share.",
+                  "company.delete": "Company deleted.",
                   "company.create": "Company created.",
                   "company.update": "Company saved.",
                 } as Record<string, string>

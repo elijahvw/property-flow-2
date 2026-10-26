@@ -67,6 +67,10 @@ model Company {
   users     User[]
   properties Property[]
   status     String @default("active")
+  deletedAt DateTime?
+  deletedById String?
+  deletionSubmissionKey String?
+  deletionSubmissionHash String?
   memberships CompanyMembership[]
   invitations Invitation[]
   maintenanceRequests MaintenanceRequest[]

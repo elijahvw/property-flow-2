@@ -1,3 +1,4 @@
+import { demoEmail, isDemoEmail } from "./sales-demo-email.js";
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyRequest, preValidationHookHandler } from "fastify";
 import type { PrismaClient, SalesDemoSetup } from "@prisma/client";
@@ -44,7 +45,7 @@ export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, aut
   }
   function ownedAccounts(setup: SalesDemoSetup) {
     const accounts = setup.accounts as Record<string, OwnedDemoAccount>;
-    if (!accounts || Array.isArray(accounts) || Object.entries(accounts).some(([key, account]) => !DEMO_PEOPLE.some(([known]) => known === key) || !account || typeof account.user_id !== "string" || account.email !== `${key}.${setup.id}@sales-demo.invalid` || account.issuer !== undefined && (typeof account.issuer !== "string" || !account.issuer) || account.connection !== undefined && (typeof account.connection !== "string" || !account.connection) || account.cleanupConfirmedSubject !== undefined && account.cleanupConfirmedSubject !== account.user_id) || new Set(Object.values(accounts).map(a => a.user_id)).size !== Object.keys(accounts).length)
+    if (!accounts || Array.isArray(accounts) || Object.entries(accounts).some(([key, account]) => !DEMO_PEOPLE.some(([known]) => known === key) || !account || typeof account.user_id !== "string" || !isDemoEmail(setup.id, key, account.email) || account.issuer !== undefined && (typeof account.issuer !== "string" || !account.issuer) || account.connection !== undefined && (typeof account.connection !== "string" || !account.connection) || account.cleanupConfirmedSubject !== undefined && account.cleanupConfirmedSubject !== account.user_id) || new Set(Object.values(accounts).map(a => a.user_id)).size !== Object.keys(accounts).length)
       throw new AccessError(409, "DEMO_OWNERSHIP_CHANGED", "This demo's generated account ownership changed. No existing account or company was modified.");
     return accounts;
   }
@@ -206,9 +207,18 @@ export function registerSalesDemo(server: FastifyInstance, db: PrismaClient, aut
     if (claimed.status === "retired") return { id, status: "retired" };
     try {
       for (const [accountKey] of DEMO_PEOPLE) {
-        const account = await checked(request, async tx => { const current = await currentRun(tx, id, token, "retiring"); await tx.salesDemoSetup.update({ where: { id }, data: { leaseUntil: leaseUntil() } }); return ownedAccounts(current)[accountKey]; });
+        const { account, email } = await checked(request, async tx => {
+          const current = await currentRun(tx, id, token, "retiring");
+          await tx.salesDemoSetup.update({ where: { id }, data: { leaseUntil: leaseUntil() } });
+          const account = ownedAccounts(current)[accountKey];
+          // Cleanup must survive a lost encryption key. Saved subjects keep their
+          // exact owned address; ambiguous creates use the pinned fixture format.
+          const seedVersion = readDemoBlueprint(current.blueprint)?.seedVersion ?? 1;
+          const email = account?.email || (seedVersion >= 7 ? demoEmail(id, accountKey) : `${accountKey}.${id}@sales-demo.invalid`);
+          return { account, email };
+        });
         if (account?.cleanupConfirmedSubject === account?.user_id && account) continue;
-        await identities.block({ demoId: id, accountKey, email: `${accountKey}.${id}@sales-demo.invalid` }, account?.user_id, async remote => {
+        await identities.block({ demoId: id, accountKey, email }, account?.user_id, async remote => {
           await checked(request, async tx => {
             const current = await currentRun(tx, id, token, "retiring");
             const demo = current.salesDemoId ? await tx.salesDemo.findUniqueOrThrow({ where: { id: current.salesDemoId } }) : null;

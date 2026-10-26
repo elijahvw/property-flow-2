@@ -32,7 +32,7 @@ async function fixture(page:Page,role='owner'){
   if(path.endsWith('/units')||path==='/api/company/leases'){
    const isUnit=path.endsWith('/units'),rows=isUnit?state.units:state.leases,cursor=url.searchParams.get('cursor'),q=(url.searchParams.get('q')||'').trim().toLowerCase(),status=url.searchParams.get('status'),unitId=url.searchParams.get('unitId');
    const selected=rows.filter(r=>(!isUnit||r.propertyId===path.split('/')[4])&&(!cursor||r.id<cursor)&&(!status||r.status===status)&&(!unitId||r.unitId===unitId)&&(!q||[r.label,r.floor,r.unit?.label,r.resident?.name].some(v=>v?.toLowerCase().includes(q)))).sort((a,b)=>b.id.localeCompare(a.id));
-   return json({items:selected.slice(0,50),nextCursor:selected.length>50?selected[49].id:null,...(unitId?{unit:state.units.find(r=>r.id===unitId)}:{})});
+   return json({items:selected.slice(0,50).map(row=>isUnit?{...row,occupancy:row.occupancy||'not_occupied'}:row),...(isUnit?{occupancyAsOf:'2026-10-25'}:{}),nextCursor:selected.length>50?selected[49].id:null,...(unitId?{unit:state.units.find(r=>r.id===unitId)}:{})});
   }
   return json([]);
  });return state;
@@ -207,4 +207,20 @@ test('lease view exposes reset and next-step links while respecting current feat
  state.features.leasing='disabled';await page.goto('/company/leases?new=lease');
  await expect(page.getByRole('heading',{name:'Feature unavailable',exact:true})).toBeVisible();
  await expect(page.getByRole('region',{name:'Record a lease',exact:true})).toHaveCount(0);expect(state.writes,state.writeRequests.join(', ')).toBe(0);
+});
+
+for(const role of ['owner','staff'])test(`units distinguish recorded occupancy from inventory status for ${role}`,async({page},info)=>{
+ const state=await fixture(page,role);
+ state.units.push({id:'u3',label:'Current household',propertyId:'home',status:'active',version:1,occupancy:'occupied'}, {id:'u2',label:'Upcoming tenancy',propertyId:'home',status:'active',version:1,occupancy:'not_occupied'}, {id:'u1',label:'Retired space',propertyId:'home',status:'archived',version:1,occupancy:'not_occupied'});
+ await page.setViewportSize({width:390,height:844});
+ await page.goto('/company/properties/home/units');
+ const occupied=page.getByRole('row').filter({hasText:'Current household'}),future=page.getByRole('row').filter({hasText:'Upcoming tenancy'}),archived=page.getByRole('row').filter({hasText:'Retired space'});
+ await expect(occupied.getByText('Occupied',{exact:true})).toBeVisible();await expect(occupied.getByText('Active',{exact:true})).toBeVisible();
+ for(const row of [future,archived])await expect(row.getByText('Not occupied',{exact:true})).toBeVisible();
+ await expect(archived.getByText('Archived',{exact:true})).toBeVisible();
+ await expect(page.getByText('Not occupied does not confirm physical vacancy or readiness.',{exact:false})).toBeVisible();
+ await page.reload();await expect(occupied.getByText('Occupied',{exact:true})).toBeVisible();
+ await page.screenshot({path:info.outputPath(`units-occupancy-${role}-phone.png`),fullPage:true});
+ expect(state.writes).toBe(0);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
 });

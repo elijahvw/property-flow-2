@@ -30,7 +30,7 @@ test('disconnected demo blueprint remains useful and cannot provision by acciden
   const state = await fixture(page); state.configured = false;
   await page.goto('/platform/companies'); await page.getByRole('button', { name: 'Manage sales demos', exact: true }).click();
   const blueprint = page.getByRole('region', { name: 'Sales demo blueprint' });
-  await expect(blueprint).toContainText('Preview only'); await expect(blueprint).toContainText('11'); await expect(blueprint).toContainText('Building is unavailable');
+  await expect(blueprint).toContainText('Two properties with three units each: four occupied, one ready to rent and one in turnover'); await expect(blueprint).toContainText('Preview only'); await expect(blueprint).toContainText('11'); await expect(blueprint).toContainText('Building is unavailable');
   await expect(blueprint.getByRole('button', { name: 'Build sales demo', exact: true })).toBeDisabled();
   await blueprint.getByText('Roles and feature coverage', { exact: true }).click(); await expect(blueprint).toContainText('No portal login or password is issued'); expect(state.posts).toHaveLength(0);
 });

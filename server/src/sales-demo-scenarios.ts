@@ -8,7 +8,7 @@ export const DEMO_BUNDLED_TEXT = "BUNDLED FICTIONAL DEMO ORIGINAL. Plain UTF-8 t
 // Every shipped company feature must retain representative connected sources.
 // New catalog entries require this map, fixture and walkthrough to be reviewed.
 export const DEMO_FEATURE_COVERAGE = {
-  properties: ["properties", "units", "scenarios.archivedUnitId", "presentation.anchorOn"],
+  properties: ["properties", "units", "scenarios.unitImportId", "scenarios.readyUnitId", "scenarios.turnoverUnitId", "scenarios.restoredUnitId", "presentation.anchorOn"],
   leasing: ["leases", "scenarios.offlineLeaseId", "scenarios.plannedMoveOutId", "scenarios.invitationId", "scenarios.endedLeaseId", "scenarios.approvedApplicationId", "scenarios.rejectedApplicationId", "savedTaskId"],
   maintenance: ["requests", "vendorId", "scenarios.privateUpdateId", "scenarios.pausedPreventivePlanId"],
   documents: ["documentVersionId", "documentId", "scenarios.receivedShareId", "scenarios.archivedDocumentId"],
@@ -41,8 +41,8 @@ export async function seedDemoScenarios(c: { call: Call; tx: Tx; companyId: stri
     pending = await contact("pending", "DEMO: portal invitation awaiting acceptance; no email sent."),
     former = await contact("former", "DEMO: former tenant with retained rental and settlement history.");
   const invitation = await call("POST", `/api/company/resident-contacts/${pending.id}/invitations`, { expectedVersion: pending.version, approvals: [] });
-  const offlineUnit = await call("POST", `/api/company/properties/${properties[0]}/units`, { label: "Offline tenant · Suite 4", bedrooms: 1, bathrooms: "1.00" });
-  const offlineLease = await call("POST", "/api/company/leases", { propertyId: properties[0], unitId: offlineUnit.id, residentContactId: offline.id, startsOn: offset(-1,15), endsOn: offset(11,14), monthlyRent: "1200.00", status: "active", rentDueDay: 1, graceDays: 3, paymentInstructions: "DEMO offline tenant. Record manual payments; no portal access." });
+  const offlineUnit = { id: c.units[4] };
+  const offlineLease = await call("POST", "/api/company/leases", { propertyId: properties[1], unitId: offlineUnit.id, residentContactId: offline.id, startsOn: offset(-1,15), endsOn: offset(11,14), monthlyRent: "1200.00", status: "active", rentDueDay: 1, graceDays: 3, paymentInstructions: "DEMO offline tenant. Record manual payments; no portal access." });
   const prorationRoot = `/api/company/leases/${offlineLease.id}/proration`, proration = await call("GET", prorationRoot + "?periodOn=" + offset(-1));
   const prorateBody = { periodOn: offset(-1), fromOn: proration.calculation.fromOn, throughOn: proration.calculation.throughOn, policy: "actual_calendar_month", dueOn: proration.dueOn.slice(0,10), overrideAmount: null, overrideReason: null, reason: "DEMO actual-calendar partial move-in month.", expectedLeaseVersion: offlineLease.version };
   const proratePreview = await call("POST", prorationRoot + "/preview", prorateBody);
@@ -53,7 +53,14 @@ export async function seedDemoScenarios(c: { call: Call; tx: Tx; companyId: stri
   const pausedSchedule = await tx.rentSchedule.findFirstOrThrow({ where: { companyId, leaseId: offlineLease.id } });
   await call("PATCH", `/api/company/rent-schedules/${pausedSchedule.id}`, { status: "paused", expectedVersion: pausedSchedule.version });
 
-  const formerUnit = await call("POST", `/api/company/properties/${properties[1]}/units`, { label: "Move-out · Suite 5", bedrooms: 2, bathrooms: "1.00" });
+  const unitCsv = `propertyId,label,bedrooms,bathrooms,squareFeet,marketRent,floor,notes\n${properties[1]},Apartment 3,2,1.00,850,1400.00,2,DEMO imported inventory and retained move-out history\n`;
+  const inventory = await call("POST", "/api/company/imports/units/preview", { fileName: "demo-units.csv", csv: unitCsv });
+  const imported = await call("POST", `/api/company/imports/units/${inventory.id}/commit`, { expectedVersion: inventory.version });
+  const formerUnit = { id: imported.result.items[0].unitId as string };
+  c.units.push(formerUnit.id);
+  // Show reversible inventory archival without expanding the six-unit portfolio.
+  await call("PATCH", `/api/company/units/${formerUnit.id}`, { label: "Apartment 3", status: "archived", expectedVersion: 1 });
+  await call("PATCH", `/api/company/units/${formerUnit.id}`, { label: "Apartment 3", status: "active", expectedVersion: 2 });
   const oldLease = await call("POST", "/api/company/leases", { propertyId: properties[1], unitId: formerUnit.id, residentContactId: former.id, startsOn: offset(-12), endsOn: offset(-1,20), monthlyRent: "1400.00", status: "active" });
   const damage = await call("POST", `/api/company/rent/${oldLease.id}/one-time-charges`, { category: "damage", effectiveOn: offset(-1,20), dueOn: offset(-1,20), amount: "200.00", description: "DEMO reviewed move-out repair", expectedLeaseVersion: 1 });
   const deposit = await call("POST", `/api/company/deposits/${oldLease.id}`, { amount: "1400.00", dueOn: offset(-12), expectedLeaseVersion: 1 });
@@ -102,9 +109,6 @@ export async function seedDemoScenarios(c: { call: Call; tx: Tx; companyId: stri
   const archivedDoc = await call("POST", documentRoot, { title: "Archived original · DEMO", filename: "archived-demo.txt", mediaType: "text/plain", contentBase64: Buffer.from(DEMO_BUNDLED_TEXT).toString("base64") });
   await call("PATCH", `${documentRoot}/${archivedDoc.documentId}`, { expectedVersion: 1, archived: true });
 
-  const unitCsv = `propertyId,label,bedrooms,bathrooms,squareFeet,marketRent,floor,notes\n${properties[0]},Imported inventory suite,1,1.00,650,1250.00,2,DEMO unit source\n`;
-  const inventory = await call("POST", "/api/company/imports/units/preview", { fileName: "demo-units.csv", csv: unitCsv });
-  await call("POST", `/api/company/imports/units/${inventory.id}/commit`, { expectedVersion: inventory.version });
   const invalidInventory = await call("POST", "/api/company/imports/units/preview", { fileName: "demo-unit-errors.csv", csv: `propertyId,label,bedrooms\n${properties[0]},Needs bedroom correction,not-a-number\n` });
   const expenseCsv = `sourceId,propertyId,occurredOn,amount,category,memo\ndemo-paid-utility,${properties[0]},${today},85.25,utilities,DEMO paid utility statement\n`;
   const expenses = await call("POST", "/api/company/imports/expenses/preview", { sourceNamespace: "sales-demo", fileName: "demo-expenses.csv", csv: expenseCsv });
@@ -120,8 +124,6 @@ export async function seedDemoScenarios(c: { call: Call; tx: Tx; companyId: stri
     }
     applicationStates[outcome] = application.id;
   }
-  const archivedUnit = await call("POST", `/api/company/properties/${properties[0]}/units`, { label: "Archived storage suite · DEMO" });
-  await call("PATCH", `/api/company/units/${archivedUnit.id}`, { label: archivedUnit.label, status: "archived", expectedVersion: archivedUnit.version });
   const pausedPreventive = await call("POST", "/api/company/preventive", { title: "Paused filter service · DEMO", description: "Fictional service paused pending equipment replacement.", category: "hvac", priority: "normal", propertyId: properties[0], unitId: null, cadence: "quarterly", timezone: "America/New_York", anchorOn: today, endOn: null });
   await call("PATCH", `/api/company/preventive/${pausedPreventive.planId}`, { title: "Paused filter service · DEMO", description: "Fictional service paused pending equipment replacement.", category: "hvac", priority: "normal", status: "paused", expectedVersion: 1, submissionKey: randomUUID() });
   const requesterId = c.requests[c.requests.length-1];
@@ -140,5 +142,5 @@ export async function seedDemoScenarios(c: { call: Call; tx: Tx; companyId: stri
   const plannedBody = { kind: "plan_end", endsOn: offset(10,20), expectedLeaseVersion: plannedContext.lease.version, expectedSuccessorVersion: null, newBilling: "none", firstDueOn: null, firstAmount: null, firstOverrideReason: null, reason: "DEMO future move-out planned; occupancy remains active and settlement follows actual departure.", depositDisposition: "retain_old_ledger" };
   const plannedPreview = await call("POST", plannedRoot + "/preview", plannedBody);
   const plannedMoveOut = await call("POST", plannedRoot, { ...plannedBody, sourceHash: plannedPreview.sourceHash, confirmed: true });
-  return { plannedMoveOutId: plannedMoveOut.id, offlineContactId: offline.id, offlineLeaseId: offlineLease.id, pendingContactId: pending.id, invitationId: invitation.id, formerContactId: former.id, endedLeaseId: oldLease.id, baselineInspectionId: baseline.inspectionId, moveOutInspectionId: moveOut.inspectionId, reviewedAgreementId: agreement.agreementId, sharedDocumentId: original.documentId, receivedShareId: shared.share.id, archivedDocumentId: archivedDoc.documentId, archivedUnitId: archivedUnit.id, pausedScheduleId: pausedSchedule.id, pausedPreventivePlanId: pausedPreventive.planId, privateUpdateId: privateUpdate.id, readNotificationId: readNotice?.id ?? null, voidedExpenseId: correction.id, reversedCreditId: reversedCredit.id, approvedApplicationId: applicationStates.approve, rejectedApplicationId: applicationStates.reject, unitImportId: inventory.id, invalidUnitImportId: invalidInventory.id, expenseImportId: expenses.id, duplicateExpenseImportId: invalidExpenses.id };
+  return { plannedMoveOutId: plannedMoveOut.id, offlineContactId: offline.id, offlineLeaseId: offlineLease.id, pendingContactId: pending.id, invitationId: invitation.id, formerContactId: former.id, endedLeaseId: oldLease.id, baselineInspectionId: baseline.inspectionId, moveOutInspectionId: moveOut.inspectionId, reviewedAgreementId: agreement.agreementId, sharedDocumentId: original.documentId, receivedShareId: shared.share.id, archivedDocumentId: archivedDoc.documentId, readyUnitId: c.units[2], turnoverUnitId: formerUnit.id, restoredUnitId: formerUnit.id, pausedScheduleId: pausedSchedule.id, pausedPreventivePlanId: pausedPreventive.planId, privateUpdateId: privateUpdate.id, readNotificationId: readNotice?.id ?? null, voidedExpenseId: correction.id, reversedCreditId: reversedCredit.id, approvedApplicationId: applicationStates.approve, rejectedApplicationId: applicationStates.reject, unitImportId: inventory.id, invalidUnitImportId: invalidInventory.id, expenseImportId: expenses.id, duplicateExpenseImportId: invalidExpenses.id };
 }

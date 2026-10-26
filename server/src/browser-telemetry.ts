@@ -54,6 +54,7 @@ export const browserOperations = [
   "ownership.transfer",
   "property.create",
   "property.update",
+  "company.delete",
   "company.create",
   "company.details.load",
   "company.update",

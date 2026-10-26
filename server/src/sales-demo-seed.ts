@@ -10,7 +10,7 @@ import { seedDemoScenarios } from "./sales-demo-scenarios.js";
 
 // Bump whenever the fixture changes. Only constant fictional content goes here;
 // never copy customer data or call an external identity/email/payment provider.
-export const SALES_DEMO_SEED_VERSION = 6;
+export const SALES_DEMO_SEED_VERSION = 7;
 export type DemoSeedAccounts = { issuer: string; databaseConnection: string; users: Record<string, ProviderUser>; anchorOn?: string };
 export async function seedSalesDemo(tx: Tx, companyId: string, accounts: DemoSeedAccounts) {
   const ownerId = accounts.users.owner.user_id;
@@ -75,9 +75,11 @@ export async function seedSalesDemo(tx: Tx, companyId: string, accounts: DemoSee
       const property = await call("POST", "/api/company/properties", { name, address: index ? "82 Harbor Avenue" : "14 Maple Lane", city: "Philadelphia", state: "PA", zip: "19106", notes: "Fictional sales demonstration property." });
       properties.push(property.id);
       for (let n=1; n<=3; n++) {
+        // The sixth unit is created by the reviewed CSV import scenario.
+        if (index === 1 && n === 3) continue;
         const unit = await call("POST", `/api/company/properties/${property.id}/units`, { label: `Apartment ${n}`, bedrooms: n === 1 ? 1 : 2, bathrooms: "1.00", marketRent: n === 1 ? "1500.00" : "1800.00" });
         units.push(unit.id);
-        if (n === 3) continue;
+        if (n === 3 || index === 1 && n === 2) continue;
         const accountKey = ["resident", "resident2", "resident3", "resident4"][index*2+n-1];
         const personId = accounts.users[accountKey].user_id;
         await tx.companyMembership.create({ data: { userId: personId, companyId, role: "resident" } });
@@ -121,7 +123,6 @@ export async function seedSalesDemo(tx: Tx, companyId: string, accounts: DemoSee
     const context = await call("GET", `/api/company/leases/${leases[0]}/agreements/context`);
     const agreement = await call("POST", `/api/company/leases/${leases[0]}/agreements`, { title: "Lease preparation · DEMO", kind: "lease", notes: "Fictional unsigned preparation. The sample original is not scanned for malware.", documentVersionIds: [], partyIds: context.leaseholders.map((p: { id: string }) => p.id), companySignerId: ownerId });
     await call("PUT", `/api/company/units/${units[2]}/availability`, { expectedVersion: null, condition: "ready", availableOn: today, reason: "DEMO owner-reviewed vacancy and readiness." });
-    await call("PUT", `/api/company/units/${units[5]}/availability`, { expectedVersion: null, condition: "turnover", availableOn: offset(1), reason: "DEMO turnover in progress." });
     await call("POST", `/api/company/units/${units[2]}/rental-listing`, { forRent: true, expectedVersion: null, expectedAvailabilityVersion: 1, reason: "DEMO explicit owner listing intent." });
     const prospect = (await call("POST", "/api/company/prospects", { propertyId: properties[0], unitId: units[2], name: "Morgan Lee · DEMO", email: "prospect@sales-demo.invalid", source: "referral", desiredMoveIn: offset(1), followUpOn: today, notes: "Fictional sales inquiry.", reason: "DEMO inquiry intake." })).prospect;
     const followUp = await call("POST", `/api/company/prospects/${prospect.id}/follow-ups`, { kind: "tour", title: "Apartment tour · DEMO", dueOn: today, notes: "Fictional tour follow-up." });
@@ -132,6 +133,12 @@ export async function seedSalesDemo(tx: Tx, companyId: string, accounts: DemoSee
     const termBody = { effectiveOn: offset(2), monthlyRent: "1550.00", rentDueDay: 1, graceDays: 5, paymentInstructions: "DEMO future agreed terms.", reason: "DEMO reviewed future rent adjustment.", expectedLeaseVersion: 1 };
     const termPreview = await call("POST", `/api/company/leases/${leases[0]}/terms/preview`, termBody);
     await call("POST", `/api/company/leases/${leases[0]}/terms`, { ...termBody, sourceHash: termPreview.sourceHash, confirmed: true });
+    // Two leaseholders share Harbor House Apartment 1 instead of adding a unit.
+    const coholder = accounts.users.resident4;
+    await tx.companyMembership.create({ data: { userId: coholder.user_id, companyId, role: "resident" } });
+    await tx.residentPropertyAssignment.create({ data: { userId: coholder.user_id, companyId, propertyId: properties[1] } });
+    await call("POST", `/api/company/leases/${leases[2]}/participants`, { userId: coholder.user_id, name: coholder.name, email: coholder.email, role: "leaseholder", startsOn: offset(-5), endsOn: null, portalApproved: true });
+    residents.push(coholder.user_id);
     const occupant = accounts.users.occupant;
     await tx.companyMembership.create({ data: { userId: occupant.user_id, companyId, role: "resident" } });
     await call("POST", `/api/company/leases/${leases[0]}/participants`, { userId: occupant.user_id, name: occupant.name, email: occupant.email, role: "occupant", startsOn: offset(-5), endsOn: null, portalApproved: true });

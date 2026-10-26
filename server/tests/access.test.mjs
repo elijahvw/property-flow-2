@@ -27,6 +27,12 @@ test('suspended companies permit only active owners to review subscriptions with
   owner.membership.status = 'disabled';
   assert.deepEqual(permissions(owner), []);
 });
+test('deleted companies grant no company or subscription access even with an active membership', () => {
+  for (const role of ['owner', 'manager', 'staff', 'resident']) {
+    const user = principal(role); user.membership.company.status = 'deleted';
+    assert.deepEqual(permissions(user), []);
+  }
+});
 test('resident and staff cannot write properties; manager can; platform role is not a company bypass', () => {
   for (const role of ['resident', 'staff']) assert.throws(() => companyScope(principal(role), 'property.write'), /access/);
   assert.equal(companyScope(principal('manager'), 'property.write'), 'company-a');
