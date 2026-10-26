@@ -57,7 +57,12 @@ test("lease sections explain task groups and retain source context through keybo
 test("mobile lease navigation groups sections without overflowing and respects finance permission", async ({ page }, testInfo) => {
   const requests = await fixture(page, false);
   await page.setViewportSize({ width: 390, height: 844 });
+  // Wait for the lazy workspace to mount before testing the permission fallback.
+  // Slow asset delivery must not consume the separate UI assertion deadline.
+  const leaseLoaded = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/company/leases/lease" && response.status() === 200);
   await page.goto("/company/leases/lease?section=settlement");
+  await leaseLoaded;
   await expect(page.getByRole("region", { name: "Overview", exact: true })).toBeVisible();
   const selector = page.getByRole("combobox", { name: "Lease section", exact: true });
   await expect(selector).toHaveValue("overview");
