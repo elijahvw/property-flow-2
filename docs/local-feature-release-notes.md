@@ -1,8 +1,8 @@
 # Feature release notes
 
-## October 26, 2026 — demo recovery and account administration (local)
+## October 26, 2026 — demo recovery and account administration (PR72)
 
-Follow-up to merged PR71/main `de72a22`. Demo teardown now names separately added members and changed generated identities/grants, links the exact account/company-access or Support review, and hashes exact reviewed source snapshots. A demo company record opens its own teardown plan before deletion. The repair uses existing versioned controls; it never adopts by email, disables unrelated accounts or silently revokes a platform grant. Company ownership alone grants no support authority; company/account reviews now distinguish explicit platform authority.
+Published [PR72](https://github.com/elijahvw/property-flow-2/pull/72), based on merged PR71/main `de72a22`; code commit `b659b1d`. Demo teardown now names separately added members and changed generated identities/grants, links the exact account/company-access or Support review, and hashes exact reviewed source snapshots. A demo company record opens its own teardown plan before deletion. The repair uses existing versioned controls; it never adopts by email, disables unrelated accounts or silently revokes a platform grant. Company ownership alone grants no support authority; company/account reviews now distinguish explicit platform authority.
 
 Platform owners can choose any recorded account for an audited, expiring read-only view, including unassigned, unverified, disabled and platform accounts. Actual target permissions/status remain authoritative; nested viewing and writes stay denied. Delegated Support retains its prior active verified nonplatform company-member boundary. Fresh actor/session locks prevent queued requests using a revoked grant or expired context.
 

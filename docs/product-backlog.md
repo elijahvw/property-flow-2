@@ -2,7 +2,7 @@
 
 Updated October 26, 2026 against merged main `de72a22` (including PR71). This document holds target acceptance and unfinished scope; a bullet is not proof of delivery. [Current source/deployment status](mvp-status.md) · [feature register](product-roadmap.md) · [current platform audit](platform-audit-2026-10-25.md) · [experience contract](platform-experience.md). Historical result paragraphs below retain their original checkpoint evidence; their old local/unmerged/pause wording is superseded by the current source summary. Deployment and actual-role/provider acceptance remain unverified unless separately recorded.
 
-Local account-control refinement: actionable demo ownership diagnostics; platform-owner any-account read-only views (PF-29); scoped owner manual password setting and recoverable administrative attempts (PF-03). Contracts and release evidence define the implemented boundaries; actual hosted role/provider acceptance remains pending. [Manual passwords](manual-passwords.md) · [Support views](support-impersonation.md) · [Demo recovery](sales-demo.md).
+[PR72](https://github.com/elijahvw/property-flow-2/pull/72) account-control refinement: actionable demo ownership diagnostics; platform-owner any-account read-only views (PF-29); scoped owner manual password setting and recoverable administrative attempts (PF-03). Contracts and release evidence define the implemented boundaries; actual hosted role/provider acceptance remains pending. [Manual passwords](manual-passwords.md) · [Support views](support-impersonation.md) · [Demo recovery](sales-demo.md).
 
 ### PF-30 · Repeatable isolated sales demos — merged fixture7; local recovery refinement
 
