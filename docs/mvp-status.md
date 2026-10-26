@@ -4,6 +4,8 @@ Updated October 26, 2026 from checked-out Git history and repository contracts. 
 
 ## Current source and audit
 
+[PR71](https://github.com/elijahvw/property-flow-2/pull/71), integrated with main `0fb692f`: platform-owner company deletion (retained history, migration058), separate unit Occupied/Not occupied labels, and PF-30 fixture7's two-property/six-unit demo with name-based emails. See [current release evidence](local-feature-release-notes.md) and [demo walkthrough](sales-demo.md). This follow-up is not merged, deployed or live-provider accepted.
+
 **Merged source and verification follow-up:** main `e8b87c7` includes user-merged PR64/68 and PR65/66/63/67. Optional Alloy/manual starts, the daily 3 a.m. America/New_York Stop definition, scanner retirement 057 and fixture6 are merged source. Stop is effective unless `DEV_AUTO_STOP=false`. New/pending originals remain **Not scanned**; historical verdicts and rejected/unknown blocking remain under existing exact-source authority. [Current reconciliation](pr64-pr68-reconciliation-2026-10-25.md).
 
 The final fixed production suite passes **459/459 in 8.6 minutes**, two workers/zero retries/no source-build drift. Additional document/demo coverage passes maintenance 149, roadmap 40 and demo 22; safe server 128+nine expected DB skips, client 70 and operations 100 pass. The follow-up preserves these regressions, explicit lease startup readiness and current documentation. Its application/schema/infra/workflow source matches merged main. All 59 earlier migration files and published 057 are unchanged. Earlier 458/459 and remote 459/459 stages retain their distinct provenance. Publication CI/review and actual cloud rollout/role acceptance remain separate gates; no production-ready or bug-free claim is made.

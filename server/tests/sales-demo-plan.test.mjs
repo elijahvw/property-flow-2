@@ -8,6 +8,7 @@ test('a blueprint is deterministic, complete and contains no issued credentials 
   const first = demoBlueprintPlan(blueprint()), second = demoBlueprintPlan(blueprint());
   assert.deepEqual(first, second);
   assert.equal(first.planHash, demoPlanHash(blueprint()));
+  assert.deepEqual(first.inventory,{properties:2,unitsPerProperty:3,occupiedUnits:4,notOccupiedUnits:2,readyUnits:1,turnoverUnits:1});
   assert.equal(first.effects.dedicatedCompanies, 1); assert.equal(first.effects.preparedAccounts, 11); assert.equal(first.effects.issuedLogins, 8);
   assert.equal(first.roles.filter(role => !role.login).length, 3);
   assert.deepEqual(first.coverage.map(c => c.key).sort(), FEATURE_CATALOG.map(c => c.key).sort());

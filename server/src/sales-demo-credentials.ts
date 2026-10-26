@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:crypto";
+import { demoEmail } from "./sales-demo-email.js";
 import { AccessError } from "./access.js";
 import type { DemoIdentity } from "./identity-provider.js";
 
@@ -17,7 +18,7 @@ export const DEMO_PEOPLE = [
 ] as const;
 export type DemoCredential = DemoIdentity & { role: string; login: boolean };
 export function newDemoCredentials(id: string): DemoCredential[] {
-  return DEMO_PEOPLE.map(([accountKey, role, name]) => ({ demoId: id, accountKey, role, name, login: !["offline", "pending", "former"].includes(accountKey), email: `${accountKey}.${id}@sales-demo.invalid`, password: randomBytes(30).toString("base64url") + "aA1!" }));
+  return DEMO_PEOPLE.map(([accountKey, role, name]) => ({ demoId: id, accountKey, role, name, login: !["offline", "pending", "former"].includes(accountKey), email: demoEmail(id, accountKey), password: randomBytes(30).toString("base64url") + "aA1!" }));
 }
 function encryptionKey(secret: string) {
   if (!secret) throw new AccessError(503, "DEMO_CREDENTIALS_UNAVAILABLE", "Demo credential protection is not configured.");

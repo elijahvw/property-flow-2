@@ -12,7 +12,7 @@ async function fixture(page: Page, workspace: "platform" | "company" = "platform
     platformRole: null, firstSignedInAt: null,
     membership: { userId: `person-${index + 1}`, companyId: "company-1", role: index % 2 ? "staff" : "manager", status: "active", version: 1, company: companies[0] },
   }));
-  const state = { companies, people, checks: [] as string[], writes: 0 };
+  const state = { companies, people, checks: [] as string[], writes: 0, deletionRequests: [] as Record<string, unknown>[], loseDeleteResponse: false };
   await page.route("**/api/**", async route => {
     const request = route.request(), url = new URL(request.url()), path = url.pathname;
     const json = (value: unknown, status = 200) => route.fulfill({ json: value, status });
@@ -27,9 +27,18 @@ async function fixture(page: Page, workspace: "platform" | "company" = "platform
       return json({ nextPage: null, conflicts: [], limited: false });
     }
     if (path === "/api/platform/users") return json(state.people);
-    if (path === "/api/platform/companies") return json(state.companies);
+    if (path === "/api/platform/companies") return json(state.companies.filter(company => company.status !== "deleted"));
     if (path.endsWith("/subscription")) return json({ error: "Subscription service unavailable in this directory fixture." }, 503);
-    if (/^\/api\/platform\/companies\/company-\d+$/.test(path)) return json(companies.find(company => path.endsWith(`/${company.id}`)));
+    if (/^\/api\/platform\/companies\/company-\d+$/.test(path)) {
+      const company = companies.find(company => path.endsWith(`/${company.id}`))!;
+      if (request.method() === "DELETE") {
+        state.deletionRequests.push(request.postDataJSON());
+        if (request.postDataJSON().confirmationName !== company.name) return json({ error: "Enter the exact company name to confirm deletion." }, 400);
+        company.status = "deleted"; company.version = 2;
+        if (state.loseDeleteResponse && state.deletionRequests.length === 1) return route.abort("failed");
+      }
+      return json(company);
+    }
     if (path === "/api/company/members") return json(people.map(person => ({ ...person.membership, user: person })));
     if (path.endsWith("/activity")) return json({ items: [], total: 0, page: 1, pageSize: 25 });
     if (request.method() !== "GET") state.writes++;
@@ -123,4 +132,47 @@ test("team directory resets filters and removes unnecessary pagination on a smal
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath("team-directory-mobile.png"), fullPage: true });
+});
+
+
+test("company deletion confirms the exact record and returns to the filtered directory", async ({ page }, info) => {
+  const state = await fixture(page);
+  await page.setViewportSize({ width: 320, height: 780 });
+  await page.goto("/platform/companies/company-1?q=Fictional&status=active");
+  await page.getByRole("button", { name: "Delete company", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Delete company", exact: true });
+  await expect(dialog).toContainText("Retained history is not erased");
+  await page.screenshot({path:info.outputPath("company-delete-phone.png"),fullPage:true});
+  await dialog.getByRole("textbox", { name: "Company name confirmation", exact: true }).fill("Wrong company");
+  await dialog.getByRole("button", { name: "Confirm company deletion", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("Enter the exact company name");
+  await dialog.getByRole("textbox", { name: "Company name confirmation", exact: true }).fill("Fictional company 01");
+  await dialog.getByRole("button", { name: "Confirm company deletion", exact: true }).click();
+  await expect(page).toHaveURL(/\/platform\/companies\?q=Fictional&status=active$/);
+  await expect(page.getByRole("link", { name: "Manage Fictional company 01", exact: true })).toHaveCount(0);
+  expect(state.deletionRequests).toHaveLength(2);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.goto("/platform/companies/company-1");
+  await expect(page.getByText("Deleted company — company access is blocked.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit company profile", exact: true })).toHaveCount(0);
+});
+
+test("interrupted company deletion retries the exact submitted version and key", async ({ page }) => {
+  const state = await fixture(page); state.loseDeleteResponse = true;
+  await page.goto("/platform/companies/company-2");
+  await page.getByRole("button", { name: "Delete company", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Delete company", exact: true });
+  await dialog.getByRole("textbox", { name: "Company name confirmation", exact: true }).fill("Fictional company 02");
+  await dialog.getByRole("button", { name: "Confirm company deletion", exact: true }).click();
+  await expect(dialog.getByRole("textbox", { name: "Company name confirmation", exact: true })).toBeDisabled();
+  await expect(dialog.getByRole("alert")).toContainText("Retry with the original details");
+  await dialog.getByRole("button", { name: "Close & keep recovery", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await page.getByRole("button", { name: "Resume company deletion", exact: true }).click();
+  await expect(dialog.getByRole("textbox", { name: "Company name confirmation", exact: true })).toHaveValue("Fictional company 02");
+  await expect(dialog.getByRole("textbox", { name: "Company name confirmation", exact: true })).toBeDisabled();
+  await dialog.getByRole("button", { name: "Confirm company deletion", exact: true }).click();
+  await expect(page).toHaveURL(/\/platform\/companies$/);
+  expect(state.deletionRequests).toHaveLength(2);
+  expect(state.deletionRequests[1]).toEqual(state.deletionRequests[0]);
 });

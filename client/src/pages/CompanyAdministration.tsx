@@ -8,6 +8,7 @@ import { api } from "../api";
 import { useResource } from "../useResource";
 import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "../components/Form";
+import { FormField, FormSection } from "../components/FormFields";
 import { PlatformCompanySubscription } from "../components/CompanySubscription";
 import { SalesDemo } from "../components/SalesDemo";
 export type CompanyProfile = {
@@ -15,6 +16,7 @@ export type CompanyProfile = {
   name: string;
   status: string;
   version: number;
+  deletedAt?: string | null;
   legalName?: string | null;
   contactName?: string | null;
   contactEmail?: string | null;
@@ -337,6 +339,9 @@ export function CompanyDetail() {
   );
 }
 function CompanyRecord() {
+  const navigate = useNavigate();
+  const [deleting, setDeleting] = useState<{ company: CompanyProfile; key: string } | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const { companyId = "" } = useParams(),
     r = useResource<CompanyProfile>(
       `/api/platform/companies/${encodeURIComponent(companyId)}`,
@@ -354,6 +359,11 @@ function CompanyRecord() {
         m.status === "active" &&
         m.user.status === "active",
     );
+  if (c.status === "deleted") return <>
+    <Link to="/platform/companies">← Companies</Link>
+    <header className="page-heading"><h1>{c.name}</h1><p>Deleted company — company access is blocked.</p></header>
+    <section className="panel"><p>This company has been removed from the company directory. Source records, financial history and audit events are retained. It cannot be reactivated.</p></section>
+  </>;
   return (
     <>
       <Link to={`/platform/companies${directoryQuery ? `?${directoryQuery}` : ""}`}>← Companies</Link>
@@ -506,6 +516,29 @@ function CompanyRecord() {
           </ul>
         )}
       </section>
+      <section className="panel" aria-labelledby="delete-company-title">
+        <h2 id="delete-company-title">Delete company</h2>
+        <p>Remove this company from the directory and block all company access. People keep their sign-in accounts; company memberships and pending invitations are disabled. Financial records, leases, documents and audit history are retained.</p>
+        <button className="secondary" disabled={editing} onClick={() => { setDeleting(previous => previous || { company: c, key: crypto.randomUUID() }); setDeleteOpen(true); }}>{deleting ? "Resume company deletion" : "Delete company"}</button>
+      </section>
+      <EditorDialog open={deleteOpen} title="Delete company" onClose={() => setDeleteOpen(false)} onDiscard={() => { setDeleting(null); setDeleteOpen(false); }}>
+        {deleting && <Form operation="company.delete" intent="write" label="Confirm company deletion" submit={async form => {
+          await api(`/api/platform/companies/${encodeURIComponent(deleting.company.id)}`, { method: "DELETE", body: {
+            expectedVersion: deleting.company.version, confirmationName: form.get("confirmationName"), submissionKey: deleting.key,
+          } });
+          setDeleting(null);
+          setDeleteOpen(false);
+          navigate(`/platform/companies${directoryQuery ? `?${directoryQuery}` : ""}`);
+        }}>
+          <FormSection title="Review company deletion" description="This action cannot be undone. Retained history is not erased. Sales demos must be torn down through the sales demo controls first.">
+            <p>Company: <strong>{deleting.company.name}</strong></p>
+            <p>Every member loses company access and their current sessions are revoked. No messages are sent and no money is moved.</p>
+            <FormField label="Company name confirmation" required hint={`Enter ${deleting.company.name} exactly to confirm.`}>
+              <input name="confirmationName" required maxLength={200} autoComplete="off" />
+            </FormField>
+          </FormSection>
+        </Form>}
+      </EditorDialog>
     </>
   );
 }

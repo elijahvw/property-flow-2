@@ -58,12 +58,16 @@ test("availability distinguishes unconfirmed readiness from recorded occupancy a
   await expect(page.getByText("4 matching units", { exact: true })).toBeVisible();
   const occupied = page.getByRole("row").filter({ hasText: "Occupied apartment" });
   await expect(occupied.getByText("Recorded occupied", { exact: true })).toBeVisible();
+  await expect(occupied.getByText("Occupied", { exact: true })).toBeVisible();
   await expect(occupied.getByRole("link", { name: "Current recorded lease", exact: true })).toHaveAttribute("href", "/company/leases/fictional-current-lease");
   const unconfirmed = page.getByRole("row").filter({ hasText: "Unconfirmed apartment" });
   await expect(unconfirmed).toContainText("physical readiness is unconfirmed");
+  await expect(unconfirmed.getByText("Not occupied", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Next units", exact: true }).click();
   const ready = page.getByRole("row").filter({ hasText: "Ready apartment" });
   await expect(ready).toContainText("Vacant & ready");
+  await expect(ready.getByText("Not occupied", { exact: true })).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "Future apartment" }).getByText("Not occupied", { exact: true })).toBeVisible();
   await expect(ready.getByRole("link", { name: "Unit lease history", exact: true })).toHaveAttribute("href", "/company/properties/fictional-home/leases?unitId=unit-x");
   await expect(page.getByRole("link", { name: "Upcoming recorded lease", exact: true })).toHaveAttribute("href", "/company/leases/fictional-future-lease");
   await page.getByRole("combobox", { name: "Availability state", exact: true }).selectOption("ready");

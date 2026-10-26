@@ -127,7 +127,7 @@ export function registerCompanyAdministration(
     });
   }
   const publicRow = (row: any) => {
-    const { submissionKey, submissionHash, createdById, ...safe } = row;
+    const { submissionKey, submissionHash, createdById, deletionSubmissionKey, deletionSubmissionHash, deletedById, ...safe } = row;
     return safe;
   };
   const audit = (
@@ -149,6 +149,7 @@ export function registerCompanyAdministration(
     checked(request, async (tx) =>
       (
         await tx.company.findMany({
+          where: { status: { not: "deleted" } },
           orderBy: [{ name: "asc" }, { id: "asc" }],
           include: {
             _count: { select: { memberships: true, properties: true } },
@@ -215,6 +216,42 @@ export function registerCompanyAdministration(
       return publicRow(row);
     });
   });
+  server.delete<{ Params: { companyId: string } }>(
+    "/api/platform/companies/:companyId", auth, request => {
+      platform(request);
+      mutation(request, origin);
+      const id = assignmentId(request.params.companyId),
+        body = input(request, ["expectedVersion", "confirmationName", "submissionKey"]),
+        expectedVersion = version(body.expectedVersion),
+        confirmationName = boundedText(body.confirmationName, 200, "Company name confirmation"),
+        key = submission(body.submissionKey, { id, expectedVersion, confirmationName });
+      return checked(request, async tx => {
+        // This fence also serializes membership assignment and company operations.
+        await tx.$queryRaw`SELECT id FROM "Company" WHERE id=${id} FOR UPDATE`;
+        const company = await tx.company.findUnique({ where: { id }, include: { salesDemo: { include: { setup: { select: { status: true } } } } } });
+        if (!company) throw new AccessError(404, "NOT_FOUND", "Company not found.");
+        if (company.status === "deleted") {
+          if (company.deletedById !== request.principal!.id || company.deletionSubmissionKey !== key.submissionKey)
+            throw new AccessError(409, "COMPANY_DELETED", "This company was already deleted.");
+          sameSubmission(company.deletionSubmissionHash!, key.submissionHash);
+          const { salesDemo, ...row } = company;
+          return publicRow(row);
+        }
+        if (company.version !== expectedVersion) throw conflict();
+        if (confirmationName !== company.name) throw new AccessError(400, "INVALID_INPUT", "Enter the exact company name to confirm deletion.");
+        if (company.salesDemo && (company.salesDemo.status !== "retired" || company.salesDemo.setup && company.salesDemo.setup.status !== "retired"))
+          throw new AccessError(409, "DEMO_TEARDOWN_REQUIRED", "Tear down this sales demo first so its generated sign-in accounts are disabled safely, then delete the company.");
+        const members = await tx.companyMembership.findMany({ where: { companyId: id }, select: { userId: true } });
+        await tx.companyMembership.updateMany({ where: { companyId: id }, data: { status: "disabled", version: { increment: 1 } } });
+        await tx.invitation.updateMany({ where: { companyId: id, revokedAt: null, acceptedAt: null }, data: { revokedAt: new Date(), version: { increment: 1 } } });
+        await tx.session.deleteMany({ where: { OR: [{ userId: { in: members.map(m => m.userId) } }, { impersonatedUserId: { in: members.map(m => m.userId) } }, { impersonationCompanyId: id }] } });
+        const row = await tx.company.update({ where: { id }, data: { status: "deleted", deletedAt: new Date(), deletedById: request.principal!.id,
+          deletionSubmissionKey: key.submissionKey, deletionSubmissionHash: key.submissionHash, version: { increment: 1 } } });
+        await audit(tx, request, id, "company.deleted");
+        return publicRow(row);
+      });
+    },
+  );
   server.patch<{ Params: { companyId: string } }>(
     "/api/platform/companies/:companyId",
     auth,
@@ -241,6 +278,7 @@ export function registerCompanyAdministration(
         const previous = await tx.company.findUnique({ where: { id } });
         if (!previous)
           throw new AccessError(404, "NOT_FOUND", "Company not found.");
+        if (previous.status === "deleted") throw new AccessError(409, "COMPANY_DELETED", "This company was deleted and cannot be reactivated.");
         const result = await tx.company.updateMany({
           where: { id, version: expectedVersion },
           data: {

@@ -60,7 +60,7 @@ export function permissions(user: Principal): Permission[] {
   }
   // A suspended company still needs its active owner to review SaaS invoices
   // and recover its subscription without opening property operations.
-  if (m?.status === "active" && m.company.status !== "active" && m.role === "owner") result.push("subscription.read");
+  if (m?.status === "active" && m.company.status === "suspended" && m.role === "owner") result.push("subscription.read");
   return result;
 }
 export class AccessError extends Error {

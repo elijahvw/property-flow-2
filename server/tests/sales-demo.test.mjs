@@ -1,3 +1,4 @@
+import { newDemoCredentials, sealDemoCredentials } from '../dist/sales-demo-credentials.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -157,7 +158,7 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
         settlement:await tx.leaseSettlement.findFirstOrThrow({where:{leaseId:s.endedLeaseId}}),refund:await tx.leaseMovement.findFirstOrThrow({where:{leaseId:s.endedLeaseId,kind:'deposit_refund'},include:{cashEntries:true}}),
         baseline:await tx.leaseInspection.findUniqueOrThrow({where:{id:s.baselineInspectionId}}),moveOut:await tx.leaseInspection.findUniqueOrThrow({where:{id:s.moveOutInspectionId}}),
         agreement:await tx.leaseAgreement.findUniqueOrThrow({where:{id:s.reviewedAgreementId}}),shared:await tx.leaseDocumentShare.findUniqueOrThrow({where:{id:s.receivedShareId}}),
-        files:await tx.documentVersion.findMany(),scanAudits:await tx.auditEvent.count({where:{companyId:demo.companyId,action:'document.scanned'}}),archivedDoc:await tx.privateDocument.findUniqueOrThrow({where:{id:s.archivedDocumentId}}),archivedUnit:await tx.unit.findUniqueOrThrow({where:{id:s.archivedUnitId}}),
+        files:await tx.documentVersion.findMany(),scanAudits:await tx.auditEvent.count({where:{companyId:demo.companyId,action:'document.scanned'}}),archivedDoc:await tx.privateDocument.findUniqueOrThrow({where:{id:s.archivedDocumentId}}),units:await tx.unit.findMany({where:{companyId:demo.companyId},include:{leases:true,availability:true}}),
         voided:await tx.ledgerEntry.findUniqueOrThrow({where:{id:s.voidedExpenseId}}),schedule:await tx.rentSchedule.findUniqueOrThrow({where:{id:s.pausedScheduleId}}),
         imports:await tx.unitImportBatch.findMany(),expenses:await tx.expenseImportBatch.findMany(),applications:await tx.rentalApplication.findMany(),
       };
@@ -175,7 +176,15 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
     assert.equal((await call(users.owner.user_id,'GET',source+'/download')).statusCode,200);
     assert.equal((await call(users.owner.user_id,'POST',source+'/scan',{})).statusCode,404);
     const residentOriginal=await call(users.resident.user_id,'GET',`/api/resident/documents/${facts.shared.id}/download`);assert.equal(residentOriginal.statusCode,200,residentOriginal.body);assert.equal(Buffer.from(residentOriginal.json().contentBase64,'base64').toString(),DEMO_BUNDLED_TEXT);
-    assert.ok(facts.archivedDoc.archivedAt);assert.equal(facts.archivedUnit.status,'archived');assert.ok(facts.voided.voidedAt);assert.equal(facts.schedule.status,'paused');
+    assert.ok(facts.archivedDoc.archivedAt);assert.equal(facts.units.length,6);
+    for(const propertyId of demo.manifest.properties)assert.equal(facts.units.filter(u=>u.propertyId===propertyId).length,3);
+    assert.deepEqual(new Set(demo.manifest.units),new Set(facts.units.map(u=>u.id)));
+    const occupied=facts.units.filter(u=>u.leases.some(l=>l.status==='active'&&l.startsOn.toISOString().slice(0,10)<=demo.manifest.today&&l.endsOn.toISOString().slice(0,10)>=demo.manifest.today));
+    assert.equal(occupied.length,4);assert.ok(!occupied.some(u=>[s.readyUnitId,s.turnoverUnitId].includes(u.id)));
+    assert.equal(facts.units.find(u=>u.id===s.readyUnitId).availability.condition,'ready');
+    assert.equal(facts.units.find(u=>u.id===s.turnoverUnitId).availability.condition,'turnover');
+    assert.equal(facts.units.find(u=>u.id===s.restoredUnitId).version,3);
+    assert.equal(facts.ended.unitId,s.turnoverUnitId);assert.equal(facts.offlineLease.unitId,demo.manifest.units[4]);assert.ok(facts.voided.voidedAt);assert.equal(facts.schedule.status,'paused');
     assert.equal(facts.imports.find(b=>b.id===s.unitImportId).status,'committed');assert.ok(facts.imports.find(b=>b.id===s.invalidUnitImportId).preview.errorCount>0);
     assert.equal(facts.expenses.find(b=>b.id===s.expenseImportId).status,'committed');assert.ok(facts.expenses.find(b=>b.id===s.duplicateExpenseImportId).preview.errorCount>0);
     assert.equal(facts.applications.find(a=>a.id===s.approvedApplicationId).status,'approved');assert.equal(facts.applications.find(a=>a.id===s.rejectedApplicationId).status,'rejected');
@@ -351,24 +360,47 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
   await t.test('pending cleanup includes an ambiguous Auth0 success whose subject was not recorded',async()=>{
     loseIdentity=true;const p={submissionKey:randomUUID()};assert.equal((await call('platform','POST',base,p)).statusCode,503);
     const pending=(await ok('platform','GET',base)).setups[0];assert.equal(pending.accountsPrepared,0);
-    await db.salesDemoSetup.update({where:{id:pending.id},data:{blueprint:Prisma.DbNull}});
+    // New-format ambiguous creates retain their pinned blueprint; the legacy
+    // null-blueprint path has a separate old-address regression below.
     pauseBlock=async()=>{throw new IdentityProviderError('update','rate_limit',429,30);};
     try{const interrupted=await call('platform','POST',`${base}/${pending.id}/teardown`,{expectedVersion:1});assert.equal(interrupted.statusCode,429,interrupted.body);}finally{pauseBlock=null;}
     const recorded=await db.salesDemoSetup.findUniqueOrThrow({where:{id:pending.id}});assert.equal(Object.keys(recorded.accounts).length,1);assert.ok(Object.values(recorded.accounts).every(account=>account.issuer===provider.issuer&&account.connection===provider.databaseConnection&&!account.cleanupConfirmedSubject));
     const originalIssuer=provider.issuer,beforeCalls=blockCalls,beforeAudit=await db.auditEvent.count();provider.issuer='https://other.auth0.com/';
     try{const rejected=await call('platform','POST',`${base}/${pending.id}/teardown`,{expectedVersion:1});assert.equal(rejected.statusCode,409,rejected.body);assert.equal(rejected.json().code,'DEMO_PROVIDER_CHANGED');assert.equal(blockCalls,beforeCalls);assert.equal(await db.auditEvent.count(),beforeAudit);assert.deepEqual(await db.salesDemoSetup.findUniqueOrThrow({where:{id:pending.id}}),recorded);}finally{provider.issuer=originalIssuer;}
     await ok('platform','POST',`${base}/${pending.id}/teardown`,{expectedVersion:1});
-    for(const [email,row]of remote)if(email.includes(pending.id))assert.equal(row.blocked,true);
+    for(const [email,row]of remote)if(newDemoCredentials(pending.id).some(c=>c.email===email))assert.equal(row.blocked,true);
   });
   await t.test('an ambiguous identity transferred outside the demo is never blocked by cleanup',async()=>{
     loseIdentity=true;assert.equal((await call('platform','POST',base,{submissionKey:randomUUID()})).statusCode,503);
-    const pending=(await ok('platform','GET',base)).setups[0],account=[...remote.values()].find(u=>u.email.includes(pending.id));
+    const pending=(await ok('platform','GET',base)).setups[0],account=[...remote.values()].find(u=>u.email===newDemoCredentials(pending.id).find(c=>c.accountKey==='owner').email);
     await admin.query(`INSERT INTO "User"(id,email,"emailVerified","updatedAt") VALUES($1,$2,true,NOW());`,[account.user_id,account.email]);
     await db.companyMembership.create({data:{userId:account.user_id,companyId:'customer-company',role:'manager'}});
     assert.equal((await call('platform','POST',`${base}/${pending.id}/teardown`,{expectedVersion:1})).statusCode,409);
     assert.equal(remote.get(account.email).blocked,false);assert.equal((await db.user.findUniqueOrThrow({where:{id:account.user_id}})).status,'active');
     await db.companyMembership.delete({where:{userId:account.user_id}});
     await ok('platform','POST',`${base}/${pending.id}/teardown`,{expectedVersion:1});assert.equal(remote.get(account.email).blocked,true);
+  });
+  await t.test('unfinished legacy email generation cleans up exact saved addresses after the email format change',async()=>{
+    const id=randomUUID(), credentials=newDemoCredentials(id).map(c=>({...c,email:`${c.accountKey}.${id}@sales-demo.invalid`}));
+    // This models an older ambiguous provider create whose subject was never saved.
+    const legacy=credentials[0],subject='auth0|legacy-email-'+randomUUID();
+    remote.set(legacy.email,{user_id:subject,email:legacy.email,name:legacy.name,email_verified:true,blocked:false});
+    await db.salesDemoSetup.create({data:{id,createdById:'platform',submissionKey:randomUUID(),submissionHash:'legacy-email-fixture',credentialsCipher:sealDemoCredentials(id,credentials,'former-application-secret')}});
+    await ok('platform','POST',`${base}/${id}/teardown`,{expectedVersion:1});
+    assert.equal(remote.get(legacy.email).blocked,true);
+    const retired=await db.salesDemoSetup.findUniqueOrThrow({where:{id}});assert.equal(retired.status,'retired');assert.equal(retired.credentialsCipher,'');
+  });
+  await t.test('new-format ambiguous identity cleanup survives an unavailable credential encryption key',async()=>{
+    const submissionKey=randomUUID();loseIdentity=true;
+    assert.equal((await call('platform','POST',base,{submissionKey})).statusCode,503);
+    const pending=await db.salesDemoSetup.findUniqueOrThrow({where:{createdById_submissionKey:{createdById:'platform',submissionKey}}});
+    assert.equal(Object.keys(pending.accounts).length,0);assert.equal(pending.blueprint.seedVersion,SALES_DEMO_SEED_VERSION);
+    await db.salesDemoSetup.update({where:{id:pending.id},data:{credentialsCipher:sealDemoCredentials(pending.id,newDemoCredentials(pending.id),'former-application-secret')}});
+    const ownerEmail=newDemoCredentials(pending.id).find(c=>c.accountKey==='owner').email;
+    assert.equal(remote.get(ownerEmail).blocked,false);
+    await ok('platform','POST',`${base}/${pending.id}/teardown`,{expectedVersion:1});
+    assert.equal(remote.get(ownerEmail).blocked,true);
+    assert.equal((await db.salesDemoSetup.findUniqueOrThrow({where:{id:pending.id}})).status,'retired');
   });
   await t.test('legacy teardown preserves its pre-existing presenter identity',async()=>{
     await admin.query(`INSERT INTO "User"(id,email,"emailVerified","updatedAt") VALUES('legacy-owner','legacy@test.invalid',true,NOW()); INSERT INTO "Company"(id,name,"updatedAt") VALUES('legacy-company','Legacy demo',NOW()); INSERT INTO "CompanyMembership"("userId","companyId",role,"updatedAt") VALUES('legacy-owner','legacy-company','owner',NOW()); INSERT INTO "SalesDemo"(id,"companyId","ownerId","createdById","submissionKey","submissionHash","seedVersion",manifest) VALUES('legacy-demo','legacy-company','legacy-owner','platform','legacy','legacy',1,'{}')`);

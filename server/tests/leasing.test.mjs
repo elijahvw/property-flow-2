@@ -66,7 +66,7 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
   assert.equal((await call('owner','GET',detail,undefined,{'x-company-id':'b'})).statusCode,403);
   assert.equal((await call('owner','POST',units,{...unitBody,label:'Different'})).statusCode,409);
   assert.equal((await call('manager','POST',units,{...unitBody,submissionKey:randomUUID()})).statusCode,409);
-  assert.equal((await call('staff','GET',units)).json().items.length,1);
+  const staffUnits=await call('staff','GET',units);assert.equal(staffUnits.json().items.length,1,staffUnits.body);
   assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='unit.created'`)).rows[0].n,1);
  });
  await t.test('lease durable replay, same-key mismatch, rent cents and tenant/role validation',async()=>{
@@ -83,7 +83,7 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
   assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='lease.created'`)).rows[0].n,1);
  });
  await t.test('lease search is scoped before pagination and current portfolio counts follow business dates',async()=>{
-  for(const q of ['home','Unit 1','resident@test.invalid']){const result=await call('owner','GET',leases+'?q='+encodeURIComponent(q));assert.equal(result.statusCode,200,result.body);assert.equal(result.json().items.length,1);}
+  for(const q of ['home','Unit 1','resident@test.invalid']){const result=await call('owner','GET',leases+'?q='+encodeURIComponent(q));assert.equal(result.statusCode,200,result.body);assert.equal(result.json().items.length,1,result.body);}
   assert.equal((await call('owner','GET',leases+'?q=unmatched')).json().items.length,0);
   assert.equal((await call('foreign','GET',leases+'?q=resident')).json().items.length,0);
   assert.equal((await call('owner','GET',leases+'?q='+ 'x'.repeat(201))).statusCode,400);
@@ -220,7 +220,7 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
  await t.test('linked lease renewals',async renewalTest=>renewalCases(renewalTest,admin,call,db));
  await t.test('prospect source-return browser workflows',{skip:!process.env.TEST_LEASING_BROWSER_URL},async scopeTest=>prospectSourceReturnCases(scopeTest,admin,call,db,app,providerCalls));
  await t.test('preferred-unit advisory and recovery',{skip:!process.env.TEST_LEASING_BROWSER_URL},async scopeTest=>unitHintCases(scopeTest,admin,call,db,app,providerCalls));
- await taskDraftCases(t,admin,call,db);
+ await t.test('saved task drafts',async draftTest=>taskDraftCases(draftTest,admin,call,db));
  await t.test('consolidated acquisition, listing and follow-ups',async scopeTest=>acquisitionConsolidationCases(scopeTest,admin,call,db,app,providerCalls));
  await t.test('a property create pinned to its opening company cannot follow a stale actor into another company',async()=>{
   const member=await db.companyMembership.findUnique({where:{userId:'owner'}});
@@ -240,4 +240,26 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
   assert.equal(retry.statusCode,200,retry.body);assert.equal(retry.json().id,saved.json().id);
   assert.equal((await admin.query('SELECT count(*)::int n FROM "AuditEvent" WHERE "targetId"=$1 AND action=\'property.created\'',[saved.json().id])).rows[0].n,1);
  });
+ await t.test('unit occupancy uses company business-day lease coverage without exposing lease or household details',async()=>{
+  await admin.query(`INSERT INTO "Property"(id,name,address,city,state,zip,"companyId","updatedAt") VALUES('occupancy-home','Occupancy examples','street','city','state','zip','a',NOW())`);
+  const path='/api/company/properties/occupancy-home/units';
+  const initial=await call('owner','GET',path);assert.equal(initial.statusCode,200,initial.body);
+  const today=initial.json().occupancyAsOf,shift=days=>{const day=new Date(today+'T00:00:00Z');day.setUTCDate(day.getUTCDate()+days);return day.toISOString().slice(0,10);};
+  for(const [id,status,start,end,occupied] of [
+   ['current','active',shift(-30),null,true],['start-today','active',today,shift(30),true],['end-today','active',shift(-30),today,true],
+   ['future','active',shift(1),shift(30),false],['past-end','active',shift(-30),shift(-1),false],['draft','draft',shift(-30),null,false],['ended','ended',shift(-30),today,false],['empty',null,null,null,false],['archived',null,null,null,false],
+  ]){
+   await admin.query(`INSERT INTO "Unit"(id,"companyId","propertyId",label,status,"createdById","submissionKey","submissionHash","updatedAt") VALUES($1,'a','occupancy-home',$1,$2,'owner',$3,'fixture',NOW())`,['occupancy-'+id,id==='archived'?'archived':'active',randomUUID()]);
+   if(status)await admin.query(`INSERT INTO "Lease"(id,"companyId","propertyId","unitId","residentId","startsOn","endsOn","rentCents",status,"createdById","submissionKey","submissionHash","updatedAt") VALUES($1,'a','occupancy-home',$2,'resident',$3,$4,12345,$5,'owner',$6,'fixture',NOW())`,['occupancy-lease-'+id,'occupancy-'+id,start,end,status,randomUUID()]);
+   const response=await call('owner','GET',path+'?q='+encodeURIComponent('occupancy-'+id));assert.equal(response.statusCode,200,response.body);
+   const unit=response.json().items.find(row=>row.id==='occupancy-'+id);assert.equal(unit.occupancy,occupied?'occupied':'not_occupied',id);
+   assert.equal(unit.status,id==='archived'?'archived':'active');
+   for(const key of ['residentId','residentContactId','currentLeaseId','leases','rentCents'])assert.equal(Object.hasOwn(unit,key),false,key);
+  }
+  await admin.query(`UPDATE "CompanyMembership" SET "staffPropertyScope"='all' WHERE "userId"='staff'`);
+  const staff=await call('staff','GET',path);assert.equal(staff.statusCode,200,staff.body);assert.equal(staff.json().items.filter(row=>row.occupancy==='occupied').length,3);
+  assert.equal((await call('foreign','GET',path)).statusCode,404);
+  for(const user of ['resident','platform'])assert.equal((await call(user,'GET',path)).statusCode,403);
+ });
+
 });

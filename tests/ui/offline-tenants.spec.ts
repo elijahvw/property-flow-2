@@ -440,6 +440,7 @@ test("archive and restore live in tenant details and retain profile/history disc
   await page.getByRole("button",{name:"Archive tenant",exact:true}).click();
   await expect(page.getByRole("dialog")).toContainText("rental, financial and audit history will remain");
   await page.getByRole("button",{name:"Confirm archive",exact:true}).click();
+  await expect(page.getByRole("dialog",{name:"Archive tenant",exact:true})).toBeHidden();
   expect(state.updates[0]).toMatchObject({expectedVersion:3,status:"archived",name:"Jordan Rivera",managementNotes:"Preserve these internal details"});
   await page.getByRole("link",{name:"← All tenants",exact:true}).click();
   await expect(page.getByRole("link",{name:"View tenant Jordan Rivera"})).toHaveCount(0);
@@ -448,6 +449,7 @@ test("archive and restore live in tenant details and retain profile/history disc
   await page.getByText("More tenant actions",{exact:true}).click();
   await page.getByRole("button",{name:"Restore tenant",exact:true}).click();
   await page.getByRole("button",{name:"Confirm restore",exact:true}).click();
+  await expect(page.getByRole("dialog",{name:"Restore tenant",exact:true})).toBeHidden();
   await page.getByRole("link",{name:"← All tenants",exact:true}).click();
   await expect(page.getByRole("heading",{name:"No archived tenants"})).toBeVisible();
   await page.getByLabel("Tenant records",{exact:true}).selectOption("active");

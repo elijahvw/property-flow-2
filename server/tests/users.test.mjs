@@ -832,6 +832,58 @@ test(
         );
       },
     );
+    await t.test("platform company deletion is atomic, scoped, retry-safe and retains history", async () => {
+      const company = await db.company.create({ data: { name: "Deletion fixture" } }), id = company.id, path = `/api/platform/companies/${id}`;
+      const member = "delete-owner";
+      await db.user.create({ data: { id: member, email: "delete-owner@test.invalid", status: "active", emailVerified: true,
+        membership: { create: { companyId: id, role: "owner" } } } });
+      const session = () => db.session.create({ data: { tokenHash: digest(`token-${member}`), csrfToken: "csrf", userId: member,
+        expiresAt: new Date(Date.now() + 3600000), idleExpiresAt: new Date(Date.now() + 3600000) } });
+      await session();
+      const property = await call(member, "POST", "/api/company/properties", { name: "Retained building", address: "1 Test Street", city: "Test", state: "PA", zip: "19100", submissionKey: randomUUID() });
+      assert.equal(property.statusCode, 200, property.body);
+      const expense = await call(member, "POST", "/api/company/finances", { propertyId: property.json().id, occurredOn: "2026-10-25", amount: "12.50", kind: "expense", category: "other", memo: "Retained posted source", submissionKey: randomUUID() });
+      assert.equal(expense.statusCode, 200, expense.body);
+      const invitation = await db.invitation.create({ data: { companyId: id, email: "pending-delete@test.invalid", role: "staff", tokenHash: digest(randomUUID()), expiresAt: new Date(Date.now()+3600000), createdBy: "platform" } });
+      const body = { expectedVersion: 1, confirmationName: company.name, submissionKey: randomUUID() };
+      for (const actor of [member, "owner", "manager", "staff", "resident", "foreign"])
+        assert.equal((await call(actor, "DELETE", path, body)).statusCode, 403);
+      assert.equal((await call("platform", "DELETE", path, body, { "x-csrf-token": "bad" })).statusCode, 403);
+      assert.equal((await call("platform", "DELETE", path, { ...body, expectedVersion: 2 })).statusCode, 409);
+      assert.equal((await call("platform", "DELETE", path, { ...body, confirmationName: "Wrong company" })).statusCode, 400);
+      await admin.query(`CREATE FUNCTION reject_fixture_company_delete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='company.deleted' THEN RAISE EXCEPTION 'fixture rollback'; END IF; RETURN NEW; END $$`);
+      await admin.query(`CREATE TRIGGER reject_fixture_company_delete BEFORE INSERT ON "AuditEvent" FOR EACH ROW EXECUTE FUNCTION reject_fixture_company_delete()`);
+      try { assert.equal((await call("platform", "DELETE", path, body)).statusCode, 500); }
+      finally { await admin.query(`DROP TRIGGER reject_fixture_company_delete ON "AuditEvent"; DROP FUNCTION reject_fixture_company_delete()`); }
+      assert.equal((await db.company.findUniqueOrThrow({ where: { id } })).status, "active");
+      assert.equal((await db.companyMembership.findUniqueOrThrow({ where: { userId: member } })).status, "active");
+      assert.ok(await db.session.findUnique({ where: { tokenHash: digest(`token-${member}`) } }));
+      assert.equal((await db.invitation.findUniqueOrThrow({ where: { id: invitation.id } })).revokedAt, null);
+      const results = await Promise.all([call("platform", "DELETE", path, body), call("platform", "DELETE", path, body)]);
+      for (const result of results) { assert.equal(result.statusCode, 200, result.body); assert.equal(result.json().status, "deleted"); assert.equal(result.json().deletionSubmissionHash, undefined); }
+      assert.equal((await call("platform", "DELETE", path, body)).statusCode, 200);
+      assert.equal((await call("platform", "DELETE", path, { ...body, confirmationName: "Changed" })).statusCode, 409);
+      assert.equal((await call("platform", "DELETE", path, { ...body, submissionKey: randomUUID() })).statusCode, 409);
+      assert.equal((await call("platform", "PATCH", path, { name: company.name, status: "active", expectedVersion: 2 })).statusCode, 409);
+      assert.equal((await call(member, "GET", "/api/company/properties")).statusCode, 401);
+      await session();
+      for (const route of ["/api/company/properties", "/api/company/subscription"])
+        assert.equal((await call(member, "GET", route)).statusCode, 403);
+      assert.equal((await db.companyMembership.findUniqueOrThrow({ where: { userId: member } })).status, "disabled");
+      assert.ok((await db.invitation.findUniqueOrThrow({ where: { id: invitation.id } })).revokedAt);
+      assert.ok(!(await call("platform", "GET", "/api/platform/companies")).json().some(c => c.id === id));
+      assert.equal((await call("platform", "GET", path)).json().status, "deleted");
+      assert.equal((await call("platform", "GET", path + "/subscription")).statusCode, 200);
+      assert.equal((await call("platform", "PUT", path + "/subscription", { expectedVersion: null, planId: null, status: "cancelled", reason: "Deleted company", submissionKey: randomUUID() })).statusCode, 409);
+      const history = (await admin.query(`SELECT "amountCents","memo","voidedAt" FROM "LedgerEntry" WHERE id=$1`, [expense.json().id])).rows[0];
+      assert.equal(history.amountCents, 1250); assert.equal(history.memo, "Retained posted source"); assert.equal(history.voidedAt, null);
+      assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE action='company.deleted' AND "companyId"=$1`, [id])).rows[0].n, 1);
+      assert.equal((await db.company.findUniqueOrThrow({ where: { id: "a" } })).status, "active");
+      const demoCompany = await db.company.create({ data: { name: "Demo requiring teardown" } });
+      await db.salesDemo.create({ data: { companyId: demoCompany.id, ownerId: member, createdById: "platform", submissionKey: randomUUID(), submissionHash: "fixture", seedVersion: 1, manifest: {} } });
+      const blocked = await call("platform", "DELETE", `/api/platform/companies/${demoCompany.id}`, { expectedVersion: 1, confirmationName: demoCompany.name, submissionKey: randomUUID() });
+      assert.equal(blocked.statusCode, 409, blocked.body); assert.equal(blocked.json().code, "DEMO_TEARDOWN_REQUIRED");
+    });
     await t.test(
       "platform-only notes and creation identity never leak through company or bootstrap responses",
       async () => {
