@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-25",
+  "timezone": "America/New_York",
+  "task": "Resolve PR64/68 with merged platform, preserving separate reviews and existing workflow protections.",
+  "mainAtIntegration": "44747bd142abfc9e059e36db28ab0f2c0f6ce080",
+  "pr64": {
+    "original": "ad79f9a5697ea61043da1a32164e22202a3b9591",
+    "published": "aaebc1521b2e7ec6a3240c15172fefd9f184e7e1",
+    "ciRun": 40245059536,
+    "ciStatus": "success",
+    "applicationSourceUnchangedFromMain": true,
+    "operationsPassed": 103,
+    "status": "merged by user",
+    "mergeCommit": "186ea7dca31374c7cfe1c01e5f29dff0cec2530a",
+    "mergedAtUtcMinute": "2026-10-25T23:47Z",
+    "ciStage": "Published aaebc15 before user merge",
+    "dailyStop": {
+      "definitionEffectiveOnMain": true,
+      "localTime": "03:00",
+      "timezone": "America/New_York",
+      "optOut": "DEV_AUTO_STOP=false",
+      "starts": "manual",
+      "actualScheduledRun": "not verified by this reconciliation"
+    }
+  },
+  "pr68": {
+    "original": "66310be9968beefc82ccbb2d89b3b2dfbd2eea9a",
+    "implementationBase": "186ea7dca31374c7cfe1c01e5f29dff0cec2530a",
+    "baseBranch": "main",
+    "migration": "202610250057_retire_document_scanning",
+    "canonical056Unchanged": true,
+    "fixtureVersion": 6,
+    "history": "No old document/financial/audit graph is rewritten. Historical pending/clean/rejected states remain stored unchanged.",
+    "availability": "Only exact allowed unscanned/pending/clean statuses are usable, with existing current source/company/role/grant/archive rules; rejected/unknown remain unavailable.",
+    "priorImplementationBase": "72385defdce9d7e805bbfc8a07067d785d2be3a1",
+    "priorBaseBranch": "codex/ecs-alloy-dev-shutdown",
+    "localIntegrationHead": "cd3818f09597b6efa4125316411b638467693dde",
+    "preservedConcurrentRemoteHead": "59af21e555e6931ce2d9dc6258afdd69fa29a869",
+    "existingMainMigrationFilesPreserved": 59,
+    "published057BytesPreserved": true,
+    "runtimeInfraSchemaWorkflowsExactConcurrentRemote": true,
+    "localDifferences": [
+      "Additional regression coverage, including149 maintenance/40 roadmap/22 demo",
+      "Bounded lease-wayfinding startup-readiness wait",
+      "Documentation and separate provenance/evidence"
+    ],
+    "status": "merged by user",
+    "published": "e6e398388e8d8bb3fd67899eb995ebadc24715cd",
+    "mergeCommit": "e8b87c78841b6602b405d58bad5a07ae736c92bc",
+    "mergedAtUtc": "2026-10-26T00:01:15Z",
+    "runtimeInfraSchemaWorkflowsExactMergedMain": true
+  },
+  "source": {
+    "files": 608,
+    "manifestSha256": "b8f5c332a729fb3362aac8af6937a617bd1069d842e3dc7aeb110ff4aa6fa527",
+    "definition": "SHA-256 of sorted compact JSON path\u2192file SHA-256 for tracked code/test/config under client/server/scripts/tests/infra/config/.github/workflows with TS/TSX/CSS/JS/MJS/CJS/PY/Prisma/SQL/TF/HCL/YAML/TFTPL/Alloy/JSON extensions, plus root package/lock, Codex config and Playwright TS configs. Docs/generated artifacts excluded.",
+    "stage": "Frozen current working tree after concurrent/main integration and root readiness-fixture correction; documentation excluded",
+    "integrationHead": "cd3818f09597b6efa4125316411b638467693dde",
+    "workingTreeTestCorrection": "tests/ui/lease-wayfinding.spec.ts readiness wait included in this fingerprint",
+    "manifestLocation": "/tmp/pf-pr68-integrated-source-manifest.json",
+    "transferredToFollowupWithoutSourceChanges": true
+  },
+  "clientBuild": {
+    "status": "passed",
+    "command": "node scripts/local-validation.mjs build client",
+    "freshOnly": true,
+    "log": "/tmp/pf-pr68-integrated-client-build.log",
+    "manifestSha256": "d4528170338dccd8d9f0c5deb137634e5746585f09024b6e005196fc320eb18c",
+    "files": 91
+  },
+  "prisma": {
+    "version": "7.10.1",
+    "method": "Existing official in-process WASM generator; schema engine download restriction previously observed in this environment.",
+    "modelsDefaultsVerified": "Official getDMMF source/generated datamodel deep equality; formatting differs.",
+    "compile": "node node_modules/typescript/bin/tsc -p server/tsconfig.json",
+    "exitCode": 0,
+    "finalSourceNoEmitCompile": "passed after current integration; generated models unchanged"
+  },
+  "checks": {
+    "safeServer": {
+      "passed": 128,
+      "skipped": 9,
+      "failed": 0,
+      "reportedSeconds": 20.071
+    },
+    "clientUnits": {
+      "passed": 70,
+      "failed": 0,
+      "reportedSeconds": 5.998
+    },
+    "focusedBrowser": {
+      "passed": 22,
+      "failed": 0,
+      "reportedSeconds": 31.3,
+      "scope": "Forms post-save unload, document library/sharing/private work-orders, rejected/unscanned status and mobile/privacy fixtures."
+    },
+    "freshMaintenance": {
+      "passed": 149,
+      "skipped": 0,
+      "failed": 0,
+      "reportedSeconds": 95.649,
+      "command": "PLAYWRIGHT_BROWSERS_PATH=/tmp/propertyflow-browser-cache node scripts/test-maintenance.mjs"
+    },
+    "freshRoadmap": {
+      "passed": 40,
+      "skipped": 0,
+      "failed": 0,
+      "reportedSeconds": 14.976,
+      "command": "PLAYWRIGHT_BROWSERS_PATH=/tmp/propertyflow-browser-cache node scripts/test-roadmap.mjs"
+    },
+    "freshDemo": {
+      "passed": 22,
+      "skipped": 0,
+      "failed": 0,
+      "reportedSeconds": 67.23,
+      "command": "PLAYWRIGHT_BROWSERS_PATH=/tmp/propertyflow-browser-cache node scripts/test-sales-demo.mjs"
+    },
+    "operations": {
+      "passed": 100,
+      "failed": 0,
+      "reportedSeconds": 8.172
+    },
+    "terraform": {
+      "mockedTestsPerBranch": 4,
+      "rootValidateExitCode": 0,
+      "formatExitCode": 0,
+      "backend": false,
+      "accountBackedPlan": false
+    },
+    "alloyRenderedConfiguration": {
+      "version": "1.21.1",
+      "passedModes": [
+        "generally-available",
+        "experimental"
+      ],
+      "containerNetwork": "none"
+    },
+    "powerInventory": {
+      "exitCode": 0
+    },
+    "actionlint": {
+      "stage": "Prior successful CI/actionlint evidence reused; workflow and validation-recipe sources verified unchanged from each original green head."
+    },
+    "browserFull": {
+      "status": "passed",
+      "expectedTests": 459,
+      "workers": 2,
+      "retries": 0,
+      "sourceManifestSha256": "b8f5c332a729fb3362aac8af6937a617bd1069d842e3dc7aeb110ff4aa6fa527",
+      "command": "PF_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium node node_modules/@playwright/test/cli.js test -c playwright.production.config.ts --reporter=line --output=/tmp/pf-pr68-integrated-ui-results",
+      "log": "/tmp/pf-pr68-integrated-ui.log",
+      "resultDirectory": "/tmp/pf-pr68-integrated-ui-results",
+      "passed": 459,
+      "failed": 0,
+      "duration": "8.6m",
+      "exitCode": 0,
+      "sourceDrift": false,
+      "buildDrift": false,
+      "retainedFailureTraces": 0
+    },
+    "leaseWayfindingReadiness": {
+      "passed": 10,
+      "failed": 0,
+      "reportedSeconds": 20.5,
+      "retries": 0,
+      "scope": "Two desktop/mobile cases, five repeats each, after bounded startup-readiness correction"
+    }
+  },
+  "initialSetupFailure": {
+    "stage": "First fresh maintenance initialization",
+    "reason": "An empty local056_retire folder remained after moving its SQL file to057; directory enumeration tried to read its absent migration.sql.",
+    "resolution": "Removed only the empty obsolete folder and staged the057 rename. Fresh149-case run then passes; no business assertion was changed."
+  },
+  "evidencePreservation": "Oct19 notification screenshot artifacts restored to mergedmain versions; no unrelated screenshot replacement is part of this change.",
+  "timingLimit": "Reported TAP/Playwright times exclude parent setup/cleanup; not matching-workload speed comparisons.",
+  "publication": "PR64 and PR68 were merged by the user while final validation ran. Publish remaining test/documentation corrections as a separate review against main; no agent merge or deployment.",
+  "remainingGates": [
+    "Published follow-up head CI/comments/inline/automated review.",
+    "Authorized057 migration and matching scanner-free Terraform/backend/client rollout.",
+    "Actual reduced-task capacity, private document role flows, Alloy ingestion and Start/Stop acceptance."
+  ],
+  "liveEffects": {
+    "mainMerge": false,
+    "deployment": false,
+    "awsApply": false,
+    "scheduleActivation": false,
+    "collectorActivation": false,
+    "realIdentityProvisioning": false,
+    "customerDataChange": false,
+    "sharedDemoExecution": false,
+    "scope": "Actions by this reconciliation agent only; user merges64/68 and the effective schedule definition are recorded separately.",
+    "scheduleDefinitionEffectiveOnMain": true,
+    "cloudStartStopByAgent": false,
+    "secretChangeByAgent": false
+  },
+  "priorBrowserFull": {
+    "status": "failed",
+    "passed": 458,
+    "failed": 1,
+    "discovered": 459,
+    "duration": "8.6m",
+    "workers": 2,
+    "retries": 0,
+    "sourceDrift": false,
+    "failure": "lease-wayfinding mobile: lazy module assets incomplete before five-second Overview assertion; no lease GET, JS errors or unauthorized finance read; trace retained locally",
+    "resultDirectory": "/tmp/pf-pr68-final-ui-results",
+    "date": "2026-10-25",
+    "stage": "Initial integrated browser gate before the bounded readiness-fixture correction",
+    "sourceManifestSha256": "be8adc0c66b7f08907a99816b3a3de338981783495dce7293e35e1c1da44f705",
+    "sourceFiles": 608,
+    "command": "PF_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium node node_modules/@playwright/test/cli.js test -c playwright.production.config.ts --reporter=line --output=/tmp/pf-pr68-final-ui-results"
+  },
+  "currentMain": "e8b87c78841b6602b405d58bad5a07ae736c92bc",
+  "localIntegrationHead": "cd3818f09597b6efa4125316411b638467693dde",
+  "concurrentRemoteHeadPreserved": "59af21e555e6931ce2d9dc6258afdd69fa29a869",
+  "priorClientBuild": {
+    "command": "node scripts/local-validation.mjs build client",
+    "exitCode": 0,
+    "freshOnly": true,
+    "files": 91,
+    "manifestSha256": "d4528170338dccd8d9f0c5deb137634e5746585f09024b6e005196fc320eb18c"
+  },
+  "remotePriorStage": {
+    "head": "59af21e555e6931ce2d9dc6258afdd69fa29a869",
+    "evidence": "docs/acceptance-evidence/pr68-main-reconciliation-2026-10-25.json",
+    "deploymentGuide": "docs/deploy-october-25-batch.md",
+    "filesPreservedUnchanged": true,
+    "browserPassed": 459,
+    "browserFailed": 0,
+    "limitation": "Dated prior-stage record for different browser-test source, not the current readiness-corrected gate"
+  },
+  "completedAtUtc": "2026-10-26T00:02:32Z",
+  "followup": {
+    "base": "e8b87c78841b6602b405d58bad5a07ae736c92bc",
+    "branch": "codex/pr64-pr68-verification-followup",
+    "scope": "Only regression coverage, startup-readiness gating, current workflow/status documentation and restoration of historical notification screenshots; application/schema/infra/workflow source matches merged main.",
+    "state": "Separate authorized review branch; publication/head/CI are recorded in the pull request.",
+    "url": "https://github.com/elijahvw/property-flow-2/pull/70"
+  }
+}

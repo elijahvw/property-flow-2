@@ -98,11 +98,11 @@ SQL migrations on fresh PostgreSQL 17. These checks do not establish live
 deployment, capacity at production load or malware detection.
 
 The consolidated deployment prerequisites and exact Actions UI inputs are in
-[the October25 batch checklist](deploy-october-25-batch.md).
+[the October 25 batch checklist](deploy-october-25-batch.md).
 
-## Integration with the merged platform/demo batch
+## Historical59af21e integration with the platform/demo batch
 
-PR68 now incorporates main `44747bd` and the resolved PR64 head `aaebc15`.
+At remote `59af21e`, PR68 incorporated main `44747bd` and the then-resolved PR64 head `aaebc15`. The following checks belong to that prior browser-test source, not the current corrected gate.
 The new provider reservations/deadlines, reviewed rebuilds, future-move-out guard,
 source walkthrough, navigation/forms and RDS/ECR protection changes are retained.
 All 59 existing migration files are unchanged; only scanner migration057 is added.
@@ -111,8 +111,10 @@ The final integrated validation and publication state are recorded in
 
 The integrated checkout passes both builds (with the recorded Prisma generation
 limitation), 128 safe server checks with nine expected DB-suite skips, 70 client
-checks, 100 operations checks, fresh demo22/maintenance148/roadmap39 and the
+checks, 100 operations checks, fresh demo 22/maintenance148/roadmap39 and the
 complete fixed production browser suite459/459 with two workers and zero retries.
 Four mocked Terraform runs, root validation/formatting, both rendered Alloy modes,
 actionlint and the power inventory pass. Published-head CI and cloud acceptance
 remain separate gates.
+
+PR68 was merged by the user as main `e8b87c7` at 00:01:15 UTC on October 26, after PR64/main `186ea7d`. All 59 earlier migrations and published 057 remain unchanged. The separate verification follow-up preserves added 149 maintenance/40 roadmap/22 demo regressions and the bounded lease-readiness correction. Its final fixed suite passes 459/459 in 8.6m, zero retries/no source-build drift. [Current reconciliation](pr64-pr68-reconciliation-2026-10-25.md). Publication checks and authorized hosted rollout remain separate.
