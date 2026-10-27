@@ -16,7 +16,11 @@ import {
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
-import { routes, groupedNavigation, pageContext, navigationActive } from "./navigation";
+import { routes, sidebarNavigation, contextualNavigation, contextualDestinationPath, pageContext } from "./navigation";
+import { leaseContext } from "./lease-links";
+import { documentLibraryContext } from "./document-context";
+import { agreementContext } from "./agreement-context";
+import { notificationContext } from "./notification-context";
 import { PropertySearch } from "./components/PropertySearch";
 import { FeedbackProvider } from "./components/Feedback";
 import { NavigationIcon } from "./components/NavigationIcon";
@@ -118,6 +122,18 @@ function Shell({ children }: { children: React.ReactNode }) {
   const route = pageContext(location.pathname, location.search);
   const navigationType = useNavigationType();
   const navigationPolicy = JSON.stringify(data?.companyFeatures || null);
+  const availableDestination = (path: string) => availableFeatureRoute(path, data?.companyFeatures, data?.membership?.role);
+  const areaNavigation = contextualNavigation(data?.permissions || [], location.pathname, availableDestination);
+  const areaDestination = (path: string) => {
+    const destination = contextualDestinationPath(path, location.search, location.pathname);
+    if (!/^\/company\/(?:rent|deposits)$/.test(path) || !/^\/company\/(?:rent|deposits|properties\/[^/]+\/(?:rent|deposits))$/.test(location.pathname)) return destination;
+    const source = new URLSearchParams(location.search);
+    if (!source.get("leaseId") && !source.get("leaseReturn")) return destination;
+    const query = new URLSearchParams(destination.split("?")[1]);
+    for (const [key, value] of Object.entries({ ...leaseContext(source), ...documentLibraryContext(source), ...agreementContext(source), ...notificationContext(source) })) query.set(key, value);
+    for (const key of ["leaseId", "leaseReturn"]) if (source.get(key)) query.set(key, source.get(key)!);
+    return `${path}?${query}`;
+  };
   useEffect(() => {
     const media = window.matchMedia("(max-width: 700px)");
     const update = () => {
@@ -272,8 +288,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           className={`nav-sections ${menuOpen ? "expanded" : ""}`}
           aria-label="Main navigation"
         >
-          {groupedNavigation(data?.permissions || []).map(({ title: group, routes: sectionRoutes }) => {
-            const links = sectionRoutes.filter(r => availableFeatureRoute(r.path, data?.companyFeatures, data?.membership?.role));
+          {sidebarNavigation(data?.permissions || [], location.pathname, availableDestination).map(({ title: group, routes: links }) => {
             return links.length ? (
               <div className="nav-group" key={group}>
                 <p>{group}</p>
@@ -281,8 +296,8 @@ function Shell({ children }: { children: React.ReactNode }) {
                   <Link
                     key={r.path}
                     to={r.path}
-                    className={navigationActive(r.path, location.pathname) ? "active" : undefined}
-                    aria-current={navigationActive(r.path, location.pathname) ? "page" : undefined}
+                    className={r.active ? "active" : undefined}
+                    aria-current={r.active ? "page" : undefined}
                     onClick={() => setMenuOpen(false)}
                   >
                     <NavigationIcon path={r.path} />
@@ -335,6 +350,12 @@ function Shell({ children }: { children: React.ReactNode }) {
             <p>{actionError.message}</p>
             {actionError.action === "sign_out" && <button type="button" className="secondary" onClick={signOut}>Try signing out again</button>}
           </div>}
+          {areaNavigation && <nav className="workspace-area-navigation" aria-label={`${areaNavigation.title} navigation`}>
+            {areaNavigation.routes.map(destination => <Link key={destination.path} to={areaDestination(destination.path)}
+              aria-current={destination.active ? "page" : undefined}>
+              {destination.path === "/company/drafts" ? "Resume work" : destination.title}
+            </Link>)}
+          </nav>}
           <NotificationReturnLink/>
           <ProspectReturnLink/>
           <EmailVerification />

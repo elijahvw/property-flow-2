@@ -1,5 +1,5 @@
 import {manualPasswordCases} from './manual-password-cases.mjs';
-import { newFixturePage } from "./browser-fixture.mjs";
+import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
 import {workspaceGuideCases} from "./workspace-guide-cases.mjs";
 import {invitationWorkflowCases} from "./invitation-workflow-cases.mjs";
 import {residentAccountCases} from "./resident-account-cases.mjs";
@@ -12,7 +12,7 @@ import pg from "pg";
 import Fastify from "fastify";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { chromium, expect } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { registerApplication } from "../dist/application.js";
 import { registerSessions, digest } from "../dist/sessions.js";
 import { cents, date } from "../dist/operational.js";
@@ -1350,7 +1350,7 @@ test(
       "real browser automatically discovers an Auth0 account with no import action or target sign-in",
       { skip: !process.env.TEST_USERS_BROWSER_URL },
       async () => {
-        const browser = await chromium.launch({ headless: true });
+        const browser = await launchFixtureBrowser({ headless: true });
         try {
           const page = await newFixturePage(browser);
           await page.route("**/api/**", async (route) => {

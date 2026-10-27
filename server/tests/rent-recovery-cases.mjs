@@ -1,7 +1,7 @@
-import { newFixturePage } from "./browser-fixture.mjs";
+import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { chromium, expect } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { companyDay } from "../dist/reports.js";
 export async function rentRecoveryCases(t, admin, call, db) {
   const ok = (r) => {
@@ -362,7 +362,7 @@ export async function rentRecoveryCases(t, admin, call, db) {
       const replaced = await get();
       assert.equal(replaced.schedule.id, replacement.id);
       assert.equal(replaced.history[0].scheduleId, old.id);
-      const browser = await chromium.launch({ headless: true });
+      const browser = await launchFixtureBrowser({ headless: true });
       try {
         const page = await newFixturePage(browser);
         let lose = true;

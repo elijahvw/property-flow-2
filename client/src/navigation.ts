@@ -50,7 +50,7 @@ export const routes: {
   },
   {
     path: "/company/overview",
-    title: "Overview",
+    title: "Today",
     permission: "property.read",
     section: "Company",
   },
@@ -142,10 +142,16 @@ export function visibleRoutes(permissions: readonly string[]) {
 // Keep workflow placement and order explicit. Route registration order and words
 // in a URL must never decide where a task appears in the menu.
 export const navigationSections = [
-  { title: "Workspace", paths: ["/company/overview", "/company/properties", "/company/residents", "/resident"] },
-  { title: "Operations", paths: ["/company/availability", "/company/prospects", "/company/applications", "/company/leases", "/company/maintenance", "/company/work-orders", "/company/documents", "/company/drafts", "/resident/maintenance", "/resident/documents"] },
-  { title: "Finance", paths: ["/company/rent", "/company/deposits", "/company/finances", "/company/reports", "/company/imports/expenses", "/resident/rent", "/resident/deposits"] },
-  { title: "Administration", paths: ["/platform/companies", "/platform/users", "/platform/plans", "/platform/audit", "/platform/impersonation", "/company/members", "/company/settings", "/company/subscription", "/company/imports/units"] },
+  { title: "Today", paths: ["/company/overview"] },
+  { title: "Properties", paths: ["/company/properties", "/company/imports/units"] },
+  { title: "Tenants", paths: ["/company/residents"] },
+  { title: "Leasing", paths: ["/company/leases", "/company/availability", "/company/prospects", "/company/applications", "/company/drafts"] },
+  { title: "Maintenance", paths: ["/company/maintenance", "/company/work-orders"] },
+  { title: "Money", paths: ["/company/rent", "/company/deposits", "/company/finances", "/company/reports", "/company/imports/expenses"] },
+  { title: "Documents", paths: ["/company/documents"] },
+  { title: "Settings", paths: ["/company/settings", "/company/members", "/company/subscription"] },
+  { title: "Platform", paths: ["/platform/companies", "/platform/users", "/platform/plans", "/platform/audit", "/platform/impersonation"] },
+  { title: "My rental", paths: ["/resident", "/resident/maintenance", "/resident/rent", "/resident/deposits", "/resident/documents"] },
   { title: "Account", paths: ["/account/notifications", "/account", "/help"] },
 ] as const;
 
@@ -160,10 +166,64 @@ export function groupedNavigation(permissions: readonly string[]) {
   }));
 }
 
+type NavigationLink = { path: string; title: string; active: boolean };
+
+// Daily navigation shows one entry per job. Its tools stay in the same route
+// catalog for contextual navigation, direct links and workspace search.
+export function sidebarNavigation(permissions: readonly string[], pathname: string, available: (path: string) => boolean = () => true) {
+  const sections = groupedNavigation(permissions).map(section => ({
+    ...section, routes: section.routes.filter(route => available(route.path)),
+  }));
+  const root = (section: typeof sections[number]): NavigationLink[] => {
+    const route = section.routes[0];
+    if (!route) return [];
+    return [{ path: route.path,
+      title: section.title === "Maintenance" && route.path === "/company/work-orders" ? "Assigned work" : section.title,
+      active: section.routes.some(item => navigationActive(item.path, pathname)),
+    }];
+  };
+  const rows = (title: string) => sections.find(section => section.title === title)?.routes.map(route => ({
+    path: route.path, title: route.title, active: navigationActive(route.path, pathname),
+  })) || [];
+  return [
+    { title: "Daily work", routes: sections.filter(section => ["Today", "Properties", "Tenants", "Leasing", "Maintenance", "Money"].includes(section.title)).flatMap(root) },
+    { title: "Tools & settings", routes: sections.filter(section => ["Documents", "Settings"].includes(section.title)).flatMap(root) },
+    { title: "Platform", routes: rows("Platform") },
+    { title: "My rental", routes: rows("My rental") },
+    { title: "Account", routes: rows("Account") },
+  ].filter(section => section.routes.length);
+}
+
+export function contextualNavigation(permissions: readonly string[], pathname: string, available: (path: string) => boolean = () => true) {
+  const taskPath = pathname.replace(/^\/company\/properties\/[^/]+\/(leases|rent|deposits|finances|reports|maintenance)$/, "/company/$1");
+  const section = groupedNavigation(permissions).find(section =>
+    !["Platform", "My rental", "Account"].includes(section.title) && section.routes.some(route => navigationActive(route.path, taskPath)),
+  );
+  if (!section) return undefined;
+  const links = workspaceDestinations(permissions).filter(route => route.group === section.title && available(route.path));
+  // The sidebar selects a broad job; its tool strip names the exact destination.
+  // Prefer the longest matching tool so Vendors does not also select Maintenance.
+  const active = links.filter(route => taskPath === route.path || taskPath.startsWith(route.path + "/")).sort((a, b) => b.path.length - a.path.length)[0]?.path;
+  return links.length > 1 ? { title: section.title, routes: links.map(route => ({ ...route, active: route.path === active })) } : undefined;
+}
+
+// Carry the selected portfolio scope between tools; editor/filter-specific
+// parameters belong to their source page and must not follow unrelated tasks.
+export function contextualDestinationPath(path: string, search: string, pathname = "") {
+  if (!/^\/company\/(?:leases|availability|prospects|applications|maintenance|work-orders|rent|deposits|finances|reports|preventive|work-calendar)$/.test(path)) return path;
+  const nested = pathname.match(/^\/company\/properties\/([^/]+)(?:\/|$)/);
+  let propertyId = new URLSearchParams(search).get("propertyId");
+  if (nested) {
+    try { propertyId = decodeURIComponent(nested[1]); }
+    catch { return path; }
+  }
+  return propertyId ? `${path}?${new URLSearchParams({ propertyId })}` : path;
+}
+
 export type WorkspaceDestination = { path: string; title: string; group: string; keywords: string };
 
 const taskKeywords: Record<string, string> = {
-  "/company/overview": "dashboard today priorities portfolio",
+  "/company/overview": "overview dashboard today priorities portfolio",
   "/company/properties": "property portfolio buildings homes units addresses",
   "/company/residents": "tenants residents people contacts household access",
   "/company/leases": "tenancy rental agreements renewals household",
@@ -177,6 +237,8 @@ const taskKeywords: Record<string, string> = {
   "/company/finances": "transactions income expense ledger cash money",
   "/company/reports": "reporting cash statements exports money",
   "/company/drafts": "unfinished saved tasks continue resume",
+  "/company/imports/units": "upload csv spreadsheet units property import",
+  "/company/imports/expenses": "upload csv spreadsheet paid expense import money",
   "/company/members": "team staff people permissions roles invitations access",
   "/company/settings": "company business address preferences roles",
   "/company/subscription": "subscription invoices usage company billing",

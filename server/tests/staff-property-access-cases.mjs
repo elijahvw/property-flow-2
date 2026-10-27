@@ -1,6 +1,6 @@
-import { newFixturePage } from "./browser-fixture.mjs";
+import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
 import assert from 'node:assert/strict';
-import { chromium, expect } from '@playwright/test';
+import { expect } from '@playwright/test';
 
 export async function staffPropertyAccessCases(t, admin, call, db, app) {
   const endpoint = '/api/company/members/staff/property-access';
@@ -135,7 +135,7 @@ export async function staffPropertyAccessCases(t, admin, call, db, app) {
     assert.deepEqual(await ids('staff'), []);
   });
   await t.test('owner browser grant, response-loss retry, history and staff view use the real API', { skip: !process.env.TEST_LEASING_BROWSER_URL }, async () => {
-    const browser = await chromium.launch({ headless: true });
+    const browser = await launchFixtureBrowser({ headless: true });
     try {
       const owner = await newFixturePage(browser), staff = await newFixturePage(browser);
       let loseResponse = true;

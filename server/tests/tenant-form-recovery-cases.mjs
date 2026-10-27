@@ -2,9 +2,9 @@
 // real sessions and restricted runtime handlers in its own fresh tmpfs database.
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { chromium, expect } from '@playwright/test';
+import { expect } from '@playwright/test';
 import { digest } from '../dist/sessions.js';
-import { newFixturePage } from './browser-fixture.mjs';
+import { newFixturePage, launchFixtureBrowser } from './browser-fixture.mjs';
 import { tenantAdminCompatCases } from './tenant-admin-compat-cases.mjs';
 
 export async function tenantFormRecoveryCases(t, { admin, db, call, app, provider, remote, counts, invitationDeliveries }) {
@@ -65,7 +65,7 @@ export async function tenantFormRecoveryCases(t, { admin, db, call, app, provide
     assert.equal([...remote.values()].filter(row => row.email === email).length, 1);
     return { user, contact: contacts[0] };
   };
-  const browser = await chromium.launch({ headless: true }); t.after(() => browser.close());
+  const browser = await launchFixtureBrowser({ headless: true }); t.after(() => browser.close());
   const mutations = [], reads = [];
   const pageDiagnostics = new WeakMap();
   const bounded = (items, value) => { items.push(value); if (items.length > 10) items.shift(); };

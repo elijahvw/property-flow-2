@@ -1,7 +1,7 @@
-import { newFixturePage } from "./browser-fixture.mjs";
+import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { chromium, expect } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { companyDay } from "../dist/reports.js";
 import { serializable } from "../dist/application.js";
 import { generateRentOccurrence } from "../dist/rent-schedules.js";
@@ -726,7 +726,7 @@ export async function leaseTermCases(t, admin, call, app, db) {
     { skip: !process.env.TEST_FINANCES_BROWSER_URL },
     async () => {
       const l = await make("Browser future terms");
-      const browser = await chromium.launch({ headless: true });
+      const browser = await launchFixtureBrowser({ headless: true });
       try {
         const page = await newFixturePage(browser, {
           viewport: { width: 1440, height: 1000 },

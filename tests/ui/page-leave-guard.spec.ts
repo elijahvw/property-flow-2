@@ -58,7 +58,7 @@ test("prerequisite links and a same-path property scope change both protect unfi
   await page.getByRole("link", { name: "Manage units for this property", exact: true }).click();
   await expect(page.getByLabel("New lease monthly rent (USD)")).toHaveValue("1250.00");
   page.once("dialog", dialog => dialog.dismiss());
-  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Leases", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Leasing", exact: true }).click();
   await expect(page).toHaveURL(/propertyId=home&new=lease/);
   await expect(page.getByLabel("New lease monthly rent (USD)")).toHaveValue("1250.00");
 });
@@ -139,7 +139,7 @@ test("canceling a property-search destination keeps both the search and unfinish
 });
 
 test("browser Back and Forward across routes protect a page task",async({page})=>{
- await fixture(page);await page.goto('/help');await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Leases',exact:true}).click();
+ await fixture(page);await page.goto('/help');await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Leasing',exact:true}).click();
  await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('New lease monthly rent (USD)').fill('1850.00');
  await page.goBack();await expect(page).toHaveURL(/company\/leases$/);
  page.once('dialog',dialog=>dialog.dismiss());await page.goBack();await expect(page).toHaveURL(/company\/leases$/);

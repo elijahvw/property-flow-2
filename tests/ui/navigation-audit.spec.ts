@@ -19,6 +19,9 @@ async function fixture(page: Page, role = "manager", companyFeatures?: Record<st
     if (/^\/api\/company\/properties\/[^/]+$/.test(path)) return json(properties.find(property => path.endsWith("/" + property.id)));
     if (path.endsWith("/units")) return json({ items: [], nextCursor: null });
     if (path === "/api/company/leases") return json({ items: [], nextCursor: null });
+    if (path === "/api/company/task-drafts") return json({ companyId: "a", items: [], hasMore: false });
+    if (path === "/api/company/vendors") return json({ items: [], total: 0, page: 1, pageSize: 25 });
+    if (path.startsWith("/api/company/deposits")) return json({ error: "Deposit account temporarily unavailable." }, 503);
     if (path === "/api/company/rent" || path === "/api/resident/rent") return json({ businessDate: "2026-10-21", accounts: [] });
     return json([]);
   });
@@ -142,15 +145,70 @@ test("the mobile menu keeps tasks ordered and dismisses with Escape back to its 
   await expect(drawer).toHaveAttribute("aria-modal", "true");
   expect(await page.locator(".workspace-main").evaluate(node => (node as HTMLElement).inert)).toBe(true);
   await expect(navigation).toBeVisible();
-  await expect(navigation.getByRole("link").first()).toHaveText("Overview");
-  await expect(navigation.getByRole("link", { name: "Prospects", exact: true })).toBeVisible();
-  await expect(navigation.getByRole("link", { name: "Applications", exact: true })).toHaveCount(1);
-  await navigation.getByRole("link", { name: "Leases", exact: true }).focus();
+  await expect(navigation.getByRole("link").first()).toHaveText("Today");
+  await expect(navigation.getByRole("link", { name: "Prospects", exact: true })).toHaveCount(0);
+  await expect(navigation.getByRole("link", { name: "Leasing", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(navigation.getByRole("link", { name: "Applications", exact: true })).toHaveCount(0);
+  await navigation.getByRole("link", { name: "Leasing", exact: true }).focus();
   await page.keyboard.press("Escape");
   await expect(navigation).not.toBeVisible();
   await expect(toggle).toBeFocused();
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   expect(await page.locator(".workspace-main").evaluate(node => (node as HTMLElement).inert)).toBe(false);
+});
+
+test("specialist leasing tools remain discoverable without crowding daily navigation", async ({ page }) => {
+  await fixture(page);
+  await page.goto("/company/leases?propertyId=maple");
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(navigation.getByRole("link", { name: "Leasing", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(navigation.getByRole("link", { name: "Applications", exact: true })).toHaveCount(0);
+  await expect(navigation.getByRole("link", { name: "Saved drafts", exact: true })).toHaveCount(0);
+  const tools = page.getByRole("navigation", { name: "Leasing navigation" });
+  await expect(tools.getByRole("link", { name: "Applications", exact: true })).toHaveAttribute("href", "/company/applications?propertyId=maple");
+  await expect(tools.getByRole("link", { name: "Resume work", exact: true })).toHaveAttribute("href", "/company/drafts");
+  await tools.getByRole("link", { name: "Resume work", exact: true }).click();
+  await expect(page).toHaveURL(/\/company\/drafts$/);
+  await expect(navigation.locator('[aria-current="page"]')).toHaveText("Leasing");
+  await page.reload();
+  await expect(page.getByRole("navigation", { name: "Leasing navigation" }).getByRole("link", { name: "Leases", exact: true })).toHaveAttribute("href", "/company/leases");
+  await page.getByRole("button", { name: /Search workspace/ }).click();
+  const finder = page.getByRole("dialog", { name: "Search workspace" });
+  await finder.getByRole("searchbox").fill("import units");
+  await expect(finder.getByRole("link", { name: /Import units/ })).toHaveAttribute("href", "/company/imports/units");
+});
+
+test("unavailable money tools disappear from both daily and contextual navigation", async ({ page }) => {
+  await fixture(page, "manager", { finances: "disabled" });
+  await page.goto("/company/leases");
+  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Money", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Money navigation" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Leasing navigation" }).getByRole("link", { name: "Applications", exact: true })).toBeVisible();
+});
+
+test("contextual navigation selects the exact maintenance tool", async ({ page }) => {
+  await fixture(page);
+  await page.goto("/company/vendors");
+  const tools = page.getByRole("navigation", { name: "Maintenance navigation" });
+  await expect(tools.locator('[aria-current="page"]')).toHaveCount(1);
+  await expect(tools.locator('[aria-current="page"]')).toHaveText("Vendors");
+  await expect(page.getByRole("navigation", { name: "Main navigation" }).locator('[aria-current="page"]')).toHaveText("Maintenance");
+});
+
+test("nested money tools preserve the exact lease and move-in return without unrelated query fields", async ({ page }) => {
+  await fixture(page);
+  await page.goto("/company/properties/maple/rent?propertyId=garden&leaseId=source-lease&leaseReturn=source-lease&onboarding=move-in&leaseListProperty=maple&leaseListStatus=draft&new=lease&memo=private");
+  const tools = page.getByRole("navigation", { name: "Money navigation" });
+  const deposits = tools.getByRole("link", { name: "Deposits", exact: true });
+  const destination = new URL((await deposits.getAttribute("href"))!, "https://fixture.invalid");
+  expect(destination.pathname).toBe("/company/deposits");
+  expect(Object.fromEntries(destination.searchParams)).toEqual({ propertyId: "maple", leaseListProperty: "maple", leaseListStatus: "draft", onboarding: "move-in", leaseId: "source-lease", leaseReturn: "source-lease" });
+  await expect(tools.locator('[aria-current="page"]')).toHaveCount(1);
+  await expect(tools.getByRole("link", { name: "Reports", exact: true })).toHaveAttribute("href", "/company/reports?propertyId=maple");
+  await deposits.click();
+  await expect(page).toHaveURL(destination.pathname + destination.search);
+  await expect(page.getByRole("link", { name: "← Back to lease workspace", exact: true })).toHaveAttribute("href", "/company/leases/source-lease?leaseListProperty=maple&leaseListStatus=draft&onboarding=move-in");
+  await expect(page.getByRole("navigation", { name: "Money navigation" }).getByRole("link", { name: "Rent & payments", exact: true })).toHaveAttribute("href", "/company/rent?propertyId=maple&leaseListProperty=maple&leaseListStatus=draft&onboarding=move-in&leaseId=source-lease&leaseReturn=source-lease");
 });
 
 test("workspace search finds task language and secondary workspaces while property reads fail", async ({ page }) => {

@@ -42,7 +42,7 @@ async function fixture(page: Page, role = "owner") {
 test("daily work separates urgent follow-up, approvals and future handoffs without losing property source context", async ({ page }) => {
   await fixture(page);
   await page.goto("/company/overview?propertyId=maple");
-  const scope = page.getByRole("region", { name: "Overview scope", exact: true });
+  const scope = page.getByRole("region", { name: "Today scope", exact: true });
   await expect(scope.getByRole("combobox", { name: "Property", exact: true })).toHaveValue("maple");
   await expect(scope).toContainText("Tasks, totals and source links below follow this property.");
   const urgent = page.getByRole("group", { name: "Follow up now", exact: true });
@@ -62,13 +62,34 @@ test("daily work separates urgent follow-up, approvals and future handoffs witho
   await expect(page.getByRole("region", { name: "Portfolio snapshot", exact: true })).toContainText("12");
 });
 
+test("Today starts move-in in the selected property and offers saved work without inventing a scoped draft count", async ({ page }) => {
+  await fixture(page);
+  await page.goto("/company/overview?propertyId=maple");
+  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Start move-in/ })).toHaveAttribute("href", "/company/properties/maple/leases?new=lease");
+  await expect(page.getByRole("link", { name: "Resume saved work", exact: true })).toHaveAttribute("href", "/company/drafts");
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.getByRole("link", { name: "Resume saved work", exact: true }).focus();
+  await expect(page.getByRole("link", { name: "Resume saved work", exact: true })).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("disabled leasing removes move-in and saved-work shortcuts", async ({ page }) => {
+  const state = await fixture(page);
+  state.features = Object.fromEntries(["properties", "leasing", "maintenance", "documents", "finances", "reports", "inspections", "agreements", "notifications", "resident_portal"].map(key => [key, key === "leasing" ? "disabled" : "enabled"]));
+  await page.goto("/company/overview");
+  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Start move-in/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Resume saved work", exact: true })).toHaveCount(0);
+});
+
 test("refresh keeps the last snapshot explicit through a temporary failure and removes it on authoritative denial", async ({ page }) => {
   const state = await fixture(page);
   await page.goto("/company/overview");
   const snapshot = page.getByRole("region", { name: "Portfolio snapshot", exact: true });
   await expect(snapshot).toContainText("12");
   state.hold = true;
-  await page.getByRole("button", { name: "Refresh overview", exact: true }).click();
+  await page.getByRole("button", { name: "Refresh today", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("previous snapshot remains visible");
   await expect(snapshot).toContainText("12");
   state.status = 503; state.hold = false; state.release();
@@ -78,8 +99,8 @@ test("refresh keeps the last snapshot explicit through a temporary failure and r
   await page.getByRole("alert").getByRole("button", { name: "Try again", exact: true }).click();
   await expect(page.getByRole("alert")).toHaveCount(0);
   state.status = 403;
-  await page.getByRole("button", { name: "Refresh overview", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Overview unavailable", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Refresh today", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Today unavailable", exact: true })).toBeVisible();
   await expect(snapshot).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Needs attention", exact: true })).toHaveCount(0);
 });
@@ -115,7 +136,7 @@ test("read-only feature access keeps source views but removes unsupported creati
   await page.goto("/company/overview");
   await expect(page.getByRole("heading", { name: "Needs attention", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: /Finish draft leases/ })).toHaveAttribute("href", "/company/leases?status=draft");
-  await expect(page.getByRole("link", { name: /Record lease/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Start move-in/ })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /Record transaction/ })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /Add property Create the property/ })).toHaveAttribute("href", "/company/properties?new=property");
 });
@@ -128,7 +149,7 @@ test("a support session can inspect the workspace without creation shortcuts", a
   await expect(page.getByRole("heading", { name: "Needs attention", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: /Finish draft leases/ })).toHaveAttribute("href", "/company/leases?status=draft");
   await expect(page.getByRole("heading", { name: "Start a task", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: /Record lease|Record transaction|Add property Create/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Start move-in|Record transaction|Add property Create/ })).toHaveCount(0);
 });
 
 test("zero pending work stays calm without pretending recorded cash is a balance owed", async ({ page }) => {

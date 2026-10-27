@@ -28,6 +28,9 @@ export function leaseContext(params: URLSearchParams) {
   const context = { ...Object.fromEntries(
     keys.filter((key) => params.get(key)).map((key) => [key, params.get(key)!]),
   ), ...prospectContext(params) };
+  // Keep the guided setup return on this exact lease, without accepting an
+  // arbitrary destination or changing the legacy household-only deep link.
+  if (params.get("onboarding") === "move-in") context.onboarding = "move-in";
   for (const key of ["tenantCursor", "tenantBefore", "tenantHistoryCursor", "tenantHistoryBefore"])
     if (!context.tenantId || !/^[A-Za-z0-9_-]{1,512}$/.test(context[key] || "")) delete context[key];
   if (!context.tenantId || context.tenantSection !== "rentals") delete context.tenantSection;

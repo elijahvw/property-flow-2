@@ -226,7 +226,7 @@ test("a saved-response-loss journal dominates a different URL hint and recovers 
   await dialog(page).getByRole("button", { name: "Create lease record", exact: true }).click();
   await expect(dialog(page)).toHaveCount(0); expect(state.posts).toHaveLength(2); expect(state.posts[0]).toEqual(state.posts[1]);
   expect(state.posts[0].unitId).toBe("home-unit-002"); expect(state.posts[0].monthlyRent).toBe("1444.00"); expect(state.records).toHaveLength(1);
-  await expect(page).toHaveURL(url => url.pathname === "/company/leases/hint-saved-lease" && url.searchParams.get("prospectId") === markers.prospectId && url.searchParams.get("onboarding") === "household");
+  await expect(page).toHaveURL(url => url.pathname === "/company/leases/hint-saved-lease" && url.searchParams.get("prospectId") === markers.prospectId && url.searchParams.get("onboarding") === "move-in");
 });
 
 test("a company refresh clears the earlier candidate and ignores its late metadata response", async ({ page }) => {

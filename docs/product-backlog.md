@@ -4,7 +4,7 @@ Updated October 26, 2026 against merged main `de72a22` (including PR71). This do
 
 [PR72](https://github.com/elijahvw/property-flow-2/pull/72) account-control refinement: actionable demo ownership diagnostics; platform-owner any-account read-only views (PF-29); scoped owner manual password setting and recoverable administrative attempts (PF-03). Contracts and release evidence define the implemented boundaries; actual hosted role/provider acceptance remains pending. [Manual passwords](manual-passwords.md) · [Support views](support-impersonation.md) · [Demo recovery](sales-demo.md).
 
-### PF-30 · Repeatable isolated sales demos — merged fixture7; local recovery refinement
+### PF-30 · Repeatable isolated sales demos — fixture7 and recovery refinement merged
 
 Merged PR71 fixture: two properties with three units each (four occupied, one ready/listed, one turnover), an imported and archived/restored unit, familiar name-based emails, co-leaseholders and retained former/offline/pending tenant examples. Existing generations retain their addresses/history; reviewed rebuild applies the new fixture. Live Auth0 provisioning and actual-role acceptance remain separate.
 
@@ -32,7 +32,7 @@ Acceptance:
 
 Audience: owner/manager and authorized tenant. Dependencies: existing lease/rent/deposit APIs; reuse PF-01 navigation conventions.
 
-Previous baseline: Rent's “Lease details” link went to a property lease directory, which had no selected-lease URL. The current increment adds an exact lease route and a connected onboarding/household/invitation/terms/renewal hub. See [scope and limits](lease-workflow.md). Remaining PF-03 data/provider acceptance and PF-10 transition acceptance stay separately tracked.
+The merged baseline provides an exact lease route and connected household/invitation/terms/renewal hub. The first simplification refinement is implemented locally: Today → Start move-in uses existing creation/review handlers, then opens Move-in setup in that saved lease’s Overview. Recorded rental/tenant/terms facts, current-household review, explicit activation and optional rent/deposit/portal source links preserve the same source/return identities. It adds no status, completion flag, API or workflow database. See [scope and limits](lease-workflow.md). Source validation, PF-03 data/provider acceptance and PF-10 transition acceptance stay separately tracked.
 
 Acceptance:
 - A specific lease route shows the named lease after reload/back/copied URL; old entry links still resolve.
@@ -43,6 +43,8 @@ Acceptance:
 ### PF-03 · Prepared accounts, tenant history and verified portal access — P1
 
 Audience: owner/manager and prospective/current/former tenant. The merged account-first contract in [resident accounts](resident-contacts.md) and [AGENTS.md](../AGENTS.md) supersedes earlier account-free contact proposals. Auth0 is the account authority; every new tenant, leaseholder and occupant uses an existing or prepared User plus exact issuer/subject Identity. Account preparation, contact/lease history, invitation, portal grant and first sign-in are separate.
+
+The local move-in refinement presents these distinctions together without changing account preparation, roster mutation or owner approval authority. Existing accounts, saved leases and issued invitations are not treated as proof of current portal access or first sign-in.
 
 Acceptance and remaining provider/data checks:
 - Prepare/select the required account before recording a new tenant or lease participant. It may remain offline with no portal grant or first sign-in; do not send setup/invitation messages implicitly.
@@ -297,6 +299,8 @@ Delivery state: merged in PR61; deployment and real-company acceptance remain un
 
 ### PF-23 · UI/UX acceptance in every increment — P1 continuous
 
+Current first simplification increment is implemented locally: compact daily navigation plus contextual tools, Today/Resume saved work, and the canonical source-based Move-in setup guide. Current APIs, shared components and authority/recovery mechanisms are reused with no added service or dependency. Validation remains in [current work](current-work.md). Measure task time, page changes, backtracking and assistance against a baseline; targets of 90% unassisted completion and 30% fewer unnecessary transitions/time are proposed acceptance goals, not achieved results.
+
 The established tenant form/recovery/privacy and consolidated source-return/leave-guard behavior is merged in PR61. The [substantive October25 overhaul](platform-overhaul-2026-10-25.md) now extends the [first-pass audit](platform-audit-2026-10-25.md); its new-source acceptance and failures are separate. Shared tokens/form/directory primitives, navigation, Overview, administration and cash recovery are included in that integrated review. The [matched CLS evidence](layout-stability-2026-10-25.md) remains a scoped local experiment, not a field SLO. Apply the [experience contract](platform-experience.md) in every feature change. Historical scoped results remain in [the continuation](roadmap-continuation-2026-10-24.md); they do not validate subsequent edits. Provider create/rename before final DB gating retains its documented external-consistency limit.
 
 Acceptance:
@@ -332,6 +336,19 @@ Acceptance:
 - CSV/export/internal reconciliation first. External accounting declares consent/scopes, category mapping, sync direction and local/remote ownership.
 - Preserve remote IDs and expose errors/retries; deduplicate out-of-order sync and reconcile corrections/deletions/disconnection. No inactive “connected” switches.
 - Calendar tokens are scoped/revocable with minimum data. Bank feeds and screening each need separate activation decisions.
+
+#### Planned next phase: API architecture and complete OpenAPI/Swagger documentation
+
+This user-required phase follows the navigation/move-in increment. It is planned, not implemented by that increment. Keep one Fastify application with REST/HTTP JSON business APIs and the existing cookie/CSRF, company/property authorization, transactions, immutable history and durable submission behavior. Authentication redirects/callbacks, document transfer, health endpoints and any provider webhooks retain their actual protocol requirements and are documented explicitly.
+
+1. **Inventory the complete exposed surface.** Enumerate production-registered company, resident, platform/admin and internal routes, authentication/session callbacks, health/readiness endpoints, document uploads/downloads and any webhooks actually present. Record each route’s owner, audience, purpose and current caller; absent capabilities are not fabricated as endpoints. Separate intended public exposure from authenticated/internal use.
+2. **Define a single contract convention incrementally.** Record method/path, path/query/header parameters, content types, request fields, safe response fields, HTTP statuses and machine-readable errors. Define list filtering/paging/count semantics, dates/timezones, exact money representation, record versions, CSRF/company/support-context headers and operation-specific idempotency/retry behavior from actual handlers. Structural schemas do not replace fresh authorization or database-dependent business rules. Keep existing client compatibility and consequential recovery while adopting schemas by domain.
+3. **Document authorization per operation.** State account/session requirements, permitted roles/capabilities, company/property/lease boundaries, feature enabled/read-only/disabled behavior and support-view restrictions. Document scoped read projections as well as writes; platform authority is not a company-data bypass. Examples use fictional safe values and never contain passwords, tokens, private contact/financial contents or real customer identifiers.
+4. **Integrate maintained open-source documentation.** Use Fastify-compatible OpenAPI generation and Swagger UI packages inside the existing application/deployment, with a compatible specification version selected against the installed tools. Generate the document from verified route schemas where supported; document protocol exceptions explicitly. Gate the complete spec and UI through explicit existing authorization by default, keep internal/admin documentation unavailable to unauthenticated users and configure same-origin requests without embedded credentials or persisted secret values. A public subset requires an explicit exposure decision; no separate hosted documentation service is needed.
+5. **Enforce coverage and drift.** Add a build/CI check that reconciles actual registered methods/paths with documented operations or named protocol exceptions. Contract tests verify representative request validation, safe responses, errors, role/support denials, paging and retry/version behavior against real handlers. Regenerating the spec must reveal source/schema drift; any generated client types come from that same verified document. Do not label documentation complete from schema counts alone.
+6. **Publish a usable developer reference.** Include authentication/session/CSRF guidance, company/property scope, error and pagination conventions, safe retry examples, operation groups and a route coverage report with any explicit gaps. Validate owner/manager/staff/resident/occupant and platform/support examples as applicable. Keep runtime responses, generated spec and reference instructions aligned in the same change.
+
+Acceptance: every exposed production route is accounted for; documented operations match the actual handler and permissions; the complete Swagger UI/spec requires the intended authorization; private examples or secret-bearing responses are absent; CI catches a deliberately missing/changed route contract; current business workflows and compatibility/recovery checks still pass. Record package/hosting cost and maintenance impact before adoption. Expected approach is maintained OSS within current hosting; no paid service, broad API rewrite, provider activation or live security/configuration change is authorized by this planning entry.
 
 ### PF-26 · Payment providers, last — P3
 

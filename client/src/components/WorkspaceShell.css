@@ -77,3 +77,11 @@
   .sidebar.mobile-open { overflow-y:auto; overscroll-behavior:contain; }
   .sidebar.mobile-open .nav-sections { flex-shrink:0; min-height:10rem; max-height:45dvh; }
 }
+
+/* The selected workspace exposes its specialist tools without a longer sidebar. */
+.workspace-area-navigation { display:flex; flex-wrap:wrap; gap:.35rem .6rem; margin:0 0 1.5rem; padding:.65rem; background:var(--pf-surface,#fff); border:1px solid var(--pf-border,#e1e8eb); border-radius:var(--pf-radius-surface,12px); }
+.workspace-area-navigation a { display:inline-flex; align-items:center; min-height:44px; padding:.5rem .75rem; border-radius:var(--pf-radius-control,7px); color:var(--pf-muted,#526773); text-decoration:none; font-size:.85rem; }
+.workspace-area-navigation a:hover { background:var(--pf-surface-subtle,#f2f5f3); color:var(--pf-text,#172b36); }
+.workspace-area-navigation a[aria-current="page"] { background:var(--pf-accent-soft,#e1eee7); color:var(--pf-accent-strong,#173d34); font-weight:700; }
+.workspace-area-navigation a:focus-visible { outline:3px solid var(--pf-focus,#126b5c); outline-offset:2px; }
+@media(max-width:700px) { .workspace-area-navigation { gap:.25rem; padding:.35rem; margin-bottom:1rem; } .workspace-area-navigation a { font-size:.8rem; padding:.4rem .6rem; } }

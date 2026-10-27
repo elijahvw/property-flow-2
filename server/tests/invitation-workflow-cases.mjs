@@ -1,5 +1,5 @@
-import { chromium, expect } from "@playwright/test";
-import { newFixturePage } from "./browser-fixture.mjs";
+import { expect } from "@playwright/test";
+import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {digest} from '../dist/sessions.js';
@@ -121,7 +121,7 @@ export async function invitationWorkflowCases(t,db,admin,call,deliveries,setSend
    assert.equal((await call('staff','GET','/api/invitations/delivery')).statusCode,403);
  });
  await t.test('real browser creates, sends and accepts one exact staff account through the shared invitation flow',{skip:!process.env.TEST_USERS_BROWSER_URL},async()=>{
-  const browser=await chromium.launch({headless:true});
+  const browser=await launchFixtureBrowser({headless:true});
   try{
    let actor='invite-owner';const page=await newFixturePage(browser);page.setDefaultTimeout(15000);
    await page.route('**/api/**',async route=>{

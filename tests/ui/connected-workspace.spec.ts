@@ -66,8 +66,8 @@ async function fixture(page:Page,role='manager'){
  });return state;
 }
 test('role overview is actionable, grouped and responsive; failed load never invents zeros',async({page})=>{
- const state=await fixture(page);await page.goto('/dashboard');await expect(page).toHaveURL(/\/company\/overview$/);await expect(page.getByRole('heading',{name:'Overview',exact:true})).toBeVisible();await expect(page.getByRole('region',{name:'Portfolio snapshot'})).toContainText('60');await expect(page.locator('.cash-summary')).toContainText('$53,800.00');
- await page.screenshot({path:'/tmp/pf-connected-overview-desktop.png',fullPage:true});await page.setViewportSize({width:390,height:844});await page.screenshot({path:'/tmp/pf-connected-overview-mobile.png',fullPage:true});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await expect(page.getByRole('navigation',{name:'Main navigation'})).not.toBeVisible();await page.getByRole('button',{name:'Menu',exact:true}).click();await expect(page.getByRole('navigation',{name:'Main navigation'})).toBeVisible();await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Leases',exact:true}).click();await expect(page.getByRole('navigation',{name:'Main navigation'})).not.toBeVisible();
+ const state=await fixture(page);await page.goto('/dashboard');await expect(page).toHaveURL(/\/company\/overview$/);await expect(page.getByRole('heading',{name:'Today',exact:true})).toBeVisible();await expect(page.getByRole('region',{name:'Portfolio snapshot'})).toContainText('60');await expect(page.locator('.cash-summary')).toContainText('$53,800.00');
+ await page.screenshot({path:'/tmp/pf-connected-overview-desktop.png',fullPage:true});await page.setViewportSize({width:390,height:844});await page.screenshot({path:'/tmp/pf-connected-overview-mobile.png',fullPage:true});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await expect(page.getByRole('navigation',{name:'Main navigation'})).not.toBeVisible();await page.getByRole('button',{name:'Menu',exact:true}).click();await expect(page.getByRole('navigation',{name:'Main navigation'})).toBeVisible();await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Leasing',exact:true}).click();await expect(page.getByRole('navigation',{name:'Main navigation'})).not.toBeVisible();
  await page.goto('/company/overview');state.overviewStatus=503;await page.reload();await expect(page.getByRole('alert')).toContainText('temporarily unavailable');await expect(page.getByRole('region',{name:'Portfolio snapshot'})).toHaveCount(0);state.overviewStatus=200;await page.getByRole('button',{name:'Try again',exact:true}).click();await expect(page.getByRole('region',{name:'Portfolio snapshot'})).toBeVisible();
 });
 test('property tabs carry context through lease history, residents, finances, and reports without opening creation',async({page})=>{
@@ -134,7 +134,7 @@ test('saving is primary; draft discard is quiet and confirmed, and property swit
  await expect(active.getByLabel('New lease monthly rent (USD)')).toHaveValue('1350');
  await page.getByLabel('Property for new lease').selectOption('home');
  page.once('dialog',dialog=>dialog.accept());await recorded.click();
- await expect(page).toHaveURL(/\/company\/leases\/lease-0\?onboarding=household/);
+ await expect(page).toHaveURL(url=>url.pathname==='/company/leases/lease-0'&&url.searchParams.get('onboarding')==='move-in'&&url.searchParams.get('leaseListProperty')==='home');
  await expect(editor).not.toBeVisible();expect(state.leases).toHaveLength(1);
  await page.getByRole('link',{name:'← All leases',exact:true}).click();
  await page.getByRole('button',{name:'Record a lease',exact:true}).click();

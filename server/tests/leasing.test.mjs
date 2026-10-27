@@ -1,4 +1,4 @@
-import { newFixturePage } from "./browser-fixture.mjs";
+import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
 import {fixtureIdentities} from "./fixture-identities.mjs";
 import {renewalCases} from "./renewal-cases.mjs";
 import {staffPropertyAccessCases} from "./staff-property-access-cases.mjs";
@@ -14,7 +14,7 @@ import pg from 'pg';
 import Fastify from 'fastify';
 import {PrismaClient} from '@prisma/client';
 import {PrismaPg} from '@prisma/adapter-pg';
-import {chromium,expect} from '@playwright/test';
+import {expect} from '@playwright/test';
 import {registerApplication} from '../dist/application.js';
 import {registerSessions,digest} from '../dist/sessions.js';
 import {cents,date} from '../dist/operational.js';
@@ -194,7 +194,7 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
   const replay=await call('owner','POST',units,{label:'Legacy unit',submissionKey:key,...blank});assert.equal(replay.statusCode,200,replay.body);assert.equal(replay.json().id,'legacy-retry');
  });
  await t.test('real browser units and lease commit-response-loss replay',{skip:!process.env.TEST_LEASING_BROWSER_URL},async()=>{
-  const browser=await chromium.launch({headless:true});try{
+  const browser=await launchFixtureBrowser({headless:true});try{
    const page=await newFixturePage(browser);let loseUnit=true,loseLease=true;const keys={unit:[],lease:[]};
    await page.route('**/api/**',async route=>{const req=route.request(),u=new URL(req.url());
     if(u.pathname==='/api/telemetry')return route.fulfill({status:202,json:{accepted:true}});
@@ -208,7 +208,7 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
    await page.goto(process.env.TEST_LEASING_BROWSER_URL+'/company/properties/home/units');await page.getByRole('button',{name:'Add a unit',exact:true}).click();await page.getByLabel('Unit name',{exact:true}).fill('Browser unit');await page.getByRole('spinbutton',{name:/^Bedrooms/}).fill('0');await page.getByRole('spinbutton',{name:'Bathrooms',exact:true}).fill('2.25');await page.getByRole('spinbutton',{name:/^Market rent/}).fill('1250.01');
    await page.getByRole('button',{name:'Create unit',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create unit',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();assert.equal(keys.unit[0],keys.unit[1]);
    const browserUnit=(await admin.query(`SELECT id,bedrooms,"bathroomsHundredths","marketRentCents" FROM "Unit" WHERE label='Browser unit'`)).rows;assert.equal(browserUnit.length,1);assert.equal(browserUnit[0].bedrooms,0);assert.equal(browserUnit[0].bathroomsHundredths,225);assert.equal(browserUnit[0].marketRentCents,125001);await expect(page.locator('.feedback-region')).toContainText('Unit created.');
-   await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Leases',exact:true}).click();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await page.getByLabel('Unit for new lease').selectOption(browserUnit[0].id);
+   await page.getByRole('navigation',{name:'Main navigation'}).getByRole('link',{name:'Leasing',exact:true}).click();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await page.getByLabel('Unit for new lease').selectOption(browserUnit[0].id);
    const candidates=(await call('owner','GET','/api/company/properties/home/residents?includeContacts=true')).json();const primary=candidates.find(p=>p.userId==='resident');assert.ok(primary);await page.getByLabel('Primary resident').selectOption(primary.contactId||primary.userId);
    await page.getByLabel('New lease start date').fill('2026-11-01');await page.getByLabel('New lease end date',{exact:true}).fill('2027-10-31');await page.getByLabel('New lease monthly rent (USD)').fill('1250.50');
    await page.getByRole('button',{name:'Review lease',exact:true}).click();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create lease record',exact:true}).click();await expect(page.getByRole('region',{name:'Record a lease',exact:true})).not.toBeVisible();assert.equal(keys.lease[0],keys.lease[1]);

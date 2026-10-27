@@ -1,8 +1,8 @@
-import { newFixturePage } from "./browser-fixture.mjs";
+import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { digest } from '../dist/sessions.js';
-import { chromium, expect } from '@playwright/test';
+import { expect } from '@playwright/test';
 import { companyDay } from '../dist/reports.js';
 
 export async function residentWorkspaceCases(t, admin, call, app) {
@@ -51,7 +51,7 @@ export async function residentWorkspaceCases(t, admin, call, app) {
     assert.equal(JSON.stringify(result).includes('Private deposit reference'),false);
   });
   await t.test('real browser opens connected tenant details, ledger and preserved return path', {skip: !process.env.TEST_FINANCES_BROWSER_URL}, async()=>{
-    const browser=await chromium.launch({headless:true});
+    const browser=await launchFixtureBrowser({headless:true});
     try {
       const page=await newFixturePage(browser, {viewport:{width:1440,height:1000}});
       await page.route('**/api/**',async route=>{

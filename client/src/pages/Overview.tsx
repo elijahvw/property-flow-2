@@ -75,6 +75,7 @@ function OverviewWorkspace() {
   const canRecordCash = can("finance.manage") && writable("finances", "leasing");
   const canManageResidents = can("resident.assignment.manage") && writable("leasing");
   const canAddProperty = can("property.write") && writable("properties");
+  const canResumeTasks = can("lease.manage") && auth?.companyFeatures?.leasing !== "disabled";
   const [params, setParams] = useSearchParams();
   const id = params.get("propertyId") || "";
   const r = useResource<OverviewData>(propertyLink("/api/company/overview", id), true, true);
@@ -102,13 +103,16 @@ function OverviewWorkspace() {
     <header className="page-heading overview-heading">
       <div>
         <p className="eyebrow">Your workspace</p>
-        <h1>Overview</h1>
+        <h1>Today</h1>
         <p>{d ? `${d.company.name} · ${new Date(d.today + "T12:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}` : "Your portfolio, priorities, and next steps."}</p>
       </div>
-      <button className="secondary overview-refresh" onClick={r.reload} disabled={r.loading}>{r.loading ? "Refreshing…" : "Refresh overview"}</button>
+      <div className="overview-heading-actions">
+        {canResumeTasks && <Link className="button secondary" to="/company/drafts">Resume saved work</Link>}
+        <button className="secondary overview-refresh" onClick={r.reload} disabled={r.loading}>{r.loading ? "Refreshing…" : "Refresh today"}</button>
+      </div>
     </header>
 
-    <section className="overview-scope" aria-label="Overview scope">
+    <section className="overview-scope" aria-label="Today scope">
       <div>
         <span className="overview-section-kicker">Working in</span>
         <strong>{scopeName}</strong>
@@ -128,16 +132,16 @@ function OverviewWorkspace() {
     </div>}
     {d && r.loading && <p className="overview-refresh-state" role="status">Refreshing your overview. The previous snapshot remains visible.</p>}
     {d && r.error && <div className="notice error overview-refresh-error" role="alert">
-      <strong>Overview could not refresh</strong>
+      <strong>Today could not refresh</strong>
       <p>{r.error} Showing the last loaded snapshot; the source records may have changed.</p>
       <button className="secondary" onClick={r.reload}>Try again</button>
     </div>}
 
     {!d ? <section className="panel overview-load-state">{r.error ? <>
-      <h2>Overview unavailable</h2>
+      <h2>Today unavailable</h2>
       <p role="alert">{r.error}</p>
       <button onClick={r.reload}>Try again</button>
-    </> : <p role="status">Loading your overview…</p>}</section> : <>
+    </> : <p role="status">Loading today’s work…</p>}</section> : <>
       {hasManagementWork ? <div className="overview-daily-grid">
         <div className="overview-main-work">
           <section className="panel overview-priorities" aria-labelledby="overview-attention-title">
@@ -234,8 +238,8 @@ function OverviewWorkspace() {
             </div>
             <div className="overview-task-actions">
               {canStartLease && <Link to={url("/company/leases", { new: "lease" })}>
-                <strong>Record lease</strong>
-                <span>Review the unit, existing account and agreed terms.</span>
+                <strong>Start move-in</strong>
+                <span>Choose a rental and tenant, then follow the lease setup steps.</span>
                 <span aria-hidden="true">→</span>
               </Link>}
               {canRecordCash && <Link to={url("/company/finances", { new: "transaction" })}>

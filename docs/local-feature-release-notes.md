@@ -1,5 +1,32 @@
 # Feature release notes
 
+## October 26, 2026 — compact navigation and guided move-in (local)
+
+Approved first simplification increment on merged main `2ff16da` (PR72), branch `work`. The management sidebar now has six daily workspaces: Today, Properties, Tenants, Leasing, Maintenance and Money. Documents/Settings and Platform controls remain separate. Specialist tools stay in contextual navigation and Search workspace; direct routes, feature projections and resident/staff permissions are retained. The source projection for representative management permissions with all features available falls from 22 to 11 sidebar links including account utilities. This is a structural comparison, not measured task speed or user acceptance.
+
+Today offers Start move-in in the selected property and Resume saved work. New lease records, resumed lease drafts and approved-application handoffs open Move-in setup on the exact existing lease. The guide uses saved source facts, household review, existing activation review, rent/deposit sources and optional portal tasks. It does not infer readiness from a current-household count, receipt from a deposit account, or portal authority from an invitation. Canonical directory/property/unit/prospect/tenant/notification/document/agreement context survives the relevant handoffs. Pending owner approvals stay visible outside collapsed optional setup. No new tab, workflow database, business endpoint, migration, product dependency or service is introduced.
+
+Independent review corrected multiple contextual current markers, lost nested-property scope and rent/deposit source-return context. The first affected browser run passed 159/162; it retained failures for the old Today heading selector, an owner-approval notice hidden by the guide and a recovery fixture assuming a property filter absent from its original unit-only directory. Restoring the real owner notice and updating intended heading/filter expectations retained substantive assertions; the 9 correction/guide checks pass. The original log is `/tmp/pf-simplification-browser-focused.log`; corrected evidence is `/tmp/pf-simplification-browser-corrections.log`.
+
+| Local check | Result |
+| --- | --- |
+| Normal client production build and fresh receipt | Pass |
+| Client units |76 passed |
+| Final fixed production browser suite, two workers/zero retries |485/485 passed in7.5 minutes; no source/build drift or retained final failure traces |
+| Fresh disposable users / leasing / finance / roadmap |73 /68 /192 /40 passed; no skips; sequential cleanup verified |
+| Safe server units after final fixture changes |134 passed;9 intentional database-gated skips |
+| Matching generated Prisma client and real server TypeScript compile | Pass through official pinned WASM tooling; separate from normal build |
+| Normal server build | Blocked: Prisma engine checksum host returns HTTP403; no normal-build receipt |
+| Whitespace and changed Markdown local targets | Pass |
+
+Commands: `node scripts/local-validation.mjs build client`; `PF_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium node node_modules/@playwright/test/cli.js test -c playwright.production.config.ts --reporter=line`; `node --test client/tests/*.test.cjs`; the safe server command with database environment variables unset from [validation guidance](agent-validation.md); and `node scripts/test-users.mjs`, `node scripts/test-leasing.mjs`, `node scripts/test-finances.mjs`, `node scripts/test-roadmap.mjs` sequentially with the same explicit browser path. Logs use `/tmp/pf-simplification-` with the matching check names; the final browser log is `/tmp/pf-simplification-browser-final.log`.
+
+Environment evidence remains separate: the original online npm install failed integrity verification; all 454 exact lockfile tarballs were SHA512-verified and normal offline `npm ci` installed the unchanged lock successfully. Normal server generation cannot download the engine checksum from `binaries.prisma.sh`. Official temporary `@prisma/internals` and client-generator registry 7.10.1 generated the current real client with `skipDownload:true`; source/generated full DMMF matched all 87 models, and normal TypeScript emit passed. This alternative does not claim a normal Prisma CLI build receipt. The system browser is Chromium 154.0.8037.57 with Playwright 1.58.2; bundled Chromium was not tested. Existing fixture helpers now honor the documented explicit browser path; the initial missing-bundled-browser users failure is retained separately, and the corrected fresh run passes 73/73.
+
+Shared Help, experience/lease/demo guidance and existing PF-02/03/23 tracking are updated. Demo fixture7, source relationships, feature coverage and presentation source stops remain valid without a seed bump; only presentation and continuation instructions change. Existing page-load, lease-create/edit and financial workflow signals cover the same operations, so no new monitoring event or provider activation is required. Infrastructure/power definitions are unchanged.
+
+The required complete REST endpoint inventory, per-operation auth/role/scope/support/request/response/error/retry contracts, access-controlled OpenAPI/Swagger UI and route/spec drift checks are explicitly **planned separately under PF-25**. Human task-completion/time targets remain unmeasured. Open, ready-for-review PR publication is now user-authorized; exact-head CI/review and normal-build CI remain publication/release checks. No merge, deployment, live Auth0/email/customer-data action or paid service is performed. Real-role/provider acceptance remains separate.
+
 ## October 26, 2026 — demo recovery and account administration (PR72)
 
 Published [PR72](https://github.com/elijahvw/property-flow-2/pull/72), based on merged PR71/main `de72a22`; code commit `b659b1d`. Demo teardown now names separately added members and changed generated identities/grants, links the exact account/company-access or Support review, and hashes exact reviewed source snapshots. A demo company record opens its own teardown plan before deletion. The repair uses existing versioned controls; it never adopts by email, disables unrelated accounts or silently revokes a platform grant. Company ownership alone grants no support authority; company/account reviews now distinguish explicit platform authority.

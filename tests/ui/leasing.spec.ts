@@ -72,7 +72,22 @@ test('lease creation retries same key and records exact monthly rent',async({pag
  const state=await fixture(page,'manager');state.additionalProperty=true;state.units.push({id:'u1',label:'Unit 1',propertyId:'home',status:'active',version:1});state.loseLease=true;
  await page.goto('/company/leases');await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await page.getByLabel('New lease start date').fill('2026-11-01');await page.getByLabel('New lease monthly rent (USD)').fill('1234.56');
  await page.getByRole('button',{name:'Review lease',exact:true}).click();await page.getByRole('button',{name:'Create lease record'}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Create lease record'}).click();await expect(page.getByRole('region',{name:'Record a lease',exact:true})).not.toBeVisible();expect(state.leases.length).toBe(1);expect(state.leases[0].rentCents).toBe(123456);expect(state.keys[0]).toBe(state.keys[1]);
- await expect(page).toHaveURL(/\/company\/leases\/l1\?onboarding=household/);await expect(page.getByRole('heading',{name:'Leaseholders and occupants',exact:true})).toBeVisible();await page.getByRole('link',{name:'← All leases',exact:true}).click();await expect(page.getByText(/1234\.56|1,234\.56/)).toBeVisible();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await expect(page.getByLabel('New lease monthly rent (USD)')).toHaveValue('');
+ await expect(page).toHaveURL(url=>url.pathname==='/company/leases/l1'&&url.searchParams.get('onboarding')==='move-in');await expect(page.getByRole('heading',{name:'Move-in setup',exact:true})).toBeVisible();await page.getByRole('button',{name:'Review household',exact:true}).first().click();await expect(page.getByRole('heading',{name:'Leaseholders and occupants',exact:true})).toBeVisible();await page.getByRole('link',{name:'← All leases',exact:true}).click();await expect(page.getByText(/1234\.56|1,234\.56/)).toBeVisible();await page.getByRole('button',{name:'Record a lease',exact:true}).click();await page.getByLabel('Property for new lease').selectOption('home');await expect(page.getByLabel('New lease monthly rent (USD)')).toHaveValue('');
+});
+
+test('new move-in setup retains the originating property directory and filters',async({page})=>{
+ const state=await fixture(page,'manager');state.units.push({id:'u1',label:'Unit 1',propertyId:'home',status:'active',version:1});
+ await page.goto('/company/properties/home/leases?status=draft&q=Resident&new=lease');
+ await page.getByLabel('New lease start date').fill('2027-01-01');
+ await page.getByLabel('New lease monthly rent (USD)').fill('1250.00');
+ await page.getByRole('button',{name:'Review lease',exact:true}).click();
+ await page.getByRole('button',{name:'Create lease record',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Move-in setup',exact:true})).toBeVisible();
+ await expect(page).toHaveURL(url=>url.pathname==='/company/leases/l1'&&url.searchParams.get('onboarding')==='move-in'&&url.searchParams.get('leaseListProperty')==='home'&&url.searchParams.get('leaseListNested')==='true');
+ await expect(page.getByRole('link',{name:'← All leases',exact:true})).toHaveAttribute('href','/company/properties/home/leases?status=draft&q=Resident');
+ expect(state.leases).toHaveLength(1);
+ await page.getByRole('link',{name:'← All leases',exact:true}).click();
+ await expect(page).toHaveURL('/company/properties/home/leases?status=draft&q=Resident');
 });
 
 test('completing one property lease keeps another property task protected',async({page})=>{
