@@ -1,5 +1,13 @@
 # Feature release notes
 
+## October 27, 2026 — development power monitoring-state repair (local)
+
+PF-27: a reported `Unexpected database state: configuring-enhanced-monitoring` came from the controller's polling allowlist. The explicit RDS transition is now accepted during polling, initial Start/`start-database` dispatch and initial Stop readiness. The existing wait limit, required `available`/`stopped` observations, account/service checks, database-before-app startup and app-before-database shutdown remain. Deployment reuses this controller; no workflow, infrastructure, IAM or monitoring setting changes are needed.
+
+Seven new regression methods reproduce the defect on unmodified main `23bcede` (27 methods, 19 failed subtests) and cover initial/in-progress transitions, shutdown followed by restart, timeout without database mutation, no repeated start/stop commands and rejection of failure/unknown states. After the repair, the targeted 27/27 and full operations 107/107 pass; `bash -n scripts/dev-power.sh`, `python3 scripts/validate-dev-power.py` and diff whitespace checks pass. Independent review found no actionable issue. Application builds and browser tests were not repeated for this Bash/controller-only change. [Operator instructions and AWS state reference](dev-power.md).
+
+No application/API, schema, sales-demo fixture, Help entry, inventory target or cost policy changes; their existing documentation remains applicable. No live AWS operation or workflow rerun occurred. This source repair is local; publication, merge and live power acceptance remain separate.
+
 ## October 27, 2026 (UTC) — complete API contracts and protected Swagger (local)
 
 PF-25 now has a checked production registration inventory and source-reviewed field contracts for all304 explicit original operations across239 OpenAPI paths. The468 registered methods include151 generated HEAD and13 named documentation-infrastructure methods; these are accounted separately from business contract review. The catalog has zero pending, duplicate or orphan entries. This is source coverage, not a claim that every branch of every handler is fully verified. [Exact coverage/acceptance](api/acceptance.md) · [Final validation and retained failures](api/validation.md).

@@ -24,7 +24,7 @@ wait_for_db() {
   for ((attempt=1; attempt<=${DB_WAIT_ATTEMPTS:-80}; attempt++)); do
     status=$(db_status)
     [[ "$status" == "$target" ]] && return 0
-    case "$status" in starting|stopping|available|stopped|backing-up) ;; *) echo "Unexpected database state: $status" >&2; return 1 ;; esac
+    case "$status" in starting|stopping|available|stopped|backing-up|configuring-enhanced-monitoring) ;; *) echo "Unexpected database state: $status" >&2; return 1 ;; esac
     echo "Waiting for database to become $target (currently $status)."
     sleep "${DB_WAIT_SECONDS:-30}"
   done
@@ -60,8 +60,8 @@ if [[ "$ACTION" == "start" || "$ACTION" == "start-database" ]]; then
   fi
   case "$status" in
     stopped) aws rds start-db-instance --db-instance-identifier "$DB" >/dev/null ;;
-    # An existing backup must finish before deployment readiness is established.
-    available|starting|backing-up) ;;
+    # Existing backup/monitoring changes must finish before readiness is established.
+    available|starting|backing-up|configuring-enhanced-monitoring) ;;
     *) echo "Cannot start from database state: $status" >&2; exit 1 ;;
   esac
   wait_for_db available
@@ -74,7 +74,7 @@ if [[ "$ACTION" == "start" || "$ACTION" == "start-database" ]]; then
 else
   # Finish stopping the application before disconnecting its database.
   set_backend_count 0
-  if [[ "$status" == "starting" || "$status" == "backing-up" ]]; then
+  if [[ "$status" == "starting" || "$status" == "backing-up" || "$status" == "configuring-enhanced-monitoring" ]]; then
     wait_for_db available
     status=available
   fi

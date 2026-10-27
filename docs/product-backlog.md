@@ -363,6 +363,8 @@ Acceptance:
 
 ### PF-27 · Monitoring, recovery and release operations — P1, partial
 
+October 27 local repair: the shared development power controller waits through RDS `configuring-enhanced-monitoring` both at entry and while polling for Start, Stop and deployment readiness. Regression checks cover no duplicate database commands, ordered ECS changes, bounded waits and failure/unknown-state rejection. Publication/merge and a successful live power run remain separate gates; no live state change is claimed. [Recovery instructions](dev-power.md).
+
 October 25 local increment: Alloy shares the existing power-controlled ECS task; guarded runtime credentials, collector readiness and a daily 3 a.m. Eastern GitHub stop schedule with manual starts is prepared. Acceptance requires an approved rollout, actual Fleet/series verification, Start/Stop proof and reduced-task capacity checks after the separately requested scanner removal. PostgreSQL login/secret provisioning and query-level collection remain separate. [Runbook and evidence](alloy-collector.md).
 
 Audience: platform operator and product team. Dependencies: the app's real workflows and separately reviewed infrastructure/provider activation.
