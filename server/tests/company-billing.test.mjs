@@ -1,3 +1,4 @@
+import { documentedInject } from './api-contract-assertions.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash, randomUUID } from 'node:crypto';
@@ -61,7 +62,7 @@ test('company controls, usage and SaaS billing preserve authority and financial 
   registerApplication(app, db, auth, 'https://app.test');
   const contexts = new Map();
   const ok = response => { assert.equal(response.statusCode, 200, response.body); return response.json(); };
-  const call = (user, method, path, payload, extra = {}) => app.inject({ method, url: path, headers: {
+  const call = (user, method, path, payload, extra = {}) => documentedInject(app,{ method, url: path, headers: {
     ...(user ? { cookie: `__Host-pf-session=token-${user}` } : {}), origin: 'https://app.test', 'x-csrf-token': 'csrf',
     ...(contexts.has(user) ? { 'x-impersonation-id': contexts.get(user) } : {}), ...extra,
   }, ...(payload === undefined ? {} : { payload }) });

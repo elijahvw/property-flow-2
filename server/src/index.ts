@@ -13,6 +13,9 @@ import { registerSessions, readAuthConfig } from "./sessions.js";
 import { MAX_USER_ID_BYTES, registerApplication } from "./application.js";
 import { identityProvider } from "./identity-provider.js";
 import { registerRequestErrors } from "./request-errors.js";
+import { installApiDocumentation, registerApiDocumentationRoutes } from "./api-documentation.js";
+import { apiContractForRoute, apiDocumentTransform } from "./api-contracts.js";
+import { registerHealth } from "./health.js";
 
 dotenv.config();
 const server = fastify({
@@ -35,14 +38,15 @@ const server = fastify({
 });
 registerRequestErrors(server, recordRequestError);
 registerTelemetry(server);
-server.get("/", async () => ({ status: "ok" }));
-server.get("/api/health", async () => ({ status: "ok" }));
-server.get("/api/ready", async () => {
-  await prisma.$queryRaw`SELECT 1`;
-  return { status: "ok", db: "connected" };
-});
 const config = readAuthConfig();
+await installApiDocumentation(server, {
+  contractForRoute: apiContractForRoute,
+  transformObject: document => apiDocumentTransform(document, config.secure),
+  sessionCookieName: config.secure ? "__Host-pf-session" : "pf-session",
+});
+registerHealth(server, prisma);
 const authenticate = await registerSessions(server, prisma, config);
+await registerApiDocumentationRoutes(server, authenticate);
 registerBrowserTelemetry(server, authenticate);
 registerApplication(
   server,

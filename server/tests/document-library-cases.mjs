@@ -1,8 +1,8 @@
 import {historicalDocument} from "./historical-document-fixture.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { chromium, expect } from "@playwright/test";
-import { newFixturePage } from "./browser-fixture.mjs";
+import { expect } from "@playwright/test";
+import { launchFixtureBrowser, newFixturePage } from "./browser-fixture.mjs";
 export async function documentLibraryCases(t, admin, call, app) {
   const base = "/api/company/documents",
     ok = async (...args) => {
@@ -238,7 +238,7 @@ export async function documentLibraryCases(t, admin, call, app) {
     "real browser focuses the exact retained source document, shows scan state and restores library filters",
     { skip: !process.env.TEST_MAINTENANCE_BROWSER_URL },
     async () => {
-      const browser = await chromium.launch({ headless: true });
+      const browser = await launchFixtureBrowser({ headless: true });
       try {
         const page = await newFixturePage(browser, {
           viewport: { width: 390, height: 844 },

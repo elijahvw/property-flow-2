@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { chromium, expect } from "@playwright/test";
-import { newFixturePage } from "./browser-fixture.mjs";
+import { expect } from "@playwright/test";
+import { launchFixtureBrowser, newFixturePage } from "./browser-fixture.mjs";
 export async function preventiveCases(t, admin, db, call, app) {
   const base = "/api/company/preventive",
     make = (extra = {}) => ({
@@ -539,7 +539,7 @@ export async function preventiveCases(t, admin, db, call, app) {
     "browser reviews one request after committed response loss using real isolated API",
     { skip: !process.env.TEST_MAINTENANCE_BROWSER_URL },
     async () => {
-      const browser = await chromium.launch({ headless: true });
+      const browser = await launchFixtureBrowser({ headless: true });
       try {
         const page = await newFixturePage(browser, {
           viewport: { width: 390, height: 844 },

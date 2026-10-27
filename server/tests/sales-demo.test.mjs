@@ -1,3 +1,4 @@
+import { documentedInject } from './api-contract-assertions.mjs';
 import { newDemoCredentials, sealDemoCredentials } from '../dist/sales-demo-credentials.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,8 +13,8 @@ import { registerSessions, digest } from '../dist/sessions.js';
 import { registerRequestErrors } from '../dist/request-errors.js';
 import { AccessError } from '../dist/access.js';
 import { identityProvider, IdentityProviderError } from '../dist/identity-provider.js';
-import { chromium, expect } from '@playwright/test';
-import { newFixturePage } from './browser-fixture.mjs';
+import { expect } from '@playwright/test';
+import { newFixturePage, launchFixtureBrowser } from './browser-fixture.mjs';
 import { DEMO_BUNDLED_TEXT, DEMO_FEATURE_COVERAGE } from '../dist/sales-demo-scenarios.js';
 import { FEATURE_CATALOG } from '../dist/company-features.js';
 import { SALES_DEMO_SEED_VERSION } from '../dist/sales-demo-seed.js';
@@ -50,7 +51,7 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
   registerApplication(app,db,auth,'https://app.test',provider,{salesDemoCredentialSecret:'isolated-demo-test-encryption-secret'});
   const session=async id=>db.session.upsert({where:{tokenHash:digest(`token-${id}`)},update:{},create:{tokenHash:digest(`token-${id}`),csrfToken:'csrf',userId:id,expiresAt:new Date(Date.now()+3600000),idleExpiresAt:new Date(Date.now()+3600000)}});
   for(const id of ['platform','customer'])await session(id);
-  const call=(user,method,path,payload,headers={})=>app.inject({method,url:path,headers:{cookie:`__Host-pf-session=token-${user}`,origin:'https://app.test','x-csrf-token':'csrf',...headers},...(payload?{payload}:{})});
+  const call=(user,method,path,payload,headers={})=>documentedInject(app,{method,url:path,headers:{cookie:`__Host-pf-session=token-${user}`,origin:'https://app.test','x-csrf-token':'csrf',...headers},...(payload?{payload}:{})});
   const ok=async(...args)=>{const r=await call(...args);assert.equal(r.statusCode,200,r.body);return r.json();};
   const base='/api/platform/sales-demos',payload={submissionKey:randomUUID()};let sheet,demo,setupId;
   const current=async id=>db.salesDemo.findUniqueOrThrow({where:{id}});
@@ -488,7 +489,7 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
     assert.equal((await db.company.findUniqueOrThrow({where:{id:'customer-company'}})).status,'active');assert.equal((await db.user.findUniqueOrThrow({where:{id:'unrelated-demo-member'}})).status,'active');
   });
   await t.test('browser builds without account setup, recovers credentials after response loss and tears down', {skip:!process.env.TEST_SALES_DEMO_BROWSER_URL},async()=>{
-    const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{})});
+    const browser=await launchFixtureBrowser({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{})});
     try{
       const page=await newFixturePage(browser);let lose=true;const keys=[],responses=[],navigations=[],pageErrors=[],viteUpdates=[];
       const startedAt=Date.now();
@@ -540,7 +541,7 @@ test('automatic sales demo identities, role access, recovery and teardown', { sk
     const ownerId=remote.get(built.credentials.find(c=>c.role==='Owner').email).user_id;await session(ownerId);
     const before=await admin.query(`SELECT (SELECT count(*) FROM "LeaseMovement" WHERE "leaseId"=$1)::int movements,(SELECT count(*) FROM "RentCharge" WHERE "leaseId"=$1)::int charges,(SELECT status FROM "RentSchedule" WHERE "leaseId"=$1 LIMIT 1) billing`,[leaseId]);
     const end=new Date(fixture.manifest.today+'T00:00:00Z');end.setUTCMonth(end.getUTCMonth()+9,0);const future=end.toISOString().slice(0,10),reason='Future departure agreed with tenant';
-    const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{})});
+    const browser=await launchFixtureBrowser({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{})});
     try{
       const page=await newFixturePage(browser),settlementWrites=[];
       await page.route('**/api/**',async route=>{

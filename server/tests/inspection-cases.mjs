@@ -1,8 +1,8 @@
 import {historicalDocument} from './historical-document-fixture.mjs';
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { chromium, expect } from "@playwright/test";
-import { newFixturePage } from "./browser-fixture.mjs";
+import { expect } from "@playwright/test";
+import { launchFixtureBrowser, newFixturePage } from "./browser-fixture.mjs";
 
 export async function inspectionCases(t, admin, db, call, app) {
   await admin.query(
@@ -533,7 +533,7 @@ export async function inspectionCases(t, admin, db, call, app) {
       assert.ok(bootstrap.permissions.includes("lease.manage"));
       assert.equal(bootstrap.companyFeatures.leasing, "enabled");
       assert.equal(bootstrap.companyFeatures.inspections, "enabled");
-      const browser = await chromium.launch({ headless: true });
+      const browser = await launchFixtureBrowser({ headless: true });
       try {
         const page = await newFixturePage(browser);
         let lose = true;

@@ -1,3 +1,4 @@
+import { documentedInject } from './api-contract-assertions.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash, randomUUID } from 'node:crypto';
@@ -51,7 +52,7 @@ test('roadmap workflows preserve recorded history, property scope and retry inte
   t.after(() => app.close());
   const authenticate = await registerSessions(app, db, { origin: 'https://app.test', domain: 'unused.auth0.com', clientId: 'test', clientSecret: 'test-only', secure: true });
   registerApplication(app, db, authenticate, 'https://app.test');
-  const call = (user, method, path, payload, extra = {}) => app.inject({ method, url: path, headers: {
+  const call = (user, method, path, payload, extra = {}) => documentedInject(app,{ method, url: path, headers: {
     ...(user ? { cookie: `__Host-pf-session=token-${user}` } : {}), origin: 'https://app.test', 'x-csrf-token': 'csrf', ...extra,
   }, ...(payload === undefined ? {} : { payload }) });
   const ok = response => { assert.equal(response.statusCode, 200, response.body); return response.json(); };
