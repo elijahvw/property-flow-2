@@ -138,7 +138,7 @@ export function safeReturnTo(value: unknown): string {
         key === "prospectStage" && ["inquiry", "tour", "application", "review", "approved", "declined", "withdrawn", "converted"].includes(item) ||
         key === "prospectDue" && ["overdue", "today", "upcoming"].includes(item)
       );
-      const leaseOnboarding = /^\/company\/leases\/[^/]+$/.test(url.pathname) && key === "onboarding" && item === "household";
+      const leaseOnboarding = /^\/company\/leases\/[^/]+$/.test(url.pathname) && key === "onboarding" && ["household", "move-in"].includes(item);
       const taskContext = taskHandoff && key === "draftId" && /^[A-Za-z0-9][A-Za-z0-9_|:@.\-]{0,199}$/.test(item);
       if ((allowed.has(key) || pageCursor || tenantFilter || nestedMaintenance || prospectPage || prospectFilter || leaseOnboarding || taskContext) && item.length <= (pageCursor ? 512 : 200) && !/[\\\x00-\x1f\x7f]/.test(item) && (!pageCursor || /^[A-Za-z0-9_-]+$/.test(item))) query.set(key,item);
     }
