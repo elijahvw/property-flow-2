@@ -1,3 +1,4 @@
+import { documentedInject } from './api-contract-assertions.mjs';
 import {manualPasswordCases} from './manual-password-cases.mjs';
 import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
 import {workspaceGuideCases} from "./workspace-guide-cases.mjs";
@@ -194,7 +195,7 @@ test(
               })
             )?.version ?? null,
         };
-      return app.inject({
+      return documentedInject(app, {
         method,
         url: path,
         headers: {

@@ -1,7 +1,7 @@
-import { newFixturePage } from "./browser-fixture.mjs";
+import { launchFixtureBrowser, newFixturePage } from "./browser-fixture.mjs";
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { chromium, expect } from '@playwright/test';
+import { expect } from '@playwright/test';
 
 export async function maintenanceCostCases(t, admin, db, call, app, requestId) {
   const base = `/api/company/maintenance/${requestId}/costs`, otherRequest = (await admin.query(`SELECT id FROM "MaintenanceRequest" WHERE title='Boiler inspection'`)).rows[0].id;
@@ -108,7 +108,7 @@ export async function maintenanceCostCases(t, admin, db, call, app, requestId) {
     finally { await admin.query(`UPDATE "Company" SET status='active' WHERE id='a'`); }
   });
   await t.test('real browser lost link and unlink responses replay one association and one audit', { skip: !process.env.TEST_MAINTENANCE_BROWSER_URL }, async () => {
-    const fresh = await expense({ memo: 'Browser cost retry', amount: '35.50' }); const browser = await chromium.launch({ headless: true });
+    const fresh = await expense({ memo: 'Browser cost retry', amount: '35.50' }); const browser = await launchFixtureBrowser({ headless: true });
     try {
       const page = await newFixturePage(browser); let loseLink = true, loseUnlink = true; const attempts = [];
       await page.route('**/api/**', async route => {

@@ -31,6 +31,11 @@ export function Help() {
       <p className="help" role="status">{results.length} {results.length===1?"guide":"guides"}{search.trim()?" matching your search":" available"}</p>
       {results.length ? <ul className="help-directory">{results.map(item=><li key={item.id}><h2><Link to={`/help/${item.id}`}>{item.title}</Link></h2><p>{item.summary}</p><span className="help">{item.audience}</span></li>)}</ul> : <p>No guides match this search. Try a broader task name.</p>}
     </>}
+    {can("platform.manage") && !data?.impersonation && (!articleId || articleId === "administration") && <section className="panel" aria-labelledby="api-reference-title">
+      <h2 id="api-reference-title">API reference</h2>
+      <p>Browse documented endpoints, access rules and validation coverage. The reference is read-only and uses your own platform-owner session.</p>
+      <a className="button secondary" href="/api/docs/">Open API reference</a>
+    </section>}
     <p className="help">For account or property-specific help, contact your company owner or property manager. Never send a password or private invitation link in a support note.</p>
   </div>;
 }

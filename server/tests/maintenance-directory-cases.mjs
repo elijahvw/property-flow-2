@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { digest } from '../dist/sessions.js';
-import { chromium, expect } from '@playwright/test';
-import { newFixturePage } from './browser-fixture.mjs';
+import { expect } from '@playwright/test';
+import { launchFixtureBrowser, newFixturePage } from './browser-fixture.mjs';
 
 export async function maintenanceDirectoryCases(t, admin, db, call, app) {
   const company='directory-company',home='directory-home',hidden='directory-hidden',foreignCompany='directory-foreign-company';
@@ -152,7 +152,7 @@ export async function maintenanceDirectoryCases(t, admin, db, call, app) {
 
   await t.test('real browser opens copied page two, follows the exact source and returns with property/filter context before phone cursor recovery',{skip:!process.env.TEST_MAINTENANCE_BROWSER_URL},async()=>{
     const filters={...main,status:'unresolved',propertyId:home},first=await page(filters),second=await page({...filters,cursor:first.nextCursor});
-    const browser=await chromium.launch({headless:true});
+    const browser=await launchFixtureBrowser({headless:true});
     try{
       const view=await newFixturePage(browser),requests=[];
       await view.route('**/api/**',async route=>{const req=route.request(),url=new URL(req.url());requests.push(url.pathname+url.search);

@@ -1,9 +1,10 @@
 import { notificationCases } from "./notification-cases.mjs";
+import { assertDocumentedResponse } from './api-contract-assertions.mjs';
 import { publishNotification } from "../dist/notification-events.js";
-import { newFixturePage } from "./browser-fixture.mjs";
+import { launchFixtureBrowser, newFixturePage } from "./browser-fixture.mjs";
 import test from 'node:test';
 import {randomUUID} from 'node:crypto';
-import {chromium, expect} from '@playwright/test';
+import { expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
 import pg from 'pg';
@@ -56,7 +57,9 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  const call=async(user,method,path,payload,extra={})=>{
  if(payload&&method==='PATCH'&&path.startsWith('/api/company/maintenance/')&&!Object.hasOwn(payload,'expectedVersion'))payload={...payload,expectedVersion:(await admin.query('SELECT version FROM "MaintenanceRequest" WHERE id=$1',[path.split('/').pop()])).rows[0]?.version||1};
  if(payload&&method==='PATCH'&&path.startsWith('/api/platform/companies/')&&!Object.hasOwn(payload,'expectedVersion'))payload={...payload,expectedVersion:(await db.company.findUnique({where:{id:path.split('/').pop()}}))?.version};
- return app.inject({method,url:path,headers:{...(user?{cookie:`__Host-pf-session=token-${user}`} : {}),origin:'https://app.test','x-csrf-token':'csrf',...extra},...(payload?{payload}:{})});};
+ const response=await app.inject({method,url:path,headers:{...(user?{cookie:`__Host-pf-session=token-${user}`} : {}),origin:'https://app.test','x-csrf-token':'csrf',...extra},...(payload?{payload}:{})});
+ assertDocumentedResponse(method,path,response);
+ return response;};
  const valid={submissionKey:randomUUID(),propertyId:'home',title:'Leaking tap',description:'Kitchen tap leaks.',priority:'normal'};
 
  await t.test('durable replay, concurrent attempts, mismatch, requester/company scopes and rollback',async()=>{
@@ -92,7 +95,7 @@ test('maintenance real PostgreSQL API, isolation and revocation', {skip:!url}, a
  await admin.query(`DELETE FROM "AuditEvent"`);await admin.query(`DELETE FROM "MaintenanceRequest"`);
  });
  await t.test('real browser committed response loss replays one row and audit', {skip:!process.env.TEST_MAINTENANCE_BROWSER_URL},async()=>{
- const browser=await chromium.launch({headless:true});try{
+ const browser=await launchFixtureBrowser({headless:true});try{
  const page=await newFixturePage(browser);let lose=true;const keys=[];
  await page.route('**/api/**',async route=>{const req=route.request(),path=new URL(req.url());
  const response=await app.inject({method:req.method(),url:path.pathname+path.search,headers:{...req.headers(),origin:'https://app.test',cookie:'__Host-pf-session=token-resident'},...(req.postData()?{payload:req.postData()}:{})});

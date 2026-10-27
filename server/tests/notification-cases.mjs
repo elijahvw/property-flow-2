@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { chromium, expect } from "@playwright/test";
-import { newFixturePage } from "./browser-fixture.mjs";
+import { expect } from "@playwright/test";
+import { launchFixtureBrowser, newFixturePage } from "./browser-fixture.mjs";
 export async function notificationCases(t, admin, db, call, app) {
   const digest = (value) => createHash("sha256").update(value).digest("hex"),
     company = "notice-company",
@@ -787,7 +787,7 @@ export async function notificationCases(t, admin, db, call, app) {
     "real browser inbox recovers lost committed action, keeps source return, handles conflict and phone layout",
     { skip: !process.env.TEST_MAINTENANCE_BROWSER_URL },
     async () => {
-      const browser = await chromium.launch({ headless: true });
+      const browser = await launchFixtureBrowser({ headless: true });
       try {
         const page = await newFixturePage(browser),
           bodies = [];

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { chromium, expect } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { digest } from "../dist/sessions.js";
-import { newFixturePage } from "./browser-fixture.mjs";
+import { launchFixtureBrowser, newFixturePage } from "./browser-fixture.mjs";
 export async function vendorCases(t, admin, db, call, app) {
   const base = "/api/company/vendors",
     make = (name, extra = {}) => ({
@@ -664,7 +664,7 @@ export async function vendorCases(t, admin, db, call, app) {
     "browser creates one vendor after a committed lost response and links it through the real API",
     { skip: !process.env.TEST_MAINTENANCE_BROWSER_URL },
     async () => {
-      const browser = await chromium.launch({ headless: true });
+      const browser = await launchFixtureBrowser({ headless: true });
       try {
         const page = await newFixturePage(browser);
         let lose = true;

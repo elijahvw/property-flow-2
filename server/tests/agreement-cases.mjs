@@ -1,8 +1,8 @@
 import {historicalDocument} from './historical-document-fixture.mjs';
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { chromium, expect } from "@playwright/test";
-import { newFixturePage } from "./browser-fixture.mjs";
+import { expect } from "@playwright/test";
+import { launchFixtureBrowser, newFixturePage } from "./browser-fixture.mjs";
 
 export async function agreementCases(t, admin, db, call, app) {
   for (const [id, name] of [
@@ -839,7 +839,7 @@ export async function agreementCases(t, admin, db, call, app) {
         expectedVersion: 4,
         submissionKey: randomUUID(),
       });
-      const browser = await chromium.launch({ headless: true });
+      const browser = await launchFixtureBrowser({ headless: true });
       try {
         const page = await newFixturePage(browser);
         let lose = true;

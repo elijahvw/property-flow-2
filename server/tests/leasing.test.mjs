@@ -1,3 +1,4 @@
+import { documentedInject } from './api-contract-assertions.mjs';
 import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
 import {fixtureIdentities} from "./fixture-identities.mjs";
 import {renewalCases} from "./renewal-cases.mjs";
@@ -43,7 +44,7 @@ test('units and leases real PostgreSQL isolation, history and concurrency',{skip
  await admin.query(`INSERT INTO "ResidentPropertyAssignment"("companyId","propertyId","userId") VALUES('a','home','resident'),('a','home','resident2'),('b','foreign-home','foreign-resident')`);
  const providerCalls=[];
  const app=Fastify();t.after(()=>app.close());const auth=await registerSessions(app,db,{origin:'https://app.test',domain:'unused.auth0.com',clientId:'test',clientSecret:'test-only',secure:true});registerApplication(app,db,auth,'https://app.test',await fixtureIdentities(admin,providerCalls));
- const call=(user,method,path,payload,extra={})=>app.inject({method,url:path,headers:{...(user?{cookie:`__Host-pf-session=token-${user}`} : {}),origin:'https://app.test','x-csrf-token':'csrf',...extra},...(payload?{payload}:{})});
+ const call=(user,method,path,payload,extra={})=>documentedInject(app,{method,url:path,headers:{...(user?{cookie:`__Host-pf-session=token-${user}`} : {}),origin:'https://app.test','x-csrf-token':'csrf',...extra},...(payload?{payload}:{})});
  const units='/api/company/properties/home/units',leases='/api/company/leases';
  let unit,lease;
  const terms={startsOn:'2026-10-01',endsOn:'2027-09-30',monthlyRent:'1500.01',status:'active'};

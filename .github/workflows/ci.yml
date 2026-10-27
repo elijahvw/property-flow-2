@@ -69,6 +69,12 @@ jobs:
           mkdir -p test-results
           node --test --test-reporter=spec --test-reporter=junit --test-reporter-destination=stdout --test-reporter-destination=test-results/server.xml server/tests/*.test.mjs
 
+      - name: Check complete API inventory and documentation drift
+        run: |
+          npm ci --prefix server --workspaces=false --ignore-scripts --dry-run --no-audit --no-fund
+          node scripts/api-inventory.mjs --check
+          node --test tests/api-inventory.test.mjs
+
       - name: Test browser operations and authentication deadlines
         run: |
           mkdir -p test-results
@@ -83,6 +89,9 @@ jobs:
         run: |
           npx playwright install --with-deps --only-shell chromium
           npx playwright test -c playwright.onboarding.config.ts --reporter=line,junit
+
+      - name: Test protected Swagger UI with an isolated owner session
+        run: node --test tests/api-documentation-browser.test.mjs
 
       - name: Test enabled production RUM with intercepted network
         env:

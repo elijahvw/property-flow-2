@@ -1,7 +1,7 @@
-import { newFixturePage } from "./browser-fixture.mjs";
+import { launchFixtureBrowser, newFixturePage } from "./browser-fixture.mjs";
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {chromium,expect} from '@playwright/test';
+import { expect } from '@playwright/test';
 export async function workOrderCases(t,admin,db,call,app){
  let id,version=1;const detail=()=>`/api/company/work-orders/${id}`,act=(action,extra={})=>({action,note:`Fictional ${action} note`,expectedVersion:version,submissionKey:randomUUID(),...extra});
  const grant=async(user,enabled=true)=>{const v=(await admin.query('SELECT version FROM "CompanyMembership" WHERE "userId"=$1',[user])).rows[0].version;return call('owner','PUT',`/api/company/members/${user}/maintenance-access`,{enabled,expectedVersion:v});};
@@ -66,7 +66,7 @@ export async function workOrderCases(t,admin,db,call,app){
   assert.equal((await call('owner','PUT','/api/company/members/staff/property-access',{scope:'all',propertyIds:[],expectedVersion:propertyVersion})).statusCode,200);assert.equal((await grant('staff')).statusCode,200);
   const work=(await call('manager','POST','/api/company/maintenance',{propertyId:'home',title:'Browser fixture repair',description:'Fictional isolated browser repair.',priority:'normal',submissionKey:randomUUID()})).json();
   assert.equal((await call('manager','POST',`/api/company/work-orders/${work.id}/actions`,{action:'assign',assigneeId:'staff',note:'Please inspect this fixture.',expectedVersion:1,submissionKey:randomUUID()})).statusCode,200);
-  const browser=await chromium.launch({headless:true});
+  const browser=await launchFixtureBrowser({headless:true});
   try{
    const page=await newFixturePage(browser);let actor='staff';
    await page.route('**/api/**',async route=>{const req=route.request(),u=new URL(req.url());if(u.pathname==='/api/telemetry')return route.fulfill({status:202,json:{accepted:true}});const response=await app.inject({method:req.method(),url:u.pathname+u.search,headers:{...req.headers(),origin:'https://app.test',cookie:`__Host-pf-session=token-${actor}`},...(req.postData()?{payload:req.postData()}:{})});await route.fulfill({status:response.statusCode,contentType:'application/json',body:response.body});});

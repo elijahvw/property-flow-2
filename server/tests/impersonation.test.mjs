@@ -9,6 +9,9 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { registerApplication } from '../dist/application.js';
 import { registerSessions, digest } from '../dist/sessions.js';
 import { registerBrowserTelemetry } from '../dist/browser-telemetry.js';
+import { registerRequestErrors } from '../dist/request-errors.js';
+import { installApiDocumentation, registerApiDocumentationRoutes } from '../dist/api-documentation.js';
+import { apiDocsSessionCases } from './api-docs-session-cases.mjs';
 
 const url = process.env.TEST_IMPERSONATION_DATABASE_URL;
 test('impersonation preserves identity, company and read-only owner/support boundaries', { skip: !url }, async t => {
@@ -55,7 +58,19 @@ test('impersonation preserves identity, company and read-only owner/support boun
 
   const app = Fastify();
   t.after(() => app.close());
+  registerRequestErrors(app);
+  // Exercise the real cookie/session authority boundary here. Complete business
+  // contract coverage is checked separately from this minimal fixture document.
+  await installApiDocumentation(app, {
+    sessionCookieName: '__Host-pf-session',
+    contractForRoute: (method, path) => method === 'GET' && path === '/api/bootstrap' ? {
+      operationId: 'sessionFixtureBootstrap', summary: 'Read the existing session context',
+      security: [{ sessionCookie: [] }],
+      response: { 200: { type: 'object', description: 'Existing authenticated bootstrap projection.' } },
+    } : undefined,
+  });
   const auth = await registerSessions(app, db, { origin: 'https://app.test', domain: 'unused.auth0.com', clientId: 'test', clientSecret: 'test-only', secure: true });
+  await registerApiDocumentationRoutes(app, auth);
   registerApplication(app, db, auth, 'https://app.test');
   registerBrowserTelemetry(app, auth);
   const state = new Map();
@@ -72,6 +87,8 @@ test('impersonation preserves identity, company and read-only owner/support boun
   const start = async (user, userId) => { const response = await call(user, 'POST', '/api/impersonation', { userId, reason: 'Test role access for support case' }); ok(response); return bootstrap(user); };
   const stop = async user => { ok(await call(user, 'DELETE', '/api/impersonation')); return bootstrap(user); };
   const supportVersion = async user => (await db.user.findUniqueOrThrow({ where: { id: user } })).updatedAt.toISOString();
+
+  await apiDocsSessionCases(t, { admin, call, start, stop });
 
   await t.test('only platform owner/support can select active verified company users', async () => {
     assert.equal((await call(null, 'GET', '/api/impersonation/users')).statusCode, 401);
@@ -107,7 +124,11 @@ test('impersonation preserves identity, company and read-only owner/support boun
     assert.equal((await call('platform', 'PATCH', '/api/platform/users/candidate/support-access', { ...payload, enabled: false })).statusCode, 409);
     assert.equal(await db.auditEvent.count({ where: { actorId: 'platform', targetId: 'candidate', action: 'platform.support.granted' } }), 1);
     await admin.query("CREATE FUNCTION reject_support_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='platform.support.revoked' THEN RAISE EXCEPTION 'audit unavailable'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_support_audit BEFORE INSERT ON \"AuditEvent\" FOR EACH ROW EXECUTE FUNCTION reject_support_audit()");
-    try { assert.equal((await call('platform', 'PATCH', '/api/platform/users/candidate/support-access', { enabled: false, updatedAt: saved.updatedAt })).statusCode, 500); }
+    try {
+      const failed = await call('platform', 'PATCH', '/api/platform/users/candidate/support-access', { enabled: false, updatedAt: saved.updatedAt });
+      assert.equal(failed.statusCode, 503, failed.body);
+      assert.equal(failed.json().code, 'REQUEST_503');
+    }
     finally { await admin.query('DROP TRIGGER reject_support_audit ON "AuditEvent"; DROP FUNCTION reject_support_audit()'); }
     assert.equal((await db.user.findUniqueOrThrow({ where: { id: 'candidate' } })).platformRole, 'support');
   });
@@ -247,7 +268,11 @@ test('impersonation preserves identity, company and read-only owner/support boun
 
   await t.test('start is atomic with its audit and concurrent starts create only one context', async () => {
     await admin.query("CREATE FUNCTION reject_impersonation_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='impersonation.started' THEN RAISE EXCEPTION 'audit unavailable'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_impersonation_audit BEFORE INSERT ON \"AuditEvent\" FOR EACH ROW EXECUTE FUNCTION reject_impersonation_audit()");
-    try { assert.equal((await call('platform', 'POST', '/api/impersonation', { userId: 'manager', reason: 'Atomic audit test' })).statusCode, 500); }
+    try {
+      const failed = await call('platform', 'POST', '/api/impersonation', { userId: 'manager', reason: 'Atomic audit test' });
+      assert.equal(failed.statusCode, 503, failed.body);
+      assert.equal(failed.json().code, 'REQUEST_503');
+    }
     finally { await admin.query('DROP TRIGGER reject_impersonation_audit ON "AuditEvent"; DROP FUNCTION reject_impersonation_audit()'); }
     assert.equal((await db.session.findUniqueOrThrow({ where: { tokenHash: digest('token-platform') } })).impersonatedUserId, null);
     const before = await db.auditEvent.count({ where: { actorId: 'platform', action: 'impersonation.started' } });

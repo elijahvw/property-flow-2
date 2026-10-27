@@ -1,7 +1,7 @@
-import { newFixturePage } from "./browser-fixture.mjs";
+import { launchFixtureBrowser, newFixturePage } from "./browser-fixture.mjs";
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { chromium, expect } from '@playwright/test';
+import { expect } from '@playwright/test';
 
 export async function maintenanceUpdateCases(t, admin, db, call, app, requestId) {
   const endpoint = `/api/company/maintenance/${requestId}/updates`, residentEndpoint = `/api/resident/maintenance/${requestId}/updates`;
@@ -84,7 +84,7 @@ export async function maintenanceUpdateCases(t, admin, db, call, app, requestId)
     }
   });
   await t.test('browser committed-response-loss keeps the update draft, audience and key', { skip: !process.env.TEST_MAINTENANCE_BROWSER_URL }, async () => {
-    const browser = await chromium.launch({ headless: true });
+    const browser = await launchFixtureBrowser({ headless: true });
     try {
       const page = await newFixturePage(browser); let lose = true; const attempts = [];
       await page.route('**/api/**', async route => {

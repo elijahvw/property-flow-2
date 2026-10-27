@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { chromium, expect } from "@playwright/test";
-import { newFixturePage } from "./browser-fixture.mjs";
+import { expect } from "@playwright/test";
+import { launchFixtureBrowser, newFixturePage } from "./browser-fixture.mjs";
 export async function calendarCases(t, admin, call, app) {
   const base = "/api/company/work-calendar",
     filter = "month=2026-10&propertyId=calendar-home";
@@ -338,7 +338,7 @@ export async function calendarCases(t, admin, call, app) {
     "real browser opens dated work and returns with calendar filters; mobile layout uses real isolated data",
     { skip: !process.env.TEST_MAINTENANCE_BROWSER_URL },
     async () => {
-      const browser = await chromium.launch({ headless: true });
+      const browser = await launchFixtureBrowser({ headless: true });
       try {
         const page = await newFixturePage(browser, {
           viewport: { width: 390, height: 844 },
