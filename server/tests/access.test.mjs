@@ -187,3 +187,30 @@ test('sign-in keeps independent tenant directory and rental-history pages only o
     assert.equal(safeReturnTo(`${path}?cursor=${directoryPage}`), '/dashboard');
   }
 });
+
+test('sign-in preserves the exact lease move-in guide and its supported source context', () => {
+  const context = new URLSearchParams({
+    section: 'overview', propertyId: 'home',
+    tenantId: 'tenant-source', tenantContact: 'true', tenantQ: 'Fictional tenant', tenantSection: 'rentals',
+    prospectId: 'closed-inquiry', prospectStage: 'converted', prospectQ: 'Original inquiry', prospectCursor: 'case-page',
+    noticeReturn: 'inbox', noticeStatus: 'unread', noticeType: 'agreements', noticePage: '2',
+    library: '1', library_source: 'leases', library_page: '3', agreementId: 'agreement-source',
+  });
+  for (const mode of ['move-in', 'household']) {
+    const destination = `/company/leases/active-lease?onboarding=${mode}&${context}`;
+    assert.equal(safeReturnTo(destination), destination);
+    assert.equal(new URL(safeReturnTo(destination), 'https://internal.invalid').pathname, '/company/leases/active-lease');
+  }
+});
+
+test('lease onboarding return modes are allowlisted only on exact company lease detail paths', () => {
+  for (const path of ['/company/leases', '/company/leases/active-lease/statement', '/company/rent', '/company/deposits', '/company/properties/home/leases', '/resident/leases/active-lease', '/platform/users']) {
+    for (const mode of ['move-in', 'household']) assert.equal(safeReturnTo(`${path}?onboarding=${mode}`), path);
+  }
+  for (const mode of ['unknown', 'Move-in', 'move-in%2Fother', 'move-in%00', 'move-in%26section%3Drenewal', '%252f%252fevil.test']) {
+    assert.equal(safeReturnTo(`/company/leases/active-lease?onboarding=${mode}&section=overview&redirect=https%3A%2F%2Fevil.test`), '/company/leases/active-lease?section=overview');
+  }
+  for (const path of ['/company/leases/active%2Fother', '/company/leases/%252f', '/company/leases/%2e%2e/platform', '//evil.test/company/leases/active-lease']) {
+    assert.equal(safeReturnTo(`${path}?onboarding=move-in`), '/dashboard');
+  }
+});
