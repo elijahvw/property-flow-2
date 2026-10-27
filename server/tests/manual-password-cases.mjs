@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { digest } from '../dist/sessions.js';
-import {chromium,expect} from '@playwright/test';
-import {newFixturePage} from './browser-fixture.mjs';
+import {expect} from '@playwright/test';
+import {newFixturePage, launchFixtureBrowser} from './browser-fixture.mjs';
 
 export async function manualPasswordCases(t,{db,admin,app,provider,remote}) {
   let addressIndex=1,address='127.0.1.1';
@@ -169,7 +169,7 @@ export async function manualPasswordCases(t,{db,admin,app,provider,remote}) {
   });
   await subtest('development StrictMode password review loads, clears fields and completes a real API dispatch',{skip:!process.env.TEST_USERS_BROWSER_URL},async()=>{
     await session('platform');
-    const browser=await chromium.launch({headless:true});
+    const browser=await launchFixtureBrowser({headless:true});
     try{
       const page=await newFixturePage(browser);
       await page.route('**/api/**',async route=>{

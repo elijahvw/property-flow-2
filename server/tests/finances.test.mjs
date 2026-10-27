@@ -1,4 +1,4 @@
-import { newFixturePage } from "./browser-fixture.mjs";
+import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
 import {fixtureIdentities} from "./fixture-identities.mjs";
 import {leaseLifecycleCases} from "./lease-lifecycle-cases.mjs";
 import {leaseTermCases} from "./lease-term-cases.mjs";
@@ -28,7 +28,7 @@ import pg from 'pg';
 import Fastify from 'fastify';
 import {PrismaClient} from '@prisma/client';
 import {PrismaPg} from '@prisma/adapter-pg';
-import {chromium,expect} from '@playwright/test';
+import {expect} from '@playwright/test';
 import {registerApplication} from '../dist/application.js';
 import {registerSessions,digest} from '../dist/sessions.js';
 import {cents,date} from '../dist/operational.js';
@@ -131,7 +131,7 @@ test('manual finance isolation, replay, corrections and totals',{skip:!url},asyn
   // Dedicated guidance cases own first-login presentation and progress.
   const guideResponse=await call('owner','GET','/api/account/guide');assert.equal(guideResponse.statusCode,200,guideResponse.body);const guide=guideResponse.json();
   const dismissed=await call('owner','PUT','/api/account/guide',{guideKey:guide.guideKey,expectedVersion:guide.version,status:'dismissed',step:guide.steps[0].id});assert.equal(dismissed.statusCode,200,dismissed.body);
-  const browser=await chromium.launch({headless:true});try{const page=await newFixturePage(browser);let lose=true;const keys=[];
+  const browser=await launchFixtureBrowser({headless:true});try{const page=await newFixturePage(browser);let lose=true;const keys=[];
    await page.route('**/api/**',async route=>{const req=route.request(),u=new URL(req.url());const response=await app.inject({method:req.method(),url:u.pathname+u.search,headers:{...req.headers(),origin:'https://app.test',cookie:'__Host-pf-session=token-owner'},...(req.postData()?{payload:req.postData()}:{})});if(req.method()==='POST'&&u.pathname===path){keys.push(req.postDataJSON().submissionKey);assert.equal(req.headers()['x-company-id'],'a');assert.equal(response.statusCode,200,response.body);if(lose){lose=false;return route.abort('failed');}}await route.fulfill({status:response.statusCode,contentType:'application/json',body:response.body});});
    await page.goto(process.env.TEST_FINANCES_BROWSER_URL+'/company/finances');await page.getByRole('button',{name:'Record a transaction',exact:true}).click();await page.getByLabel('Date received or paid').fill('2026-10-14');await page.getByLabel('Amount (USD)').fill('99.99');await page.getByLabel('Memo (optional)').fill('Browser receipt');await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect(page.getByRole('alert')).toBeVisible();await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:/^(Save draft & close|Close & keep recovery)$/,exact:true}).click();await page.reload();await page.getByRole('button',{name:'Review unfinished transaction',exact:true}).click();await expect(page.getByLabel('Amount (USD)')).toHaveValue('99.99');await expect(page.getByLabel('Amount (USD)')).toBeDisabled();await page.getByRole('button',{name:'Record transaction',exact:true}).click();await expect(page.getByRole('dialog')).not.toBeVisible();assert.equal(keys[0],keys[1]);const rows=(await admin.query(`SELECT id,"amountCents" FROM "LedgerEntry" WHERE memo='Browser receipt'`)).rows;assert.equal(rows.length,1);assert.equal(rows[0].amountCents,9999);assert.equal((await admin.query(`SELECT count(*)::int n FROM "AuditEvent" WHERE "targetId"=$1`,[rows[0].id])).rows[0].n,1);
   }finally{await browser.close();}

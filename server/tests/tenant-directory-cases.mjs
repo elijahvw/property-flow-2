@@ -2,10 +2,10 @@
 // existing fresh tmpfs finance runner and its actual restricted runtime API.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { chromium, expect } from '@playwright/test';
+import { expect } from '@playwright/test';
 import { digest } from '../dist/sessions.js';
 import { safeReturnTo } from '../dist/access.js';
-import { newFixturePage } from './browser-fixture.mjs';
+import { newFixturePage, launchFixtureBrowser } from './browser-fixture.mjs';
 import { tenantDirectoryCapCases } from './tenant-directory-cap-cases.mjs';
 
 export async function tenantDirectoryCases(t, admin, call, app, db, providerCalls) {
@@ -308,7 +308,7 @@ export async function tenantDirectoryCases(t, admin, call, app, db, providerCall
   let browser;
   if (origin) {
     const target = new URL(origin); assert.equal(target.protocol, 'http:'); assert.equal(target.hostname, '127.0.0.1'); assert.match(target.port, /^\d+$/); assert.equal(origin, target.origin); assert.equal(target.username, ''); assert.equal(target.password, '');
-    browser = await chromium.launch({ headless: true }); t.after(() => browser.close());
+    browser = await launchFixtureBrowser({ headless: true }); t.after(() => browser.close());
   }
   const fixturePage = async (actor = 'td-owner', options) => {
     const page = await newFixturePage(browser, options);

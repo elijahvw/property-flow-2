@@ -72,7 +72,7 @@ function SavedTask({ id }: { id: string }) {
 }
 function SavedTaskContent({ task }: { task: TaskDraft }) {
   const navigate = useNavigate();
-  if (task.kind === "lease_create") return <LeaseCreate propertyId={task.propertyId} propertyName={task.property?.name || "Property"} initialTask={task} saved={row => navigate(leasePath(row.id, { ...task.context, onboarding: "household" }))}/>;
+  if (task.kind === "lease_create") return <LeaseCreate propertyId={task.propertyId} propertyName={task.property?.name || "Property"} initialTask={task} saved={row => navigate(leasePath(row.id, { ...task.context, onboarding: "move-in" }))}/>;
   if (task.kind === "inspection") return <SavedInspectionTask task={task} saved={id => navigate(leasePath(task.sourceId!, { ...task.context, section: "inspections", inspectionId: id }))}/>;
   return <RenewalTask task={task}/>;
 }

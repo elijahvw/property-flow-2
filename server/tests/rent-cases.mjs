@@ -1,7 +1,7 @@
-import { newFixturePage } from "./browser-fixture.mjs";
+import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { chromium, expect } from '@playwright/test';
+import { expect } from '@playwright/test';
 import { companyDay } from '../dist/reports.js';
 export async function rentCases(t, admin, call, app, db) {
  const year=Number(companyDay('America/New_York').slice(0,4))-1,jan=`${year}-01-01`,feb=`${year}-02-01`,mar=`${year}-03-01`;
@@ -120,7 +120,7 @@ export async function rentCases(t, admin, call, app, db) {
   await admin.query(`DELETE FROM "Lease" WHERE id LIKE 'rent-limit-%'`);
  });
  await t.test('real browser committed charge and payment response loss retry once with preserved draft',{skip:!process.env.TEST_FINANCES_BROWSER_URL},async()=>{
-  const browser=await chromium.launch({headless:true});try{
+  const browser=await launchFixtureBrowser({headless:true});try{
    const page=await newFixturePage(browser),lost=new Set(),keys={};
    await page.route('**/api/**',async route=>{const req=route.request(),u=new URL(req.url());const response=await app.inject({method:req.method(),url:u.pathname+u.search,headers:{...req.headers(),origin:'https://app.test',cookie:'__Host-pf-session=token-owner'},...(req.postData()?{payload:req.postData()}:{})});
     if(req.method()==='POST'&&u.pathname.startsWith(`${root}/${lease.id}/`)){const type=u.pathname.split('/').at(-1);(keys[type]??=[]).push(req.postDataJSON().submissionKey);assert.equal(response.statusCode,200,response.body);if(!lost.has(type)){lost.add(type);return route.abort('failed');}}

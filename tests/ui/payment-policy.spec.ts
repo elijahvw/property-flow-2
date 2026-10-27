@@ -227,7 +227,7 @@ test("lease create and edit use complete payment terms, preserve clear instructi
     graceDays: 5,
     paymentInstructions: "Pay at the office.",
   });
-  await expect(page).toHaveURL(/\/company\/leases\/new-lease\?onboarding=household/);
+  await expect(page).toHaveURL(url=>url.pathname==='/company/leases/new-lease'&&url.searchParams.get('onboarding')==='move-in'&&url.searchParams.get('leaseListProperty')==='home');
   await page.getByRole('link',{name:'← All leases',exact:true}).click();
   await page.getByText("More actions",{exact:true}).first().click();
   await page.getByRole("button", { name: "Edit lease", exact: true }).click();

@@ -23,6 +23,7 @@ import { LeaseInspections, InspectionSettlementContext } from "../components/Lea
 import { LeaseAgreements } from "../components/LeaseAgreements";
 import { agreementContext } from "../agreement-context";
 import { LeaseInvitations } from "../components/LeaseInvitations";
+import { LeaseMoveIn } from "../components/LeaseMoveIn";
 import { EditorDialog } from "../components/EditorDialog";
 import { Form } from "../components/Form";
 import { dollars } from "../money";
@@ -73,7 +74,7 @@ function LeaseWorkspace({ id }: { id: string }) {
     "proration",
   ].includes(params.get("section") || "")
     ? params.get("section")!
-    : params.has("onboarding")
+    : params.get("onboarding") === "household"
       ? "household"
       : "overview";
   const available = (value: string) => value === "documents" ? hasDocuments : value === "inspections" ? hasInspections : value === "agreements" ? hasAgreements : value === "invitations" ? hasPortal : ["terms", "proration", "settlement"].includes(value) ? hasFinance : true;
@@ -140,7 +141,10 @@ function LeaseWorkspace({ id }: { id: string }) {
   const currentGroup = sectionGroups.find(group => group.items.some(([value]) => value === section))!;
   const currentSection = currentGroup.items.find(([value]) => value === section)![1];
   const source = (module: string) =>
-    `/company/${module}?${new URLSearchParams({ ...context, leaseId: id, leaseReturn: id })}`;
+    `/company/${module}?${new URLSearchParams({ ...context, ...documentLibraryContext(params), ...agreementContext(params), ...notificationContext(params), ...(lease.status === "draft" ? { onboarding: "move-in" } : {}), leaseId: id, leaseReturn: id })}`;
+  const showMoveIn = lease.status === "draft" || params.get("onboarding") === "move-in";
+  const openMoveIn = () => setParams({ ...context, ...documentLibraryContext(params), ...agreementContext(params), ...notificationContext(params), onboarding: "move-in", section: "overview" });
+  const moveInSection = (value: string) => setParams({ ...context, ...documentLibraryContext(params), ...agreementContext(params), ...notificationContext(params), onboarding: "move-in", section: value });
   return (
     <div className="lease-workspace">
       {handoffGuard}
@@ -197,27 +201,14 @@ function LeaseWorkspace({ id }: { id: string }) {
       <div id="lease-section-content" role="region" aria-label={currentSection}>
       {section === "overview" && (
         <div className="lease-overview">
-          {lease.status === "draft" && (
-            <section className="notice lease-setup-notice">
-              <div>
-                <h2>This lease is a draft</h2>
-                <p>
-                  Review the dates, terms and household, then activate the
-                  record when it is ready. Portal invitations and recurring
-                  billing are optional, separate actions.
-                </p>
-              </div>
-              <div className="actions"><button className="text-button" onClick={()=>tab("household")}>Review household</button>{hasFinance&&<Link to={source("rent")}>Review rent setup</Link>}</div>
-              <button
-                className="secondary"
-                disabled={!!r.error}
-                onClick={() => editTerms(true)}
-              >
-                Review draft & activate
-              </button>
-            </section>
-          )}
-          {!!lease.overview?.pendingApprovals && can("members.manage") && (
+          {showMoveIn && <LeaseMoveIn lease={lease} owner={can("members.manage")}
+            writable={can("lease.manage") && !auth?.impersonation && (!auth?.companyFeatures || auth.companyFeatures.leasing === "enabled")}
+            finance={hasFinance} portal={hasPortal} unavailable={!!r.error}
+            household={() => moveInSection("household")}
+            invitations={() => moveInSection("invitations")}
+            activate={() => { openMoveIn(); editTerms(true); }}
+            rentPath={source("rent")} depositPath={source("deposits")} />}
+          {hasPortal && !!lease.overview?.pendingApprovals && can("members.manage") && (
             <section className="notice lease-setup-notice">
               <p>
                 {lease.overview.pendingApprovals} resident{" "}
@@ -247,6 +238,7 @@ function LeaseWorkspace({ id }: { id: string }) {
               >
                 Edit lease record
               </button>
+              {!showMoveIn && lease.status !== "ended" && <button type="button" className="text-button" onClick={openMoveIn}>Review move-in setup</button>}
             </div>
             <dl className="lease-overview-facts">
               <div>
@@ -307,7 +299,7 @@ function LeaseWorkspace({ id }: { id: string }) {
               )}
             </div>
           </section>
-          <div className="lease-overview-cards">
+          {!showMoveIn && <div className="lease-overview-cards">
             <section className="panel">
               <h2>Household</h2>
               <p className="lease-overview-value">
@@ -355,12 +347,13 @@ function LeaseWorkspace({ id }: { id: string }) {
                 </section>
               </>
             )}
-          </div>
+          </div>}
         </div>
       )}
       {(section === "household" || visited.includes("household")) && (
         <section className="panel" hidden={section !== "household"}>
           <LeaseHousehold leaseId={id} onChange={r.reload} />
+          {params.get("onboarding") === "move-in" && <button type="button" className="secondary" onClick={openMoveIn}>Continue move-in setup</button>}
           {hasPortal && <button className="secondary" onClick={() => tab("invitations")}>
             Continue to invitations →
           </button>}
@@ -369,6 +362,7 @@ function LeaseWorkspace({ id }: { id: string }) {
       {hasPortal && (section === "invitations" || visited.includes("invitations")) && (
         <section className="panel" hidden={section !== "invitations"}>
           <LeaseInvitations leaseId={id} startsOn={lease.startsOn} />
+          {params.get("onboarding") === "move-in" && <button type="button" className="secondary" onClick={openMoveIn}>Continue move-in setup</button>}
           <button className="secondary" onClick={() => tab("overview")}>
             Return to overview
           </button>

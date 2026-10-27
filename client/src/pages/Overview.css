@@ -4,6 +4,7 @@
 .daily-overview .overview-heading p,.overview-scope > div > strong { overflow-wrap:anywhere; }
 .daily-overview .overview-heading p:last-child { margin-bottom:0; }
 .overview-refresh { flex-shrink:0; }
+.overview-heading-actions { display:flex; flex-wrap:wrap; gap:var(--pf-space-2, .5rem); align-items:center; }
 .overview-scope { display:flex; align-items:center; justify-content:space-between; gap:1.5rem; padding:1.15rem 1.35rem; margin-bottom:1.5rem; background:var(--pf-surface-selected); border:1px solid var(--overview-line); border-radius:var(--pf-radius-surface); }
 .overview-section-kicker { display:block; color:var(--overview-muted); font-size:.69rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; margin-bottom:.3rem; }
 .overview-scope > div > strong { display:block; font-size:1.05rem; color:var(--overview-ink); }

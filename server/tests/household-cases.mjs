@@ -1,9 +1,9 @@
-import { newFixturePage } from "./browser-fixture.mjs";
+import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {digest} from '../dist/sessions.js';
 import {companyDay} from '../dist/reports.js';
-import {chromium,expect} from '@playwright/test';
+import {expect} from '@playwright/test';
 
 export async function householdCases(t,admin,call,app){
  const ok=r=>{assert.equal(r.statusCode,200,r.body);return r.json();},today=companyDay('America/New_York');
@@ -100,7 +100,7 @@ export async function householdCases(t,admin,call,app){
    assert.equal((await call('resident2','POST','/api/invitations/preview',{token})).statusCode,403);
    assert.equal((await call('resident2','POST','/api/invitations/accept',{token})).statusCode,403);
    if(role==='occupant'&&process.env.TEST_FINANCES_BROWSER_URL){
-    const browser=await chromium.launch({headless:true});try{
+    const browser=await launchFixtureBrowser({headless:true});try{
      const page=await newFixturePage(browser, {viewport:{width:1280,height:1000}});
      await page.route('**/api/**',async route=>{const req=route.request(),url=new URL(req.url()),response=await app.inject({method:req.method(),url:url.pathname+url.search,headers:{...req.headers(),origin:'https://app.test',cookie:`__Host-pf-session=token-${id}`},...(req.postData()?{payload:req.postData()}:{})});await route.fulfill({status:response.statusCode,contentType:'application/json',body:response.body});});
      await page.goto(process.env.TEST_FINANCES_BROWSER_URL+`/invite?lease=1#${token}`);
@@ -225,7 +225,7 @@ export async function householdCases(t,admin,call,app){
   assert.equal((await call('hh-new-holder','GET',`/api/resident/rent?leaseId=${renewal.id}`)).statusCode,404,'owner review does not activate draft finances');
  });
  await t.test('real browser follows the lease workspace, household and invitation workflow', {skip:!process.env.TEST_FINANCES_BROWSER_URL},async()=>{
-  const browser=await chromium.launch({headless:true});try{
+  const browser=await launchFixtureBrowser({headless:true});try{
    const page=await newFixturePage(browser, {viewport:{width:1440,height:1000}});
    await page.route('**/api/**',async route=>{const req=route.request(),url=new URL(req.url()),response=await app.inject({method:req.method(),url:url.pathname+url.search,headers:{...req.headers(),origin:'https://app.test',cookie:'__Host-pf-session=token-hh-owner'},...(req.postData()?{payload:req.postData()}:{})});await route.fulfill({status:response.statusCode,contentType:'application/json',body:response.body});});
    await page.goto(process.env.TEST_FINANCES_BROWSER_URL+`/company/leases/${lease.id}`);

@@ -1,7 +1,7 @@
-import { newFixturePage } from "./browser-fixture.mjs";
+import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { chromium, expect } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { companyDay } from "../dist/reports.js";
 
 export async function leaseChargeCases(t, admin, call, app, db) {
@@ -108,7 +108,7 @@ export async function leaseChargeCases(t, admin, call, app, db) {
     ok(await call("owner", "POST", root + "/one-time-charges", payload));
   });
   await t.test("real browser preserves reviewed charge after response loss and reload; local forms are readable and plain references replace ID menus", { skip: !process.env.TEST_FINANCES_BROWSER_URL }, async () => {
-    const browser = await chromium.launch({ headless: true });
+    const browser = await launchFixtureBrowser({ headless: true });
     try {
       const page = await newFixturePage(browser); let lose = true; const keys = [];
       await page.route("**/api/**", async route => {

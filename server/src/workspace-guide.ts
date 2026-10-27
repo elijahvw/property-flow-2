@@ -7,7 +7,7 @@ import { choice, input, mutation, version } from "./operational.js";
 type Step = { id: string; title: string; description: string; path: string; action: string; help: string };
 const step = (id: string, title: string, description: string, path: string, action: string, help: string): Step => ({ id, title, description, path, action, help });
 const management = [
-  step("overview", "Your daily workspace", "Overview brings together your properties and work that needs attention. Open a task to continue with the right records and filters.", "/company/overview", "Open overview", "getting-started"),
+  step("overview", "Your daily workspace", "Today brings together your properties and work that needs attention. Open a task to continue with the right records and filters, or resume your saved work.", "/company/overview", "Open Today", "getting-started"),
   step("properties", "Start with a property and its units", "Add the place you manage, then the units you rent. Each property keeps its people, leases, money and maintenance connected.", "/company/properties", "View properties", "properties"),
   step("tenants", "Save each tenant once", "Add a tenant before they sign in. Reuse that person when recording a lease. Portal invitations are optional and owners approve access.", "/company/residents", "View tenants", "people"),
   step("leases", "Connect the lease and household", "Review the unit, dates, household and rent. An active lease, portal access and recurring billing are separate decisions; the lease workspace guides the next step.", "/company/leases", "View leases", "leases"),

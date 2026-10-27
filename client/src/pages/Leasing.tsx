@@ -3,7 +3,7 @@ import { useEditorSelection } from "../useEditorSelection";
 import { useDebouncedValue } from "../useDebouncedValue";
 import { TenantForm,type TenantContact } from "../components/TenantForm";
 import { formatDate } from "../dates";
-import { leasePath, unitDirectoryPath, unitListContext } from "../lease-links";
+import { leasePath, leaseContext, unitDirectoryPath, unitListContext } from "../lease-links";
 import { prospectContext, withProspectContext } from "../prospect-context";
 import { DateField } from "../components/DateField";
 import {
@@ -35,7 +35,7 @@ type Unit = UnitExtras & {
 };
 export type Lease = {
   hasTermHistory?:boolean;
-  overview?:{householdCount:number;pendingApprovals:number;scheduleStatus:string|null;depositRecorded:boolean};
+  overview?:{householdCount:number;pendingApprovals?:number;scheduleStatus?:string|null;depositRecorded?:boolean;financeAvailable?:boolean};
   previousLeaseId?: string | null;
   previousLease?: { id: string; endsOn: string | null; status: string } | null;
   renewals?: { id: string; status: string; startsOn: string }[];
@@ -463,7 +463,7 @@ function LeaseList() {
     }
   }, [properties.data, propertyId]);
   const propertyName = properties.data?.find((p) => p.id === contextId)?.name;
-  const detailPath = (id: string, section?: string) =>
+  const detailPath = (id: string, section?: string, moveIn = false) =>
     leasePath(
       id,
       Object.fromEntries(
@@ -477,7 +477,7 @@ function LeaseList() {
           leaseListUnit: unitId,
           ...unitListContext(params),
           ...prospectContext(params),
-          ...(section ? { section } : approvals ? { section: "invitations" } : {}),
+          ...(moveIn ? { onboarding: "move-in" } : section ? { section } : approvals ? { section: "invitations" } : {}),
         }).filter(([, value]) => value),
       ),
     );
@@ -603,6 +603,7 @@ function LeaseList() {
                   active={propertyId === id}
                   unitHint={{ id: unitId, loading: r.loading, failed: !!r.error, candidate: r.data?.unit }}
                   initialContactId={params.get("contactId") || undefined}
+                  recordedPath={id => detailPath(id, undefined, true)}
                   propertyName={
                     properties.data!.find((p) => p.id === id)?.name ||
                     "Property"
@@ -610,7 +611,7 @@ function LeaseList() {
                   saved={(row) => {
                     reload();
                     navigate(
-                      leasePath(row.id, { onboarding: "household", ...prospectContext(params) }),
+                      detailPath(row.id, undefined, true),
                     );
                   }}
                 />
@@ -946,6 +947,7 @@ export function LeaseCreate({
   initialTask,
   active = true,
   unitHint,
+  recordedPath,
   saved,
 }: {
   propertyId: string;
@@ -954,6 +956,7 @@ export function LeaseCreate({
   initialTask?: TaskDraft;
   active?: boolean;
   unitHint?: { id: string; loading: boolean; failed: boolean; candidate?: Unit };
+  recordedPath?: (id: string) => string;
   saved: (row: { id:string }) => void;
 }) {
   const [returnParams] = useSearchParams();
@@ -1023,7 +1026,7 @@ export function LeaseCreate({
   const unitValue = selectedUnit ?? (openingUnitHint ? "" : unitOptions[0]?.id || "");
   if (task.accessDenied) return <TaskDraftAccessNotice task={task}/>;
   if (task.sourceUnavailable) return <TaskSourceUnavailable task={task}/>;
-  if (savedLease) return <p className="notice" role="status">Lease recorded. <Link to={leasePath(savedLease, { onboarding:"household", ...prospectContext(returnParams) })}>Open the recorded lease workspace</Link>. Other unfinished property tasks are kept until you choose to leave.</p>;
+  if (savedLease) return <p className="notice" role="status">Lease recorded. <Link to={recordedPath ? recordedPath(savedLease) : leasePath(savedLease, { ...initialTask?.context, ...leaseContext(returnParams), onboarding:"move-in" })}>Open the recorded lease workspace</Link>. Other unfinished property tasks are kept until you choose to leave.</p>;
   return (
     <div ref={container}>
       {!review && <TaskDraftPanel task={task}/>}

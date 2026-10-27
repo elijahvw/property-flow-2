@@ -1,7 +1,7 @@
-import { newFixturePage } from "./browser-fixture.mjs";
+import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { chromium, expect } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { companyDay } from "../dist/reports.js";
 export async function depositCases(t, admin, call, db) {
   const ok = (r) => {
@@ -633,7 +633,7 @@ export async function depositCases(t, admin, call, db) {
     { skip: !process.env.TEST_FINANCES_BROWSER_URL },
     async () => {
       const fresh = await createLease("Browser deposit unit"),
-        browser = await chromium.launch({ headless: true });
+        browser = await launchFixtureBrowser({ headless: true });
       const page = await newFixturePage(browser);
       try {
         const posts = [],

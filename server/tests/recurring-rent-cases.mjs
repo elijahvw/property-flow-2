@@ -1,5 +1,5 @@
-import { newFixturePage } from "./browser-fixture.mjs";
-import { chromium, expect } from "@playwright/test";
+import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
+import { expect } from "@playwright/test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { serializable } from "../dist/application.js";
@@ -654,7 +654,7 @@ export async function recurringRentCases(t, admin, call, db) {
           submissionKey: randomUUID(),
         }),
       );
-      const browser = await chromium.launch({ headless: true });
+      const browser = await launchFixtureBrowser({ headless: true });
       try {
         const page = await newFixturePage(browser);
         let lose = true;

@@ -3,10 +3,10 @@
 // provider remains the leasing fixture's offline stub.
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { chromium, expect } from '@playwright/test';
+import { expect } from '@playwright/test';
 import { digest } from '../dist/sessions.js';
 import { safeReturnTo } from '../dist/access.js';
-import { newFixturePage } from './browser-fixture.mjs';
+import { newFixturePage, launchFixtureBrowser } from './browser-fixture.mjs';
 
 export async function prospectSourceReturnCases(t, admin, call, db, app, providerCalls) {
   const company = 'return-company', property = 'return-home', chosenUser = 'return-person';
@@ -93,7 +93,7 @@ export async function prospectSourceReturnCases(t, admin, call, db, app, provide
     await expect(page.getByRole('heading', { name: approved.name, exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: '← Back to prospect', exact: true })).toHaveCount(0);
   };
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchFixtureBrowser({ headless: true });
   t.after(() => browser.close());
   const writes = [], apiReads = [], authReturnPaths = [];
   let loseLeaseResponse = true;
@@ -186,10 +186,11 @@ export async function prospectSourceReturnCases(t, admin, call, db, app, provide
     await expect(page.getByRole('alert')).toBeVisible();
     await page.getByRole('button', { name: 'Create lease record', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Record a lease', exact: true })).not.toBeVisible();
-    await expect(page.getByLabel('Lease section', { exact: true })).toHaveValue('household');
+    await expect(page.getByLabel('Lease section', { exact: true })).toHaveValue('overview');
+    await expect(page.getByRole('heading', { name: 'Move-in setup', exact: true })).toBeVisible();
     lease = (await admin.query('SELECT id,"residentContactId","residentId","unitId",status,version FROM "Lease" WHERE "companyId"=$1', [company])).rows[0];
     assert.equal(new URL(page.url()).pathname, '/company/leases/' + lease.id);
-    assert.equal(new URL(page.url()).searchParams.get('onboarding'), 'household'); assertMarker(page);
+    assert.equal(new URL(page.url()).searchParams.get('onboarding'), 'move-in'); assertMarker(page);
     assert.equal(lease.residentContactId, contact.id); assert.equal(lease.residentId, chosenUser); assert.equal(lease.status, 'draft');
     assert.equal(lease.unitId, 'return-chosen-unit');
     const leaseWrites = writes.filter(row => row.path === '/api/company/leases');

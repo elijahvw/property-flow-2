@@ -1,8 +1,8 @@
-import { newFixturePage } from "./browser-fixture.mjs";
+import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
 import {residentPortalCases} from "./resident-portal-cases.mjs";
 import assert from "node:assert/strict";
 import {randomUUID} from "node:crypto";
-import {chromium,expect} from "@playwright/test";
+import {expect} from "@playwright/test";
 import {companyDay} from "../dist/reports.js";
 export async function leaseMovementCases(t,admin,call,app,db){
  const ok=r=>{assert.equal(r.statusCode,200,r.body);return r.json();},today=companyDay('America/New_York'),month=today.slice(0,7)+'-01';
@@ -80,7 +80,7 @@ export async function leaseMovementCases(t,admin,call,app,db){
   await assert.rejects(db.$transaction(async tx=>{await tx.$queryRaw`SELECT set_config('app.company_id','a',true)`;return tx.ledgerEntry.update({where:{id:active.cashEntries[0].id},data:{voidedAt:new Date(),voidReason:'Bypass correction probe'}});}),/requires linked reversal/i);
  });
  await t.test('real browser reviews an actual refund and recovers a lost commit after reload using the same source identity',{skip:!process.env.TEST_FINANCES_BROWSER_URL},async()=>{
-  const browser=await chromium.launch({headless:true});try{const page=await newFixturePage(browser);let lose=true;const keys=[];
+  const browser=await launchFixtureBrowser({headless:true});try{const page=await newFixturePage(browser);let lose=true;const keys=[];
    await page.route('**/api/**',async route=>{const req=route.request(),url=new URL(req.url()),response=await app.inject({method:req.method(),url:url.pathname+url.search,headers:{...req.headers(),origin:'https://app.test',cookie:'__Host-pf-session=token-owner'},...(req.postData()?{payload:req.postData()}: {})});if(req.method()==='POST'&&url.pathname===root){keys.push(req.postDataJSON().submissionKey);assert.equal(response.statusCode,200,response.body);if(lose){lose=false;return route.abort('failed');}}return route.fulfill({status:response.statusCode,contentType:'application/json',body:response.body});});
    await page.goto(process.env.TEST_FINANCES_BROWSER_URL+`/company/deposits?leaseId=${lease.id}`);
    await page.getByRole('button',{name:'Record deposit refund',exact:true}).click();await page.getByLabel('Amount (USD)',{exact:true}).fill('9.87');await page.getByLabel('Person paid',{exact:true}).fill('Jordan Resident');await page.getByLabel('Reason shown to the tenant',{exact:true}).fill('Browser tested return');await page.getByRole('button',{name:'Review money movement',exact:true}).click();await page.getByRole('button',{name:'Back to details',exact:true}).click();await expect(page.getByLabel('Amount (USD)',{exact:true})).toHaveValue('9.87');await expect(page.getByLabel('Person paid',{exact:true})).toHaveValue('Jordan Resident');await page.getByRole('button',{name:'Review money movement',exact:true}).click();

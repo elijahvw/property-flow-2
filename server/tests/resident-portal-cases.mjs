@@ -1,7 +1,7 @@
-import { newFixturePage } from "./browser-fixture.mjs";
+import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { chromium, expect } from '@playwright/test';
+import { expect } from '@playwright/test';
 
 export async function residentPortalCases(t, admin, call, app, { lease, today }) {
   const rent = `/api/company/rent/${lease.id}`;
@@ -45,7 +45,7 @@ export async function residentPortalCases(t, admin, call, app, { lease, today })
     assert.equal((await admin.query('SELECT count(*)::int n FROM "AuditEvent"')).rows[0].n, auditCount);
   });
   await t.test('resident portal shows read-only history on desktop and phone without management forms', { skip: !process.env.TEST_FINANCES_BROWSER_URL }, async () => {
-    const browser = await chromium.launch({ headless: true });
+    const browser = await launchFixtureBrowser({ headless: true });
     try {
       const page = await newFixturePage(browser);
       const writes = [];

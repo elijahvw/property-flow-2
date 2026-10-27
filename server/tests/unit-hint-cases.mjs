@@ -2,9 +2,9 @@
 // fictional and live only in the leasing runner's fresh tmpfs PostgreSQL.
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { chromium, expect } from '@playwright/test';
+import { expect } from '@playwright/test';
 import { digest } from '../dist/sessions.js';
-import { newFixturePage } from './browser-fixture.mjs';
+import { newFixturePage, launchFixtureBrowser } from './browser-fixture.mjs';
 
 export async function unitHintCases(t, admin, call, db, app, providerCalls) {
   const company = 'hint-company', home = 'hint-home', otherHome = 'hint-other-home', targetId = 'a-hint-target', fallbackId = 'z-hint-052';
@@ -98,7 +98,7 @@ export async function unitHintCases(t, admin, call, db, app, providerCalls) {
     assert.deepEqual(await snapshot(), before); assert.deepEqual(await currentProspect(), prospect);
   });
 
-  const browser = await chromium.launch({ headless: true }); t.after(() => browser.close());
+  const browser = await launchFixtureBrowser({ headless: true }); t.after(() => browser.close());
   const posts = [], reads = [];
   async function fixturePage({ loseCommit = false, beforeCommit } = {}) {
     const page = await newFixturePage(browser); let lose = loseCommit;

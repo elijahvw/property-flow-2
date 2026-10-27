@@ -1,7 +1,7 @@
-import { newFixturePage } from "./browser-fixture.mjs";
+import { newFixturePage, launchFixtureBrowser } from "./browser-fixture.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { chromium, expect } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { companyDay } from "../dist/reports.js";
 import { calendarProration } from "../dist/proration-policy.js";
 import { serializable } from "../dist/application.js";
@@ -673,7 +673,7 @@ export async function leaseLifecycleCases(t, admin, call, app, db) {
       const l = await make("Browser partial rent", {
           startsOn: month.slice(0, 8) + "09",
         }),
-        browser = await chromium.launch({ headless: true });
+        browser = await launchFixtureBrowser({ headless: true });
       try {
         const page = await newFixturePage(browser, {
           viewport: { width: 1440, height: 1000 },
@@ -769,7 +769,7 @@ export async function leaseLifecycleCases(t, admin, call, app, db) {
     { skip: !process.env.TEST_FINANCES_BROWSER_URL },
     async () => {
       const l = await make("Browser lease ending"),
-        browser = await chromium.launch({ headless: true });
+        browser = await launchFixtureBrowser({ headless: true });
       try {
         const page = await newFixturePage(browser, {
           viewport: { width: 390, height: 844 },
