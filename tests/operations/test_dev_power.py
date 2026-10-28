@@ -175,5 +175,82 @@ class DevPowerTests(unittest.TestCase):
                 self.assertIn('Unexpected database state: '+status,result.stderr)
                 self.assertFalse(any(c[:2]==['rds','start-db-instance'] for c in calls))
 
+    def test_existing_monitoring_configuration_finishes_before_startup(self):
+        for action in ('start','start-database'):
+            with self.subTest(action=action):
+                result,calls,state=self.run_power(action,count=0,statuses=[
+                    'configuring-enhanced-monitoring','configuring-enhanced-monitoring','available'])
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertIn('currently configuring-enhanced-monitoring',result.stdout)
+                self.assertNotIn(['rds','start-db-instance'],[c[:2] for c in calls])
+                if action=='start':
+                    index=next(i for i,c in enumerate(calls) if c[:2]==['ecs','update-service'])
+                    self.assertEqual(calls[index-1][:2],['rds','describe-db-instances'])
+                    self.assertEqual(state['count'],1)
+                else:
+                    self.assertFalse(any(c[0]=='ecs' for c in calls))
+
+    def test_monitoring_configuration_during_start_does_not_repeat_start(self):
+        for action in ('start','start-database'):
+            with self.subTest(action=action):
+                result,calls,state=self.run_power(action,count=0,statuses=[
+                    'stopped','configuring-enhanced-monitoring','available'])
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertEqual([c[:2] for c in calls].count(['rds','start-db-instance']),1)
+                self.assertIn('currently configuring-enhanced-monitoring',result.stdout)
+                self.assertEqual(state['db'],'available')
+                if action=='start':
+                    self.assertEqual(state['count'],1)
+                else:
+                    self.assertFalse(any(c[0]=='ecs' for c in calls))
+
+    def test_stop_waits_for_monitoring_configuration_after_backend_shutdown(self):
+        result,calls,state=self.run_power('stop',statuses=[
+            'configuring-enhanced-monitoring','configuring-enhanced-monitoring','available'])
+        self.assertEqual(result.returncode,0,result.stderr)
+        index=next(i for i,c in enumerate(calls) if c[:2]==['rds','stop-db-instance'])
+        backend_stable=next(i for i,c in enumerate(calls) if c[:3]==['ecs','wait','services-stable'])
+        self.assertLess(backend_stable,index)
+        self.assertEqual(calls[index-1][:2],['rds','describe-db-instances'])
+        self.assertEqual((state['db'],state['count']),('stopped',0))
+
+    def test_monitoring_configuration_during_stop_does_not_repeat_stop(self):
+        result,calls,state=self.run_power('stop',statuses=[
+            'available','configuring-enhanced-monitoring','stopped'])
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual([c[:2] for c in calls].count(['rds','stop-db-instance']),1)
+        self.assertIn('currently configuring-enhanced-monitoring',result.stdout)
+        self.assertEqual((state['db'],state['count']),('stopped',0))
+
+    def test_monitoring_configuration_during_shutdown_then_start(self):
+        result,calls,state=self.run_power('start',count=0,statuses=[
+            'stopping','configuring-enhanced-monitoring','stopped'])
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual([c[:2] for c in calls].count(['rds','start-db-instance']),1)
+        self.assertEqual((state['db'],state['count']),('available',1))
+
+    def test_persistent_monitoring_configuration_times_out_without_database_changes(self):
+        for action in ('start','start-database','stop'):
+            with self.subTest(action=action):
+                result,calls,state=self.run_power(action,db='configuring-enhanced-monitoring',count=0)
+                self.assertNotEqual(result.returncode,0)
+                self.assertIn('within the wait limit',result.stderr)
+                self.assertEqual([c[:2] for c in calls].count(['rds','describe-db-instances']),3)
+                self.assertFalse(any(c[:2] in (['rds','start-db-instance'],['rds','stop-db-instance']) for c in calls))
+                self.assertEqual(state['count'],0)
+                if action!='stop':
+                    self.assertFalse(any(c[:2]==['ecs','update-service'] for c in calls))
+
+    def test_monitoring_transition_to_failure_or_unknown_state_fails_closed(self):
+        for action in ('start','start-database','stop'):
+            for status in ('failed','incompatible-restore','configuring-unrecognized'):
+                with self.subTest(action=action,status=status):
+                    result,calls,state=self.run_power(action,count=0,statuses=[
+                        'configuring-enhanced-monitoring',status])
+                    self.assertNotEqual(result.returncode,0)
+                    self.assertIn('Unexpected database state: '+status,result.stderr)
+                    self.assertFalse(any(c[:2] in (['rds','start-db-instance'],['rds','stop-db-instance']) for c in calls))
+                    self.assertEqual(state['count'],0)
+
 if __name__=='__main__': unittest.main()
 
