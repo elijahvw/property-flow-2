@@ -66,7 +66,7 @@
     },
     {
       "file": "server/src/api-documentation.ts",
-      "sha256": "55f079dd6a230801a28d1ee35f5c85baa0cc66bb3f67dfb8fd78dd304784e642"
+      "sha256": "14ab869914870925c12fc7841c08397d13ce6dc5646f2a4e5b1de285cad4e2be"
     },
     {
       "file": "server/src/api/core-contracts.ts",

@@ -156,6 +156,37 @@ test('catalog schemas and metadata document the real route without changing runt
   assert.deepEqual(writeContract.body.required, ['documented'], 'spec generation does not mutate the contract source');
 });
 
+test('empty parameter containers stay empty without changing runtime input or composed schemas', async t => {
+  const app = Fastify();
+  t.after(() => app.close());
+  const ignored = { type: 'object', additionalProperties: true, description: 'Query values are ignored by this handler.' };
+  const composed = { type: 'object', allOf: [{ type: 'object', properties: {
+    status: { type: 'string', enum: ['open', 'closed'], default: 'open' },
+  }, required: ['status'] }] };
+  const schemas = {
+    '/ignored': { ...contract, querystring: ignored, headers: { type: 'object', additionalProperties: true } },
+    '/composed': { ...contract, querystring: composed },
+  };
+  const before = structuredClone(schemas);
+  await installApiDocumentation(app, { contractForRoute: (_, path) => schemas[path] });
+  app.get('/ignored', request => ({ query: request.query, runtimeField: 'retained' }));
+  app.get('/composed', () => ({ label: 'Fixture' }));
+  await app.ready();
+  const document = app.swagger();
+  assert.deepEqual(document.paths['/ignored'].get.parameters ?? [], []);
+  assert.equal(document.paths['/ignored'].get['x-pf-query-policy'], ignored.description);
+  const parameters = document.paths['/composed'].get.parameters;
+  assert.equal(parameters.length, 1);
+  assert.equal(parameters[0].name, 'status');
+  assert.equal(parameters[0].required, true);
+  assert.deepEqual(parameters[0].schema.enum, ['open', 'closed']);
+  assert.equal(parameters[0].schema.default, 'open');
+  assert.deepEqual(schemas, before, 'documentation transforms must not mutate source contracts');
+  const response = await app.inject('/ignored?undocumented=preserved');
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), { query: { undocumented: 'preserved' }, runtimeField: 'retained' });
+});
+
 test('Swagger configuration disables execution, persisted credentials and external specification requests', async t => {
   const { app } = await fixture(t);
   const response = await app.inject({ url: '/api/docs/static/swagger-initializer.js', headers: { 'x-fixture-actor': 'owner' } });

@@ -1,5 +1,11 @@
 # Feature release notes
 
+## October 28, 2026 — Swagger parameter rendering repair (local)
+
+PF-25: the reported ParameterRow `toJS` crash is reproduced against the full production specification. Empty ignored-query schemas had generated 573 scalar-schema fake parameters across 191 operations. A documentation-clone normalization preserves actual contract fields, composition/reference resolution and ignored-query prose without changing runtime handlers or authentication. The expanded protected-browser regression opens all304 operations and checks exact parameter rows, caught/uncaught errors, disabled execution and zero business/external requests. [Validation, retained failures and release limits](api/validation.md).
+
+Local validation passes: all304 Swagger operations/1,279 parameter rows; the fixed489/489 production UI suite in6.5minutes, two workers/zero retries/no drift or retained failure traces;16 focused API checks;155 safe server checks plus9intentional DB skips;76 client units;9 inventory checks and468 registered operations. Normal client build and matching-client TypeScript compilation pass. Normal backend generation remains blocked locally by Prisma checksum-host403 and requires exact-head CI proof. Independent review is clear. This change needs a matching backend release after review/merge; no migration, new dependency/service or cloud setting is required. Sales-demo records/fixtures, ordinary application UI/Help and business APIs are unchanged, so no seed/version or workflow walkthrough change is needed. Existing bounded request instrumentation and documentation access rules remain applicable. No live operation or deployment is performed.
+
 ## October 27, 2026 — development power monitoring-state repair (local)
 
 PF-27: a reported `Unexpected database state: configuring-enhanced-monitoring` came from the controller's polling allowlist. The explicit RDS transition is now accepted during polling, initial Start/`start-database` dispatch and initial Stop readiness. The existing wait limit, required `available`/`stopped` observations, account/service checks, database-before-app startup and app-before-database shutdown remain. Deployment reuses this controller; no workflow, infrastructure, IAM or monitoring setting changes are needed.
