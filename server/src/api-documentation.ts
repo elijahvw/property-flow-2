@@ -48,7 +48,20 @@ export async function installApiDocumentation(server: FastifyInstance, options: 
       const methods = Array.isArray(route.method) ? route.method : [route.method];
       const method = methods.find(value => value !== "HEAD") ?? methods[0];
       const contract = options.contractForRoute(method.toUpperCase(), url);
-      return { schema: contract ? structuredClone(contract) : { hide: true }, url };
+      if (!contract) return { schema: { hide: true }, url };
+      const schema = structuredClone(contract) as FastifySchema & Record<string, unknown>;
+      for (const part of ["querystring", "params", "headers"] as const) {
+        const container = schema[part] as Record<string, unknown> | undefined;
+        if (container?.type !== "object" || container.properties !== undefined ||
+            ["$ref", "oneOf", "anyOf", "allOf"].some(key => container[key] !== undefined)) continue;
+        // Swagger otherwise treats root keywords as shorthand parameter names.
+        // Normalize only this documentation clone; keep ignored inputs/runtime
+        // behavior intact and let references/compositions use normal resolution.
+        container.properties = {};
+        if (part === "querystring" && typeof container.description === "string")
+          schema["x-pf-query-policy"] ??= container.description;
+      }
+      return { schema, url };
     },
     ...(options.transformObject ? {
       transformObject: (document: Parameters<SwaggerTransformObject>[0]) =>

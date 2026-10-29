@@ -1,8 +1,10 @@
 # PF-25 API contract acceptance
 
-This is the API documentation increment's gap and acceptance record. Its source dependency PR73 (initial `37319bf`, final `a422c50`) is verified merged at `59fe883`. This branch began with the equivalent return-context fix cherry-pick `691c3f8`; the merged base is reconciled at local merge commit `1608d8f`, preserving both ancestries. Merge and deployment remain with the user. Existing tests and interface acceptance from the navigation increment do not validate a subsequently changed API document, guard or schema.
+This is the API documentation increment's gap and acceptance record. The API implementation is merged in [PR74](https://github.com/elijahvw/property-flow-2/pull/74) at `23bcede`, with [CI40442139603](https://github.com/elijahvw/property-flow-2/actions/runs/40442139603) passing. Current main `7a390f7` also includes merged [PR75](https://github.com/elijahvw/property-flow-2/pull/75), with [CI40594445905](https://github.com/elijahvw/property-flow-2/actions/runs/40594445905) passing. Hosted deployment and real-account acceptance remain separate.
 
-The [developer reference](reference.md) records actual conventions and protocol differences. [Integrated validation](validation.md) records final local results, retained failures and remaining normal-build/CI/release gates. The [route inventory](route-inventory.json) is the machine-readable production-registration snapshot. Current release claims belong in [current work](../current-work.md), [release notes](../local-feature-release-notes.md) and the existing [PF-25 register](../product-roadmap.md).
+Historical dependency and branch lineage: PR73 (initial `37319bf`, final `a422c50`) merged at `59fe883`; the API branch began with equivalent return-context fix `691c3f8` and reconciled that merged base at local merge `1608d8f`, preserving both ancestries. Existing navigation tests and earlier API checks do not validate a subsequently changed API document, guard or schema.
+
+The [developer reference](reference.md) records actual conventions and protocol differences. [Integrated validation](validation.md) retains the dated local results and failures, distinguishes the merged API's CI evidence, and tracks the October 28 repair's current checks and remaining release/hosted gates. The [route inventory](route-inventory.json) is the machine-readable production-registration snapshot. Current release claims belong in [current work](../current-work.md), [release notes](../local-feature-release-notes.md) and the existing [PF-25 register](../product-roadmap.md).
 
 ## What complete means
 
@@ -16,7 +18,7 @@ Track these states separately for each production method/path:
 
 No state implies the next. A generated OpenAPI operation with generic objects is accounted for, not schema-complete. The initial PR73 baseline capture records 455 method/path operations: 304 explicit and 151 generated HEAD; only one has a registered structural schema, and all 455 initially carry source-evidence-only review status. These are the pre-documentation baseline, not final coverage. Current counts must come from the checked machine-readable coverage artifacts; do not infer business-contract coverage from the number of Swagger operations. No complete-contract count is established until the catalog and its review status have been reconciled with the final runtime inventory.
 
-## Integrated local implementation
+## Integrated source implementation
 
 | Measure | Current source status |
 | --- | --- |
@@ -27,9 +29,15 @@ No state implies the next. A generated OpenAPI operation with generic objects is
 | Manually source-reviewed field contracts | 304 across eight domain modules; zero duplicate or orphan definitions. Source review is not full handler verification. |
 | Still awaiting manual field-contract review | Zero catalog entries remain inventory-only after the six-domain continuation. The prior15/289 checkpoint is historical. |
 | Handler-verified contract status | Zero in the current coverage classification. Documentation access tests and contract-index generation do not establish business-handler parity. |
-| Full documentation/release acceptance | Source-reviewed field coverage and protected UI are implemented locally. Integrated local conformance/regression passed; API-head normal build/CI, publication, deployment and applicable real-account/provider acceptance remain separate gates. |
+| Full documentation/release acceptance | Source-reviewed field coverage and protected UI are merged in PR74, with passing API CI. Dated integrated local conformance/regression remains recorded separately; the October 28 rendering repair is validated locally and ready for publication. Repair-head normal-build CI, publication and deployment, plus applicable hosted/real-account/provider acceptance, remain open. |
 
 The one original registered structural schema is telemetry. Documentation routes add their own framework schemas; these do not increase business-handler schema coverage. The inventory checks all 265 static server route declarations in the current source, while real registration expands loops and automatic methods into the counts above. It uses controlled synthetic configuration, not live database/provider configuration, and follows only bounded helper evidence. The final integrated validation record must identify changes to these counts or statuses.
+
+## October 28 parameter-rendering repair — locally validated
+
+The reported hosted Swagger `ParameterRow` / `w.toJS` failure exposed malformed emitted parameter schemas: the baseline inspection identified 573 across 191 ignored-query containers. The local repair adds `properties: {}` only to cloned explicit object query/path/header containers that lack properties, references or compositions. Ignored-query descriptions remain available as `x-pf-query-policy`; business route parsing and schemas are unchanged.
+
+Acceptance requires valid emitted parameter schemas and the expected fields, required flags, enums and defaults, plus a bundled Swagger browser check that opens all 304 explicit operations without parameter-row errors or business execution. The emitted-parameter checks and bundled Swagger browser pass all 304 explicit operations and 1,279 parameter rows; the final application UI suite passes 489/489. The repair is locally validated and ready for publication. The [validation record](validation.md) owns the exact outcomes and remaining normal-build CI gate; publication/deployment are separate and the deployed SHA and hosted repair remain unverified.
 
 ## Reviewed domain coverage
 

@@ -36,6 +36,31 @@ test('a missing documented operation fails parity rather than disappearing behin
   assert.ok(!documentedOperations(incomplete).includes('POST /api/company/leases'));
 });
 
+test('generated OpenAPI parameters match named contract fields and use object schemas', () => {
+  for (const [path, methods] of Object.entries(capture.document.paths)) {
+    for (const [method, operation] of Object.entries(methods)) {
+      if (!operation.responses) continue;
+      const key = operationKey(method, path);
+      const contract = apiContractForRoute(method, path.replace(/\{([^}]+)\}/g, ':$1'));
+      for (const [location, container] of Object.entries({ query: contract.querystring,
+        path: contract.params, header: contract.headers })) {
+        const expected = Object.keys(container?.properties ?? {}).sort();
+        const actual = (operation.parameters ?? []).filter(parameter => parameter.in === location);
+        assert.deepEqual(actual.map(parameter => parameter.name).sort(), expected, `${key}: ${location}`);
+        for (const parameter of actual) {
+          assert.ok(parameter.schema && typeof parameter.schema === 'object' && !Array.isArray(parameter.schema),
+            `${key}: ${location} ${parameter.name} requires an OpenAPI 3.0 Schema Object`);
+          assert.equal(parameter.required === true, location === 'path' || (container.required ?? []).includes(parameter.name),
+            `${key}: ${parameter.name} requiredness`);
+          const source = container.properties[parameter.name];
+          if (source.enum) assert.deepEqual(parameter.schema.enum, source.enum, `${key}: ${parameter.name} enum`);
+          if (source.default !== undefined) assert.deepEqual(parameter.schema.default, source.default, `${key}: ${parameter.name} default`);
+        }
+      }
+    }
+  }
+});
+
 test('source-reviewed contracts and remaining field-review gaps are reported independently', () => {
   const coverage = apiContractCoverage();
   assert.equal(coverage.indexedOperations, runtimeInventory(capture).routes.length);
